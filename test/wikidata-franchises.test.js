@@ -29,6 +29,24 @@ module.exports = {
     );
   },
 
+  // A P179-tagged franchise whose series item is labelled too vaguely to use ("Wars" for
+  // Advance Wars) upgrades to the games' own shared title -- but that upgrade has to
+  // survive one oddly-formatted member breaking a strict unanimous match, which is exactly
+  // how "Wars" reached production the first time.
+  'a vague franchise label upgrades by majority, surviving one outlier title'() {
+    const members = [
+      { label: 'Advance Wars', category: 'Video Games', franchise: 'Wars', characters: [ch('Andy', 3)] },
+      { label: 'Advance Wars 2: Black Hole Rising', category: 'Video Games', franchise: 'Wars', characters: [ch('Olaf', 2)] },
+      { label: 'Advance Wars: Dual Strike', category: 'Video Games', franchise: 'Wars', characters: [ch('Sasha', 1)] },
+      // Doesn't match the numeral-stripping regex ("1+2" isn't a plain number), so its base
+      // disagrees with the other three -- and used to be enough to defeat the whole upgrade.
+      { label: 'Game Boy Wars Advance 1+2', category: 'Video Games', franchise: 'Wars', characters: [ch('Rachel', 1)] },
+    ];
+    const merged = mergeFranchises(members);
+    assert.equal(merged.length, 1);
+    assert.equal(merged[0].label, 'Advance Wars', 'majority title wins over the bare franchise label');
+  },
+
   'a title with no franchise tag passes through untouched'() {
     const series = [
       { label: 'Persona 5', category: 'Video Games', characters: [ch('Joker'), ch('Ryuji')] },

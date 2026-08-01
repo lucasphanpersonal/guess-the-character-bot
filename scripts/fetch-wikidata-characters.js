@@ -80,13 +80,18 @@ const FICTIONAL_CHARACTER = 'wd:Q95074';
  * company) -- a TV series is reliably tagged with the former and a theatrical film with the
  * latter, and using the wrong one for either finds almost nothing.
  *
- * `category` is written straight through to the list's category column, so it has to be one
- * of the categories the rest of the seed data already uses ("Television Shows", "Movies").
+ * `category` is only a fallback: deriveCategories() overrides it per series from what
+ * Wikidata says the series actually is (TV, animated TV, or film), which is right far more
+ * often than a whole group's source would be -- Adult Swim and Fox both air live-action
+ * programming too. It's used only for the rare series Wikidata gives neither signal for, so
+ * it should still be a best guess at what the group's *typical* member is, and has to be one
+ * of the categories the rest of the seed data already uses ("Television Shows", "Cartoon",
+ * "Movies").
  */
 const SOURCE_GROUPS = {
   'kids-tv': {
     label: 'Cartoon Network / Nickelodeon / Disney Channel / Disney XD',
-    category: 'Television Shows',
+    category: 'Cartoon',
     // Verify any QID added here against the item's own label rather than trusting
     // wbsearchentities: searching "Disney Channel" returns Q1368786 (Disney Channel *Asia*)
     // ahead of the US channel, and using it silently cost the entire Disney Channel
@@ -106,7 +111,7 @@ const SOURCE_GROUPS = {
   },
   'adult-animation': {
     label: 'Adult Swim / Fox animation',
-    category: 'Television Shows',
+    category: 'Cartoon',
     broadcasters: {
       Q379052: 'Adult Swim',
       Q166419: 'Fox Broadcasting Company',
@@ -133,49 +138,14 @@ const SOURCE_GROUPS = {
     },
   },
   'video-games': {
-    label: 'Major video game developers',
+    label: 'Video games (every game Wikidata records characters for)',
     category: 'Video Games',
-    // A game's franchise is resolved separately via P179 ("part of the series"), so this
-    // list only has to be broad enough to reach the games themselves -- it does not need
-    // one entry per publisher the way TV needed one entry per broadcaster, since a
-    // franchise's later entries are found through the series link even if a different
-    // developer made them.
-    developers: {
-      Q8093: 'Nintendo',
-      Q207784: 'Square Enix',
-      Q14428: 'Capcom',
-      Q2414469: 'FromSoftware',
-      Q178824: 'Blizzard Entertainment',
-      Q3300783: 'Bethesda Game Studios',
-      Q1194689: 'Bandai Namco Entertainment',
-      Q188273: 'Ubisoft',
-      Q193559: 'Valve Corporation',
-      Q94912: 'Rockstar Games',
-      Q122741: 'Sega',
-      Q720871: 'Naughty Dog',
-      Q1172164: 'CD Projekt Red',
-      Q1141245: 'Insomniac Games',
-      Q28686397: 'miHoYo',
-      Q1060165: 'Riot Games',
-      Q782028: 'Game Freak',
-      Q1068734: 'HAL Laboratory',
-      Q45700: 'Konami',
-      Q780528: 'Atlus',
-      Q150001: 'Intelligent Systems',
-      Q1140960: 'Sonic Team',
-      Q204474: 'id Software',
-      Q4042609: 'Larian Studios',
-      Q1129295: 'Mojang Studios',
-      Q7643396: 'Supergiant Games',
-      Q735267: 'Bungie',
-      Q7884447: 'Respawn Entertainment',
-      Q739711: 'Epic Games',
-      Q495054: 'ArenaNet',
-      Q674686: 'Level-5',
-      Q309996: 'Namco',
-      Q337910: 'Guerrilla Games',
-      Q656710: 'Santa Monica Studio',
-    },
+    // Games are discovered by being games, not by who made them. Scoping to a hand-written
+    // list of 34 major studios was the original approach and it left most of the catalogue
+    // out -- 670 games, against the ~4,000 that asking for "anything typed as a video game
+    // with a character" reaches. There is no developer list to maintain, and indie and
+    // older titles stop depending on whether their studio was famous enough to think of.
+    anyOfType: 'Q7889', // video game
   },
 };
 
@@ -262,13 +232,33 @@ const qidOf = (uri) => uri.split('/').pop();
 // Which series/films a set of broadcasters or studios put out. Cheap (~1.5s for 3,700
 // series) because it involves no type walking.
 async function fetchSeries(group) {
+  const series = new Map();
+
+  // A whole medium at once, rather than a list of who made things. `^wdt:P1441` restricts
+  // to works that actually have a character on Wikidata, which is what keeps this from
+  // returning the ~100,000 games that would contribute nothing.
+  if (group.anyOfType) {
+    const rows = await sparql(
+      `SELECT DISTINCT ?series ?seriesLabel WHERE {
+         ?series wdt:P31/wdt:P279* wd:${group.anyOfType} ; ^wdt:P1441 ?c .
+         SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+       }`,
+      { label: `everything of type ${group.anyOfType}` }
+    );
+    for (const row of rows) {
+      const qid = qidOf(row.series.value);
+      const label = row.seriesLabel.value;
+      if (label === qid) continue;
+      if (!series.has(qid)) series.set(qid, label);
+    }
+  }
+
   const byProperty = [
     ['wdt:P449', group.broadcasters],
     ['wdt:P272', group.studios],
     ['wdt:P178', group.developers],
   ].filter(([, ids]) => ids);
 
-  const series = new Map();
   for (const [property, ids] of byProperty) {
     const values = Object.keys(ids).map((q) => `wd:${q}`).join(' ');
     const rows = await sparql(
@@ -415,6 +405,13 @@ async function pruneNonWorks(data) {
  * series -- so bucketing the whole group as "Movies" filed Samurai Jack, Dexter's
  * Laboratory and Adventure Time as films. Wikidata already knows the difference, so ask it.
  *
+ * TV further splits into "Cartoon" vs "Television Shows" by the same method: Wikidata types
+ * SpongeBob, Rick and Morty and Family Guy as an "animated television series" (Q117467246,
+ * which "anime television series" also descends from) and Breaking Bad or Game of Thrones
+ * as a plain "television series" (Q5398426) with no such ancestor. That is a more reliable
+ * split than which broadcaster a show came from -- Adult Swim and Fox both air live-action
+ * programming too, and grouping by broadcaster would have filed it as a cartoon regardless.
+ *
  * The classification is done on the handful of distinct P31 types rather than per series,
  * which keeps it to one extra query no matter how many series there are.
  */
@@ -433,18 +430,21 @@ async function deriveCategories(data) {
     }
   }
 
-  // One pass over the distinct types: is each one a kind of film, or a kind of TV series?
-  // Q11424 = film, Q15416 = television program.
+  // One pass over the distinct types: is each one a kind of film, a kind of TV series, or
+  // a kind of animated TV series? Q11424 = film, Q15416 = television program,
+  // Q117467246 = animated television series.
   const filmish = new Set();
   const tvish = new Set();
+  const animated = new Set();
   const typeList = [...allTypes];
   for (let i = 0; i < typeList.length; i += 150) {
     const values = typeList.slice(i, i + 150).map((t) => `wd:${t}`).join(' ');
     const rows = await sparql(
-      `SELECT ?t ?isFilm ?isTv WHERE {
+      `SELECT ?t ?isFilm ?isTv ?isAnimated WHERE {
          VALUES ?t { ${values} }
          BIND(EXISTS { ?t wdt:P279* wd:Q11424 } AS ?isFilm)
          BIND(EXISTS { ?t wdt:P279* wd:Q15416 } AS ?isTv)
+         BIND(EXISTS { ?t wdt:P279* wd:Q117467246 } AS ?isAnimated)
        }`,
       { label: 'classifying series types' }
     );
@@ -452,6 +452,7 @@ async function deriveCategories(data) {
       const t = qidOf(row.t.value);
       if (row.isFilm?.value === 'true') filmish.add(t);
       if (row.isTv?.value === 'true') tvish.add(t);
+      if (row.isAnimated?.value === 'true') animated.add(t);
     }
   }
 
@@ -462,7 +463,8 @@ async function deriveCategories(data) {
     // television-film pilot), and the show is the thing people would pick at lobby time.
     const isTv = types.some((t) => tvish.has(t));
     const isFilm = types.some((t) => filmish.has(t));
-    const category = isTv ? 'Television Shows' : isFilm ? 'Movies' : series.category;
+    const isAnimated = types.some((t) => animated.has(t));
+    const category = isTv ? (isAnimated ? 'Cartoon' : 'Television Shows') : isFilm ? 'Movies' : series.category;
     if (category !== series.category) {
       series.category = category;
       changed++;
