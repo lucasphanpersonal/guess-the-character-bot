@@ -132,6 +132,51 @@ const SOURCE_GROUPS = {
       Q907311: 'Netflix',
     },
   },
+  'video-games': {
+    label: 'Major video game developers',
+    category: 'Video Games',
+    // A game's franchise is resolved separately via P179 ("part of the series"), so this
+    // list only has to be broad enough to reach the games themselves -- it does not need
+    // one entry per publisher the way TV needed one entry per broadcaster, since a
+    // franchise's later entries are found through the series link even if a different
+    // developer made them.
+    developers: {
+      Q8093: 'Nintendo',
+      Q207784: 'Square Enix',
+      Q14428: 'Capcom',
+      Q2414469: 'FromSoftware',
+      Q178824: 'Blizzard Entertainment',
+      Q3300783: 'Bethesda Game Studios',
+      Q1194689: 'Bandai Namco Entertainment',
+      Q188273: 'Ubisoft',
+      Q193559: 'Valve Corporation',
+      Q94912: 'Rockstar Games',
+      Q122741: 'Sega',
+      Q720871: 'Naughty Dog',
+      Q1172164: 'CD Projekt Red',
+      Q1141245: 'Insomniac Games',
+      Q28686397: 'miHoYo',
+      Q1060165: 'Riot Games',
+      Q782028: 'Game Freak',
+      Q1068734: 'HAL Laboratory',
+      Q45700: 'Konami',
+      Q780528: 'Atlus',
+      Q150001: 'Intelligent Systems',
+      Q1140960: 'Sonic Team',
+      Q204474: 'id Software',
+      Q4042609: 'Larian Studios',
+      Q1129295: 'Mojang Studios',
+      Q7643396: 'Supergiant Games',
+      Q735267: 'Bungie',
+      Q7884447: 'Respawn Entertainment',
+      Q739711: 'Epic Games',
+      Q495054: 'ArenaNet',
+      Q674686: 'Level-5',
+      Q309996: 'Namco',
+      Q337910: 'Guerrilla Games',
+      Q656710: 'Santa Monica Studio',
+    },
+  },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -220,6 +265,7 @@ async function fetchSeries(group) {
   const byProperty = [
     ['wdt:P449', group.broadcasters],
     ['wdt:P272', group.studios],
+    ['wdt:P178', group.developers],
   ].filter(([, ids]) => ids);
 
   const series = new Map();
@@ -426,6 +472,87 @@ async function deriveCategories(data) {
 }
 
 /**
+ * Tags video game entries with the franchise they belong to, via P179 ("part of the
+ * series").
+ *
+ * TV shows were grouped by broadcaster, which worked because a show and its channel stay
+ * associated for the show's whole run. Games have no equivalent: Wikidata files every
+ * numbered entry as its own item, so a straight import would offer "Kingdom Hearts",
+ * "Kingdom Hearts II", "Kingdom Hearts III" and "Kingdom Hearts: Birth by Sleep" as four
+ * unrelated lists with heavily overlapping casts. P179 is Wikidata's own answer to "which
+ * series is this part of" and resolves cleanly -- Kingdom Hearts II's P179 points straight
+ * at the Kingdom Hearts item -- so franchises are found by asking rather than by matching
+ * titles, which is what made the season-suffix guessing for anime necessarily approximate.
+ *
+ * A chain is walked (a numbered entry can point at a sub-series that itself points at the
+ * main franchise) up to a small hop limit, with a cycle guard, and the top of the chain
+ * becomes the franchise name. A title with no P179 at all is standalone and is left
+ * untagged -- scripts/seed-wikidata-characters.js then imports it under its own name, same
+ * as before this existed.
+ *
+ * Scoped to the video-games group: walking this chain for the 1,300+ TV and film entries
+ * would cost real time for no benefit, since those are already grouped by broadcaster.
+ */
+async function resolveFranchises(data) {
+  const seedQids = Object.keys(data.series).filter((q) => data.series[q].group === 'video-games');
+  if (!seedQids.length) return 0;
+
+  const parentOf = new Map();
+  const MAX_HOPS = 4;
+  let frontier = seedQids;
+
+  for (let hop = 0; hop < MAX_HOPS && frontier.length; hop++) {
+    const toFetch = frontier.filter((q) => !parentOf.has(q));
+    for (let i = 0; i < toFetch.length; i += ENTITY_CHUNK) {
+      const batch = toFetch.slice(i, i + ENTITY_CHUNK);
+      const entities = await wbGetEntities(batch, 'claims');
+      for (const q of batch) {
+        const parent = entities[q]?.claims?.P179?.[0]?.mainsnak?.datavalue?.value?.id || null;
+        parentOf.set(q, parent);
+      }
+    }
+    frontier = [...new Set([...parentOf.values()].filter(Boolean))].filter((q) => !parentOf.has(q));
+  }
+
+  const root = (qid) => {
+    const seen = new Set();
+    let cur = qid;
+    while (true) {
+      seen.add(cur);
+      const parent = parentOf.get(cur);
+      if (!parent || seen.has(parent)) return cur; // no parent, or a cycle -- stop here
+      cur = parent;
+    }
+  };
+
+  // The franchise root is often not itself one of the fetched games (e.g. "Kingdom Hearts"
+  // the series item is distinct from "Kingdom Hearts" the first game), so its label has to
+  // be looked up separately from anything already known.
+  const roots = new Set(seedQids.map(root));
+  const needLabels = [...roots].filter((q) => !data.series[q]);
+  const labelOf = new Map();
+  for (let i = 0; i < needLabels.length; i += ENTITY_CHUNK) {
+    const batch = needLabels.slice(i, i + ENTITY_CHUNK);
+    const entities = await wbGetEntities(batch, 'labels');
+    for (const q of batch) {
+      const label = entities[q]?.labels?.en?.value;
+      if (label) labelOf.set(q, label);
+    }
+  }
+
+  let tagged = 0;
+  for (const qid of seedQids) {
+    const r = root(qid);
+    if (r === qid) continue; // no P179 at all -- a standalone title
+    const label = data.series[r]?.label || labelOf.get(r);
+    if (!label) continue; // couldn't name it -- leave untagged rather than show a QID
+    data.series[qid].franchise = label;
+    tagged++;
+  }
+  return tagged;
+}
+
+/**
  * Upgrades stored names to the English Wikipedia article title where there is one.
  *
  * Wikidata labels are canonical, not colloquial, and for a guessing game that is the wrong
@@ -585,6 +712,11 @@ async function main() {
   console.log('Deriving categories from each series\' own type...');
   const recategorised = await deriveCategories(data);
   console.log(`  recategorised ${recategorised}.`);
+  save(data);
+
+  console.log('Resolving video game franchises via "part of the series"...');
+  const franchiseTagged = await resolveFranchises(data);
+  console.log(`  tagged ${franchiseTagged}.`);
   save(data);
 
   const all = Object.values(data.series).flatMap((s) => s.characters);
