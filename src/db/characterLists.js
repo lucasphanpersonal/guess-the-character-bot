@@ -29,6 +29,10 @@ function listLists(guildId) {
     .all(guildId);
 }
 
+function setListCategory(listId, category) {
+  return db.prepare('UPDATE character_lists SET category = ? WHERE id = ?').run(category, listId).changes > 0;
+}
+
 function addCharacter(listId, name, addedBy, imageUrl = null) {
   const info = db
     .prepare('INSERT INTO characters (list_id, name, added_by, created_at, image_url) VALUES (?, ?, ?, ?, ?)')
@@ -64,6 +68,62 @@ function countCharacters(listId) {
 function formatListLabel(list) {
   if (!list.category || list.category === list.name) return list.name;
   return `${list.name} (${list.category})`;
+}
+
+/**
+ * Which work a character comes from, for display alongside their name.
+ *
+ * A name on its own is ambiguous often enough to matter: the seed data has three different
+ * Dittos (Pokémon, Ben 10, a Marvel character), an "Ed" in both Ed Edd n Eddy and Cowboy
+ * Bebop, and a "Jack" in Samurai Jack, Lost and Titanic. A player answering questions about
+ * a name they half-recognise needs to know which one they were handed.
+ *
+ * The same character usually sits in several lists at once -- a show and the film spun off
+ * from it, or Pikachu in both "Pokémon" and an anime title -- so this picks the most useful
+ * one.
+ * A franchise list (name differs from its category) beats a bare category list, and among
+ * franchise lists the *biggest* wins.
+ *
+ * Biggest, not smallest, and that was a real bug rather than a preference. Spin-offs and
+ * tie-in films have far smaller casts than the show they came from, so ranking by smallest
+ * confidently answered "Squidward Tentacles, from The Patrick Star Show" and "Blossom, from
+ * The Powerpuff Girls Movie" -- technically true, useless as a hint, and wrong about where
+ * people know the character from. The flagship show has the fullest cast, so its list is
+ * the biggest, and it is also the one worth naming.
+ *
+ * Lists named after the character are skipped rather than shown, since "SpongeBob
+ * SquarePants, from SpongeBob SquarePants" tells nobody anything -- a title character falls
+ * back to the next-best list ("Television Shows"). Returns null only when that leaves
+ * nothing, e.g. a one-off list somebody typed by hand for a single character.
+ */
+function getCharacterSource(guildId, characterName, drawnListId = null) {
+  const rows = db
+    .prepare(
+      `SELECT cl.id, cl.name, cl.category, COUNT(c2.id) AS size
+         FROM characters ch
+         JOIN character_lists cl ON cl.id = ch.list_id
+         JOIN characters c2 ON c2.list_id = cl.id
+        WHERE cl.guild_id = ? AND ch.name = ? COLLATE NOCASE
+        GROUP BY cl.id
+        ORDER BY size DESC`
+    )
+    .all(guildId, characterName);
+  const sameName = (a, b) => normalizeForMatch(a).toLowerCase() === normalizeForMatch(b).toLowerCase();
+  const candidates = rows.filter((row) => !sameName(row.name, characterName));
+  if (!candidates.length) return null;
+
+  // A list is a specific work unless it is just its own category ("Anime", "Video Games").
+  // A null category counts as a work: the Pokémon and League seeds set no category, and
+  // treating them as generic sent Pikachu's source to "Video Games" instead of "Pokémon".
+  const isWork = (row) => !row.category || row.category !== row.name;
+
+  // The list the character was actually dealt from settles it outright, when it names a
+  // work. Two unrelated characters can share a name -- there is a Ditto in Pokémon and a
+  // different Ditto in Ben 10 -- and no amount of ranking over the name alone can tell them
+  // apart. Which list it came from can.
+  const drawn = drawnListId != null && candidates.find((row) => row.id === drawnListId);
+  const best = (drawn && isWork(drawn) && drawn) || candidates.find(isWork) || candidates[0];
+  return isWork(best) && best.category ? `${best.name} (${best.category})` : best.name;
 }
 
 // Human-readable label for a whole lobby selection, e.g. "Naruto (Manga) + Scrubs (TV Shows)".
@@ -202,6 +262,7 @@ function searchCharactersInLists(listIds, query, limit = 25) {
 
 module.exports = {
   createList,
+  setListCategory,
   getListByName,
   listLists,
   addCharacter,
@@ -213,6 +274,7 @@ module.exports = {
   getListsByIds,
   formatListLabel,
   getListLabelForIds,
+  getCharacterSource,
   countDistinctCharacters,
   getRandomPair,
   getRandomCharacters,

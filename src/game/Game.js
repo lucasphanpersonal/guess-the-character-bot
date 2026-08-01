@@ -1,7 +1,28 @@
 const { normalizeLoose } = require('../util/text');
+const { getCharacterSource } = require('../db/characterLists');
 
 class Game {
   static STOPWORDS = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'in', 'on', 'to', 'for', 'de', 'la', 'le']);
+
+  /**
+   * Turns a database character row into the shape the DMs and reveal render.
+   *
+   * `source` names the work the character is from, so whoever is answering questions knows
+   * which "Ditto" or "Jack" they were handed. Looked up once, when the character is dealt,
+   * because the same value goes out to both players and every spectator.
+   *
+   * A failed lookup is not worth losing a game over -- it is a display nicety, and the test
+   * harness builds lobbies with no guild rows behind them at all.
+   */
+  static head(lobby, character) {
+    let source = null;
+    try {
+      source = getCharacterSource(lobby.guildId, character.name, character.list_id ?? null);
+    } catch {
+      source = null;
+    }
+    return { name: character.name, imageUrl: character.image_url || null, source };
+  }
 
   constructor({ lobby, characters, turnSeconds }) {
     this.lobby = lobby;
@@ -10,8 +31,8 @@ class Game {
     const [c1, c2] = characters;
     // Each player's "head" is what THEY must guess -- and what the OTHER player was DM'd.
     this.headByPlayer = {
-      [p1Id]: { name: c1.name, imageUrl: c1.image_url || null },
-      [p2Id]: { name: c2.name, imageUrl: c2.image_url || null },
+      [p1Id]: Game.head(lobby, c1),
+      [p2Id]: Game.head(lobby, c2),
     };
     this.turnSeconds = turnSeconds;
     this.round = 1;

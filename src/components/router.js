@@ -10,6 +10,7 @@ const lobbyButtons = require('./lobbyButtons');
 const turnControls = require('./turnControls');
 const voteControls = require('./voteControls');
 const gameOverControls = require('./gameOverControls');
+const listBrowser = require('./listBrowser');
 
 const HANDLERS = {
   // Character confirm/reroll buttons, sent in DMs when a game starts.
@@ -23,6 +24,8 @@ const HANDLERS = {
   vote: (interaction) => voteControls.handle(interaction),
   // End-of-game reveal buttons.
   over: (interaction) => gameOverControls.handle(interaction),
+  // `/list-show` pagination (Prev / Next / Back).
+  browse: (interaction) => listBrowser.handle(interaction),
 };
 
 async function handleComponentInteraction(interaction) {

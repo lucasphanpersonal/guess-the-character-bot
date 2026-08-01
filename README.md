@@ -30,10 +30,13 @@ happen live between humans in voice.
 4. **Optionally `/set-characters`** (host only) to hand-pick each player's character instead
    of leaving it to chance. The confirmation is ephemeral, so it can't spoil anything even
    though you type it in the shared channel.
-5. **`/start-game`** (host only). Each player gets a DM showing the *other* player's
-   character — that's what they'll use to answer questions — with **Good to go** / **Reroll**
-   buttons. Either player can reroll a character they don't recognize (or think the wearer
-   won't). Turn 1 doesn't begin until both confirm.
+5. **Hit Start game** on the board (host only; `/start-game` does the same). Each player
+   gets a DM showing the *other* player's character — that's what they'll use to answer
+   questions — along with the show or film it's from, since a name on its own is often
+   ambiguous (there's a Ditto in Pokémon *and* Ben 10, an Ed in Ed Edd n Eddy *and* Cowboy
+   Bebop). Spectators and the final reveal show the same. The DM carries **Good to go** /
+   **Reroll** buttons: either player can reroll a character they don't recognize (or think
+   the wearer won't). Turn 1 doesn't begin until both confirm.
 
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
@@ -167,25 +170,50 @@ Four bundled importers, all idempotent — re-running only adds what's missing, 
 safe to run repeatedly.
 
 ```bash
-npm run seed:pokemon      -- <your-server-id>   # 1,025 Pokémon, with official artwork
-npm run seed:lol          -- <your-server-id>   # 173 League of Legends champions, with splash art
-npm run seed:codex        -- <your-server-id>   # 15,939 characters across ~29 categories
-npm run seed:anime-images -- <your-server-id>   # backfills artwork onto the anime/manga lists
+npm run seed:pokemon  -- <your-server-id>   # 1,025 Pokémon, with official artwork
+npm run seed:lol      -- <your-server-id>   # 173 League of Legends champions, with splash art
+npm run seed:wikidata -- <your-server-id>   # Western TV/film casts, one list per show
+npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per title
 ```
+
+> **The Character Codex was removed.** It was the original bulk source and a poor fit: it
+> carried categories nobody plays with (Blogs, Magazines, Scientific Papers, Research
+> Journals), filed authors as characters (Eiichiro Oda under One Piece), and duplicated
+> characters under several spellings — One Piece arrived with four Luffys and three
+> Choppers, but no Zoro, Nami, Sanji or Usopp. The Wikidata and AniList importers cover the
+> same ground with real casts. Use `npm run reset:seeded -- <server-id>` to clear
+> seed-created lists before rebuilding from these sources.
 
 - **`seed:pokemon`** and **`seed:lol`** each create a single list, with images pulled from
   the games' own public asset APIs (PokeAPI's sprite repo and Riot's Data Dragon).
-- **`seed:codex`** imports the
-  [Character Codex dataset](https://huggingface.co/datasets/NousResearch/CharacterCodex)
-  in two additive layers: one list per media-type **category** ("Anime", "Video Games",
-  "Mythology", …) *and* one list per recognizable **franchise** ("Naruto", "Scrubs",
-  "Disney", …). A character can belong to several lists at once — Pikachu ends up in both
-  "Video Games" and "Pokémon". This dataset ships no images at all.
-- **`seed:anime-images`** fills some of that gap: it adds no characters, it only attaches
-  official [AniList](https://anilist.co) artwork to codex characters in the **Anime** and
-  **Manga** lists (both the category lists and every franchise list under those categories)
-  that don't have an image yet. Existing artwork is never overwritten. Run it after
-  `seed:codex`.
+- **`seed:anilist`** builds one list per anime/manga title from
+  [AniList](https://anilist.co), with artwork on nearly every character. Casts are complete
+  rather than sampled — One Piece imports 815 characters. AniList stores names
+  first-name-first ("Luffy Monkey"), so they're rebuilt surname-first to give
+  "Monkey D. Luffy", "Roronoa Zoro", "Nico Robin".
+
+  AniList files each season separately, so titles differing only by a season or part marker
+  are **merged** — otherwise a lobby offers "Attack on Titan" four times. The merge is
+  conservative: "Steins;Gate 0" and "Mob Psycho 100" keep their numbers.
+
+  Characters labelled `BACKGROUND` by AniList are skipped (`--include-background` to keep
+  them), as is anything flagged adult. `--per-show N` caps each title.
+- **`seed:wikidata`** covers Western TV and film, which AniList doesn't touch. It
+  builds **one list per show or film** from [Wikidata](https://www.wikidata.org), sweeping
+  Cartoon Network, Nickelodeon, Disney Channel/XD, Adult Swim, Fox, the Disney/Pixar/
+  DreamWorks film catalogues, and HBO/AMC/Netflix drama.
+
+  Each show is capped at its **30 best-known characters** (`--per-show N` to change it),
+  ranked by how many language Wikipedias cover them. The cap is per show rather than a
+  single global fame threshold on purpose: every Ed Edd n Eddy character has *zero*
+  Wikipedia articles — the whole cast lives on one shared page — so a global cutoff would
+  delete Ed, Edd, Eddy, Rolf and Plank while keeping dozens of minor SpongeBob relatives.
+  Fame only compares meaningfully within a show. Production bookkeeping ("Incidental 29")
+  and self-answering descriptions ("Sandy's cousin") are dropped either way.
+
+  Restrict it with `--group kids-tv|adult-animation|animation-studios|live-action-tv`, and
+  preview without writing using `--dry-run`. Wikidata only carries freely-licensed images,
+  which rules out most cartoon art, so a lot of these arrive text-only.
 
 Anything still without an image reveals as plain text, which is a supported look — use
 `/list-set-image` to fill in any you care about.
@@ -194,19 +222,34 @@ Anything still without an image reveals as plain text, which is a supported look
 anything at game time: `/create-lobby list:Naruto, Scrubs`.
 
 <details>
-<summary>Refreshing the AniList artwork cache</summary>
+<summary>Refreshing the AniList and Wikidata caches</summary>
 
-`seed:anime-images` reads a committed mapping at `data/seed/anilist-character-images.json`,
-so seeding itself never touches the network. To rebuild that file from AniList:
+`seed:anilist` reads a committed `data/seed/anilist-characters.json`, so seeding never
+touches the network. To rebuild it from AniList:
 
 ```bash
 npm run fetch:anilist
 ```
 
-It's resumable, respects AniList's rate limit, and deliberately errs toward **no** image:
-every result is cross-checked against the codex character's `media_source` before it's
-accepted, because a portrait of the wrong character actively misleads someone trying to
-guess. Names it can't confidently pin down are recorded under `unmatched` and left text-only.
+It walks the most popular titles rather than searching by name (AniList's fuzzy search
+answers "Demon Slayer" with a game called *Onigiri*), then pages every character of every
+title it takes. AniList rate-limits hard, so a full run takes a couple of hours; it's
+resumable, and records which titles are fully paged so a re-run only costs the one in
+flight. `--pages N` sets the depth and `--type ANIME|MANGA` restricts it.
+
+Likewise `seed:wikidata` reads a committed `data/seed/wikidata-characters.json`. To rebuild
+it from Wikidata (a long run — tens of minutes, and the public endpoint rate-limits):
+
+```bash
+npm run fetch:wikidata
+```
+
+It discovers shows by broadcaster and production company rather than from a hand-written
+list, so a cartoon nobody thought to add still lands. It's resumable — the output file
+doubles as the progress log, so `Ctrl+C` and re-run only costs the chunk in flight — and it
+splits a query in half whenever the endpoint times out, which is what lets a 300-character
+series like The Simpsons through without failing the 23 ordinary shows sharing its request.
+Add `--group <key>` to sweep one source group, or `--list-groups` to see them.
 </details>
 
 ---
@@ -277,7 +320,7 @@ a backstop: in the normal case the `setTimeout` fires first and the pass finds n
 ## Development
 
 ```bash
-npm test                 # 102 tests, no network or Discord needed
+npm test                 # 115 tests, no network or Discord needed
 npm run generate:sounds  # regenerate the WAV sound effects
 ```
 
