@@ -97,6 +97,103 @@ function selectForShow(characters, perShow) {
     .slice(0, perShow);
 }
 
+/**
+ * Merges video game entries that share a franchise (tagged by fetch-wikidata-characters.js
+ * via Wikidata's "part of the series" link) into one list, unioning their casts.
+ *
+ * Wikidata files every numbered entry as its own item, so without this, Kingdom Hearts
+ * would arrive as "Kingdom Hearts", "Kingdom Hearts II", "Kingdom Hearts III" and "Kingdom
+ * Hearts: Birth by Sleep" -- four lists at lobby time for what is one game to ask for.
+ * Entries with no franchise tag (a standalone title, or anything outside the video-games
+ * group) pass through unchanged.
+ */
+/**
+ * Strips the parts of a game title that mark an individual entry rather than the series:
+ * a subtitle after a colon, a trailing roman numeral or number, and edition words.
+ *
+ * This is the fallback for what P179 misses, and Wikidata misses a lot of it -- only about
+ * half the games swept came back tagged, leaving Final Fantasy split across eighteen lists
+ * and Mario across seventeen. Deliberately conservative, and only ever applied when two or
+ * more titles agree on the same base, so a one-off game keeps its full name.
+ */
+function baseGameTitle(label) {
+  let base = label.split(':')[0].trim();
+  base = base
+    .replace(/\s+(?:\d+|[IVXLC]+)$/i, '')
+    .replace(/\s+(?:remake|remastered|redux|definitive|deluxe|hd|final mix)$/i, '')
+    .trim();
+  return base.length >= 3 ? base : label;
+}
+
+function mergeFranchises(series) {
+  // P179 is authoritative where it exists, so it is applied first and never second-guessed.
+  const tagged = series.filter((s) => s.franchise);
+  const untagged = series.filter((s) => !s.franchise);
+
+  // For everything P179 left untagged, fall back to the title itself -- but only where at
+  // least two entries share a base, which is the evidence that it names a series rather
+  // than just being one game's title.
+  const baseCounts = new Map();
+  for (const s of untagged) {
+    const base = baseGameTitle(s.label);
+    baseCounts.set(base, (baseCounts.get(base) || 0) + 1);
+  }
+  // A base that matches a franchise P179 already knows about is trusted even at count 1,
+  // since the tagged entries are the corroboration.
+  const knownFranchises = new Set(tagged.map((s) => s.franchise));
+
+  const standalone = [];
+  const grouped = new Map();
+  const put = (key, s) => {
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(s);
+  };
+
+  for (const s of tagged) put(s.franchise, s);
+  for (const s of untagged) {
+    const base = baseGameTitle(s.label);
+    if (baseCounts.get(base) > 1 || knownFranchises.has(base)) put(base, s);
+    else standalone.push(s);
+  }
+
+  const merged = [];
+  for (const [franchise, members] of grouped) {
+    // The category a franchise's characters get filed under is whichever its members agree
+    // on most -- almost always unanimous, since a franchise's entries are nearly always the
+    // same medium.
+    const votes = new Map();
+    for (const m of members) votes.set(m.category, (votes.get(m.category) || 0) + 1);
+    const category = [...votes.entries()].sort((a, b) => b[1] - a[1])[0][0];
+
+    // Biggest cast first, so when two entries disagree on a shared character's data the
+    // fuller game's version wins.
+    const characters = [];
+    const seen = new Set();
+    for (const m of [...members].sort((a, b) => b.characters.length - a.characters.length)) {
+      for (const c of m.characters) {
+        const key = c.name.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        characters.push(c);
+      }
+    }
+    // Wikidata's series label is sometimes vaguer than the games' own shared title -- the
+    // Advance Wars series item is labelled just "Wars", which as a list name tells a player
+    // nothing. Where every member agrees on a longer base title that still contains the
+    // series label, that is the more recognisable name and wins.
+    const bases = new Set(members.map((m) => baseGameTitle(m.label)));
+    const shared = bases.size === 1 ? [...bases][0] : null;
+    const label =
+      shared && shared.length > franchise.length && shared.toLowerCase().includes(franchise.toLowerCase())
+        ? shared
+        : franchise;
+
+    merged.push({ label, category, characters, mergedFrom: members.length });
+  }
+
+  return [...standalone, ...merged];
+}
+
 // Two characters in one show can share a display name once the Wikipedia-title pass has
 // stripped disambiguators (Ed Edd n Eddy's "Ed" and Ben 10's "Ditto" are distinct items
 // that can collide with an existing row). Within a list the name is the identity, so a
@@ -196,9 +293,9 @@ function main() {
   }
 
   const data = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
-  const shows = Object.values(data.series)
-    .filter((s) => !opts.groups.length || opts.groups.includes(s.group))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const shows = mergeFranchises(
+    Object.values(data.series).filter((s) => !opts.groups.length || opts.groups.includes(s.group))
+  ).sort((a, b) => a.label.localeCompare(b.label));
 
   if (!shows.length) {
     console.error(`No shows matched. Groups present: ${[...new Set(Object.values(data.series).map((s) => s.group))].join(', ')}`);
@@ -229,7 +326,8 @@ function main() {
     if (added || images) {
       console.log(
         `  ${show.label}: added ${added}, skipped ${skipped} already present` +
-          `${images ? `, ${images} image(s)` : ''}${show.characters.length > selected.length ? ` [${show.characters.length - selected.length} trimmed]` : ''}`
+          `${images ? `, ${images} image(s)` : ''}${show.characters.length > selected.length ? ` [${show.characters.length - selected.length} trimmed]` : ''}` +
+          `${show.mergedFrom > 1 ? ` [${show.mergedFrom} titles merged]` : ''}`
       );
     }
     totalAdded += added;
@@ -245,6 +343,14 @@ function main() {
   if (opts.dryRun) console.log('--dry-run: no database writes.');
 }
 
-module.exports = { selectForShow, dedupeByName, isGuessable, PER_SHOW_LIMIT, MIN_CHARACTERS };
+module.exports = {
+  selectForShow,
+  dedupeByName,
+  isGuessable,
+  mergeFranchises,
+  baseGameTitle,
+  PER_SHOW_LIMIT,
+  MIN_CHARACTERS,
+};
 
 if (require.main === module) main();
