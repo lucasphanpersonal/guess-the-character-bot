@@ -69,11 +69,18 @@ function scheduleCountdown(lobby) {
   }
 }
 
+// A character's name plus the work it comes from, on its own line so the name stays the
+// thing your eye lands on. Omitted entirely when the source is unknown or would just
+// restate the name.
+function withSource(line, source) {
+  return source ? `${line}\n*from ${source}*` : line;
+}
+
 // description: the text shown above the embed(s), e.g. who this character belongs to.
-// characters: array of { label, name, imageUrl } -- one embed per character.
+// characters: array of { label, name, imageUrl, source } -- one embed per character.
 function characterMessage(description, characters) {
-  const embeds = characters.map(({ label, name, imageUrl }) => {
-    const embed = new EmbedBuilder().setDescription(`**${label}**: **${name}**`);
+  const embeds = characters.map(({ label, name, imageUrl, source }) => {
+    const embed = new EmbedBuilder().setDescription(withSource(`**${label}**: **${name}**`, source));
     if (imageUrl) embed.setImage(imageUrl);
     return embed;
   });
@@ -101,7 +108,7 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true } = {}) {
 }
 
 function confirmCharacterEmbed(character) {
-  const embed = new EmbedBuilder().setDescription(`**${character.name}**`);
+  const embed = new EmbedBuilder().setDescription(withSource(`**${character.name}**`, character.source));
   if (character.imageUrl) embed.setImage(character.imageUrl);
   return embed;
 }
@@ -353,7 +360,7 @@ async function handleConfirmationButton(interaction) {
 
     state.rejectedNames.add(currentName);
     if (!unlimited) state.rerollsLeft -= 1;
-    game.headByPlayer[otherPlayerId] = { name: replacement.name, imageUrl: replacement.image_url || null };
+    game.headByPlayer[otherPlayerId] = Game.head(lobby, replacement);
 
     return interaction.update({
       content: confirmPrompt(game.listLabel),

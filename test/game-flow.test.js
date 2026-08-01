@@ -105,8 +105,10 @@ module.exports = {
     // p1 must be told Luigi (p2's head) so they can answer p2's questions -- never Mario.
     const toP1 = ctx.recorder.sent.find((m) => m.target === 'dm:p1');
     const toP2 = ctx.recorder.sent.find((m) => m.target === 'dm:p2');
-    assert.equal(toP1.payload.embeds[0].data.description, '**Luigi**');
-    assert.equal(toP2.payload.embeds[0].data.description, '**Mario**');
+    // The source line matters when a name is ambiguous across shows, so it is asserted
+    // alongside the name rather than matched loosely.
+    assert.equal(toP1.payload.embeds[0].data.description, '**Luigi**\n*from Flow List (Video Games)*');
+    assert.equal(toP2.payload.embeds[0].data.description, '**Mario**\n*from Flow List (Video Games)*');
     cleanup(ctx);
   },
 

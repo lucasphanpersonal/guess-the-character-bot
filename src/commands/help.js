@@ -29,13 +29,17 @@ module.exports = {
             'draw from a combined pool; optionally set `turn-seconds` and `max-rerolls`, ' +
             '`-1` = unlimited). Set `random:true` instead of `list` to let the bot roll a random ' +
             "category for you -- 🎲 category roulette\n" +
-            '`/join-lobby` -- two people need to do this (the host doesn\'t have to be one of them)\n' +
-            '`/leave-lobby` -- back out before the game starts\n' +
-            '`/spectate` -- opt in to a DM revealing both characters\n' +
-            '`/set-characters` -- host only, optional: assign each player\'s hidden character ' +
-            "yourself instead of leaving it random (reply is only visible to you, so it won't " +
-            "spoil anything)\n" +
-            '`/start-game` -- host only, once 2 players have joined',
+            'That posts the **lobby board**, which updates itself as people join. Everything ' +
+            'else here is a button on it:\n' +
+            '**Join** / **Leave** -- two people need to join (the host doesn\'t have to be one ' +
+            'of them)\n' +
+            '**Spectate** -- opt in to a DM revealing both characters\n' +
+            '**Start game** -- host only, stays disabled until 2 players have joined\n' +
+            'The matching `/join-lobby`, `/leave-lobby`, `/spectate` and `/start-game` commands ' +
+            'still work and keep the board in sync.\n' +
+            '`/set-characters` -- host only, optional, no button: assign each player\'s hidden ' +
+            "character yourself instead of leaving it random (reply is only visible to you, so " +
+            "it won't spoil anything)",
         },
         {
           name: '🗳️ Audience vote mode',
@@ -57,11 +61,14 @@ module.exports = {
         {
           name: '3️⃣ On your turn',
           value:
-            "Ask questions out loud in voice, and `/guess <character>` any time -- guessing wrong " +
-            "doesn't end your turn, so guess early and often and keep going. Only `/pass`, or " +
-            "running out of time, actually hands the turn over (once time's up you get one truly " +
-            "last `/guess` or `/pass` before it moves on). Small typos are OK, and a well-known " +
-            "first or last name alone is accepted for multi-word names.",
+            'A **turn board** appears with a live countdown, your guesses so far, and ' +
+            '**Guess** / **Pass** buttons. Ask your questions out loud in voice, then hit ' +
+            "**Guess** (it opens a text box) as often as you like -- guessing wrong doesn't " +
+            'end your turn, so guess early and often and keep going. Only **Pass**, or ' +
+            "running out of time, actually hands the turn over (once time's up the board goes " +
+            'amber for one truly last guess before it moves on). `/guess <character>` and ' +
+            '`/pass` still work if you prefer typing. Small typos are OK, and a well-known ' +
+            'first or last name alone is accepted for multi-word names.',
         },
         {
           name: '🏆 Winning',
