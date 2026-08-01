@@ -5,6 +5,7 @@ const {
   searchListNames,
   getRandomCategory,
   getListsByCategory,
+  listCategoriesWithCounts,
 } = require('../db/characterLists');
 const Lobby = require('../game/Lobby');
 const GameManager = require('../game/GameManager');
@@ -18,6 +19,12 @@ module.exports = {
       opt
         .setName('list')
         .setDescription('Character list(s) to use -- comma-separated to combine several')
+        .setAutocomplete(true)
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName('category')
+        .setDescription('Use every list in a category, e.g. all of Video Games')
         .setAutocomplete(true)
     )
     .addBooleanOption((opt) =>
@@ -65,16 +72,39 @@ module.exports = {
 
     const random = interaction.options.getBoolean('random');
     const listOption = interaction.options.getString('list');
-    if (!random && !listOption) {
+    const categoryOption = interaction.options.getString('category');
+
+    const chosen = [listOption && 'list', categoryOption && 'category', random && 'random'].filter(Boolean);
+    if (!chosen.length) {
       return interaction.reply({
-        content: 'Provide a `list` to use, or set `random:true` to have the bot roll a random category.',
+        content:
+          'Pick one: a `list`, a `category` to use every list in it, or `random:true` to roll a category.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (chosen.length > 1) {
+      return interaction.reply({
+        content: `Use only one of \`list\`, \`category\` or \`random\` -- you gave ${chosen.join(' and ')}.`,
         flags: MessageFlags.Ephemeral,
       });
     }
 
     let resolved;
     let rolledCategory = null;
-    if (random) {
+    let pooledCategory = null;
+    if (categoryOption) {
+      resolved = getListsByCategory(interaction.guildId, categoryOption);
+      if (!resolved.length) {
+        const available = listCategoriesWithCounts(interaction.guildId)
+          .map((c) => `**${c.category}**`)
+          .join(', ');
+        return interaction.reply({
+          content: `No lists in category **${categoryOption}**.${available ? ` Try: ${available}` : ''}`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      pooledCategory = categoryOption;
+    } else if (random) {
       const category = getRandomCategory(interaction.guildId);
       if (!category) {
         return interaction.reply({ content: 'No character lists exist yet -- create one with `/list-create`.', flags: MessageFlags.Ephemeral });
@@ -148,7 +178,11 @@ module.exports = {
     // The reply IS the lobby board -- keep a handle on it so button clicks and slash
     // commands can both re-render it in place.
     const response = await interaction.reply({
-      content: rolledCategory ? `🎲 Random category rolled: **${rolledCategory}**!` : undefined,
+      content: rolledCategory
+        ? `🎲 Random category rolled: **${rolledCategory}**!`
+        : pooledCategory
+          ? `🗂️ Drawing from every list in **${pooledCategory}** (${resolved.length} lists).`
+          : undefined,
       ...buildLobbyBoardPayload(lobby),
       withResponse: true,
     });
@@ -156,7 +190,17 @@ module.exports = {
     return undefined;
   },
   async autocomplete(interaction) {
-    const raw = interaction.options.getFocused();
+    const focused = interaction.options.getFocused(true);
+    if (focused.name === 'category') {
+      const query = focused.value.toLowerCase();
+      const choices = listCategoriesWithCounts(interaction.guildId)
+        .filter((c) => c.category.toLowerCase().includes(query))
+        .slice(0, 25)
+        .map((c) => ({ name: `${c.category} (${c.count} lists)`, value: c.category }));
+      return interaction.respond(choices);
+    }
+
+    const raw = focused.value;
     const parts = raw.split(',');
     const currentPartial = parts[parts.length - 1].trim();
     const alreadyTyped = parts

@@ -126,9 +126,24 @@ function getCharacterSource(guildId, characterName, drawnListId = null) {
   return isWork(best) && best.category ? `${best.name} (${best.category})` : best.name;
 }
 
-// Human-readable label for a whole lobby selection, e.g. "Naruto (Manga) + Scrubs (TV Shows)".
+// How many lists a selection can name individually before it is summarised instead.
+const LABEL_LIST_LIMIT = 3;
+
+/**
+ * Human-readable label for a whole lobby selection, e.g. "Naruto (Manga) + Scrubs (TV Shows)".
+ *
+ * A selection can cover a whole category -- `/create-lobby category:Video Games` pools 127
+ * lists, and rolling "Anime" pools 443 -- and naming each one would produce a label
+ * thousands of characters long, well past what Discord will render in an embed. Past a
+ * handful, the shared category is the honest summary; a mixed selection just gets counted.
+ */
 function getListLabelForIds(listIds) {
-  return getListsByIds(listIds).map(formatListLabel).join(' + ');
+  const lists = getListsByIds(listIds);
+  if (lists.length <= LABEL_LIST_LIMIT) return lists.map(formatListLabel).join(' + ');
+
+  const categories = new Set(lists.map((l) => l.category || 'Uncategorized'));
+  const suffix = `${lists.length} lists`;
+  return categories.size === 1 ? `${[...categories][0]} (${suffix})` : suffix;
 }
 
 // Returned in the same order as `listIds` so display labels match the order the host typed

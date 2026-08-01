@@ -17,8 +17,12 @@ happen live between humans in voice.
    or "Video Games") and `/list-add-character`. Or skip this entirely and use the bundled
    seed data — see [Seeding character lists](#seeding-character-lists).
 2. **Open a lobby** with `/create-lobby list:<name>` in the channel you'll play from.
-   Comma-separate several lists (`list:Pokemon, Anime`) to draw from a combined pool, or use
-   `random:true` instead of `list` for 🎲 category roulette.
+   Comma-separate several lists (`list:Pokemon, Anime`) to draw from a combined pool.
+
+   To play "any character from X", use `category` instead — `/create-lobby category:Video
+   Games` pools every list in that category (2,800+ characters across 127 games), which
+   naming them individually can't do: Discord caps the `list` option at 100 characters. Or
+   `random:true` for 🎲 category roulette.
 
    This posts the **lobby board** — a single message with **Join / Leave / Spectate / Start
    game** buttons that updates itself in place as people join. Everything below can be done
@@ -106,7 +110,7 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list-set-image` | anyone | Attach/update a character's image |
 | `/list-remove-character` | anyone | Remove a character |
 | `/list-show` | anyone | Browse categories, lists in a category, or one list's characters |
-| `/create-lobby` | anyone | Open a lobby + post the lobby board (`list`, or `random:true`; plus `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds`) |
+| `/create-lobby` | anyone | Open a lobby + post the lobby board (`list`, `category`, or `random:true`; plus `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds`) |
 | `/join-lobby` / `/leave-lobby` | players | Join or leave the waiting lobby (or use the board's buttons) |
 | `/spectate` | anyone | Opt in to a DM revealing both characters (or use the board's button) |
 | `/set-characters` | host | Hand-pick both players' characters |
