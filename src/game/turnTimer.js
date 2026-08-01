@@ -25,6 +25,12 @@ class TurnTimer {
     if (!this.startedAt) return this.durationMs;
     return Math.max(0, this.durationMs - (Date.now() - this.startedAt));
   }
+
+  // Wall-clock deadline, which is what the watchdog enforces when setTimeout can't be
+  // trusted to have run (see timerWatchdog.js). Null until the timer is started.
+  expiresAt() {
+    return this.startedAt === null ? null : this.startedAt + this.durationMs;
+  }
 }
 
 module.exports = TurnTimer;

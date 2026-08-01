@@ -163,13 +163,14 @@ data creates over a thousand lists.
 
 ## Seeding character lists
 
-Three bundled importers, all idempotent — re-running only adds what's missing, so they're
+Four bundled importers, all idempotent — re-running only adds what's missing, so they're
 safe to run repeatedly.
 
 ```bash
-npm run seed:pokemon -- <your-server-id>   # 1,025 Pokémon, with official artwork
-npm run seed:lol     -- <your-server-id>   # 173 League of Legends champions, with splash art
-npm run seed:codex   -- <your-server-id>   # 15,939 characters across ~29 categories
+npm run seed:pokemon      -- <your-server-id>   # 1,025 Pokémon, with official artwork
+npm run seed:lol          -- <your-server-id>   # 173 League of Legends champions, with splash art
+npm run seed:codex        -- <your-server-id>   # 15,939 characters across ~29 categories
+npm run seed:anime-images -- <your-server-id>   # backfills artwork onto the anime/manga lists
 ```
 
 - **`seed:pokemon`** and **`seed:lol`** each create a single list, with images pulled from
@@ -179,11 +180,34 @@ npm run seed:codex   -- <your-server-id>   # 15,939 characters across ~29 catego
   in two additive layers: one list per media-type **category** ("Anime", "Video Games",
   "Mythology", …) *and* one list per recognizable **franchise** ("Naruto", "Scrubs",
   "Disney", …). A character can belong to several lists at once — Pikachu ends up in both
-  "Video Games" and "Pokémon". This dataset has no images, so those characters show as text
-  only; `/list-set-image` can fill in any you care about.
+  "Video Games" and "Pokémon". This dataset ships no images at all.
+- **`seed:anime-images`** fills some of that gap: it adds no characters, it only attaches
+  official [AniList](https://anilist.co) artwork to codex characters in the **Anime** and
+  **Manga** lists (both the category lists and every franchise list under those categories)
+  that don't have an image yet. Existing artwork is never overwritten. Run it after
+  `seed:codex`.
 
-All three take an optional list name as a second argument. Combine anything at game time:
-`/create-lobby list:Naruto, Scrubs`.
+Anything still without an image reveals as plain text, which is a supported look — use
+`/list-set-image` to fill in any you care about.
+
+`seed:pokemon` and `seed:lol` take an optional list name as a second argument. Combine
+anything at game time: `/create-lobby list:Naruto, Scrubs`.
+
+<details>
+<summary>Refreshing the AniList artwork cache</summary>
+
+`seed:anime-images` reads a committed mapping at `data/seed/anilist-character-images.json`,
+so seeding itself never touches the network. To rebuild that file from AniList:
+
+```bash
+npm run fetch:anilist
+```
+
+It's resumable, respects AniList's rate limit, and deliberately errs toward **no** image:
+every result is cross-checked against the codex character's `media_source` before it's
+accepted, because a portrait of the wrong character actively misleads someone trying to
+guess. Names it can't confidently pin down are recorded under `unmatched` and left text-only.
+</details>
 
 ---
 
@@ -211,10 +235,13 @@ src/
     audienceVote.js     Audience-vote state, ballots, tallying (spoiler-safe board)
     rematch.js          Builds a rematch lobby from a finished one
     turnTimer.js        Turn countdown wrapper
+    timerWatchdog.js    Wall-clock backstop for turn/vote deadlines (sleep-safe)
+    boards.js           Tracks live button messages and retires them after a restart
     voice.js            Voice-channel join + sound playback (all best-effort)
   db/
     connection.js       SQLite setup + lightweight column migrations
-    schema.sql          character_lists, characters, game_results
+    schema.sql          character_lists, characters, game_results, active_boards
+    activeBoards.js     Which board messages are live right now
     characterLists.js   List/character queries, random selection, search
     stats.js            Win/loss records and leaderboard
   util/text.js          Shared accent/case normalization
@@ -229,12 +256,28 @@ data/
 **State:** character lists and game results are persisted in SQLite. Active lobby and game
 state is deliberately in-memory only — a game in progress does not survive a bot restart.
 
+**Restarts.** Because the game state is gone but its messages aren't, the *messages* are
+tracked: `active_boards` holds the channel id, message id and kind of every board currently
+carrying buttons (lobby, turn, vote, reveal, and the confirm DMs). A board is untracked the
+moment it loses its buttons in normal play, so the table only ever holds live ones. On
+startup the bot retires whatever is left: buttons stripped, a short "the bot restarted" note
+added, embeds untouched. The reveal keeps its **Leaderboard** button, which reads from SQLite
+and never needed the lobby. The same sweep runs on a clean shutdown so boards go quiet
+immediately, but the startup pass is the one that matters — a crash or force-kill skips
+shutdown entirely, and the rows are still there on the next boot.
+
+**Sleep.** Turn timers, countdown checkpoints and the vote auto-close are `setTimeout`s, and
+a sleeping machine doesn't run them. `timerWatchdog.js` re-checks every 5 seconds against the
+wall clock and expires anything already past due, so a turn that ran out while the machine
+was asleep ends on wake instead of hanging (or firing a burst of stale countdown edits). It's
+a backstop: in the normal case the `setTimeout` fires first and the pass finds nothing.
+
 ---
 
 ## Development
 
 ```bash
-npm test                 # 77 tests, no network or Discord needed
+npm test                 # 102 tests, no network or Discord needed
 npm run generate:sounds  # regenerate the WAV sound effects
 ```
 
@@ -244,7 +287,8 @@ list/character queries, the lobby/turn/game-over boards with their buttons and m
 audience-vote mode (including a guard that the public board never leaks a candidate), and
 the full game flow —
 confirm/reroll, turn rules, the rebuttal/tie/win outcomes, concurrent lobbies, and rematch —
-using fake Discord objects.
+using fake Discord objects. The restart sweep and the wall-clock timer watchdog are covered
+too: the harness hands back fetchable fake messages, so the sweep is driven end to end.
 
 Add a test file as `test/<name>.test.js` exporting named functions; the runner picks it up
 automatically.

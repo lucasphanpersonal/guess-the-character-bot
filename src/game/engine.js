@@ -11,6 +11,7 @@ const {
 const { recordResult } = require('../db/stats');
 const { refreshLobbyBoard } = require('./lobbyBoard');
 const { buildTurnBoardPayload, refreshTurnBoard } = require('./turnBoard');
+const { trackBoard, untrackBoard } = require('./boards');
 const {
   AudienceVote,
   drawCandidates,
@@ -56,7 +57,10 @@ function scheduleCountdown(lobby) {
   for (const remainingS of countdownCheckpoints(game.turnSeconds)) {
     const elapsedMs = (game.turnSeconds - remainingS) * 1000;
     const handle = setTimeout(() => {
-      if (game.finished) return;
+      // `paused` means the turn already ran out of time (possibly because the machine slept
+      // through the rest of it -- see timerWatchdog.js), so the remaining checkpoints have
+      // nothing left to count down and would just re-render the same board in a burst.
+      if (game.finished || game.paused) return;
       voice.playChime(game);
       // The board renders its own remaining time, so a refresh is all that's needed.
       refreshTurnBoard(game, lobby.channelId).catch((err) => console.error(err));
@@ -124,11 +128,12 @@ async function sendConfirmDM(recipientUser, subjectPlayerId, game, channelId) {
   const state = game.confirmState[recipientUser.id];
   const character = game.headByPlayer[subjectPlayerId];
   try {
-    await recipientUser.send({
+    const dm = await recipientUser.send({
       content: game.rerollAllowed ? confirmPrompt(game.listLabel) : votedPrompt(game.listLabel),
       embeds: [confirmCharacterEmbed(character)],
       components: [buildConfirmRow(channelId, state.rerollsLeft, { allowReroll: game.rerollAllowed })],
     });
+    trackBoard('confirm', dm);
     return true;
   } catch {
     return false;
@@ -189,6 +194,7 @@ async function startAudienceVote(client, lobby) {
 
   const channel = await getChannel(client, lobby);
   vote.boardMessage = await channel.send(buildVoteBoardPayload(vote));
+  trackBoard('vote', vote.boardMessage);
   vote.timer = setTimeout(() => {
     closeAudienceVote(client, lobby, { reason: 'timer' }).catch(console.error);
   }, lobby.voteSeconds * 1000);
@@ -322,6 +328,7 @@ async function handleConfirmationButton(interaction) {
       embeds: interaction.message.embeds,
       components: [],
     });
+    untrackBoard(interaction.message);
     return maybeBeginPlay(interaction.client, lobby);
   }
 
@@ -368,6 +375,7 @@ async function startTurn(client, lobby) {
   game.timer.start();
 
   game.turnBoardMessage = await channel.send(buildTurnBoardPayload(game, lobby.channelId));
+  trackBoard('turn', game.turnBoardMessage);
   scheduleCountdown(lobby);
 }
 
@@ -530,13 +538,16 @@ async function finalizeGame(client, lobby, outcome) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  await channel.send({
+  const reveal = await channel.send({
     ...characterMessage(resultLine, [
       { label: `${p1Name}'s character was`, ...game.headByPlayer[p1Id] },
       { label: `${p2Name}'s character was`, ...game.headByPlayer[p2Id] },
     ]),
     components: [gameOverButtons],
   });
+  // Rematch needs the FINISHED lobby that only exists in memory, so a restart has to retire
+  // this row -- the sweep keeps the Leaderboard button, which reads from SQLite.
+  trackBoard('gameover', reveal);
 
   const result = outcome.result === 'tie' ? 'tie' : outcome.winnerId === p1Id ? 'player1' : 'player2';
   recordResult(lobby.guildId, p1Id, p2Id, result);

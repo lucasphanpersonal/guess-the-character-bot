@@ -5,6 +5,7 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { countDistinctCharacters, getListLabelForIds } = require('../db/characterLists');
+const { trackBoard, untrackBoard } = require('./boards');
 
 const MAX_PLAYERS = 2;
 
@@ -93,11 +94,23 @@ function buildLobbyBoardPayload(lobby) {
 // which is atomic with acknowledging the click.
 async function refreshLobbyBoard(lobby) {
   if (!lobby.boardMessage) return;
+  const payload = buildLobbyBoardPayload(lobby);
   try {
-    await lobby.boardMessage.edit(buildLobbyBoardPayload(lobby));
+    await lobby.boardMessage.edit(payload);
+    // Past WAITING the board has no buttons left, so a restart has nothing to retire on it.
+    // A failed edit deliberately keeps the row: the board may still be showing its buttons.
+    if (!payload.components.length) untrackBoard(lobby.boardMessage);
   } catch (err) {
     console.warn('[lobbyBoard] Could not refresh the lobby board:', err.message);
   }
 }
 
-module.exports = { buildLobbyBoardPayload, refreshLobbyBoard, MAX_PLAYERS };
+// All three places that post a board (/create-lobby, /rematch, the reveal's Rematch button)
+// do it as an interaction reply, so they share the handle-keeping and the restart tracking.
+async function attachLobbyBoard(lobby, response, interaction) {
+  lobby.boardMessage = response?.resource?.message ?? (await interaction.fetchReply().catch(() => null));
+  trackBoard('lobby', lobby.boardMessage);
+  return lobby.boardMessage;
+}
+
+module.exports = { buildLobbyBoardPayload, refreshLobbyBoard, attachLobbyBoard, MAX_PLAYERS };

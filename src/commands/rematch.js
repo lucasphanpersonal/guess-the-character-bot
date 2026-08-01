@@ -1,7 +1,7 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const GameManager = require('../game/GameManager');
 const { createRematchLobby, rematchAnnouncement } = require('../game/rematch');
-const { buildLobbyBoardPayload } = require('../game/lobbyBoard');
+const { buildLobbyBoardPayload, attachLobbyBoard } = require('../game/lobbyBoard');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -23,7 +23,7 @@ module.exports = {
       ...buildLobbyBoardPayload(lobby),
       withResponse: true,
     });
-    lobby.boardMessage = response?.resource?.message ?? (await interaction.fetchReply().catch(() => null));
+    await attachLobbyBoard(lobby, response, interaction);
     return undefined;
   },
 };

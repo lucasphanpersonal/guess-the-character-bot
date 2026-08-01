@@ -4,7 +4,7 @@
 const { MessageFlags } = require('discord.js');
 const GameManager = require('../game/GameManager');
 const { createRematchLobby, rematchAnnouncement } = require('../game/rematch');
-const { buildLobbyBoardPayload } = require('../game/lobbyBoard');
+const { buildLobbyBoardPayload, attachLobbyBoard } = require('../game/lobbyBoard');
 const { getLeaderboard } = require('../db/stats');
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
@@ -41,7 +41,7 @@ async function handle(interaction) {
       ...buildLobbyBoardPayload(lobby),
       withResponse: true,
     });
-    lobby.boardMessage = message?.resource?.message ?? (await interaction.fetchReply().catch(() => null));
+    await attachLobbyBoard(lobby, message, interaction);
     return undefined;
   }
 

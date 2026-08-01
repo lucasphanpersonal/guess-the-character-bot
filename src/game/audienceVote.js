@@ -9,6 +9,7 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
 const { getRandomCharacters } = require('../db/characterLists');
+const { untrackBoard } = require('./boards');
 
 const SLOTS = ['1', '2'];
 
@@ -145,8 +146,11 @@ function buildBallotPayload(vote, voterId) {
 
 async function refreshVoteBoard(vote) {
   if (!vote.boardMessage) return;
+  const payload = buildVoteBoardPayload(vote);
   try {
-    await vote.boardMessage.edit(buildVoteBoardPayload(vote));
+    await vote.boardMessage.edit(payload);
+    // A closed vote board keeps no buttons, so a restart has nothing to retire on it.
+    if (!payload.components.length) untrackBoard(vote.boardMessage);
   } catch (err) {
     console.warn('[audienceVote] Could not refresh the vote board:', err.message);
   }

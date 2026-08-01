@@ -62,7 +62,7 @@ function dedupeNamesWithinGroup(rows) {
       continue;
     }
     seen.add(name.toLowerCase());
-    result.push({ name });
+    result.push({ name, row });
   }
   return { result, collisionsSkipped };
 }
@@ -220,4 +220,15 @@ function main() {
   );
 }
 
-main();
+// Exported so image-backfill scripts can reproduce *exactly* which codex row ended up under
+// which stored character name in which list -- the disambiguation above means a stored name
+// isn't always the raw character_name, so re-deriving it is the only reliable way back.
+module.exports = {
+  FRANCHISE_MIN_CHARACTERS,
+  dedupeNamesWithinGroup,
+  groupByMediaType,
+  buildFranchiseRoots,
+  mostCommonMediaType,
+};
+
+if (require.main === module) main();

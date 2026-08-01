@@ -25,19 +25,32 @@ function payloadText(payload) {
 
 // Records every message the bot would have sent, so tests can assert on wording and on
 // which channel/DM it went to.
+let messageSeq = 0;
 function createRecorder() {
   const sent = [];
-  const record = (target, payload) => {
+  // Sent messages by `<channelId>:<messageId>`, so a fake client can fetch one back the way
+  // the startup board sweep does.
+  const messages = new Map();
+
+  // channelId defaults to the target's own id (`channel:123` -> `123`, `dm:p1` -> `p1`);
+  // interaction replies pass the real channel explicitly, since their target is the user.
+  const record = (target, payload, channelId = target.split(':')[1] ?? target) => {
     sent.push({ target, content: payloadText(payload), payload });
-    return {
+    const message = {
+      id: `msg${++messageSeq}`,
+      channelId,
+      content: typeof payload === 'string' ? payload : payload?.content ?? '',
       // Boards are edited in place; edits are recorded against `<target>:edit`.
-      edit: async (next) => record(`${target}:edit`, next),
+      edit: async (next) => record(`${target}:edit`, next, channelId),
     };
+    messages.set(`${channelId}:${message.id}`, message);
+    return message;
   };
   const matching = (prefix) => sent.filter((m) => m.target.startsWith(prefix));
   return {
     sent,
     record,
+    messageAt: (channelId, messageId) => messages.get(`${channelId}:${messageId}`),
     /** All recorded content joined, for coarse "was this mentioned anywhere" checks. */
     allText: () => sent.map((m) => m.content).join('\n'),
     textFor: (target) => sent.filter((m) => m.target === target).map((m) => m.content),
@@ -49,12 +62,27 @@ function createRecorder() {
   };
 }
 
+// Discord throws on a message that's been deleted; the board sweep relies on that to know
+// there's nothing left to retire.
+function unknownMessage() {
+  const err = new Error('Unknown Message');
+  err.code = 10008;
+  return err;
+}
+
 function createFakeClient(recorder) {
   return {
     channels: {
       fetch: async (channelId) => ({
         id: channelId,
         send: async (payload) => recorder.record(`channel:${channelId}`, payload),
+        messages: {
+          fetch: async (messageId) => {
+            const message = recorder.messageAt(channelId, messageId);
+            if (!message) throw unknownMessage();
+            return message;
+          },
+        },
       }),
     },
     users: {
@@ -89,10 +117,11 @@ function createSlashInteraction({ client, userId, guildId, channelId, options = 
     // Mirrors the real shape: with `withResponse: true` discord.js hands back an
     // InteractionCallbackResponse whose `.resource.message` is the posted Message.
     reply: async (payload) => {
-      const message = recorder.record(`reply:${userId}`, payload);
+      // A reply that doubles as a board lives in the channel, not on the user.
+      const message = recorder.record(`reply:${userId}`, payload, channelId);
       return { resource: { message } };
     },
-    fetchReply: async () => recorder.record(`fetchReply:${userId}`, ''),
+    fetchReply: async () => recorder.record(`fetchReply:${userId}`, '', channelId),
     deferReply: async () => recorder.record(`defer:${userId}`, ''),
     editReply: async (payload) => recorder.record(`editreply:${userId}`, payload),
     followUp: async (payload) => recorder.record(`followup:${userId}`, payload),
@@ -108,12 +137,12 @@ function createButtonInteraction({ client, userId, customId, recorder, guildId, 
     guildId,
     channelId,
     message: { embeds: [] },
-    update: async (payload) => recorder.record(`update:${userId}`, payload),
+    update: async (payload) => recorder.record(`update:${userId}`, payload, channelId),
     reply: async (payload) => {
-      const message = recorder.record(`reply:${userId}`, payload);
+      const message = recorder.record(`reply:${userId}`, payload, channelId);
       return { resource: { message } };
     },
-    fetchReply: async () => recorder.record(`fetchReply:${userId}`, ''),
+    fetchReply: async () => recorder.record(`fetchReply:${userId}`, '', channelId),
     followUp: async (payload) => recorder.record(`followup:${userId}`, payload),
     deferUpdate: async () => recorder.record(`defer:${userId}`, ''),
     showModal: async (modal) => recorder.record(`modal:${userId}`, JSON.stringify(modal.toJSON())),

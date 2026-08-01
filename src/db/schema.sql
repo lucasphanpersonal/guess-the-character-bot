@@ -18,6 +18,18 @@ CREATE TABLE IF NOT EXISTS characters (
   UNIQUE(list_id, name COLLATE NOCASE)
 );
 
+-- The button-bearing messages ("boards") that are live right now. Deliberately NOT game
+-- state -- just enough to find those messages again after a restart and retire them, since
+-- the lobby/game they belong to is gone. See src/game/boards.js.
+CREATE TABLE IF NOT EXISTS active_boards (
+  id INTEGER PRIMARY KEY,
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  kind TEXT NOT NULL, -- 'lobby', 'turn', 'vote', 'gameover', or 'confirm'
+  created_at INTEGER NOT NULL,
+  UNIQUE(channel_id, message_id)
+);
+
 CREATE TABLE IF NOT EXISTS game_results (
   id INTEGER PRIMARY KEY,
   guild_id TEXT NOT NULL,

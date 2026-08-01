@@ -8,6 +8,8 @@ const GameManager = require('./game/GameManager');
 const db = require('./db/connection');
 const { handleComponentInteraction } = require('./components/router');
 const { clearVoteTimer } = require('./game/audienceVote');
+const { sweepBoards } = require('./game/boards');
+const timerWatchdog = require('./game/timerWatchdog');
 
 if (!process.env.DISCORD_TOKEN) {
   console.error('DISCORD_TOKEN is not set. Copy .env.example to .env and fill it in.');
@@ -34,8 +36,19 @@ function loadCommands(dir) {
 }
 loadCommands(path.join(__dirname, 'commands'));
 
-client.once('clientReady', () => {
+client.once('clientReady', async () => {
   console.log(`Logged in as ${client.user.tag}. Loaded ${client.commands.size} commands.`);
+
+  // Whatever games were running belong to a process that no longer exists, so retire their
+  // boards before anyone can click a button on one. This is the pass that matters: the
+  // shutdown handler below only runs on a clean exit, and a force-kill or crash skips it.
+  const { found, retired } = await sweepBoards(client).catch((err) => {
+    console.error('Error retiring boards left over from the last run:', err.message);
+    return { found: 0, retired: 0 };
+  });
+  if (found) console.log(`Retired ${retired}/${found} board(s) left over from the last run.`);
+
+  timerWatchdog.start(client);
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -82,15 +95,25 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// In-memory game state is intentionally not persisted, but pending turn timers, live voice
-// connections and the SQLite WAL all need an orderly teardown -- otherwise the bot can hang
-// on exit holding a voice socket, and the WAL grows unbounded because it's never
-// checkpointed.
+// In-memory game state is intentionally not persisted, but the boards it posted, pending
+// turn timers, live voice connections and the SQLite WAL all need an orderly teardown --
+// otherwise buttons are left hanging in the channel, the bot can hang on exit holding a
+// voice socket, and the WAL grows unbounded because it's never checkpointed.
+const BOARD_SWEEP_TIMEOUT_MS = 5000;
 let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`\nReceived ${signal}, shutting down...`);
+  timerWatchdog.stop();
+
+  // Best-effort: retire the live boards now rather than leaving them clickable until the
+  // next startup sweep. Bounded, because a slow Discord API shouldn't hold up the exit --
+  // anything left untouched still has its row, so the next boot cleans it up.
+  await Promise.race([
+    sweepBoards(client).catch((err) => console.error('Error retiring boards:', err.message)),
+    new Promise((resolve) => setTimeout(resolve, BOARD_SWEEP_TIMEOUT_MS)),
+  ]);
 
   for (const lobby of GameManager.allLobbies()) {
     try {

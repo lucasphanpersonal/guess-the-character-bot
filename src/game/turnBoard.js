@@ -5,6 +5,7 @@
 // stripped once the turn ends, so the channel ends up with exactly one tidy block per turn.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { untrackBoard } = require('./boards');
 
 const BAR_WIDTH = 12;
 // Enough history to feel like a running tally without risking the 1024-char field cap.
@@ -87,8 +88,11 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
 
 async function refreshTurnBoard(game, channelId, outcome = null) {
   if (!game.turnBoardMessage) return;
+  const payload = buildTurnBoardPayload(game, channelId, outcome);
   try {
-    await game.turnBoardMessage.edit(buildTurnBoardPayload(game, channelId, outcome));
+    await game.turnBoardMessage.edit(payload);
+    // An outcome means the buttons are gone for good, so a restart has nothing to retire.
+    if (!payload.components.length) untrackBoard(game.turnBoardMessage);
   } catch (err) {
     console.warn('[turnBoard] Could not refresh the turn board:', err.message);
   }
