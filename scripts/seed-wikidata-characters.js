@@ -179,10 +179,21 @@ function mergeFranchises(series) {
     }
     // Wikidata's series label is sometimes vaguer than the games' own shared title -- the
     // Advance Wars series item is labelled just "Wars", which as a list name tells a player
-    // nothing. Where every member agrees on a longer base title that still contains the
+    // nothing. Where most members agree on a longer base title that still contains the
     // series label, that is the more recognisable name and wins.
-    const bases = new Set(members.map((m) => baseGameTitle(m.label)));
-    const shared = bases.size === 1 ? [...bases][0] : null;
+    //
+    // Majority rather than unanimity: one oddly-formatted title is enough to defeat a
+    // unanimous vote and was exactly how "Wars" got through in the first place -- "Game Boy
+    // Wars Advance 1+2" doesn't match the numeral-stripping regex (its trailing "1+2" isn't
+    // a plain number or roman numeral), so its base disagreed with the other five members
+    // that all agreed on "Advance Wars".
+    const baseVotes = new Map();
+    for (const m of members) {
+      const base = baseGameTitle(m.label);
+      baseVotes.set(base, (baseVotes.get(base) || 0) + 1);
+    }
+    const [topBase, topCount] = [...baseVotes.entries()].sort((a, b) => b[1] - a[1])[0];
+    const shared = topCount / members.length > 0.5 ? topBase : null;
     const label =
       shared && shared.length > franchise.length && shared.toLowerCase().includes(franchise.toLowerCase())
         ? shared
