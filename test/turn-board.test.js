@@ -107,6 +107,21 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Discord resolves `<@id>` in an embed description but not in its title, where it renders
+  // as the literal "<@192319600095002634>". The mention has to stay out of the title.
+  async "the current player renders as a mention, not raw markup"() {
+    const ctx = await runningGame();
+    const payload = buildTurnBoardPayload(ctx.lobby.game, ctx.channelId);
+    const embed = payload.embeds[0].data;
+
+    assert.ok(!/<@/.test(embed.title || ''), `mention must not be in the title, got ${embed.title}`);
+    assert.match(embed.description, /<@p1>/, 'mention belongs in the description');
+    for (const field of embed.fields || []) {
+      assert.ok(!/<@/.test(field.name), 'mentions do not render in field names either');
+    }
+    cleanup(ctx);
+  },
+
   async 'the Guess button opens a modal rather than replying'() {
     const ctx = await runningGame();
     let shown = null;
