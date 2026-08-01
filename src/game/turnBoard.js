@@ -51,7 +51,12 @@ function buildButtons(game, channelId) {
  */
 function buildTurnBoardPayload(game, channelId, outcome = null) {
   const label = game.rebuttal ? '🔁 Rebuttal turn' : `🎯 Round ${game.round}`;
-  const embed = new EmbedBuilder().setTitle(`${label} — <@${game.currentPlayerId}>'s turn`);
+  const embed = new EmbedBuilder().setTitle(label);
+
+  // Discord resolves `<@id>` in an embed's description but NOT in its title or field
+  // names, where it renders as the raw `<@192319600095002634>`. So whose turn it is has to
+  // live in the description.
+  const whoseTurn = `<@${game.currentPlayerId}>'s turn`;
 
   const history = guessHistory(game);
   if (history) embed.addFields({ name: 'Guesses this turn', value: history });
@@ -60,9 +65,9 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
     if (outcome.cancelled) {
       embed.setColor(COLOR_OVER).setDescription('🛑 Game cancelled.');
     } else if (outcome.correct) {
-      embed.setColor(COLOR_CORRECT).setDescription('✅ **Correct!**');
+      embed.setColor(COLOR_CORRECT).setDescription(`${whoseTurn}\n✅ **Correct!**`);
     } else {
-      embed.setColor(COLOR_OVER).setDescription('➡️ Turn over.');
+      embed.setColor(COLOR_OVER).setDescription(`${whoseTurn}\n➡️ Turn over.`);
     }
     return { embeds: [embed], components: [] };
   }
@@ -70,7 +75,7 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
   if (game.paused) {
     embed
       .setColor(COLOR_PAUSED)
-      .setDescription("⏰ **Time's up — last chance!**\nGuess now, or pass to hand it over.");
+      .setDescription(`${whoseTurn}\n⏰ **Time's up — last chance!**\nGuess now, or pass to hand it over.`);
     return { embeds: [embed], components: [buildButtons(game, channelId)] };
   }
 
@@ -79,7 +84,8 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
   embed
     .setColor(COLOR_ACTIVE)
     .setDescription(
-      `⏳ \`${timerBar(remainingMs, totalMs)}\` **${Math.ceil(remainingMs / 1000)}s**\n` +
+      `${whoseTurn}\n` +
+        `⏳ \`${timerBar(remainingMs, totalMs)}\` **${Math.ceil(remainingMs / 1000)}s**\n` +
         'Ask your questions out loud — a wrong guess does *not* end your turn.'
     );
 
