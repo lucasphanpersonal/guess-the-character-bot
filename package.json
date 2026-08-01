@@ -1,0 +1,31 @@
+{
+  "name": "guess-the-character-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for hosting Guess the Character (Hedbanz-style) games, as seen on The Best in Jest",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/run.js",
+    "deploy-commands": "node src/deploy-commands.js",
+    "seed:pokemon": "node scripts/seed-pokemon-list.js",
+    "seed:codex": "node scripts/seed-character-codex.js",
+    "seed:lol": "node scripts/seed-league-of-legends.js",
+    "generate:sounds": "node scripts/generate-chime.js && node scripts/generate-sound-effects.js",
+    "postinstall": "npm run generate:sounds"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "@stablelib/xchacha20poly1305": "^2.0.1",
+    "better-sqlite3": "^11.3.0",
+    "discord.js": "^14.15.3",
+    "dotenv": "^16.4.5",
+    "ffmpeg-static": "^5.2.0",
+    "opusscript": "^0.1.1"
+  }
+}
