@@ -27,8 +27,10 @@ module.exports = {
           value:
             '`/create-lobby list:<name>` -- open a lobby (comma-separate several list names to ' +
             'draw from a combined pool; optionally set `turn-seconds` and `max-rerolls`, ' +
-            '`-1` = unlimited). Set `random:true` instead of `list` to let the bot roll a random ' +
-            "category for you -- 🎲 category roulette\n" +
+            '`-1` = unlimited)\n' +
+            '`/create-lobby category:<name>` -- draw from **every** list in a category at once, ' +
+            'e.g. `category:Video Games` for any video game character\n' +
+            'Or `random:true` to let the bot roll a random category -- 🎲 category roulette\n' +
             'That posts the **lobby board**, which updates itself as people join. Everything ' +
             'else here is a button on it:\n' +
             '**Join** / **Leave** -- two people need to join (the host doesn\'t have to be one ' +
