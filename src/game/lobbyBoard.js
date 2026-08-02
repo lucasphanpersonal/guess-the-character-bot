@@ -49,6 +49,9 @@ const STATUS_NOTE = {
   CONFIRMING: '🔍 Dealing characters -- both players need to confirm in their DMs.',
   IN_PROGRESS: '🎮 Game in progress.',
   FINISHED: '🏁 Game finished. `/rematch` to run it back, or `/create-lobby` for a new one.',
+  // A cancelled lobby is deleted outright, so there is nothing left for /rematch to replay
+  // -- pointing at it (as FINISHED does) would just send people to an error.
+  CANCELLED: '🛑 Lobby cancelled. Use `/create-lobby` to start a new one.',
 };
 
 function buildLobbyBoardPayload(lobby) {
