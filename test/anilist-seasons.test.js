@@ -7,7 +7,15 @@
 // tested.
 
 const { assert } = require('./harness');
-const { baseTitle, mergeSeasons, selectCast } = require('../scripts/seed-anilist-characters');
+const {
+  baseTitle,
+  mergeSeasons,
+  selectCast,
+  parseArgs,
+  MIN_CHARACTERS,
+  FAME_FLOOR,
+  PER_SHOW_LIMIT,
+} = require('../scripts/seed-anilist-characters');
 
 const character = (name, favourites = 0, role = 'MAIN') => ({ name, favourites, role, image: null });
 
@@ -73,5 +81,80 @@ module.exports = {
       selectCast(cast, { includeBackground: false, perShow: 2 }).map((c) => c.name),
       ['Monkey D. Luffy', 'Roronoa Zoro']
     );
+  },
+
+  // The fame floor is measured against the show's own best-known character, which is the
+  // whole point: a flat rank cut keeps One Piece's #30 (1,486 favourites, famous) and Cowboy
+  // Bebop's #30 (3 favourites, nobody) on the same reasoning.
+  'the fame floor is relative to the show, not to anime as a whole'() {
+    // The same 30-favourite character, in two shows of very different reach.
+    const bigShow = [
+      character('Monkey D. Luffy', 36038, 'SUPPORTING'),
+      character('Roronoa Zoro', 28790, 'SUPPORTING'),
+      character('Sanji', 15256, 'SUPPORTING'),
+      character('Minor Marine', 30, 'SUPPORTING'),
+    ];
+    const smallShow = [
+      character('Spike Spiegel', 1000, 'SUPPORTING'),
+      character('Faye Valentine', 700, 'SUPPORTING'),
+      character('Jet Black', 500, 'SUPPORTING'),
+      character('Vicious', 30, 'SUPPORTING'),
+    ];
+    const opts = { includeBackground: false, perShow: null, fameFloor: 0.02 };
+
+    assert.deepEqual(
+      selectCast(bigShow, opts).map((c) => c.name),
+      ['Monkey D. Luffy', 'Roronoa Zoro', 'Sanji'],
+      '2% of 36,038 is 721, so 30 favourites is nothing here'
+    );
+    assert.deepEqual(
+      selectCast(smallShow, opts).map((c) => c.name),
+      ['Spike Spiegel', 'Faye Valentine', 'Jet Black', 'Vicious'],
+      '2% of 1,000 is 20, so the same 30 favourites is a known character here'
+    );
+  },
+
+  // The show's own billing outranks a popularity vote: in an ensemble where one character
+  // dwarfs the rest, the other leads are still leads.
+  'a MAIN character is kept however few favourites they have'() {
+    const cast = [
+      character('Breakout Star', 50000, 'MAIN'),
+      character('Second Billing', 2000, 'SUPPORTING'),
+      character('Third Billing', 1500, 'SUPPORTING'),
+      character('Overlooked Lead', 12, 'MAIN'),
+      // Identical fame to the overlooked lead, but no billing to stand on.
+      character('Some Extra', 12, 'SUPPORTING'),
+    ];
+    const kept = selectCast(cast, { includeBackground: false, perShow: null, fameFloor: 0.02 });
+    assert.deepEqual(
+      kept.map((c) => c.name),
+      ['Breakout Star', 'Second Billing', 'Third Billing', 'Overlooked Lead'],
+      'the lead is rescued by their role, the extra on the same favourites is not'
+    );
+  },
+
+  // A title nobody has favourited would otherwise be trimmed out of existence.
+  'a show with no famous members keeps a playable list rather than vanishing'() {
+    const cast = [
+      character('A', 0, 'SUPPORTING'),
+      character('B', 0, 'SUPPORTING'),
+      character('C', 0, 'SUPPORTING'),
+      character('D', 0, 'SUPPORTING'),
+    ];
+    // Everything ties at zero, so the floor cannot separate them -- but a zero threshold
+    // keeps them all, and the MIN_CHARACTERS fallback covers the case where it can't.
+    const kept = selectCast(cast, { includeBackground: false, perShow: null, fameFloor: 0.5 });
+    assert.ok(kept.length >= MIN_CHARACTERS, `kept ${kept.length}, need at least ${MIN_CHARACTERS}`);
+  },
+
+  'trimming is on by default and can be turned off from the command line'() {
+    const defaults = parseArgs(['guild-1']);
+    assert.equal(defaults.fameFloor, FAME_FLOOR, 'the floor applies without being asked for');
+    assert.equal(defaults.perShow, PER_SHOW_LIMIT, 'and so does the cap');
+
+    // Taken as a percent, so the flag reads the way the trade-off is discussed.
+    assert.equal(parseArgs(['guild-1', '--fame-floor', '1.5']).fameFloor, 0.015);
+    assert.equal(parseArgs(['guild-1', '--fame-floor', '0']).fameFloor, 0, 'keep everything');
+    assert.throws(() => parseArgs(['guild-1', '--fame-floor', '250']), /fame-floor/);
   },
 };
