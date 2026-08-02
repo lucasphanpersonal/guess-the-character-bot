@@ -11,11 +11,14 @@ const turnControls = require('./turnControls');
 const voteControls = require('./voteControls');
 const gameOverControls = require('./gameOverControls');
 const listBrowser = require('./listBrowser');
+const listFilter = require('./listFilter');
 
 const HANDLERS = {
   // Character confirm/reroll buttons, sent in DMs when a game starts.
   confirm: (interaction) => engine.handleConfirmationButton(interaction),
   reroll: (interaction) => engine.handleConfirmationButton(interaction),
+  // "Never deal this show again", alongside Reroll on the confirmation DM.
+  droplist: (interaction) => engine.handleConfirmationButton(interaction),
   // Lobby board buttons.
   lobby: (interaction) => lobbyButtons.handle(interaction),
   // Turn board buttons and the guess modal.
@@ -26,6 +29,8 @@ const HANDLERS = {
   over: (interaction) => gameOverControls.handle(interaction),
   // `/list-show` pagination (Prev / Next / Back).
   browse: (interaction) => listBrowser.handle(interaction),
+  // `/list-filter` checkboxes for the server's playable list selection.
+  filter: (interaction) => listFilter.handle(interaction),
 };
 
 async function handleComponentInteraction(interaction) {

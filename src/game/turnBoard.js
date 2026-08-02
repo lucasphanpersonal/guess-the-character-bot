@@ -8,8 +8,6 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { untrackBoard } = require('./boards');
 
 const BAR_WIDTH = 12;
-// Enough history to feel like a running tally without risking the 1024-char field cap.
-const MAX_SHOWN_GUESSES = 8;
 
 const COLOR_ACTIVE = 0x5865f2; // blurple
 const COLOR_PAUSED = 0xfaa61a; // amber -- time's up, last chance
@@ -22,27 +20,50 @@ function timerBar(remainingMs, totalMs) {
   return '█'.repeat(filled) + '░'.repeat(BAR_WIDTH - filled);
 }
 
-function guessHistory(game) {
-  if (!game.turnGuesses.length) return null;
-  const shown = game.turnGuesses.slice(-MAX_SHOWN_GUESSES);
-  const hidden = game.turnGuesses.length - shown.length;
-  const lines = shown.map((g) => `${g.correct ? '✅' : '❌'} ${g.text}`).join('\n');
-  return hidden > 0 ? `_...and ${hidden} earlier_\n${lines}` : lines;
+// Guesses are called out in voice and ruled on by the other player, so the bot knows how
+// many there were but never what they were. A count is therefore the whole truth -- listing
+// them would be a column of "said out loud" pretending to be history.
+//
+// Which means the bot can't stop you re-guessing a name. The other player can, and does,
+// because that is what happens at a real table.
+function guessTally(game) {
+  const n = game.guessLog.filter((g) => g.playerId === game.currentPlayerId).length;
+  if (!n) return null;
+  return `**${n}** guess${n === 1 ? '' : 'es'} this game`;
 }
 
+// Two rows, because the two players have different jobs and share one message: the player
+// who can see the answer rules on it, and the player guessing decides when to give up.
 function buildButtons(game, channelId) {
-  return new ActionRowBuilder().addComponents(
+  const wrongSoFar = game.turnGuesses.filter((g) => !g.correct).length;
+
+  const judgeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`turn:guess:${channelId}`)
-      .setLabel('Guess')
-      .setEmoji('🎯')
-      .setStyle(ButtonStyle.Primary),
+      .setCustomId(`turn:right:${channelId}`)
+      .setLabel('They got it')
+      .setEmoji('✅')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`turn:wrong:${channelId}`)
+      // The running count lives on the button so the judge can see their presses landing.
+      .setLabel(wrongSoFar ? `Nope · ${wrongSoFar}` : 'Nope')
+      .setEmoji('❌')
+      .setStyle(ButtonStyle.Danger)
+  );
+
+  // Pass is the guesser's only control. There is deliberately no "submit a guess" button
+  // beside it: the judge's ✅ already answers "was that right?", and a second way to answer
+  // it would mean two authorities on the same question -- a human who can see the character,
+  // and Levenshtein distance. One is better.
+  const guesserRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`turn:pass:${channelId}`)
       .setLabel('Pass')
       .setEmoji('⏭️')
       .setStyle(ButtonStyle.Secondary)
   );
+
+  return [judgeRow, guesserRow];
 }
 
 /**
@@ -57,9 +78,14 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
   // names, where it renders as the raw `<@192319600095002634>`. So whose turn it is has to
   // live in the description.
   const whoseTurn = `<@${game.currentPlayerId}>'s turn`;
+  // Both players read the same message, so each row has to name its owner or the judge
+  // buttons look like they're for the person guessing.
+  const roles =
+    `🗣️ <@${game.currentPlayerId}> guesses out loud · ` +
+    `⚖️ <@${game.judgeId}> hits ✅ or ❌`;
 
-  const history = guessHistory(game);
-  if (history) embed.addFields({ name: 'Guesses this turn', value: history });
+  const tally = guessTally(game);
+  if (tally) embed.addFields({ name: 'Guesses so far', value: tally });
 
   if (outcome) {
     if (outcome.cancelled) {
@@ -75,8 +101,10 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
   if (game.paused) {
     embed
       .setColor(COLOR_PAUSED)
-      .setDescription(`${whoseTurn}\n⏰ **Time's up — last chance!**\nGuess now, or pass to hand it over.`);
-    return { embeds: [embed], components: [buildButtons(game, channelId)] };
+      .setDescription(
+        `${whoseTurn}\n⏰ **Time's up — last chance!**\n${roles}\nOne more guess, or pass to hand it over.`
+      );
+    return { embeds: [embed], components: buildButtons(game, channelId) };
   }
 
   const totalMs = game.turnSeconds * 1000;
@@ -86,10 +114,11 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
     .setDescription(
       `${whoseTurn}\n` +
         `⏳ \`${timerBar(remainingMs, totalMs)}\` **${Math.ceil(remainingMs / 1000)}s**\n` +
-        'Ask your questions out loud — a wrong guess does *not* end your turn.'
+        `${roles}\n` +
+        'A wrong guess does *not* end the turn.'
     );
 
-  return { embeds: [embed], components: [buildButtons(game, channelId)] };
+  return { embeds: [embed], components: buildButtons(game, channelId) };
 }
 
 async function refreshTurnBoard(game, channelId, outcome = null) {

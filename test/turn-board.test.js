@@ -1,4 +1,10 @@
-const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
+const {
+  assert,
+  createRecorder,
+  createFakeClient,
+  createButtonInteraction,
+  createSlashInteraction,
+} = require('./harness');
 
 const { buildTurnBoardPayload, timerBar } = require('../src/game/turnBoard');
 const { handleComponentInteraction } = require('../src/components/router');
@@ -47,11 +53,12 @@ async function runningGame() {
   return { lobby, client, recorder, channelId };
 }
 
+// The board carries two rows now -- the judge's and the guesser's -- so flatten both.
 function buttonsOf(payload) {
-  const row = payload.components[0];
-  if (!row) return {};
   const out = {};
-  for (const c of row.toJSON().components) out[c.custom_id.split(':')[1]] = c;
+  for (const row of payload.components ?? []) {
+    for (const c of row.toJSON().components) out[c.custom_id.split(':')[1]] = c;
+  }
   return out;
 }
 
@@ -65,20 +72,19 @@ const clickButton = (ctx, userId, action) =>
     })
   );
 
-// A modal submission carries its values in `fields`, not `options`.
-function submitGuessModal(ctx, userId, text, { fromMessage = true } = {}) {
-  const base = createButtonInteraction({
-    client: ctx.client,
-    userId,
-    customId: `turn:submit:${ctx.channelId}`,
-    recorder: ctx.recorder,
-  });
-  return handleComponentInteraction({
-    ...base,
-    fields: { getTextInputValue: () => text },
-    isFromMessage: () => fromMessage,
-    deferReply: async () => ctx.recorder.record(`defer:${userId}`, ''),
-  });
+// Typing a guess now only happens through /guess -- the board has no submit control, so
+// that the judge's ruling is the single authority on whether a guess was right.
+function typeGuess(ctx, userId, text) {
+  return require('../src/commands/guess').execute(
+    createSlashInteraction({
+      client: ctx.client,
+      userId,
+      guildId: ctx.lobby.guildId,
+      channelId: ctx.channelId,
+      options: { character: text },
+      recorder: ctx.recorder,
+    })
+  );
 }
 
 const cleanup = (ctx) => {
@@ -93,7 +99,7 @@ module.exports = {
     assert.equal(timerBar(0, 1000), '░░░░░░░░░░░░');
   },
 
-  async 'a turn posts exactly one board carrying Guess and Pass'() {
+  async 'a turn posts exactly one board carrying the judge and guesser controls'() {
     const ctx = await runningGame();
     const boards = ctx.recorder.sent.filter(
       (m) => m.target === `channel:${ctx.channelId}` && m.payload?.components?.length
@@ -101,7 +107,10 @@ module.exports = {
     assert.equal(boards.length, 1, 'one board message for the turn');
 
     const buttons = buttonsOf(boards[0].payload);
-    assert.deepEqual(Object.keys(buttons).sort(), ['guess', 'pass']);
+    // Judging leads, because guesses are called out in voice rather than typed.
+    // No typed-guess control: the judge's ruling is the only authority on correctness.
+    assert.deepEqual(Object.keys(buttons).sort(), ['pass', 'right', 'wrong']);
+    assert.equal(boards[0].payload.components.length, 2, 'one row each');
     assert.match(boards[0].content, /Round 1/);
     assert.match(boards[0].content, /<@p1>/);
     cleanup(ctx);
@@ -122,25 +131,6 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'the Guess button opens a modal rather than replying'() {
-    const ctx = await runningGame();
-    let shown = null;
-    await handleComponentInteraction({
-      ...createButtonInteraction({
-        client: ctx.client,
-        userId: 'p1',
-        customId: `turn:guess:${ctx.channelId}`,
-        recorder: ctx.recorder,
-      }),
-      showModal: async (modal) => {
-        shown = modal.toJSON();
-      },
-    });
-    assert.ok(shown, 'a modal was shown');
-    assert.equal(shown.custom_id, `turn:submit:${ctx.channelId}`);
-    cleanup(ctx);
-  },
-
   async 'only the player whose turn it is can use the controls'() {
     const ctx = await runningGame();
     await clickButton(ctx, 'p2', 'pass');
@@ -149,23 +139,23 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'a wrong guess from the modal keeps the turn and shows up on the board'() {
+  async 'a typed guess that is wrong keeps the turn and is counted'() {
     const ctx = await runningGame();
-    await submitGuessModal(ctx, 'p1', 'Definitely Wrong');
+    await typeGuess(ctx, 'p1', 'Definitely Wrong');
 
     assert.equal(ctx.lobby.game.currentPlayerId, 'p1', 'turn continues');
     assert.deepEqual(
       ctx.lobby.game.turnGuesses.map((g) => `${g.correct ? 'ok' : 'x'} ${g.text}`),
       ['x Definitely Wrong']
     );
-    assert.match(ctx.recorder.textMatching(`channel:${ctx.channelId}`), /Definitely Wrong/);
+    assert.match(ctx.recorder.textMatching(`channel:${ctx.channelId}`), /1\*\* guess this game/);
     assert.match(ctx.recorder.allText(), /Not quite/);
     cleanup(ctx);
   },
 
-  async 'a correct guess from the modal advances the game'() {
+  async 'a typed guess that is right advances the game'() {
     const ctx = await runningGame();
-    await submitGuessModal(ctx, 'p1', 'Mario'); // p1's own head is Mario
+    await typeGuess(ctx, 'p1', 'Mario'); // p1's own head is Mario
 
     assert.equal(ctx.lobby.game.rebuttal, true, 'first mover winning grants a rebuttal');
     assert.equal(ctx.lobby.game.currentPlayerId, 'p2');
@@ -175,7 +165,7 @@ module.exports = {
 
   async 'an empty guess is rejected without consuming anything'() {
     const ctx = await runningGame();
-    await submitGuessModal(ctx, 'p1', '   ');
+    await typeGuess(ctx, 'p1', '   ');
     assert.equal(ctx.lobby.game.turnGuesses.length, 0);
     assert.match(ctx.recorder.allText(), /Enter a character name/);
     cleanup(ctx);
@@ -203,7 +193,7 @@ module.exports = {
 
   async 'each new turn gets its own board and a clean guess tally'() {
     const ctx = await runningGame();
-    await submitGuessModal(ctx, 'p1', 'wrong one');
+    await typeGuess(ctx, 'p1', 'wrong one');
     assert.equal(ctx.lobby.game.turnGuesses.length, 1);
 
     await clickButton(ctx, 'p1', 'pass');
@@ -221,14 +211,16 @@ module.exports = {
       rebuttal: false,
       round: 1,
       currentPlayerId: 'p1',
+      judgeId: 'p2',
       turnSeconds: 90,
       timer: null,
       paused: true,
       turnGuesses: [],
+      guessLog: [],
     };
     const payload = buildTurnBoardPayload(game, 'chan');
     assert.match(payload.embeds[0].toJSON().description, /Time's up/);
-    assert.equal(payload.components.length, 1, 'still guessable');
+    assert.equal(payload.components.length, 2, 'judge and guesser rows both still live');
   },
 
   async 'turn controls on a finished game fail gracefully'() {

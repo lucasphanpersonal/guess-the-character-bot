@@ -131,13 +131,14 @@ module.exports = {
     await guess(ctx, 'p1', 'still wrong');
     assert.equal(game.currentPlayerId, 'p1', 'still p1 after a second wrong guess');
 
-    // Both wrong guesses are tallied on the turn board rather than spamming the channel.
+    // Both are tallied on the turn board rather than spamming the channel. The board shows
+    // a count, not the names: most guesses are said out loud and judged, so it could only
+    // ever print names for the minority that were typed.
     assert.deepEqual(
       game.turnGuesses.map((g) => g.text),
       ['not even close', 'still wrong']
     );
-    assert.match(channelText(ctx), /not even close/);
-    assert.match(channelText(ctx), /still wrong/);
+    assert.match(channelText(ctx), /\*\*2\*\* guesses this game/);
     cleanup(ctx);
   },
 
