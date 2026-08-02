@@ -38,6 +38,7 @@ const {
   getCharacters,
   setCharacterImage,
 } = require('../src/db/characterLists');
+const { trustworthyImageOrNull } = require('../src/util/characterImages');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'wikidata-characters.json');
 
@@ -247,20 +248,22 @@ function importShow(guildId, listName, category, characters, { dryRun }) {
   let skipped = 0;
   let images = 0;
   for (const character of characters) {
+    // Commons images are only kept where a photograph can be right -- see characterImages.js.
+    const image = trustworthyImageOrNull(category, character.image);
     const current = existing.get(character.name.toLowerCase());
     if (current) {
       // Never overwrite artwork somebody set by hand; only fill a gap.
-      if (!current.image_url && character.image) {
-        setCharacterImage(list.id, character.name, character.image);
+      if (!current.image_url && image) {
+        setCharacterImage(list.id, character.name, image);
         images++;
       }
       skipped++;
       continue;
     }
     try {
-      addCharacter(list.id, character.name, 'seed-script', character.image || null);
+      addCharacter(list.id, character.name, 'seed-script', image);
       added++;
-      if (character.image) images++;
+      if (image) images++;
     } catch (err) {
       if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') skipped++;
       else throw err;

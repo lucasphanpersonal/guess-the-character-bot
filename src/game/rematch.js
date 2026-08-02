@@ -18,6 +18,7 @@ function createRematchLobby(previous, hostId) {
     mode: previous.mode,
     voteSeconds: previous.voteSeconds,
     voteOptions: previous.voteOptions,
+    difficulty: previous.difficulty,
   });
   lobby.addPlayer(prevP2);
   lobby.addPlayer(prevP1);

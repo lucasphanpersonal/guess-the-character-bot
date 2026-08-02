@@ -149,6 +149,22 @@ function createButtonInteraction({ client, userId, customId, recorder, guildId, 
   };
 }
 
+// A submitted modal. `fields` holds what the user typed, keyed by the text inputs' customIds.
+// isFromMessage() is true because every modal the bot shows is opened from a button on a
+// board, which is what makes interaction.update() valid on the submission.
+function createModalInteraction({ client, userId, customId, fields = {}, recorder, guildId, channelId }) {
+  return {
+    ...createButtonInteraction({ client, userId, customId, recorder, guildId, channelId }),
+    isFromMessage: () => true,
+    fields: {
+      getTextInputValue: (key) => {
+        if (!(key in fields)) throw new Error(`No text input "${key}" in the submitted modal`);
+        return fields[key];
+      },
+    },
+  };
+}
+
 // Stand-in for a live voice connection, so tests can assert which sounds would play
 // without @discordjs/voice ever opening a socket.
 function attachFakeVoice(game) {
@@ -169,5 +185,6 @@ module.exports = {
   createFakeClient,
   createSlashInteraction,
   createButtonInteraction,
+  createModalInteraction,
   attachFakeVoice,
 };

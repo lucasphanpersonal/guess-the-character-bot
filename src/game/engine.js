@@ -7,6 +7,10 @@ const {
   getRandomCharacterExcluding,
   getRandomPair,
   getListLabelForIds,
+  recordReroll,
+  setListsEnabled,
+  getListsByIds,
+  REROLL_DEMOTE_THRESHOLD,
 } = require('../db/characterLists');
 const { recordResult } = require('../db/stats');
 const { refreshLobbyBoard } = require('./lobbyBoard');
@@ -35,11 +39,11 @@ async function displayName(client, userId) {
 function countdownCheckpoints(turnSeconds) {
   const checkpoints = [];
   let remaining = turnSeconds;
+  // Halving an integer above 1 always lands on 1 or more, so the loop condition is the only
+  // guard needed -- the last checkpoint pushed is 1, and that's where it stops.
   while (remaining > 1) {
     remaining = Math.round(remaining / 2);
-    if (remaining < 1) break;
     checkpoints.push(remaining);
-    if (remaining <= 1) break;
   }
   return checkpoints;
 }
@@ -87,7 +91,7 @@ function characterMessage(description, characters) {
   return { content: description, embeds };
 }
 
-function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true } = {}) {
+function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropList = false } = {}) {
   const unlimited = rerollsLeft === -1;
   const confirmBtn = new ButtonBuilder()
     .setCustomId(`confirm:${channelId}`)
@@ -104,7 +108,22 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true } = {}) {
     .setEmoji('🔁')
     .setStyle(ButtonStyle.Secondary)
     .setDisabled(!unlimited && rerollsLeft <= 0);
-  return new ActionRowBuilder().addComponents(confirmBtn, rerollBtn);
+
+  const row = new ActionRowBuilder().addComponents(confirmBtn, rerollBtn);
+  // The moment somebody is staring at a character they don't recognise is the only moment
+  // they will ever want to curate, so the curation lives here rather than in a command they
+  // would have to remember twenty minutes later.
+  if (canDropList) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`droplist:${channelId}`)
+        .setLabel('Never deal this show')
+        .setEmoji('🚫')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(!unlimited && rerollsLeft <= 0)
+    );
+  }
+  return row;
 }
 
 function confirmCharacterEmbed(character) {
@@ -138,7 +157,14 @@ async function sendConfirmDM(recipientUser, subjectPlayerId, game, channelId) {
     const dm = await recipientUser.send({
       content: game.rerollAllowed ? confirmPrompt(game.listLabel) : votedPrompt(game.listLabel),
       embeds: [confirmCharacterEmbed(character)],
-      components: [buildConfirmRow(channelId, state.rerollsLeft, { allowReroll: game.rerollAllowed })],
+      components: [
+        buildConfirmRow(channelId, state.rerollsLeft, {
+          allowReroll: game.rerollAllowed,
+          // Only offerable when we know which list the character came from, which rules
+          // out hand-assigned characters from /set-characters.
+          canDropList: game.rerollAllowed && character.listId != null,
+        }),
+      ],
     });
     trackBoard('confirm', dm);
     return true;
@@ -218,6 +244,10 @@ async function closeAudienceVote(client, lobby, { reason } = {}) {
   vote.closed = true;
   clearVoteTimer(vote);
   const characters = vote.resolve();
+  // Kept for the reveal. A coin-flip tie or a silent audience is the most interesting thing
+  // this mode produces and it was previously resolved and thrown away -- but it names
+  // characters, so it can only be shown once both are public.
+  const voteSummary = vote.summarise();
 
   await refreshVoteBoard(vote);
   const channel = await getChannel(client, lobby);
@@ -229,6 +259,7 @@ async function closeAudienceVote(client, lobby, { reason } = {}) {
 
   lobby.vote = null;
   await startGame(client, lobby, characters);
+  lobby.game.voteSummary = voteSummary;
   return { ok: true };
 }
 
@@ -249,7 +280,7 @@ async function startGameFromLobby(client, lobby) {
   if (assigned?.[p1Id] && assigned?.[p2Id]) {
     characters = [assigned[p1Id], assigned[p2Id]];
   } else {
-    characters = getRandomPair(lobby.listIds);
+    characters = getRandomPair(lobby.listIds, lobby.difficulty);
     if (characters.length < 2) {
       return { ok: false, error: 'The character list no longer has enough characters.' };
     }
@@ -339,6 +370,75 @@ async function handleConfirmationButton(interaction) {
     return maybeBeginPlay(interaction.client, lobby);
   }
 
+  // "Never deal this show again": drop the list from the server's selection, then reroll,
+  // because whoever pressed it does not want this character either. One button doing both
+  // is the point -- the alternative is rerolling now and remembering to curate later,
+  // which nobody does.
+  if (action === 'droplist') {
+    if (!game.rerollAllowed) {
+      return interaction.reply({
+        content: "The audience picked this character — it can't be rerolled.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    const unlimited = state.rerollsLeft === -1;
+    if (!unlimited && state.rerollsLeft <= 0) {
+      return interaction.reply({ content: "You're out of rerolls.", flags: MessageFlags.Ephemeral });
+    }
+
+    const otherPlayerId = game.turnOrder.find((id) => id !== playerId);
+    const rejected = game.headByPlayer[otherPlayerId];
+    const [list] = rejected.listId ? getListsByIds([rejected.listId]) : [];
+    if (!list) {
+      return interaction.reply({
+        content: "Couldn't tell which list this character came from, so there's nothing to drop.",
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    // Drawn from the lobby's own lists minus this one, so the replacement can't come from
+    // the show that was just rejected.
+    const remaining = lobby.listIds.filter((id) => id !== list.id);
+    const excludeNames = new Set([rejected.name, game.headByPlayer[playerId].name, ...state.rejectedNames]);
+    const replacement = remaining.length
+      ? getRandomCharacterExcluding(remaining, excludeNames, lobby.difficulty)
+      : null;
+    if (!replacement) {
+      return interaction.reply({
+        content:
+          `Dropping **${list.name}** would leave nothing else to deal from in this lobby, so ` +
+          'nothing was changed. Reroll instead, or add more lists with `/list-filter`.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    setListsEnabled([list.id], false);
+    recordReroll(rejected.id, playerId);
+    state.rejectedNames.add(rejected.name);
+    if (!unlimited) state.rerollsLeft -= 1;
+    game.headByPlayer[otherPlayerId] = Game.head(lobby, replacement);
+    // The lobby's own pool is left alone mid-game: pulling the list out from under a game
+    // in progress would change what the other player can be dealt on their next reroll for
+    // no benefit. The server-wide switch-off is what was asked for, and it takes effect
+    // from the next lobby.
+
+    await interaction.update({
+      content: confirmPrompt(game.listLabel),
+      embeds: [confirmCharacterEmbed(game.headByPlayer[otherPlayerId])],
+      components: [
+        buildConfirmRow(channelId, state.rerollsLeft, {
+          canDropList: game.headByPlayer[otherPlayerId].listId != null,
+        }),
+      ],
+    });
+    return interaction.followUp({
+      content:
+        `🚫 **${list.name}** is out of the pool for future games. ` +
+        'Undo any time with `/list-toggle`.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
   if (action === 'reroll') {
     if (!game.rerollAllowed) {
       return interaction.reply({
@@ -353,20 +453,41 @@ async function handleConfirmationButton(interaction) {
     const otherPlayerId = game.turnOrder.find((id) => id !== playerId);
     const currentName = game.headByPlayer[otherPlayerId].name;
     const excludeNames = new Set([currentName, game.headByPlayer[playerId].name, ...state.rejectedNames]);
-    const replacement = getRandomCharacterExcluding(lobby.listIds, excludeNames);
+    const replacement = getRandomCharacterExcluding(lobby.listIds, excludeNames, lobby.difficulty);
     if (!replacement) {
       return interaction.reply({ content: 'No other characters available in this list to reroll to.', flags: MessageFlags.Ephemeral });
     }
+
+    // Recorded before the swap, while we still know what was rejected. Enough different
+    // people rejecting the same character retires it from random draws for good.
+    const rejected = game.headByPlayer[otherPlayerId];
+    const rejectedBy = recordReroll(rejected.id, playerId);
 
     state.rejectedNames.add(currentName);
     if (!unlimited) state.rerollsLeft -= 1;
     game.headByPlayer[otherPlayerId] = Game.head(lobby, replacement);
 
-    return interaction.update({
+    await interaction.update({
       content: confirmPrompt(game.listLabel),
       embeds: [confirmCharacterEmbed(game.headByPlayer[otherPlayerId])],
-      components: [buildConfirmRow(channelId, state.rerollsLeft)],
+      components: [
+        buildConfirmRow(channelId, state.rerollsLeft, {
+          canDropList: game.headByPlayer[otherPlayerId].listId != null,
+        }),
+      ],
     });
+
+    // Told only at the moment it takes effect, so the feature explains itself once rather
+    // than needing documentation nobody reads.
+    if (rejectedBy >= REROLL_DEMOTE_THRESHOLD) {
+      return interaction.followUp({
+        content:
+          `🚮 **${rejected.name}** has now been rerolled by ${rejectedBy} different people, ` +
+          'so the bot will stop dealing them.',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    return undefined;
   }
 }
 
@@ -411,7 +532,7 @@ async function submitGuess(client, lobby, playerId, guessText) {
   }
 
   const correct = game.checkGuess(playerId, text);
-  game.turnGuesses.push({ text, correct });
+  game.recordGuess(playerId, { text, correct });
 
   if (correct) {
     voice.playCorrectSound(game);
@@ -428,6 +549,51 @@ async function submitGuess(client, lobby, playerId, guessText) {
 
   // Still within their normal time: a wrong guess costs nothing, so just show it on the
   // board and let them keep going.
+  await refreshTurnBoard(game, lobby.channelId);
+  return { ok: true, correct: false, turnEnded: false };
+}
+
+/**
+ * The primary way a turn resolves: the player who can SEE the answer rules on a guess that
+ * was said out loud.
+ *
+ * The bot's inputs assume typing and the game is played by talking, so guesses fired off in
+ * voice never reached it -- which made any count built on submitted guesses undercount, and
+ * undercount worst for the players conscientious enough to click. Judging moves the input to
+ * the one person in the room who isn't busy: the guesser is thinking against a clock, while
+ * the other player is only listening, and is already the authority on the answer.
+ *
+ * It also retires fuzzy matching from this path entirely. A human deciding whether
+ * "Shikamaru" counts is better than Levenshtein deciding it.
+ */
+async function submitJudgement(client, lobby, judgeId, correct) {
+  const game = lobby.game;
+  if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
+    return { ok: false, error: 'No game in progress.' };
+  }
+  if (!game.turnOrder.includes(judgeId)) {
+    return { ok: false, error: 'Only the two players can judge a guess.' };
+  }
+  if (judgeId === game.currentPlayerId) {
+    return { ok: false, error: "You're the one guessing -- <@" + game.judgeId + "> judges this turn." };
+  }
+
+  // text stays null: the guess was spoken, and the bot never heard the name.
+  game.recordGuess(game.currentPlayerId, { correct, judged: true });
+
+  if (correct) {
+    voice.playCorrectSound(game);
+    await endTurn(client, lobby, { correct: true });
+    return { ok: true, correct: true, turnEnded: true };
+  }
+
+  voice.playWrongSound(game);
+  if (game.paused) {
+    // Time had already run out, so this was the last chance.
+    await endTurn(client, lobby, { correct: false });
+    return { ok: true, correct: false, turnEnded: true };
+  }
+
   await refreshTurnBoard(game, lobby.channelId);
   return { ok: true, correct: false, turnEnded: false };
 }
@@ -532,6 +698,27 @@ async function finalizeGame(client, lobby, outcome) {
     resultLine = `🏆 <@${outcome.winnerId}> guessed correctly and wins!`;
   }
 
+  // The audience chose these characters and then heard nothing about it -- the reveal is
+  // the first moment naming them is safe, so it is where the tally belongs.
+  const voteLines = (game.voteSummary ?? []).map((s) => {
+    const who = `<@${s.playerId}>`;
+    if (s.noVotes) return `• ${who}: **${s.name}** — nobody voted, so the bot picked at random`;
+    if (s.tieBroken) return `• ${who}: **${s.name}** — tied on ${s.votes}, settled by coin flip`;
+    if (s.unopposed) return `• ${who}: **${s.name}** — unanimous, ${s.votes} of ${s.totalVoters}`;
+    return `• ${who}: **${s.name}** — ${s.votes} of ${s.totalVoters} votes, over ${s.distinct - 1} other${
+      s.distinct === 2 ? '' : 's'
+    }`;
+  });
+
+  // Now that guesses are judged rather than typed, this count reflects what actually
+  // happened at the table instead of only the guesses somebody remembered to submit.
+  if (outcome.result !== 'tie' && outcome.winnerId) {
+    const taken = game.guessCountFor(outcome.winnerId);
+    if (taken > 0) {
+      resultLine += ` — on guess **#${taken}**, round **${game.round}**.`;
+    }
+  }
+
   const gameOverButtons = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`over:rematch:${lobby.channelId}`)
@@ -546,10 +733,13 @@ async function finalizeGame(client, lobby, outcome) {
   );
 
   const reveal = await channel.send({
-    ...characterMessage(resultLine, [
-      { label: `${p1Name}'s character was`, ...game.headByPlayer[p1Id] },
-      { label: `${p2Name}'s character was`, ...game.headByPlayer[p2Id] },
-    ]),
+    ...characterMessage(
+      voteLines.length ? `${resultLine}\n\n🗳️ **How the audience voted**\n${voteLines.join('\n')}` : resultLine,
+      [
+        { label: `${p1Name}'s character was`, ...game.headByPlayer[p1Id] },
+        { label: `${p2Name}'s character was`, ...game.headByPlayer[p2Id] },
+      ]
+    ),
     components: [gameOverButtons],
   });
   // Rematch needs the FINISHED lobby that only exists in memory, so a restart has to retire
@@ -576,6 +766,7 @@ module.exports = {
   startAudienceVote,
   closeAudienceVote,
   submitGuess,
+  submitJudgement,
   submitPass,
   handleGuess,
   handlePass,

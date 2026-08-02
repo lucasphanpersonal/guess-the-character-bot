@@ -21,7 +21,16 @@ class Game {
     } catch {
       source = null;
     }
-    return { name: character.name, imageUrl: character.image_url || null, source };
+    // id and listId ride along so a reroll can be recorded against the character, and so
+    // "never deal this show again" knows which list to switch off. Both are absent when a
+    // character was assigned by hand via /set-characters.
+    return {
+      name: character.name,
+      imageUrl: character.image_url || null,
+      source,
+      id: character.id ?? null,
+      listId: character.list_id ?? null,
+    };
   }
 
   constructor({ lobby, characters, turnSeconds }) {
@@ -45,6 +54,10 @@ class Game {
     // Both are replaced/reset by engine.startTurn on every new turn.
     this.turnBoardMessage = null;
     this.turnGuesses = [];
+    // Every guess of the whole game, which turnGuesses cannot be because it resets each
+    // turn. Two things need it: the reveal's "got it on their 4th guess", and a player
+    // wanting to know what they already tried three rounds ago.
+    this.guessLog = [];
     this.voiceConnection = null;
     this.audioPlayer = null;
     // Populated by engine.startGame: { [playerId]: { confirmed, rerollsLeft, rejectedNames } }
@@ -56,6 +69,35 @@ class Game {
 
   get currentPlayerId() {
     return this.turnOrder[this.currentTurnIndex];
+  }
+
+  /** The player whose job it is to judge the current turn -- the one who can see the answer. */
+  get judgeId() {
+    return this.turnOrder.find((id) => id !== this.currentPlayerId);
+  }
+
+  /**
+   * One guess, recorded in both the per-turn view and the whole-game log.
+   *
+   * `text` is null for a guess called out loud and judged by the other player: the bot never
+   * heard the name, only that a guess happened and whether it landed. That is the honest
+   * record -- inventing a placeholder name would be worse than admitting we don't know it.
+   */
+  recordGuess(playerId, { text = null, correct = false, judged = false } = {}) {
+    const entry = { text, correct, judged, playerId, round: this.round };
+    this.turnGuesses.push(entry);
+    this.guessLog.push(entry);
+    return entry;
+  }
+
+  /** How many guesses this player has made all game -- the efficiency half of the scoring. */
+  guessCountFor(playerId) {
+    return this.guessLog.filter((g) => g.playerId === playerId).length;
+  }
+
+  /** Names this player has already tried, so the board can stop them repeating one. */
+  triedNames(playerId) {
+    return this.guessLog.filter((g) => g.playerId === playerId && g.text).map((g) => g.text);
   }
 
   isFirstMover(playerId) {

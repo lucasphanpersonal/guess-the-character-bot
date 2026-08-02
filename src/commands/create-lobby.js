@@ -4,12 +4,29 @@ const {
   countDistinctCharacters,
   searchListNames,
   getRandomCategory,
-  getListsByCategory,
-  listCategoriesWithCounts,
+  getEnabledListsByCategory,
+  getEnabledLists,
+  listCategoriesWithEnabledCounts,
+  DEFAULT_DIFFICULTY,
 } = require('../db/characterLists');
+const { DEFAULTS, votePoolError } = require('../game/lobbySettings');
 const Lobby = require('../game/Lobby');
 const GameManager = require('../game/GameManager');
 const { buildLobbyBoardPayload, attachLobbyBoard } = require('../game/lobbyBoard');
+
+// A pooled draw with nothing switched on is the one dead end this feature can create, so
+// the message has to distinguish "you own no lists" from "you own plenty and enabled none".
+function nothingEnabled(guildId) {
+  const counts = listCategoriesWithEnabledCounts(guildId);
+  const total = counts.reduce((sum, c) => sum + c.count, 0);
+  if (!total) return 'No character lists exist yet -- create one with `/list-create`.';
+  return (
+    `None of this server's ${total} lists are enabled yet, so there's nothing to draw from. ` +
+    'Run `/list-filter` to pick which ones you play with -- it sorts best-known first, so ' +
+    '**Enable page** on page 1 of a category is usually all it takes. You can still name a ' +
+    'list directly with `list:` in the meantime.'
+  );
+}
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -28,6 +45,9 @@ module.exports = {
         .setAutocomplete(true)
     )
     .addBooleanOption((opt) =>
+      opt.setName('everything').setDescription('Draw from every list in the server at once -- all categories pooled')
+    )
+    .addBooleanOption((opt) =>
       opt.setName('random').setDescription('Skip picking a list -- let the bot roll a random category instead')
     )
     .addIntegerOption((opt) =>
@@ -38,6 +58,16 @@ module.exports = {
         .setName('max-rerolls')
         .setDescription('Rerolls allowed per player before confirming a character (default 2, -1 = unlimited)')
         .setMinValue(-1)
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName('difficulty')
+        .setDescription('How deep into each cast to draw (default normal)')
+        .addChoices(
+          { name: 'Easy -- best-known quarter of each cast', value: 'easy' },
+          { name: 'Normal -- skips the deepest cuts', value: 'normal' },
+          { name: 'Everything -- every character, however obscure', value: 'everything' }
+        )
     )
     .addBooleanOption((opt) =>
       opt
@@ -54,7 +84,7 @@ module.exports = {
     .addIntegerOption((opt) =>
       opt
         .setName('vote-seconds')
-        .setDescription('Audience vote: how long voting stays open (default 60)')
+        .setDescription('Audience vote: how long voting stays open (default 90)')
         .setMinValue(15)
         .setMaxValue(300)
     ),
@@ -71,20 +101,27 @@ module.exports = {
     }
 
     const random = interaction.options.getBoolean('random');
+    const everything = interaction.options.getBoolean('everything');
     const listOption = interaction.options.getString('list');
     const categoryOption = interaction.options.getString('category');
 
-    const chosen = [listOption && 'list', categoryOption && 'category', random && 'random'].filter(Boolean);
+    const chosen = [
+      listOption && 'list',
+      categoryOption && 'category',
+      everything && 'everything',
+      random && 'random',
+    ].filter(Boolean);
     if (!chosen.length) {
       return interaction.reply({
         content:
-          'Pick one: a `list`, a `category` to use every list in it, or `random:true` to roll a category.',
+          'Pick one: a `list`, a `category` to use every list in it, `everything:true` for every ' +
+          'list in the server, or `random:true` to roll a category.',
         flags: MessageFlags.Ephemeral,
       });
     }
     if (chosen.length > 1) {
       return interaction.reply({
-        content: `Use only one of \`list\`, \`category\` or \`random\` -- you gave ${chosen.join(' and ')}.`,
+        content: `Use only one of \`list\`, \`category\`, \`everything\` or \`random\` -- you gave ${chosen.join(' and ')}.`,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -92,12 +129,31 @@ module.exports = {
     let resolved;
     let rolledCategory = null;
     let pooledCategory = null;
-    if (categoryOption) {
-      resolved = getListsByCategory(interaction.guildId, categoryOption);
+    let pooledEverything = false;
+    // Pooled draws (everything / category / random) only ever see the server's enabled
+    // selection; naming lists outright, further down, deliberately ignores it.
+    if (everything) {
+      resolved = getEnabledLists(interaction.guildId);
       if (!resolved.length) {
-        const available = listCategoriesWithCounts(interaction.guildId)
-          .map((c) => `**${c.category}**`)
-          .join(', ');
+        return interaction.reply({ content: nothingEnabled(interaction.guildId), flags: MessageFlags.Ephemeral });
+      }
+      pooledEverything = true;
+    } else if (categoryOption) {
+      resolved = getEnabledListsByCategory(interaction.guildId, categoryOption);
+      if (!resolved.length) {
+        const counts = listCategoriesWithEnabledCounts(interaction.guildId);
+        const match = counts.find((c) => c.category.toLowerCase() === categoryOption.toLowerCase());
+        // "Nothing enabled in it" and "no such category" are different problems with
+        // different fixes, and telling them apart is the whole point of the message.
+        if (match) {
+          return interaction.reply({
+            content:
+              `**${categoryOption}** has ${match.count} lists but none of them are enabled. ` +
+              'Turn some on with `/list-filter`, or name one directly with `list:`.',
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+        const available = counts.filter((c) => c.enabled > 0).map((c) => `**${c.category}**`).join(', ');
         return interaction.reply({
           content: `No lists in category **${categoryOption}**.${available ? ` Try: ${available}` : ''}`,
           flags: MessageFlags.Ephemeral,
@@ -107,9 +163,9 @@ module.exports = {
     } else if (random) {
       const category = getRandomCategory(interaction.guildId);
       if (!category) {
-        return interaction.reply({ content: 'No character lists exist yet -- create one with `/list-create`.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({ content: nothingEnabled(interaction.guildId), flags: MessageFlags.Ephemeral });
       }
-      resolved = getListsByCategory(interaction.guildId, category);
+      resolved = getEnabledListsByCategory(interaction.guildId, category);
       rolledCategory = category;
     } else {
       const requestedNames = [...new Set(
@@ -137,7 +193,10 @@ module.exports = {
     }
 
     const listIds = resolved.map((l) => l.id);
-    const available = countDistinctCharacters(listIds);
+    const difficulty = interaction.options.getString('difficulty') ?? DEFAULT_DIFFICULTY;
+    // Counted at the chosen difficulty: the deal draws from that pool, so the "enough
+    // characters?" guard has to look at the same one.
+    const available = countDistinctCharacters(listIds, difficulty);
     if (available < 2) {
       return interaction.reply({
         content: `${resolved.map((l) => `**${l.name}**`).join(' + ')} combined need at least 2 distinct characters before they can be used.`,
@@ -145,20 +204,15 @@ module.exports = {
       });
     }
 
-    const turnSeconds = interaction.options.getInteger('turn-seconds') ?? 90;
-    const maxRerolls = interaction.options.getInteger('max-rerolls') ?? 2;
+    const turnSeconds = interaction.options.getInteger('turn-seconds') ?? DEFAULTS.turnSeconds;
+    const maxRerolls = interaction.options.getInteger('max-rerolls') ?? DEFAULTS.maxRerolls;
     const audienceVote = interaction.options.getBoolean('audience-vote') ?? false;
-    const voteOptions = interaction.options.getInteger('vote-options') ?? 5;
-    const voteSeconds = interaction.options.getInteger('vote-seconds') ?? 60;
+    const voteOptions = interaction.options.getInteger('vote-options') ?? DEFAULTS.voteOptions;
+    const voteSeconds = interaction.options.getInteger('vote-seconds') ?? DEFAULTS.voteSeconds;
 
-    // Each player needs their own disjoint candidate set, so the pool has to cover both.
-    if (audienceVote && available < voteOptions * 2) {
-      return interaction.reply({
-        content:
-          `Audience vote with ${voteOptions} options per player needs ${voteOptions * 2} distinct ` +
-          `characters, but this selection only has ${available}. Pick more lists or lower \`vote-options\`.`,
-        flags: MessageFlags.Ephemeral,
-      });
+    const poolError = audienceVote && votePoolError(listIds, voteOptions, difficulty);
+    if (poolError) {
+      return interaction.reply({ content: poolError, flags: MessageFlags.Ephemeral });
     }
 
     const lobby = new Lobby({
@@ -172,6 +226,7 @@ module.exports = {
       mode: audienceVote ? 'audience-vote' : 'classic',
       voteOptions,
       voteSeconds,
+      difficulty,
     });
     GameManager.createLobby(interaction.channelId, lobby);
 
@@ -182,7 +237,9 @@ module.exports = {
         ? `🎲 Random category rolled: **${rolledCategory}**!`
         : pooledCategory
           ? `🗂️ Drawing from every list in **${pooledCategory}** (${resolved.length} lists).`
-          : undefined,
+          : pooledEverything
+            ? `🌍 Drawing from **every list in the server** -- ${resolved.length} lists, ${available} characters.`
+            : undefined,
       ...buildLobbyBoardPayload(lobby),
       withResponse: true,
     });

@@ -15,6 +15,7 @@
     "seed:wikidata": "node scripts/seed-wikidata-characters.js",
     "seed:anilist": "node scripts/seed-anilist-characters.js",
     "reset:seeded": "node scripts/reset-seeded-lists.js",
+    "backfill:popularity": "node scripts/backfill-popularity.js",
     "fetch:anilist": "node scripts/fetch-anilist-characters.js",
     "fetch:wikidata": "node scripts/fetch-wikidata-characters.js",
     "generate:sounds": "node scripts/generate-chime.js && node scripts/generate-sound-effects.js",

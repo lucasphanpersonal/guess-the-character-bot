@@ -15,6 +15,10 @@ module.exports = {
       return interaction.reply({ content: "You're not in the lobby.", flags: MessageFlags.Ephemeral });
     }
     if (wasHost) {
+      // Retire the board before dropping the lobby -- otherwise it keeps its Join / Start
+      // buttons in the channel, pointing at a lobby that no longer exists.
+      lobby.status = 'CANCELLED';
+      await refreshLobbyBoard(lobby);
       GameManager.endLobby(interaction.channelId);
       return interaction.reply('Host left, so the lobby has been cancelled.');
     }

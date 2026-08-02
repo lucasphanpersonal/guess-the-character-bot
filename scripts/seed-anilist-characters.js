@@ -21,10 +21,35 @@
 // characters people actually want in audience-vote mode. Pass --include-background to take
 // literally everything.
 //
+// HOW DEEP EACH SHOW GOES
+// The MAIN/SUPPORTING cut alone is far too generous: it imported 26,778 characters over 802
+// titles, a median of 22 per show and 836 for One Piece. A third of them had fewer than five
+// favourites. Dealing one at random mostly produced somebody neither player had heard of.
+//
+// A flat per-show cap -- what seed-wikidata uses, because sitelink counts are too coarse to
+// support anything better -- is the wrong shape here. Fame falls off at wildly different
+// rates from show to show, so the same rank means different things:
+//
+//   ONE PIECE     #1 36,038 favourites   #10 5,815   #30 1,486
+//   Cowboy Bebop  #1 14,830 favourites   #10    75   #30       3
+//
+// Cutting both at 30 keeps One Piece's Silvers Rayleigh (fine, 1,486 people favourited him)
+// and Cowboy Bebop's thirtieth-billed walk-on (3 people). The shape that survives both is a
+// threshold *relative to the show's own best-known character*: keep anyone with at least
+// FAME_FLOOR of the top character's favourites. One Piece keeps a full 30, Cowboy Bebop
+// keeps the six people who are actually in Cowboy Bebop.
+//
+// Two guards on top of it. MAIN characters are kept whatever their favourites, since the
+// show's own billing outranks a popularity vote -- at 2% that rescues 86 leads across 40
+// titles, mostly in ensembles where one character dwarfs the rest. And a show that would be
+// cut below MIN_CHARACTERS falls back to its top MIN_CHARACTERS, so a niche title with no
+// famous members keeps a playable list instead of vanishing.
+//
 // Usage:
 //   node scripts/seed-anilist-characters.js <guildId>
 //   node scripts/seed-anilist-characters.js <guildId> --include-background
 //   node scripts/seed-anilist-characters.js <guildId> --per-show 50
+//   node scripts/seed-anilist-characters.js <guildId> --fame-floor 1     # percent; 0 = off
 //   node scripts/seed-anilist-characters.js <guildId> --dry-run
 
 const fs = require('fs');
@@ -40,6 +65,18 @@ const {
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'anilist-characters.json');
 
 const MIN_CHARACTERS = 3;
+
+// Keep a character if they have at least this share of the show's best-known character's
+// favourites. 2% was picked by reading the results rather than by theory: it leaves Death
+// Note with 10, Spirited Away with 10, Mob Psycho with 8 and Cowboy Bebop with 6, which is
+// what those casts actually are. 1% is noticeably looser (Attack on Titan 30 rather than
+// 19), 3% starts eating characters people know (Totoro drops to 5). Tune with --fame-floor.
+const FAME_FLOOR = 0.02;
+
+// Ceiling for the shows whose long tail is genuinely famous -- One Piece and Bleach clear 2%
+// for hundreds of characters. Same 30 seed-wikidata uses, for the same reason: past about
+// thirty, a list stops being a game and starts being a quiz.
+const PER_SHOW_LIMIT = 30;
 
 /**
  * Strips season/part/cour markers so sibling entries collapse onto one title.
@@ -106,10 +143,24 @@ function mergeSeasons(series) {
   return merged;
 }
 
-function selectCast(characters, { includeBackground, perShow }) {
-  const kept = characters
+/**
+ * The cast worth playing with, best-known first. See "HOW DEEP EACH SHOW GOES" above.
+ *
+ * `fameFloor` defaults to 0 -- no trimming -- so a caller that only wants the role filter and
+ * the ranking gets exactly that.
+ */
+function selectCast(characters, { includeBackground, perShow, fameFloor = 0 }) {
+  const ranked = characters
     .filter((c) => includeBackground || KEEP_ROLES.has(c.role))
     .sort((a, b) => b.favourites - a.favourites || a.name.localeCompare(b.name));
+  if (!ranked.length) return ranked;
+
+  // Relative to this show's own top character, so a niche title is judged against itself.
+  const threshold = (ranked[0].favourites || 0) * fameFloor;
+  const known = ranked.filter((c) => (c.favourites || 0) >= threshold || c.role === 'MAIN');
+  // A show nobody has favourited would otherwise fall below MIN_CHARACTERS and disappear
+  // entirely; its top few are still the best answer available for it.
+  const kept = known.length >= MIN_CHARACTERS ? known : ranked.slice(0, MIN_CHARACTERS);
   return perShow ? kept.slice(0, perShow) : kept;
 }
 
@@ -159,11 +210,20 @@ function importTitle(guildId, title, cast, { dryRun }) {
 }
 
 function parseArgs(argv) {
-  const opts = { guildId: null, includeBackground: false, perShow: null, dryRun: false, quiet: false };
+  const opts = {
+    guildId: null,
+    includeBackground: false,
+    perShow: PER_SHOW_LIMIT,
+    fameFloor: FAME_FLOOR,
+    dryRun: false,
+    quiet: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--include-background') opts.includeBackground = true;
     else if (arg === '--per-show') opts.perShow = Number(argv[++i]);
+    // Taken as a percent, so `--fame-floor 1.5` reads the way it's discussed.
+    else if (arg === '--fame-floor') opts.fameFloor = Number(argv[++i]) / 100;
     else if (arg === '--dry-run') opts.dryRun = true;
     else if (arg === '--quiet') opts.quiet = true;
     else if (arg.startsWith('--')) throw new Error(`Unknown flag ${arg}`);
@@ -172,6 +232,9 @@ function parseArgs(argv) {
   if (opts.perShow !== null && (!Number.isInteger(opts.perShow) || opts.perShow < 1)) {
     throw new Error('--per-show needs a positive integer');
   }
+  if (!Number.isFinite(opts.fameFloor) || opts.fameFloor < 0 || opts.fameFloor >= 1) {
+    throw new Error('--fame-floor needs a percentage from 0 (keep everything) up to 100');
+  }
   return opts;
 }
 
@@ -179,7 +242,8 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts.guildId) {
     console.error(
-      'Usage: node scripts/seed-anilist-characters.js <guildId> [--include-background] [--per-show N] [--dry-run]'
+      'Usage: node scripts/seed-anilist-characters.js <guildId> [--include-background] ' +
+        '[--per-show N] [--fame-floor PERCENT] [--dry-run]'
     );
     process.exit(1);
   }
@@ -197,6 +261,7 @@ function main() {
   let totalImages = 0;
   let tooSmall = 0;
   let mergedAway = 0;
+  let totalTrimmed = 0;
 
   for (const title of titles) {
     mergedAway += title.mergedFrom - 1;
@@ -205,12 +270,17 @@ function main() {
       tooSmall++;
       continue;
     }
+    // What the role filter alone would have taken, so the trim is visible per title.
+    const untrimmed = selectCast(title.characters, { ...opts, perShow: null, fameFloor: 0 }).length;
+    totalTrimmed += untrimmed - cast.length;
     const r = importTitle(opts.guildId, title, cast, opts);
     if (r.created) created++;
     if (r.added && !opts.quiet) {
       console.log(
         `  ${title.label}: added ${r.added}${r.skipped ? `, skipped ${r.skipped}` : ''}` +
-          `${r.images ? `, ${r.images} image(s)` : ''}${title.mergedFrom > 1 ? ` [${title.mergedFrom} seasons merged]` : ''}`
+          `${r.images ? `, ${r.images} image(s)` : ''}` +
+          `${untrimmed > cast.length ? ` [${untrimmed - cast.length} trimmed]` : ''}` +
+          `${title.mergedFrom > 1 ? ` [${title.mergedFrom} seasons merged]` : ''}`
       );
     }
     totalAdded += r.added;
@@ -223,8 +293,22 @@ function main() {
       `(${mergedAway} season entries merged away, ${tooSmall} too small). ` +
       `Added ${totalAdded}, skipped ${totalSkipped}, ${totalImages} image(s).`
   );
+  console.log(
+    `Trimmed ${totalTrimmed} lesser-known character(s) ` +
+      `(fame floor ${(opts.fameFloor * 100).toFixed(1)}% of each show's best-known, cap ${opts.perShow} per show). ` +
+      'Raise or lower it with --fame-floor.'
+  );
 }
 
-module.exports = { baseTitle, mergeSeasons, selectCast, KEEP_ROLES, MIN_CHARACTERS };
+module.exports = {
+  baseTitle,
+  mergeSeasons,
+  selectCast,
+  parseArgs,
+  KEEP_ROLES,
+  MIN_CHARACTERS,
+  FAME_FLOOR,
+  PER_SHOW_LIMIT,
+};
 
 if (require.main === module) main();

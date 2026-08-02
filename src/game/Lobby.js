@@ -8,8 +8,9 @@ class Lobby {
     turnSeconds,
     maxRerolls = 2,
     mode = 'classic',
-    voteSeconds = 60,
+    voteSeconds = 90,
     voteOptions = 5,
+    difficulty = 'normal',
   }) {
     this.guildId = guildId;
     this.channelId = channelId;
@@ -23,6 +24,10 @@ class Lobby {
     this.mode = mode;
     this.voteSeconds = voteSeconds;
     this.voteOptions = voteOptions;
+    // How deep into each cast a random deal may go: 'easy' | 'normal' | 'everything'.
+    // Separate from the server's list selection on purpose -- that says which franchises
+    // this server likes, this says how obscure a character tonight's players will tolerate.
+    this.difficulty = difficulty;
     this.vote = null; // AudienceVote while lobby.status === 'VOTING'
     this.players = [];
     this.spectators = new Set();

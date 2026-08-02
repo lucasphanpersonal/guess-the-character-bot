@@ -6,7 +6,19 @@
 
 const fs = require('fs');
 const path = require('path');
-const { createList, getListByName, addCharacter, setCharacterImage, getCharacters } = require('../src/db/characterLists');
+const {
+  createList,
+  setListCategory,
+  getListByName,
+  addCharacter,
+  setCharacterImage,
+  getCharacters,
+} = require('../src/db/characterLists');
+
+// Same category seed:lol files itself under, so `/create-lobby category:Video Games` and
+// random category roulette both reach the Pokédex. Left uncategorised it sat alone in
+// "Uncategorized" and only a lobby naming the list by hand could ever draw from it.
+const CATEGORY = 'Video Games';
 
 const SPRITE_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork';
 const imageUrlFor = (id) => `${SPRITE_BASE}/${id}.png`;
@@ -57,11 +69,17 @@ function main() {
 
   let list = getListByName(guildId, listName);
   if (!list) {
-    const id = createList(guildId, listName, 'seed-script');
+    const id = createList(guildId, listName, 'seed-script', CATEGORY);
     list = { id };
     console.log(`Created list "${listName}" for guild ${guildId}.`);
   } else {
     console.log(`Found existing list "${listName}" (id ${list.id}) -- adding/updating characters.`);
+    // An earlier run of this script left the list uncategorised. Only rows this script
+    // created are corrected -- a category somebody set by hand is theirs to keep.
+    if (list.category !== CATEGORY && list.created_by === 'seed-script') {
+      setListCategory(list.id, CATEGORY);
+      console.log(`Filed "${listName}" under "${CATEGORY}".`);
+    }
   }
 
   const existingByName = new Map(getCharacters(list.id).map((c) => [c.name.toLowerCase(), c]));

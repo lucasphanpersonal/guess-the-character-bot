@@ -1,4 +1,10 @@
-const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
+const {
+  assert,
+  createRecorder,
+  createFakeClient,
+  createButtonInteraction,
+  createSlashInteraction,
+} = require('./harness');
 
 const { buildLobbyBoardPayload } = require('../src/game/lobbyBoard');
 const { handleComponentInteraction } = require('../src/components/router');
@@ -180,6 +186,43 @@ module.exports = {
 
     if (lobby.game) require('../src/game/engine').clearTimers(lobby.game);
     GameManager.endLobby(channelId);
+  },
+
+  // Cancelling deletes the lobby outright, so the board it leaves behind has to say so --
+  // both of these used to leave it either fully clickable or advertising a /rematch that
+  // has nothing left to replay.
+  async 'the host leaving retires the lobby board rather than leaving it clickable'() {
+    const { lobby, channelId, guildId } = makeLobby({ hostId: 'host', players: ['host', 'p2'] });
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+    lobby.boardMessage = recorder.record(`channel:${channelId}`, buildLobbyBoardPayload(lobby), channelId);
+
+    await require('../src/commands/leave-lobby').execute(
+      createSlashInteraction({ client, userId: 'host', guildId, channelId, recorder })
+    );
+
+    assert.equal(GameManager.getLobby(channelId), undefined, 'the lobby is gone');
+    const retired = recorder.lastMatching(`channel:${channelId}:edit`);
+    assert.ok(retired, 'the board was re-rendered');
+    assert.deepEqual(retired.payload.components, [], 'no clickable buttons left behind');
+    assert.match(retired.content, /cancelled/i);
+    assert.doesNotMatch(retired.content, /rematch/i, 'nothing left to rematch');
+  },
+
+  async 'ending a waiting lobby retires its board the same way'() {
+    const { lobby, channelId, guildId } = makeLobby({ hostId: 'host', players: ['p1'] });
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+    lobby.boardMessage = recorder.record(`channel:${channelId}`, buildLobbyBoardPayload(lobby), channelId);
+
+    await require('../src/commands/end-game').execute(
+      createSlashInteraction({ client, userId: 'host', guildId, channelId, recorder })
+    );
+
+    assert.equal(GameManager.getLobby(channelId), undefined, 'the lobby is gone');
+    const retired = recorder.lastMatching(`channel:${channelId}:edit`);
+    assert.deepEqual(retired.payload.components, [], 'no clickable buttons left behind');
+    assert.doesNotMatch(retired.content, /rematch/i, 'nothing left to rematch');
   },
 
   async 'board buttons for a lobby that no longer exists fail gracefully'() {

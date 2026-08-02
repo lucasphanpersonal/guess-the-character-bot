@@ -30,7 +30,9 @@ module.exports = {
       await refreshTurnBoard(lobby.game, interaction.channelId, { cancelled: true });
       voice.leaveVoiceForGame(lobby.game);
     }
-    lobby.status = 'FINISHED';
+    // CANCELLED, not FINISHED: the lobby is deleted below, so the board must not offer
+    // `/rematch` -- there would be nothing left for it to replay.
+    lobby.status = 'CANCELLED';
     await refreshLobbyBoard(lobby);
     GameManager.endLobby(interaction.channelId);
     return interaction.reply('🛑 Lobby/game cancelled.');

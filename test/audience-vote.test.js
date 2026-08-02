@@ -1,7 +1,13 @@
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 
 const engine = require('../src/game/engine');
-const { AudienceVote, drawCandidates, buildVoteBoardPayload, buildBallotPayload } = require('../src/game/audienceVote');
+const {
+  AudienceVote,
+  drawCandidates,
+  buildVoteBoardPayload,
+  buildBallotPayload,
+  clearVoteTimer,
+} = require('../src/game/audienceVote');
 const { handleComponentInteraction } = require('../src/components/router');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
@@ -160,7 +166,7 @@ module.exports = {
     // The board refresh must still not name anything.
     const edits = ctx.recorder.textMatching(`channel:${ctx.channelId}:edit`);
     assert.ok(!edits.includes(choice), 'tally refresh leaked the chosen name');
-    assert.match(payloadStrings(buildVoteBoardPayload(vote)), /Votes cast/);
+    assert.match(payloadStrings(buildVoteBoardPayload(vote)), /Ballots cast/);
     cleanup(ctx);
   },
 
@@ -323,5 +329,162 @@ module.exports = {
     await click(ctx, 'watcher', 'open'); // never started
     assert.match(ctx.recorder.allText(), /no longer open/);
     cleanup(ctx);
+  },
+
+  // ---------------------------------------------------------------------------
+  // Board shape, extension, and the reveal
+  // ---------------------------------------------------------------------------
+
+  'the public board describes the shape of each tally without naming anybody'() {
+    const ctx = makeLobby();
+    const candidatesBySlot = drawCandidates(ctx.lobby);
+    const vote = new AudienceVote({ lobby: ctx.lobby, candidatesBySlot });
+
+    assert.match(payloadStrings(buildVoteBoardPayload(vote)), /no votes yet/);
+
+    // Two voters agreeing is "unanimous"; a third disagreeing makes it a split. Neither
+    // phrasing may contain a candidate name, since the player wearing it reads this board.
+    vote.recordVote('v1', '1', candidatesBySlot['1'][0].name);
+    vote.recordVote('v2', '1', candidatesBySlot['1'][0].name);
+    let text = payloadStrings(buildVoteBoardPayload(vote));
+    assert.match(text, /unanimous so far/);
+
+    vote.recordVote('v3', '1', candidatesBySlot['1'][1].name);
+    text = payloadStrings(buildVoteBoardPayload(vote));
+    assert.match(text, /3\*\* votes across 2 characters/);
+    assert.match(text, /leader has 2/);
+
+    for (const c of [...candidatesBySlot['1'], ...candidatesBySlot['2']]) {
+      assert.doesNotMatch(text, new RegExp(c.name), `board leaked ${c.name}`);
+    }
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  'a dead heat is reported as tied, still without names'() {
+    const ctx = makeLobby();
+    const candidatesBySlot = drawCandidates(ctx.lobby);
+    const vote = new AudienceVote({ lobby: ctx.lobby, candidatesBySlot });
+    vote.recordVote('v1', '2', candidatesBySlot['2'][0].name);
+    vote.recordVote('v2', '2', candidatesBySlot['2'][1].name);
+
+    const text = payloadStrings(buildVoteBoardPayload(vote));
+    assert.match(text, /currently tied/);
+    for (const c of candidatesBySlot['2']) assert.doesNotMatch(text, new RegExp(c.name));
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  'the ballot confirms that a new pick replaced the old one'() {
+    const ctx = makeLobby();
+    const vote = new AudienceVote({ lobby: ctx.lobby, candidatesBySlot: drawCandidates(ctx.lobby) });
+    const first = vote.candidatesBySlot['1'][0].name;
+    vote.recordVote('v1', '1', first);
+
+    assert.doesNotMatch(buildBallotPayload(vote, 'v1').content, /Saved/, 'silent when just opening');
+    const after = buildBallotPayload(vote, 'v1', { justPicked: '1' }).content;
+    assert.match(after, /Saved/);
+    assert.match(after, /replaces your previous pick/);
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  async 'the host can extend voting, and repeated presses accumulate'() {
+    const ctx = makeLobby({ voteSeconds: 60 });
+    await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    const vote = ctx.lobby.vote;
+    const before = vote.endsAt;
+
+    await click(ctx, 'host', 'extend');
+    assert.equal(vote.endsAt - before, 30000, 'first press');
+    await click(ctx, 'host', 'extend');
+    assert.equal(vote.endsAt - before, 60000, 'presses stack rather than resetting');
+    assert.match(ctx.recorder.allText(), /extended by 30 seconds/);
+
+    clearVoteTimer(vote);
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  async 'only the host can extend'() {
+    const ctx = makeLobby();
+    await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    const vote = ctx.lobby.vote;
+    const before = vote.endsAt;
+
+    await click(ctx, 'someone', 'extend');
+    assert.equal(vote.endsAt, before, 'unchanged');
+    assert.match(ctx.recorder.allText(), /Only the host/);
+
+    clearVoteTimer(vote);
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  // The tie-break and the empty-audience fallback are both random, so resolving twice used
+  // to be able to disagree -- the character dealt vs the one named in the summary.
+  'the winner is decided once, so the summary can never contradict the deal'() {
+    const ctx = makeLobby();
+    const candidatesBySlot = drawCandidates(ctx.lobby);
+    const vote = new AudienceVote({ lobby: ctx.lobby, candidatesBySlot });
+    // No votes at all: the fallback is a random candidate.
+    const dealt = vote.resolve().map((c) => c.name);
+    for (let i = 0; i < 20; i++) {
+      assert.deepEqual(vote.resolve().map((c) => c.name), dealt, 'stable across calls');
+    }
+    assert.deepEqual(vote.summarise().map((s) => s.name), dealt, 'summary matches what was dealt');
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  'the summary distinguishes unanimous, tie-broken and unvoted outcomes'() {
+    const ctx = makeLobby();
+    const candidatesBySlot = drawCandidates(ctx.lobby);
+    const vote = new AudienceVote({ lobby: ctx.lobby, candidatesBySlot });
+    vote.recordVote('v1', '1', candidatesBySlot['1'][0].name);
+    vote.recordVote('v2', '1', candidatesBySlot['1'][0].name);
+
+    const [slot1, slot2] = vote.summarise();
+    assert.equal(slot1.unopposed, true);
+    assert.equal(slot1.votes, 2);
+    assert.equal(slot2.noVotes, true, 'nobody voted for player 2');
+    GameManager.endLobby(ctx.channelId);
+  },
+
+  async 'the reveal tells the audience how their vote turned out'() {
+    const ctx = makeLobby();
+    await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    const vote = ctx.lobby.vote;
+    const pick = vote.candidatesBySlot['1'][0].name;
+    vote.recordVote('v1', '1', pick);
+    vote.recordVote('v2', '1', pick);
+
+    await engine.closeAudienceVote(ctx.client, ctx.lobby, { reason: 'host' });
+    const game = ctx.lobby.game;
+    assert.ok(game.voteSummary, 'the tally survived the close');
+
+    // Nothing about it may reach the channel before the reveal.
+    assert.doesNotMatch(ctx.recorder.textMatching(`channel:${ctx.channelId}`), new RegExp(pick));
+
+    // Play it out for real: confirm both, then guess correctly, so the reveal is produced
+    // by the same path a live game takes.
+    for (const userId of ['p1', 'p2']) {
+      await engine.handleConfirmationButton(
+        createButtonInteraction({
+          client: ctx.client,
+          userId,
+          customId: `confirm:${ctx.channelId}`,
+          recorder: ctx.recorder,
+        })
+      );
+    }
+    // A correct guess by whoever moved first only earns the OTHER player a rebuttal turn,
+    // so the game needs both halves before a reveal exists.
+    const first = game.currentPlayerId;
+    await engine.submitGuess(ctx.client, ctx.lobby, first, game.headByPlayer[first].name);
+    // A wrong guess deliberately does NOT end a turn, so the rebuttal is closed by passing.
+    const second = game.turnOrder.find((id) => id !== first);
+    await engine.submitPass(ctx.client, ctx.lobby, second);
+
+    const revealed = ctx.recorder.textMatching(`channel:${ctx.channelId}`);
+    assert.match(revealed, /How the audience voted/);
+    assert.match(revealed, /unanimous/);
+
+    engine.clearTimers(game);
+    GameManager.endLobby(ctx.channelId);
   },
 };
