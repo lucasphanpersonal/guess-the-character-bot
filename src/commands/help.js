@@ -31,28 +31,29 @@ module.exports = {
         {
           name: '2️⃣ Start a game',
           value:
-            '`/lobby create list:<name>` -- open a lobby (comma-separate several list names to ' +
-            'draw from a combined pool; optionally set `turn-seconds` and `max-rerolls`, ' +
-            '`-1` = unlimited)\n' +
-            '`/lobby create category:<name>` -- draw from every **enabled** list in a category ' +
-            'at once, e.g. `category:Video Games` for any video game character\n' +
-            '`/lobby create everything:true` -- pool **every list in the server**, all ' +
-            'categories at once\n' +
-            'Or `random:true` to let the bot roll a random category -- 🎲 category roulette\n' +
-            'That posts the **lobby board**, which updates itself as people join. Everything ' +
-            'else here is a button on it:\n' +
-            '**Join** / **Leave** -- two people need to join (the host doesn\'t have to be one ' +
+            '`/lobby create` -- opens a lobby here. On its own it rolls a random category, so ' +
+            'you can just run it.\n' +
+            '`from:` picks what to draw from: one field offering 🎲 a random category, ' +
+            '🌍 everything enabled, 🗂️ any single category, or 📋 list names ' +
+            '(comma-separate to combine several).\n' +
+            '`difficulty:` sets how deep into each cast the deal may go. That, the turn ' +
+            'length, the rerolls and the audience-vote settings can all be changed afterwards ' +
+            'from the board -- nothing has to be decided up front.',
+        },
+        {
+          name: '🎛️ The lobby board',
+          value:
+            'Creating a lobby posts a board that updates itself as people join. Everything ' +
+            'below is a button on it:\n' +
+            "**Join** / **Leave** -- two people need to join (the host doesn't have to be one " +
             'of them)\n' +
             '**Spectate** -- opt in to a DM revealing both characters\n' +
             '**Start game** -- host only, stays disabled until 2 players have joined\n' +
-            '**⚙️ Settings** / **🗳️ Audience vote** / **🎚️ Difficulty** -- host only: change ' +
-            'turn length, rerolls, the vote tuning and how obscure a character can be dealt, ' +
-            'without recreating the lobby (locked once the game starts)\n' +
-            'The matching `/lobby join`, `/lobby leave`, `/lobby spectate` and `/lobby start` commands ' +
-            'still work and keep the board in sync.\n' +
-            '`/lobby set-characters` -- host only, optional, no button: assign each player\'s hidden ' +
-            "character yourself instead of leaving it random (reply is only visible to you, so " +
-            "it won't spoil anything)",
+            '**⚙️ Settings** / **🗳️ Audience vote** / **🎚️ Difficulty** / **🎭 Set characters** ' +
+            '-- host only, and all locked once the game starts\n' +
+            '`/lobby join`, `/lobby leave`, `/lobby spectate`, `/lobby start` and ' +
+            '`/lobby set-characters` do the same from the command line and keep the board in ' +
+            'sync.',
         },
         {
           name: '🗳️ Audience vote mode',
