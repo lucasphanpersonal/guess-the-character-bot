@@ -1,15 +1,8 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const { listCategoriesWithCounts, searchListNames } = require('../../db/characterLists');
 const { buildBrowsePayload, payloadForList, payloadForCategory } = require('../../components/listBrowser');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('list-show')
-    .setDescription("Browse categories, list names within one, or one list's characters")
-    .addStringOption((opt) => opt.setName('list').setDescription("Show this list's characters").setAutocomplete(true))
-    .addStringOption((opt) =>
-      opt.setName('category').setDescription('Show list names in this category').setAutocomplete(true)
-    ),
   async execute(interaction) {
     const listName = interaction.options.getString('list');
     const categoryName = interaction.options.getString('category');

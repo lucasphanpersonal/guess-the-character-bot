@@ -72,21 +72,6 @@ const clickButton = (ctx, userId, action) =>
     })
   );
 
-// Typing a guess now only happens through /guess -- the board has no submit control, so
-// that the judge's ruling is the single authority on whether a guess was right.
-function typeGuess(ctx, userId, text) {
-  return require('../src/commands/guess').execute(
-    createSlashInteraction({
-      client: ctx.client,
-      userId,
-      guildId: ctx.lobby.guildId,
-      channelId: ctx.channelId,
-      options: { character: text },
-      recorder: ctx.recorder,
-    })
-  );
-}
-
 const cleanup = (ctx) => {
   if (ctx.lobby.game) engine.clearTimers(ctx.lobby.game);
   GameManager.endLobby(ctx.channelId);
@@ -139,38 +124,6 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'a typed guess that is wrong keeps the turn and is counted'() {
-    const ctx = await runningGame();
-    await typeGuess(ctx, 'p1', 'Definitely Wrong');
-
-    assert.equal(ctx.lobby.game.currentPlayerId, 'p1', 'turn continues');
-    assert.deepEqual(
-      ctx.lobby.game.turnGuesses.map((g) => `${g.correct ? 'ok' : 'x'} ${g.text}`),
-      ['x Definitely Wrong']
-    );
-    assert.match(ctx.recorder.textMatching(`channel:${ctx.channelId}`), /1\*\* guess this game/);
-    assert.match(ctx.recorder.allText(), /Not quite/);
-    cleanup(ctx);
-  },
-
-  async 'a typed guess that is right advances the game'() {
-    const ctx = await runningGame();
-    await typeGuess(ctx, 'p1', 'Mario'); // p1's own head is Mario
-
-    assert.equal(ctx.lobby.game.rebuttal, true, 'first mover winning grants a rebuttal');
-    assert.equal(ctx.lobby.game.currentPlayerId, 'p2');
-    assert.match(ctx.recorder.allText(), /Correct/);
-    cleanup(ctx);
-  },
-
-  async 'an empty guess is rejected without consuming anything'() {
-    const ctx = await runningGame();
-    await typeGuess(ctx, 'p1', '   ');
-    assert.equal(ctx.lobby.game.turnGuesses.length, 0);
-    assert.match(ctx.recorder.allText(), /Enter a character name/);
-    cleanup(ctx);
-  },
-
   async 'the Pass button hands the turn over'() {
     const ctx = await runningGame();
     await clickButton(ctx, 'p1', 'pass');
@@ -193,7 +146,7 @@ module.exports = {
 
   async 'each new turn gets its own board and a clean guess tally'() {
     const ctx = await runningGame();
-    await typeGuess(ctx, 'p1', 'wrong one');
+    await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', false);
     assert.equal(ctx.lobby.game.turnGuesses.length, 1);
 
     await clickButton(ctx, 'p1', 'pass');

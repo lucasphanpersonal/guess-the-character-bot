@@ -3,9 +3,9 @@
 // Once the top N is on by default, what is left is exceptions: one show this server is sick
 // of, one obscure favourite they want in. Finding either on the checkbox page means paging
 // through hundreds of names; autocomplete finds it in three keystrokes. This is the command
-// that makes /list-filter optional.
+// that makes /list select optional.
 
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const {
   getListByName,
   toggleListEnabled,
@@ -14,12 +14,6 @@ const {
 } = require('../../db/characterLists');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('list-toggle')
-    .setDescription('Switch one list in or out of the pool this server plays with')
-    .addStringOption((opt) =>
-      opt.setName('list').setDescription('The list to switch').setRequired(true).setAutocomplete(true)
-    ),
   async execute(interaction) {
     if (!interaction.guildId) {
       return interaction.reply({ content: 'This command must be used in a server.', flags: MessageFlags.Ephemeral });
@@ -36,7 +30,7 @@ module.exports = {
 
     const enabled = toggleListEnabled(list.id);
     const characters = countDistinctCharacters([list.id]);
-    // Public, unlike the /list-filter page: this changes what everyone plays with, and one
+    // Public, unlike the /list select page: this changes what everyone plays with, and one
     // line in the channel is how the rest of the server finds out.
     return interaction.reply(
       enabled

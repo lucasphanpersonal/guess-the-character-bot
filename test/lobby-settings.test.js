@@ -20,7 +20,7 @@ const db = require('../src/db/connection');
 
 let counter = 0;
 
-function makeLobby({ hostId = 'host', characters = 20, ...overrides } = {}) {
+function makeLobby({ hostId = 'host', characters = 20, players = [], ...overrides } = {}) {
   const n = ++counter;
   const guildId = `settings-guild-${n}`;
   const channelId = `settings-chan-${n}`;
@@ -39,6 +39,7 @@ function makeLobby({ hostId = 'host', characters = 20, ...overrides } = {}) {
     maxRerolls: 2,
     ...overrides,
   });
+  for (const p of players) lobby.addPlayer(p);
   GameManager.createLobby(channelId, lobby);
   return { lobby, channelId, guildId };
 }
@@ -309,5 +310,84 @@ module.exports = {
     assert.equal(lobby.turnSeconds, 90, 'unchanged');
     assert.match(recorder.allText(), /already started/);
     GameManager.endLobby(channelId);
+  },
+
+  // Hand-picking characters was the last lobby setting living only in a slash command.
+  async 'the host can set both characters from the board'() {
+    const { lobby, channelId, guildId } = makeLobby({ players: ['p1', 'p2'] });
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+    const listId = lists.getEnabledLists(guildId)[0]?.id ?? lobby.listIds[0];
+    lists.addCharacter(listId, 'Hero One', 'tester');
+    lists.addCharacter(listId, 'Hero Two', 'tester');
+
+    await handleComponentInteraction(
+      createModalInteraction({
+        client,
+        userId: 'host',
+        customId: `lobby:save-characters:${channelId}`,
+        fields: { player1: 'Hero One', player2: 'Hero Two' },
+        recorder,
+      })
+    );
+
+    assert.equal(lobby.assignedCharacters.p1.name, 'Hero One');
+    assert.equal(lobby.assignedCharacters.p2.name, 'Hero Two');
+    // The board may never name them -- the players are reading it.
+    const update = recorder.lastMatching('update:host');
+    assert.doesNotMatch(update.content, /Hero One/, 'the board must never name them');
+    const label = update.payload.components[1]
+      .toJSON()
+      .components.find((c) => c.custom_id.split(':')[1] === 'characters').label;
+    assert.equal(label, 'Characters: set', 'but it does say that they are set');
+    GameManager.endLobby(channelId);
+  },
+
+  async 'an unknown character changes nothing and says which one failed'() {
+    const { lobby, channelId } = makeLobby({ players: ['p1', 'p2'] });
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+
+    await handleComponentInteraction(
+      createModalInteraction({
+        client,
+        userId: 'host',
+        customId: `lobby:save-characters:${channelId}`,
+        fields: { player1: 'Nobody At All', player2: 'Character 1' },
+        recorder,
+      })
+    );
+
+    assert.deepEqual(lobby.assignedCharacters, {}, 'nothing assigned');
+    assert.match(recorder.allText(), /Nobody At All/);
+    GameManager.endLobby(channelId);
+  },
+
+  async 'clearing both boxes goes back to a random deal'() {
+    const { lobby, channelId } = makeLobby({ players: ['p1', 'p2'] });
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+    lobby.assignedCharacters = { p1: { name: 'Character 1' }, p2: { name: 'Character 2' } };
+
+    await handleComponentInteraction(
+      createModalInteraction({
+        client,
+        userId: 'host',
+        customId: `lobby:save-characters:${channelId}`,
+        fields: { player1: '  ', player2: '' },
+        recorder,
+      })
+    );
+
+    assert.deepEqual(lobby.assignedCharacters, {});
+    assert.match(recorder.allText(), /dealt at random/);
+    GameManager.endLobby(channelId);
+  },
+
+  'the set-characters button waits for both players'() {
+    const { lobby } = makeLobby({ players: ['p1'] });
+    const row = buildLobbyBoardPayload(lobby).components[1].toJSON().components;
+    const button = row.find((c) => c.custom_id.split(':')[1] === 'characters');
+    assert.equal(button.disabled, true, 'nothing to assign with one player');
   },
 };

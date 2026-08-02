@@ -197,7 +197,7 @@ module.exports = {
     const client = createFakeClient(recorder);
     lobby.boardMessage = recorder.record(`channel:${channelId}`, buildLobbyBoardPayload(lobby), channelId);
 
-    await require('../src/commands/leave-lobby').execute(
+    await require('../src/commands/actions/lobby-leave').execute(
       createSlashInteraction({ client, userId: 'host', guildId, channelId, recorder })
     );
 
@@ -215,7 +215,7 @@ module.exports = {
     const client = createFakeClient(recorder);
     lobby.boardMessage = recorder.record(`channel:${channelId}`, buildLobbyBoardPayload(lobby), channelId);
 
-    await require('../src/commands/end-game').execute(
+    await require('../src/commands/actions/lobby-end').execute(
       createSlashInteraction({ client, userId: 'host', guildId, channelId, recorder })
     );
 

@@ -1,4 +1,4 @@
-// The /list-filter page: which lists this server actually plays with.
+// The /list select page: which lists this server actually plays with.
 //
 // Discord has no checkbox component, but a string select with setMinValues(0) and
 // setMaxValues(n) is one in every respect that matters -- each option shows a tick when
@@ -52,7 +52,7 @@ function paginate(items, page, perPage) {
 function categoriesView(guildId, page) {
   const categories = listCategoriesWithEnabledCounts(guildId);
   if (!categories.length) {
-    return { content: 'No character lists exist yet -- create one with `/list-create`.', components: [] };
+    return { content: 'No character lists exist yet -- create one with `/list create`.', components: [] };
   }
 
   const { slice, page: current, pages } = paginate(categories, page, CATEGORIES_PER_PAGE);

@@ -21,7 +21,12 @@ const {
   votePoolError,
   displayValue,
 } = require('../game/lobbySettings');
-const { DIFFICULTIES, countDistinctCharacters } = require('../db/characterLists');
+const {
+  DIFFICULTIES,
+  countDistinctCharacters,
+  getCharacterByNameInLists,
+  getListLabelForIds,
+} = require('../db/characterLists');
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
 
@@ -50,12 +55,38 @@ function buildSettingsModal(lobby) {
   return modal;
 }
 
+// Two boxes, one per player, prefilled with whatever is already assigned. No autocomplete
+// -- modals have none -- so `/lobby set-characters` stays for anyone who wants help finding
+// a name in a 12,000-character pool.
+function buildCharactersModal(lobby) {
+  const [p1, p2] = lobby.players;
+  const modal = new ModalBuilder()
+    .setCustomId(`lobby:save-characters:${lobby.channelId}`)
+    .setTitle('Hand-pick both characters');
+
+  for (const [key, playerId] of [['player1', p1], ['player2', p2]]) {
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId(key)
+          .setLabel(`Character for player ${key.slice(-1)}`)
+          .setStyle(TextInputStyle.Short)
+          .setValue(lobby.assignedCharacters[playerId]?.name ?? '')
+          .setMaxLength(100)
+          // Blank in both boxes clears the assignment back to a random deal.
+          .setRequired(false)
+      )
+    );
+  }
+  return modal;
+}
+
 async function handle(interaction) {
   const [, action, channelId] = interaction.customId.split(':');
   const lobby = GameManager.getLobby(channelId);
 
   if (!lobby) {
-    return interaction.reply(ephemeral('This lobby is no longer active. Start a new one with `/create-lobby`.'));
+    return interaction.reply(ephemeral('This lobby is no longer active. Start a new one with `/lobby create`.'));
   }
   // Every board button only makes sense while the lobby is still open.
   if (lobby.status !== 'WAITING') {
@@ -92,6 +123,58 @@ async function handle(interaction) {
     return interaction.update(buildLobbyBoardPayload(lobby));
   }
 
+  if (action === 'characters' || action === 'save-characters') {
+    if (notHost) return interaction.reply(ephemeral(notHost));
+    if (lobby.players.length !== 2) {
+      return interaction.reply(ephemeral(`Need both players joined first -- currently ${lobby.players.length}/2.`));
+    }
+
+    if (action === 'characters') {
+      return interaction.showModal(buildCharactersModal(lobby));
+    }
+
+    const [p1, p2] = lobby.players;
+    const typed = {
+      [p1]: interaction.fields.getTextInputValue('player1').trim(),
+      [p2]: interaction.fields.getTextInputValue('player2').trim(),
+    };
+
+    // Clearing both is how you go back to a random deal.
+    if (!typed[p1] && !typed[p2]) {
+      lobby.assignedCharacters = {};
+      await interaction.update(buildLobbyBoardPayload(lobby));
+      return interaction.followUp(ephemeral('🎲 Cleared -- both characters will be dealt at random.'));
+    }
+
+    const resolved = {};
+    const missing = [];
+    for (const playerId of [p1, p2]) {
+      const found = getCharacterByNameInLists(lobby.listIds, typed[playerId]);
+      if (found) resolved[playerId] = found;
+      else missing.push(typed[playerId] || '(blank)');
+    }
+    if (missing.length) {
+      return interaction.reply(
+        ephemeral(
+          `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's lists ` +
+            `(${getListLabelForIds(lobby.listIds)}). Nothing was changed -- ` +
+            '`/lobby set-characters` has autocomplete if you want help spelling them.'
+        )
+      );
+    }
+    if (resolved[p1].name.toLowerCase() === resolved[p2].name.toLowerCase()) {
+      return interaction.reply(ephemeral('Both players need different characters. Nothing was changed.'));
+    }
+
+    lobby.assignedCharacters = resolved;
+    // The board only ever says THAT characters are set, never which -- the players are
+    // reading it, and their own character is the one thing they must not see.
+    await interaction.update(buildLobbyBoardPayload(lobby));
+    return interaction.followUp(
+      ephemeral(`✅ Set. Only you can see this: <@${p1}> gets **${resolved[p1].name}**, <@${p2}> gets **${resolved[p2].name}**.`)
+    );
+  }
+
   if (action === 'difficulty') {
     if (notHost) return interaction.reply(ephemeral(notHost));
 
@@ -108,7 +191,7 @@ async function handle(interaction) {
       return interaction.reply(
         ephemeral(
           `**${DIFFICULTIES[next].label}** would leave only ${pool} character(s) to draw from -- ` +
-            'enable more lists with `/list-filter` first.'
+            'enable more lists with `/list select` first.'
         )
       );
     }
@@ -127,21 +210,21 @@ async function handle(interaction) {
       return interaction.update(buildLobbyBoardPayload(lobby));
     }
 
-    // Same guard /create-lobby applies, re-run here because the pool is fixed but the
+    // Same guard /lobby create applies, re-run here because the pool is fixed but the
     // vote settings are not.
     const poolError = votePoolError(lobby.listIds, lobby.voteOptions, lobby.difficulty);
     if (poolError) return interaction.reply(ephemeral(poolError));
 
     lobby.mode = 'audience-vote';
     // startGameFromLobby hands off to the vote before it ever looks at assignedCharacters,
-    // so a host who already ran /set-characters needs telling their picks are now moot.
+    // so a host who already ran /lobby set-characters needs telling their picks are now moot.
     const overridesSetCharacters = Object.keys(lobby.assignedCharacters).length > 0;
     await interaction.update(buildLobbyBoardPayload(lobby));
     if (overridesSetCharacters) {
       return interaction.followUp(
         ephemeral(
           '🗳️ Audience vote is on -- the crowd now picks both characters, so your ' +
-            '`/set-characters` picks are ignored. Turn it back off to use them.'
+            '`/lobby set-characters` picks are ignored. Turn it back off to use them.'
         )
       );
     }
@@ -214,4 +297,4 @@ async function handle(interaction) {
   return interaction.reply(ephemeral('Unknown lobby action.'));
 }
 
-module.exports = { handle, buildSettingsModal };
+module.exports = { handle, buildSettingsModal, buildCharactersModal };

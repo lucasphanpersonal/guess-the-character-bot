@@ -1,4 +1,4 @@
-// Paginated browsing for `/list-show` (customId `browse:<view>:<key>:<page>`).
+// Paginated browsing for `/list show` (customId `browse:<view>:<key>:<page>`).
 //
 // A single Discord message caps at 2000 characters, and the seed data runs to well over a
 // thousand lists, so the un-paginated version simply truncated: "...and 1,247 more". That
@@ -69,7 +69,7 @@ function navRow(view, key, page, pages, { back = null } = {}) {
 function categoriesView(guildId, page) {
   const categories = listCategoriesWithCounts(guildId);
   if (!categories.length) {
-    return { content: 'No character lists yet. Create one with `/list-create`.', components: [] };
+    return { content: 'No character lists yet. Create one with `/list create`.', components: [] };
   }
   const { slice, page: current, pages } = paginate(categories, page, CATEGORIES_PER_PAGE);
   const total = categories.reduce((sum, c) => sum + c.count, 0);
@@ -81,7 +81,7 @@ function categoriesView(guildId, page) {
   return {
     content: fit(
       `🗂️ **Categories** (${categories.length}, ${total} lists total)\n\n${body}`
-    ) + `\n\n-# Page ${current + 1} of ${pages} · \`/list-show category:<name>\` to open one`,
+    ) + `\n\n-# Page ${current + 1} of ${pages} · \`/list show category:<name>\` to open one`,
     components: [navRow('cat', 0, current, pages)],
   };
 }
@@ -98,7 +98,7 @@ function listsView(guildId, categoryIndex, page) {
     content: fit(
       `🗂️ **${category.category}** -- ${names.length} list${names.length === 1 ? '' : 's'}\n\n` +
         slice.map((n) => `• ${n}`).join('\n')
-    ) + `\n\n-# Page ${current + 1} of ${pages} · \`/list-show list:<name>\` to open one`,
+    ) + `\n\n-# Page ${current + 1} of ${pages} · \`/list show list:<name>\` to open one`,
     components: [
       navRow('lists', categoryIndex, current, pages, {
         back: { customId: 'browse:cat:0:0', label: 'Categories' },

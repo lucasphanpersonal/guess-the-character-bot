@@ -106,9 +106,9 @@ module.exports = {
     await press(ctx, 'p2', 'wrong');
 
     const [entry] = ctx.lobby.game.guessLog;
-    assert.equal(entry.text, null);
-    assert.equal(entry.judged, true);
     assert.equal(entry.correct, false);
+    assert.equal(entry.playerId, 'p1', 'against the guesser, not the judge');
+    assert.ok(!('text' in entry), 'there is no name to record');
 
     // The board reports a count rather than a list -- there is no name to list.
     const payload = buildTurnBoardPayload(ctx.lobby.game, ctx.channelId);
@@ -188,17 +188,6 @@ module.exports = {
     const payload = buildTurnBoardPayload(game, ctx.channelId);
     const field = payload.embeds[0].toJSON().fields.find((f) => f.name === 'Guesses so far');
     assert.match(field.value, /\*\*1\*\* guess this game/, "p1's count survived a full round");
-    cleanup(ctx);
-  },
-
-  async 'typed guesses and judged ones share one tally'() {
-    const ctx = await runningGame();
-    const game = ctx.lobby.game;
-
-    await press(ctx, 'p2', 'wrong');
-    await engine.submitGuess(ctx.client, ctx.lobby, 'p1', 'Peach');
-    assert.equal(game.guessCountFor('p1'), 2, 'both paths count');
-    assert.deepEqual(game.triedNames('p1'), ['Peach'], 'only the typed one has a name');
     cleanup(ctx);
   },
 

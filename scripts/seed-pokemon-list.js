@@ -15,7 +15,7 @@ const {
   getCharacters,
 } = require('../src/db/characterLists');
 
-// Same category seed:lol files itself under, so `/create-lobby category:Video Games` and
+// Same category seed:lol files itself under, so `/lobby create category:Video Games` and
 // random category roulette both reach the Pokédex. Left uncategorised it sat alone in
 // "Uncategorized" and only a lobby naming the list by hand could ever draw from it.
 const CATEGORY = 'Video Games';

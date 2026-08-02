@@ -67,7 +67,7 @@ module.exports = {
     assert.ok(edit, 'the leftover board was edited');
     assert.deepEqual(edit.payload.components, [], 'no clickable buttons survive');
     assert.match(edit.payload.content, /bot restarted/i, 'it explains itself');
-    assert.match(edit.payload.content, /create-lobby/, 'and says what to do next');
+    assert.match(edit.payload.content, /lobby create/, 'and says what to do next');
     assert.match(edit.payload.content, /Random category rolled/, 'the original content is kept');
     assert.equal(rowsFor(channelId).length, 0, 'the row is gone once swept');
   },

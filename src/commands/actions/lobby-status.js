@@ -1,8 +1,7 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const GameManager = require('../game/GameManager');
+const { MessageFlags } = require('discord.js');
+const GameManager = require('../../game/GameManager');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('status').setDescription('Show the current lobby/game status'),
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
     if (!lobby) {
@@ -11,7 +10,7 @@ module.exports = {
 
     if (lobby.status === 'FINISHED') {
       return interaction.reply({
-        content: 'Last game in this channel finished. `/rematch` to play again with the same players, or `/create-lobby` to start something new.',
+        content: 'Last game in this channel finished. `/rematch` to play again with the same players, or `/lobby create` to start something new.',
         flags: MessageFlags.Ephemeral,
       });
     }

@@ -4,7 +4,7 @@
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
 const { handleComponentInteraction } = require('../src/components/router');
 const listFilter = require('../src/components/listFilter');
-const createLobby = require('../src/commands/create-lobby');
+const createLobby = require('../src/commands/actions/lobby-create');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
 const db = require('../src/db/connection');
@@ -173,14 +173,14 @@ module.exports = {
         userId: 'host',
         guildId,
         channelId,
-        options: { category: 'Anime' },
+        options: { from: '::cat:Anime' },
         recorder,
       })
     );
 
     assert.equal(GameManager.getLobby(channelId), undefined, 'no lobby');
     assert.match(recorder.allText(), /none of them are enabled/);
-    assert.match(recorder.allText(), /list-filter/, 'says how to fix it');
+    assert.match(recorder.allText(), /list select/, 'says how to fix it');
   },
 
   async 'everything:true draws only from the enabled selection'() {
@@ -197,7 +197,7 @@ module.exports = {
         userId: 'host',
         guildId,
         channelId,
-        options: { everything: true },
+        options: { from: '::everything' },
         recorder,
       })
     );
@@ -219,7 +219,7 @@ module.exports = {
         userId: 'host',
         guildId,
         channelId,
-        options: { list: 'Disabled Show' },
+        options: { from: 'Disabled Show' },
         recorder,
       })
     );
@@ -243,7 +243,7 @@ module.exports = {
         userId: 'host',
         guildId,
         channelId,
-        options: { random: true },
+        options: { from: '::random' },
         recorder,
       })
     );
@@ -313,7 +313,7 @@ module.exports = {
     }
     const recorder = createRecorder();
 
-    await require('../src/commands/list-filter').execute(
+    await require('../src/commands/actions/list-select').execute(
       createSlashInteraction({
         client: createFakeClient(recorder),
         userId: 'curator',
@@ -334,7 +334,7 @@ module.exports = {
     const guildId = freshGuild();
     seed(guildId, 'Cowboy Bebop', 'Anime', { characters: 4 });
     const recorder = createRecorder();
-    const toggle = require('../src/commands/lists/toggle-list');
+    const toggle = require('../src/commands/actions/list-toggle');
 
     const run = () =>
       toggle.execute(
@@ -364,7 +364,7 @@ module.exports = {
     lists.setListsEnabled([on], true);
     const recorder = createRecorder();
 
-    await require('../src/commands/lists/toggle-list').autocomplete(
+    await require('../src/commands/actions/list-toggle').autocomplete(
       createSlashInteraction({
         client: createFakeClient(recorder),
         userId: 'curator',

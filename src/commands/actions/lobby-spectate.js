@@ -1,12 +1,9 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const GameManager = require('../game/GameManager');
-const { characterMessage } = require('../game/engine');
-const { refreshLobbyBoard } = require('../game/lobbyBoard');
+const { MessageFlags } = require('discord.js');
+const GameManager = require('../../game/GameManager');
+const { characterMessage } = require('../../game/engine');
+const { refreshLobbyBoard } = require('../../game/lobbyBoard');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('spectate')
-    .setDescription("Opt in to DMs revealing both players' characters"),
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
     if (!lobby) {
@@ -14,7 +11,7 @@ module.exports = {
     }
     if (lobby.status === 'FINISHED') {
       return interaction.reply({
-        content: 'That game already finished. Wait for a `/rematch` or a new `/create-lobby`, then spectate.',
+        content: 'That game already finished. Wait for a `/rematch` or a new `/lobby create`, then spectate.',
         flags: MessageFlags.Ephemeral,
       });
     }

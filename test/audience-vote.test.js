@@ -475,7 +475,7 @@ module.exports = {
     // A correct guess by whoever moved first only earns the OTHER player a rebuttal turn,
     // so the game needs both halves before a reveal exists.
     const first = game.currentPlayerId;
-    await engine.submitGuess(ctx.client, ctx.lobby, first, game.headByPlayer[first].name);
+    await engine.submitJudgement(ctx.client, ctx.lobby, game.judgeId, true);
     // A wrong guess deliberately does NOT end a turn, so the rebuttal is closed by passing.
     const second = game.turnOrder.find((id) => id !== first);
     await engine.submitPass(ctx.client, ctx.lobby, second);

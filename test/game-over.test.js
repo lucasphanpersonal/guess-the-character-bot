@@ -46,7 +46,7 @@ async function finishedGame() {
   }
   // p1 passes, p2 guesses their own head correctly -> immediate win, no rebuttal.
   await engine.submitPass(client, lobby, 'p1');
-  await engine.submitGuess(client, lobby, 'p2', 'Luigi');
+  await engine.submitJudgement(client, lobby, 'p1', true);
 
   return { lobby, client, recorder, channelId, guildId };
 }

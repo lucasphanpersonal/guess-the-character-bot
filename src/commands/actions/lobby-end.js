@@ -1,13 +1,12 @@
-const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
-const GameManager = require('../game/GameManager');
-const { clearTimers } = require('../game/engine');
-const { refreshTurnBoard } = require('../game/turnBoard');
-const { clearVoteTimer } = require('../game/audienceVote');
-const { refreshLobbyBoard } = require('../game/lobbyBoard');
-const voice = require('../game/voice');
+const { PermissionFlagsBits, MessageFlags } = require('discord.js');
+const GameManager = require('../../game/GameManager');
+const { clearTimers } = require('../../game/engine');
+const { refreshTurnBoard } = require('../../game/turnBoard');
+const { clearVoteTimer } = require('../../game/audienceVote');
+const { refreshLobbyBoard } = require('../../game/lobbyBoard');
+const voice = require('../../game/voice');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('end-game').setDescription('Cancel the active lobby or game (host or admin only)'),
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
     if (!lobby) {

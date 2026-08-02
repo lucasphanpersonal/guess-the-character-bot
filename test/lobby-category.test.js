@@ -8,7 +8,7 @@
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
 const lists = require('../src/db/characterLists');
 const db = require('../src/db/connection');
-const createLobby = require('../src/commands/create-lobby');
+const createLobby = require('../src/commands/actions/lobby-create');
 const GameManager = require('../src/game/GameManager');
 
 let guildCounter = 0;
@@ -79,7 +79,7 @@ module.exports = {
     );
   },
 
-  async 'everything:true pools every list in the server, across all categories'() {
+  async 'from: everything pools every enabled list, across all categories'() {
     const guildId = freshGuild();
     const channelId = `everything-chan-${guildId}`;
     seed(guildId, 'Zelda', 'Video Games', ['Link', 'Ganon']);
@@ -93,7 +93,7 @@ module.exports = {
         userId: 'host',
         guildId,
         channelId,
-        options: { everything: true },
+        options: { from: '::everything' },
         recorder,
       })
     );
@@ -101,28 +101,29 @@ module.exports = {
     const lobby = GameManager.getLobby(channelId);
     assert.equal(lobby.listIds.length, 3, 'every list, not just one category');
     assert.equal(lists.countDistinctCharacters(lobby.listIds), 4);
-    assert.match(recorder.allText(), /every list in the server/);
+    assert.match(recorder.allText(), /every enabled list/);
     GameManager.endLobby(channelId);
   },
 
-  async 'everything cannot be combined with a category or a list'() {
+  // The four mutually exclusive options became one, so the modes can no longer be combined
+  // at all -- there is nothing left to reject.
+  async 'one from: option covers every mode'() {
     const guildId = freshGuild();
-    const channelId = `everything-clash-${guildId}`;
     seed(guildId, 'Zelda', 'Video Games', ['Link', 'Ganon']);
+    seed(guildId, 'Naruto', 'Anime', ['Naruto Uzumaki', 'Sasuke']);
 
-    const recorder = createRecorder();
-    await createLobby.execute(
-      createSlashInteraction({
-        client: createFakeClient(recorder),
-        userId: 'host',
-        guildId,
-        channelId,
-        options: { everything: true, category: 'Video Games' },
-        recorder,
-      })
+    const { resolvePool } = require('../src/game/lobbyPool');
+    assert.equal(resolvePool(guildId, '::everything').lists.length, 2);
+    assert.deepEqual(
+      resolvePool(guildId, '::cat:Anime').lists.map((l) => l.name),
+      ['Naruto']
     );
-
-    assert.equal(GameManager.getLobby(channelId), undefined, 'no lobby was created');
-    assert.match(recorder.allText(), /Use only one of/);
+    assert.deepEqual(
+      resolvePool(guildId, 'Zelda').lists.map((l) => l.name),
+      ['Zelda']
+    );
+    assert.equal(resolvePool(guildId, '::random').ok, true);
+    // Absent means roulette, so bare /lobby create opens a game instead of an error.
+    assert.equal(resolvePool(guildId, null).ok, true);
   },
 };

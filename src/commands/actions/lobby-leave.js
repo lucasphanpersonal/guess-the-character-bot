@@ -1,9 +1,8 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const GameManager = require('../game/GameManager');
-const { refreshLobbyBoard } = require('../game/lobbyBoard');
+const { MessageFlags } = require('discord.js');
+const GameManager = require('../../game/GameManager');
+const { refreshLobbyBoard } = require('../../game/lobbyBoard');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('leave-lobby').setDescription('Leave the waiting lobby'),
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
     if (!lobby || lobby.status !== 'WAITING') {

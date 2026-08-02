@@ -33,8 +33,8 @@ class Lobby {
     this.spectators = new Set();
     this.status = 'WAITING';
     this.game = null;
-    // Set via /set-characters: { [playerId]: characterRow }. Used instead of a random pick
-    // at /start-game when both players have an assignment.
+    // Set via /lobby set-characters: { [playerId]: characterRow }. Used instead of a random pick
+    // at /lobby start when both players have an assignment.
     this.assignedCharacters = {};
   }
 

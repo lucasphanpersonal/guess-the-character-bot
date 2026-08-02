@@ -161,7 +161,7 @@ async function sendConfirmDM(recipientUser, subjectPlayerId, game, channelId) {
         buildConfirmRow(channelId, state.rerollsLeft, {
           allowReroll: game.rerollAllowed,
           // Only offerable when we know which list the character came from, which rules
-          // out hand-assigned characters from /set-characters.
+          // out hand-assigned characters from /lobby set-characters.
           canDropList: game.rerollAllowed && character.listId != null,
         }),
       ],
@@ -263,7 +263,7 @@ async function closeAudienceVote(client, lobby, { reason } = {}) {
   return { ok: true };
 }
 
-// Shared entry point for both `/start-game` and the lobby board's Start button, so the
+// Shared entry point for both `/lobby start` and the lobby board's Start button, so the
 // validation and character-selection rules can't drift between the two.
 async function startGameFromLobby(client, lobby) {
   if (lobby.players.length !== 2) {
@@ -407,7 +407,7 @@ async function handleConfirmationButton(interaction) {
       return interaction.reply({
         content:
           `Dropping **${list.name}** would leave nothing else to deal from in this lobby, so ` +
-          'nothing was changed. Reroll instead, or add more lists with `/list-filter`.',
+          'nothing was changed. Reroll instead, or add more lists with `/list select`.',
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -434,7 +434,7 @@ async function handleConfirmationButton(interaction) {
     return interaction.followUp({
       content:
         `🚫 **${list.name}** is out of the pool for future games. ` +
-        'Undo any time with `/list-toggle`.',
+        'Undo any time with `/list toggle`.',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -518,41 +518,6 @@ async function handleTimeout(client, lobby) {
 // Shared by /guess, the turn board's Guess button (via its modal), and any future entry
 // point. Presentation-free: it records the guess on the turn board and advances the game,
 // and leaves it to the caller to acknowledge the interaction.
-async function submitGuess(client, lobby, playerId, guessText) {
-  const game = lobby.game;
-  if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
-    return { ok: false, error: 'No game in progress.' };
-  }
-  if (playerId !== game.currentPlayerId) {
-    return { ok: false, error: "It's not your turn." };
-  }
-  const text = (guessText || '').trim();
-  if (!text) {
-    return { ok: false, error: 'Enter a character name to guess.' };
-  }
-
-  const correct = game.checkGuess(playerId, text);
-  game.recordGuess(playerId, { text, correct });
-
-  if (correct) {
-    voice.playCorrectSound(game);
-    await endTurn(client, lobby, { correct: true });
-    return { ok: true, correct: true, turnEnded: true };
-  }
-
-  voice.playWrongSound(game);
-  if (game.paused) {
-    // This was their last chance after time already ran out -- now it actually ends.
-    await endTurn(client, lobby, { correct: false });
-    return { ok: true, correct: false, turnEnded: true };
-  }
-
-  // Still within their normal time: a wrong guess costs nothing, so just show it on the
-  // board and let them keep going.
-  await refreshTurnBoard(game, lobby.channelId);
-  return { ok: true, correct: false, turnEnded: false };
-}
-
 /**
  * The primary way a turn resolves: the player who can SEE the answer rules on a guess that
  * was said out loud.
@@ -578,8 +543,7 @@ async function submitJudgement(client, lobby, judgeId, correct) {
     return { ok: false, error: "You're the one guessing -- <@" + game.judgeId + "> judges this turn." };
   }
 
-  // text stays null: the guess was spoken, and the bot never heard the name.
-  game.recordGuess(game.currentPlayerId, { correct, judged: true });
+  game.recordGuess(game.currentPlayerId, correct);
 
   if (correct) {
     voice.playCorrectSound(game);
@@ -608,17 +572,6 @@ async function submitPass(client, lobby, playerId) {
   }
   await endTurn(client, lobby, { correct: false });
   return { ok: true };
-}
-
-async function handleGuess(interaction, lobby, guessText) {
-  const result = await submitGuess(interaction.client, lobby, interaction.user.id, guessText);
-  if (!result.ok) {
-    return interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
-  }
-  return interaction.reply({
-    content: result.correct ? '✅ Correct!' : '❌ Not quite.',
-    flags: MessageFlags.Ephemeral,
-  });
 }
 
 async function handlePass(interaction, lobby) {
@@ -756,8 +709,8 @@ async function finalizeGame(client, lobby, outcome) {
     voice.leaveVoiceForGame(game);
   }
   // Deliberately NOT calling GameManager.endLobby here -- the FINISHED lobby stays in the
-  // map so /rematch can read its settings. /create-lobby treats a FINISHED entry as free
-  // to overwrite, and /end-game still deletes it outright if nobody wants a rematch.
+  // map so /rematch can read its settings. /lobby create treats a FINISHED entry as free
+  // to overwrite, and /lobby end still deletes it outright if nobody wants a rematch.
 }
 
 module.exports = {
@@ -765,10 +718,8 @@ module.exports = {
   startGameFromLobby,
   startAudienceVote,
   closeAudienceVote,
-  submitGuess,
   submitJudgement,
   submitPass,
-  handleGuess,
   handlePass,
   handleTimeout,
   handleConfirmationButton,

@@ -29,7 +29,7 @@ async function handle(interaction) {
     const previous = GameManager.getLobby(channelId);
     if (!previous || previous.status !== 'FINISHED') {
       return interaction.reply(
-        ephemeral('That game has already been replaced -- use `/create-lobby` to start a new one.')
+        ephemeral('That game has already been replaced -- use `/lobby create` to start a new one.')
       );
     }
 

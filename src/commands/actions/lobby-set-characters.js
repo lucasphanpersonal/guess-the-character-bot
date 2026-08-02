@@ -1,23 +1,12 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const GameManager = require('../game/GameManager');
+const { MessageFlags } = require('discord.js');
+const GameManager = require('../../game/GameManager');
 const {
   getCharacterByNameInLists,
   searchCharactersInLists,
   getListLabelForIds,
-} = require('../db/characterLists');
+} = require('../../db/characterLists');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('set-characters')
-    .setDescription("Host only: assign each player's own hidden character instead of leaving it random")
-    .addUserOption((opt) => opt.setName('player1').setDescription('First player').setRequired(true))
-    .addStringOption((opt) =>
-      opt.setName('character1').setDescription("player1's hidden character").setRequired(true).setAutocomplete(true)
-    )
-    .addUserOption((opt) => opt.setName('player2').setDescription('Second player').setRequired(true))
-    .addStringOption((opt) =>
-      opt.setName('character2').setDescription("player2's hidden character").setRequired(true).setAutocomplete(true)
-    ),
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
     if (!lobby || lobby.status !== 'WAITING') {
@@ -66,7 +55,7 @@ module.exports = {
     // Ephemeral and deliberately vague in wording -- if this were visible to the players in
     // the channel, or spelled out who-gets-what, it'd spoil their own hidden character.
     return interaction.reply({
-      content: `✅ Characters assigned for <@${player1.id}> and <@${player2.id}>. Run \`/start-game\` when ready -- only you can see this confirmation.`,
+      content: `✅ Characters assigned for <@${player1.id}> and <@${player2.id}>. Run \`/lobby start\` when ready -- only you can see this confirmation.`,
       flags: MessageFlags.Ephemeral,
     });
   },

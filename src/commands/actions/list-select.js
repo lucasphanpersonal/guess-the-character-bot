@@ -1,21 +1,8 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { categoriesView, categoryView } = require('../components/listFilter');
-const { listCategoriesWithEnabledCounts, enableTopN } = require('../db/characterLists');
+const { MessageFlags } = require('discord.js');
+const { categoriesView, categoryView } = require('../../components/listFilter');
+const { listCategoriesWithEnabledCounts, enableTopN } = require('../../db/characterLists');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('list-filter')
-    .setDescription('Choose which character lists this server plays with')
-    .addStringOption((opt) =>
-      opt.setName('category').setDescription('Jump straight into one category').setAutocomplete(true)
-    )
-    .addIntegerOption((opt) =>
-      opt
-        .setName('top')
-        .setDescription('Enable the N best-known lists instead of ticking boxes (all categories, or just `category`)')
-        .setMinValue(1)
-        .setMaxValue(1000)
-    ),
   async execute(interaction) {
     if (!interaction.guildId) {
       return interaction.reply({ content: 'This command must be used in a server.', flags: MessageFlags.Ephemeral });
@@ -44,7 +31,7 @@ module.exports = {
       return interaction.reply({
         content:
           `✅ Enabled the top ${top} in ${scope} -- ${added} newly switched on, **${nowOn}** lists enabled in total.\n` +
-          '-# Only adds; nothing already enabled was turned off. Run `/list-filter` to fine-tune.',
+          '-# Only adds; nothing already enabled was turned off. Run `/list select` to fine-tune.',
         flags: MessageFlags.Ephemeral,
       });
     }

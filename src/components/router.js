@@ -27,9 +27,9 @@ const HANDLERS = {
   vote: (interaction) => voteControls.handle(interaction),
   // End-of-game reveal buttons.
   over: (interaction) => gameOverControls.handle(interaction),
-  // `/list-show` pagination (Prev / Next / Back).
+  // `/list show` pagination (Prev / Next / Back).
   browse: (interaction) => listBrowser.handle(interaction),
-  // `/list-filter` checkboxes for the server's playable list selection.
+  // `/list select` checkboxes for the server's playable list selection.
   filter: (interaction) => listFilter.handle(interaction),
 };
 

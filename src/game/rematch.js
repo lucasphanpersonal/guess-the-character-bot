@@ -34,7 +34,7 @@ function rematchAnnouncement(lobby, firstPlayer, secondPlayer) {
   return (
     `🔁 Rematch! <@${firstPlayer}> and <@${secondPlayer}> are back in (going in that order this time) using ` +
     `**${getListLabelForIds(lobby.listIds)}**. ` +
-    'Host can `/set-characters` or just hit **Start game** when ready.'
+    'Host can `/lobby set-characters` or just hit **Start game** when ready.'
   );
 }
 

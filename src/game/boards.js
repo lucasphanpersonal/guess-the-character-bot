@@ -14,10 +14,10 @@ const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { rememberBoard, forgetBoard, allBoards } = require('../db/activeBoards');
 
 const ENDED_NOTE = {
-  lobby: '⚠️ The bot restarted, so this lobby is no longer active. Use `/create-lobby` to start a new one.',
-  turn: '⚠️ The bot restarted, so this game ended here. Use `/create-lobby` to start a new one.',
-  vote: '⚠️ The bot restarted, so this vote was abandoned. Use `/create-lobby` to start a new one.',
-  gameover: '⚠️ The bot restarted, so **Rematch** is no longer available. Use `/create-lobby` to start a new one.',
+  lobby: '⚠️ The bot restarted, so this lobby is no longer active. Use `/lobby create` to start a new one.',
+  turn: '⚠️ The bot restarted, so this game ended here. Use `/lobby create` to start a new one.',
+  vote: '⚠️ The bot restarted, so this vote was abandoned. Use `/lobby create` to start a new one.',
+  gameover: '⚠️ The bot restarted, so **Rematch** is no longer available. Use `/lobby create` to start a new one.',
   confirm: '⚠️ The bot restarted before the game began -- this character is no longer in play.',
 };
 

@@ -83,7 +83,7 @@ module.exports = {
     assert.notEqual(lobby.game.headByPlayer.p2.name, before, 'and the character was rerolled');
     assert.match(lobby.game.headByPlayer.p2.name, /^Famous/, 'replacement came from the other list');
     assert.match(recorder.allText(), /Obscure Show\*\* is out of the pool/);
-    assert.match(recorder.allText(), /list-toggle/, 'says how to undo it');
+    assert.match(recorder.allText(), /list toggle/, 'says how to undo it');
 
     // Naming it directly still works, same as any disabled list.
     assert.ok(lists.getListByName(guildId, 'Obscure Show'));

@@ -1,9 +1,6 @@
-const { normalizeLoose } = require('../util/text');
 const { getCharacterSource } = require('../db/characterLists');
 
 class Game {
-  static STOPWORDS = new Set(['the', 'a', 'an', 'of', 'and', 'or', 'in', 'on', 'to', 'for', 'de', 'la', 'le']);
-
   /**
    * Turns a database character row into the shape the DMs and reveal render.
    *
@@ -23,7 +20,7 @@ class Game {
     }
     // id and listId ride along so a reroll can be recorded against the character, and so
     // "never deal this show again" knows which list to switch off. Both are absent when a
-    // character was assigned by hand via /set-characters.
+    // character was assigned by hand via /lobby set-characters.
     return {
       name: character.name,
       imageUrl: character.image_url || null,
@@ -55,8 +52,7 @@ class Game {
     this.turnBoardMessage = null;
     this.turnGuesses = [];
     // Every guess of the whole game, which turnGuesses cannot be because it resets each
-    // turn. Two things need it: the reveal's "got it on their 4th guess", and a player
-    // wanting to know what they already tried three rounds ago.
+    // turn. Feeds the board's running count and the reveal's "got it on their 4th guess".
     this.guessLog = [];
     this.voiceConnection = null;
     this.audioPlayer = null;
@@ -77,14 +73,14 @@ class Game {
   }
 
   /**
-   * One guess, recorded in both the per-turn view and the whole-game log.
+   * One guess by the player currently up, recorded in both the per-turn view and the
+   * whole-game log.
    *
-   * `text` is null for a guess called out loud and judged by the other player: the bot never
-   * heard the name, only that a guess happened and whether it landed. That is the honest
-   * record -- inventing a placeholder name would be worse than admitting we don't know it.
+   * There is no name to store: guesses are called out in voice and ruled on by the other
+   * player, so the bot knows that a guess happened and whether it landed, never what it was.
    */
-  recordGuess(playerId, { text = null, correct = false, judged = false } = {}) {
-    const entry = { text, correct, judged, playerId, round: this.round };
+  recordGuess(playerId, correct) {
+    const entry = { correct, playerId, round: this.round };
     this.turnGuesses.push(entry);
     this.guessLog.push(entry);
     return entry;
@@ -95,68 +91,10 @@ class Game {
     return this.guessLog.filter((g) => g.playerId === playerId).length;
   }
 
-  /** Names this player has already tried, so the board can stop them repeating one. */
-  triedNames(playerId) {
-    return this.guessLog.filter((g) => g.playerId === playerId && g.text).map((g) => g.text);
-  }
-
   isFirstMover(playerId) {
     return playerId === this.turnOrder[0];
   }
 
-  // Folds diacritics before stripping punctuation, so "Flabebe" still matches "Flabébé"
-  // (see src/util/text.js -- stripping first would delete accented letters outright).
-  static normalize(str) {
-    return normalizeLoose(str);
-  }
-
-  // Standard Levenshtein edit distance between two strings.
-  static levenshtein(a, b) {
-    const rows = a.length + 1;
-    const cols = b.length + 1;
-    const dist = Array.from({ length: rows }, (_, i) => [i, ...Array(cols - 1).fill(0)]);
-    for (let j = 0; j < cols; j++) dist[0][j] = j;
-    for (let i = 1; i < rows; i++) {
-      for (let j = 1; j < cols; j++) {
-        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-        dist[i][j] = Math.min(dist[i - 1][j] + 1, dist[i][j - 1] + 1, dist[i - 1][j - 1] + cost);
-      }
-    }
-    return dist[rows - 1][cols - 1];
-  }
-
-  // Typo tolerance scaled by target length -- exact match required for very short names,
-  // since a small edit distance is too easy to hit by accident on a short string.
-  static toleranceFor(length) {
-    if (length <= 4) return 0;
-    if (length <= 7) return 1;
-    return 2;
-  }
-
-  static fuzzyMatches(a, b) {
-    return a === b || Game.levenshtein(a, b) <= Game.toleranceFor(b.length);
-  }
-
-  checkGuess(playerId, guessText) {
-    const targetFull = this.headByPlayer[playerId].name;
-    const target = Game.normalize(targetFull);
-    const guess = Game.normalize(guessText);
-    if (!guess) return false;
-    if (Game.fuzzyMatches(guess, target)) return true;
-
-    // Multi-word names (e.g. "Shikamaru Nara") are commonly known by just one part
-    // ("Shikamaru") -- accept a guess that matches any single word of the full name, not
-    // just the whole thing, on the assumption that the guesser is using its well-known
-    // short form rather than making a typo across the whole name.
-    const words = targetFull
-      .split(/\s+/)
-      .map((w) => Game.normalize(w))
-      .filter((w) => w && !Game.STOPWORDS.has(w));
-    if (words.length > 1) {
-      return words.some((word) => Game.fuzzyMatches(guess, word));
-    }
-    return false;
-  }
 }
 
 module.exports = Game;

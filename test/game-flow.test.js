@@ -59,12 +59,11 @@ async function confirmBoth({ client, recorder, channelId }) {
   }
 }
 
-function guess({ client, recorder, lobby }, userId, text) {
-  return engine.handleGuess(
-    createSlashInteraction({ client, userId, guildId: lobby.guildId, channelId: lobby.channelId, recorder }),
-    lobby,
-    text
-  );
+// Guesses are called out in voice and ruled on by the other player, so a test "guess" is
+// the judge's verdict, not a string. `userId` is still the guesser, for readability.
+function guess({ client, lobby }, userId, correct) {
+  const judgeId = lobby.game.turnOrder.find((id) => id !== userId);
+  return engine.submitJudgement(client, lobby, judgeId, correct);
 }
 
 function pass({ client, recorder, lobby }, userId) {
@@ -126,18 +125,14 @@ module.exports = {
     await confirmBoth(ctx);
     const game = ctx.lobby.game;
 
-    await guess(ctx, 'p1', 'not even close');
+    await guess(ctx, 'p1', false);
     assert.equal(game.currentPlayerId, 'p1', 'still p1 after one wrong guess');
-    await guess(ctx, 'p1', 'still wrong');
+    await guess(ctx, 'p1', false);
     assert.equal(game.currentPlayerId, 'p1', 'still p1 after a second wrong guess');
 
-    // Both are tallied on the turn board rather than spamming the channel. The board shows
-    // a count, not the names: most guesses are said out loud and judged, so it could only
-    // ever print names for the minority that were typed.
-    assert.deepEqual(
-      game.turnGuesses.map((g) => g.text),
-      ['not even close', 'still wrong']
-    );
+    // Tallied on the turn board rather than spamming the channel -- as a count, because a
+    // guess called out in voice has no text for the bot to print.
+    assert.equal(game.turnGuesses.length, 2);
     assert.match(channelText(ctx), /\*\*2\*\* guesses this game/);
     cleanup(ctx);
   },
@@ -160,7 +155,7 @@ module.exports = {
     assert.equal(game.currentPlayerId, 'p1', 'turn has not moved on yet');
     assert.match(channelText(ctx), /last chance/i);
 
-    await guess(ctx, 'p1', 'wrong again');
+    await guess(ctx, 'p1', false);
     assert.equal(game.paused, false);
     assert.equal(game.currentPlayerId, 'p2', 'now it moves on');
     cleanup(ctx);
@@ -169,7 +164,7 @@ module.exports = {
   async 'first mover guessing right grants the opponent a rebuttal turn'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
-    await guess(ctx, 'p1', 'Mario'); // p1's own head is Mario
+    await guess(ctx, 'p1', true); // ruled correct by p2
     assert.equal(ctx.lobby.game.rebuttal, true);
     assert.equal(ctx.lobby.game.currentPlayerId, 'p2');
     assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'not over yet');
@@ -179,7 +174,7 @@ module.exports = {
   async 'a failed rebuttal gives the first mover the win, and says so'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
-    await guess(ctx, 'p1', 'Mario');
+    await guess(ctx, 'p1', true);
     await pass(ctx, 'p2'); // rebuttal squandered
 
     assert.equal(ctx.lobby.status, 'FINISHED');
@@ -194,8 +189,8 @@ module.exports = {
   async 'a successful rebuttal is a tie'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
-    await guess(ctx, 'p1', 'Mario');
-    await guess(ctx, 'p2', 'Luigi');
+    await guess(ctx, 'p1', true);
+    await guess(ctx, 'p2', true);
 
     assert.equal(ctx.lobby.status, 'FINISHED');
     assert.match(lastChannelMessage(ctx), /tie/);
@@ -208,7 +203,7 @@ module.exports = {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await pass(ctx, 'p1');
-    await guess(ctx, 'p2', 'Luigi');
+    await guess(ctx, 'p2', true);
 
     assert.equal(ctx.lobby.status, 'FINISHED');
     const final = lastChannelMessage(ctx);
@@ -222,9 +217,9 @@ module.exports = {
     await confirmBoth(ctx);
     const played = attachFakeVoice(ctx.lobby.game);
 
-    await guess(ctx, 'p1', 'wrong');
+    await guess(ctx, 'p1', false);
     assert.equal(played.length, 1, 'wrong-guess sound');
-    await guess(ctx, 'p1', 'Mario');
+    await guess(ctx, 'p1', true);
     assert.equal(played.length, 2, 'correct-guess sound');
     await pass(ctx, 'p2'); // ends the game -> win sting
     assert.equal(played.length, 3, 'win sound');
@@ -293,7 +288,7 @@ module.exports = {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await pass(ctx, 'p1');
-    await guess(ctx, 'p2', 'Luigi');
+    await guess(ctx, 'p2', true);
     assert.equal(ctx.lobby.status, 'FINISHED');
     assert.equal(GameManager.getLobby(ctx.channelId), ctx.lobby, 'kept for /rematch');
 

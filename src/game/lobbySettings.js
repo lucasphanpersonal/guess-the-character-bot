@@ -1,6 +1,6 @@
 // The knobs a lobby carries (turn length, rerolls, audience-vote tuning).
 //
-// Each one can be set twice: as a `/create-lobby` option, and again from the ⚙️ Settings
+// Each one can be set twice: as a `/lobby create` option, and again from the ⚙️ Settings
 // button on the lobby board while the lobby is still WAITING. Both paths share the bounds
 // and the pool check below, so the modal can never leave a lobby in a state the slash
 // command would have rejected.

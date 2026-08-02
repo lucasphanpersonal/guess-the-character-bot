@@ -13,18 +13,24 @@ happen live between humans in voice.
 
 ## How a game works
 
-1. **Build a character list** once with `/list-create` (tagged with a category, e.g. "Anime"
-   or "Video Games") and `/list-add-character`. Or skip this entirely and use the bundled
+1. **Build a character list** once with `/list create` (tagged with a category, e.g. "Anime"
+   or "Video Games") and `/list add`. Or skip this entirely and use the bundled
    seed data — see [Seeding character lists](#seeding-character-lists).
-2. **Open a lobby** with `/create-lobby list:<name>` in the channel you'll play from.
-   Comma-separate several lists (`list:Pokemon, Anime`) to draw from a combined pool.
+2. **Open a lobby** with `/lobby create` in the channel you'll play from. Bare, it rolls a
+   random category. The `from:` option picks what to draw from — one autocompleted field
+   offering 🎲 random, 🌍 everything, 🗂️ any category, or 📋 list names (comma-separate to
+   combine several).
 
-   To play "any character from X", use `category` instead — `/create-lobby category:Video
-   Games` pools every list in that category (~4,800 characters across ~590 games), which
-   naming them individually can't do: Discord caps the `list` option at 100 characters. The
-   bundled seed data fills six categories: Anime, Manga, Video Games, Cartoon, Television
-   Shows and Movies. Or `random:true` for 🎲 category roulette, or `everything:true` to pool
-   every list in the server at once, every category together.
+   Picking a category from `from:` pools every enabled list in it, which naming lists
+   individually can't do: Discord caps an option value at 100 characters. The bundled seed
+   data fills six categories: Anime, Manga, Video Games, Cartoon, Television Shows and
+   Movies.
+
+   The four options this replaces (`list`, `category`, `everything`, `random`) were mutually
+   exclusive, which Discord can't express — so the command advertised no required options and
+   then rejected both giving none and giving two. One field makes exclusivity structural, and
+   makes the modes discoverable: they now appear in the picker instead of being buried at
+   option four.
 
    This posts the **lobby board** — a single message with **Join / Leave / Spectate / Start
    game** buttons that updates itself in place as people join. Everything below can be done
@@ -32,16 +38,16 @@ happen live between humans in voice.
 
    The host also gets **⚙️ Settings** and a **🗳️ Audience vote: on/off** toggle on the board,
    so turn length, rerolls and the vote tuning can all be changed after the lobby is open —
-   nothing has to be decided up front on the `/create-lobby` line. Settings lock once the
+   nothing has to be decided up front on the `/lobby create` line. Settings lock once the
    game starts.
 3. **Two people join.** The host doesn't have to be one of them. Anyone else can spectate to
    get both characters DMed to them — and anyone already sitting in the same voice channel
    as the players is auto-added as a spectator. **Start game** stays disabled until exactly
    two players have joined.
-4. **Optionally `/set-characters`** (host only) to hand-pick each player's character instead
+4. **Optionally `/lobby set-characters`** (host only) to hand-pick each player's character instead
    of leaving it to chance. The confirmation is ephemeral, so it can't spoil anything even
    though you type it in the shared channel.
-5. **Hit Start game** on the board (host only; `/start-game` does the same). Each player
+5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player
    gets a DM showing the *other* player's character — that's what they'll use to answer
    questions — along with the show or film it's from, since a name on its own is often
    ambiguous (there's a Ditto in Pokémon *and* Ben 10, an Ed in Ed Edd n Eddy *and* Cowboy
@@ -58,14 +64,13 @@ happen live between humans in voice.
      loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
      guesses get called out in voice and never reach a bot that only sees typing. The ❌
      button carries a running count, so presses visibly land.
-   - **You get ⏭️ Pass**, and nothing else. There is deliberately no "submit a guess" button
-     next to it: the judge's ✅ already answers *was that right?*, and a second control for
-     the same question would mean two authorities on it — a human who can see the character,
-     and Levenshtein distance. `/guess` still exists for anyone who prefers to type.
+   - **You get ⏭️ Pass**, and nothing else. There is deliberately no way to submit a written
+     guess: the judge's ✅ already answers *was that right?*, and a second control for the
+     same question would mean two authorities on it.
 
    **A wrong guess does _not_ end your turn.** Only **Pass**, or running out of time, hands
    it over — and when the clock hits zero the board turns amber for one final guess rather
-   than ending outright. `/guess` and `/pass` still work if you prefer typing.
+   than ending outright. `/pass` also works as a command.
 
    The board shows your running guess count for the whole game, not just this turn, and the
    reveal reports how many it took. It's a count rather than a list because the bot only
@@ -86,23 +91,27 @@ happen live between humans in voice.
    rebuttal = tie, wrong = the first player wins). The reveal comes with **Rematch** and
    **Leaderboard** buttons.
 
-`/status` shows whose turn it is and the time left. `/end-game` cancels a stuck game (host
+`/lobby status` shows whose turn it is and the time left. `/lobby end` cancels a stuck game (host
 or a server admin). After a game, `/rematch` replays it with the same two players (turn
 order swapped) and `/leaderboard` shows the standings.
 
 One lobby/game can be active **per channel** — different channels in the same server can run
 their own games concurrently.
 
-### Guess matching
+### Who decides a guess is right
 
-Guesses don't have to be exact. The bot accepts:
+The player who *can see* your character. There is no text matching anywhere in the game:
+guesses are called out in voice, and the other player hits **✅ They got it** or **❌ Nope**.
 
-- **Case and punctuation differences** — `kaisa` matches `Kai'Sa`.
-- **Missing accents** — `Flabebe` matches `Flabébé`, `Pokemon` matches `Pokémon`.
-- **Small typos**, scaled to name length (none for names ≤4 characters, 1 edit for 5–7,
-  2 edits for 8+).
-- **A single well-known word** of a multi-word name — `Shikamaru` matches `Shikamaru Nara`.
-  Trivial words (`the`, `of`, `a`, …) don't count on their own.
+That's the same thing a human does at a real table, and it beats what the bot used to do —
+normalise, fold accents, and allow a Levenshtein distance scaled to name length. All of that
+existed only to compensate for the bot judging something it couldn't hear. A person deciding
+whether "Shikamaru" counts for "Shikamaru Nara" needs no algorithm.
+
+The consequence is that the bot knows *how many* guesses were made, never *what* they were.
+So the board reports a count, and remembering that you already tried Levi is the other
+player's job.
+
 
 ### Difficulty: how obscure a character you'll be dealt
 
@@ -117,7 +126,7 @@ fame rather than cutting the list:
 | **Normal** (default) | skips the deepest cuts | 91 |
 | **Everything** | every character | 151 — down to Abel and Dennis Aiblinger |
 
-Set it with `/create-lobby difficulty:` or the **🎚️ Difficulty** button on the lobby board,
+Set it with `/lobby create difficulty:` or the **🎚️ Difficulty** button on the lobby board,
 which cycles and tells you the resulting pool size. It's a per-lobby setting on purpose:
 the list selection says which franchises this server likes, difficulty says how deep tonight's
 players want to go, and those change on different schedules.
@@ -168,12 +177,12 @@ rerolling the same unlucky draw twice isn't mistaken for a consensus, and deleti
 **🚫 Never deal this show** sits next to Reroll on the confirmation DM. It drops that list
 from the server's selection *and* rerolls, in one press — the alternative is rerolling now
 and remembering to curate later, which nobody does. It costs a reroll (because it is one),
-refuses if dropping would leave the lobby nothing to deal from, and `/list-toggle` undoes it.
+refuses if dropping would leave the lobby nothing to deal from, and `/list toggle` undoes it.
 
 ### Choosing which lists you play with
 
 The seed data runs to ~2,000 lists, and most of them are obscure enough that being dealt one
-is a wasted turn — the reroll button was doing the job a filter should. `/list-filter` is
+is a wasted turn — the reroll button was doing the job a filter should. `/list select` is
 that filter: a page of checkboxes (multi-select menus, 75 per page) covering every list,
 with a running count of what's on.
 
@@ -189,21 +198,21 @@ often you'll want them:
 
 | | Best for |
 | --- | --- |
-| `/list-toggle <list>` | One list in or out. Autocomplete finds it in three keystrokes and shows ✅/⬜ for its current state. |
-| `/list-filter top:<n>` | Moving the cut line wholesale — `top:200` for every category, or with `category:` for one. Only ever adds. |
-| `/list-filter` | The checkbox page, for browsing and bulk work. Sorted best-known first, 75 checkboxes a page, with Enable/Disable page and Disable all. |
+| `/list toggle <list>` | One list in or out. Autocomplete finds it in three keystrokes and shows ✅/⬜ for its current state. |
+| `/list select top:<n>` | Moving the cut line wholesale — `top:200` for every category, or with `category:` for one. Only ever adds. |
+| `/list select` | The checkbox page, for browsing and bulk work. Sorted best-known first, 75 checkboxes a page, with Enable/Disable page and Disable all. |
 
 The page is the fallback, not the main event: once the default is sensible, hunting a single
 show across six pages is worse than naming it.
 
 The selection governs **pooled draws only** — `category`, `everything` and `random`. Naming a
-list outright (`/create-lobby list:Naruto`) always works, enabled or not, because asking for
-one by name is already a deliberate choice. Lists made by hand with `/list-create` are
+list outright (`/lobby create list:Naruto`) always works, enabled or not, because asking for
+one by name is already a deliberate choice. Lists made by hand with `/list create` are
 enabled on creation for the same reason.
 
 ### Audience-vote mode
 
-Add `audience-vote:true` to `/create-lobby` — or hit the **🗳️ Audience vote** toggle on the
+Add `audience-vote:true` to `/lobby create` — or hit the **🗳️ Audience vote** toggle on the
 lobby board — and the audience decides what both players are wearing, instead of the bot
 dealing at random.
 
@@ -241,21 +250,21 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | Command | Who | What it does |
 | --- | --- | --- |
 | `/help` | anyone | Rules and command summary |
-| `/list-create` | anyone | Create a character list, tagged with a category |
-| `/list-add-character` | anyone | Add a character, optionally with an image URL |
-| `/list-set-image` | anyone | Attach/update a character's image |
-| `/list-remove-character` | anyone | Remove a character |
-| `/list-show` | anyone | Browse categories, lists in a category, or one list's characters |
-| `/list-filter` | anyone | Tick which lists the server plays with; `top:<n>` enables the N best-known instead |
-| `/list-toggle` | anyone | Switch one named list in or out of the pool |
-| `/create-lobby` | anyone | Open a lobby + post the lobby board (`list`, `category`, `everything:true`, or `random:true`; plus `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
-| `/join-lobby` / `/leave-lobby` | players | Join or leave the waiting lobby (or use the board's buttons) |
-| `/spectate` | anyone | Opt in to a DM revealing both characters (or use the board's button) |
-| `/set-characters` | host | Hand-pick both players' characters |
-| `/start-game` | host | Deal characters and begin |
-| `/guess` / `/pass` | current player | Guess (any time, wrong is free) or end your turn (or use the turn board's buttons) |
-| `/status` | anyone | Whose turn, time remaining |
-| `/end-game` | host/admin | Cancel a stuck lobby or game |
+| `/list create` | anyone | Create a character list, tagged with a category |
+| `/list add` | anyone | Add a character, optionally with an image URL |
+| `/list image` | anyone | Attach/update a character's image |
+| `/list remove` | anyone | Remove a character |
+| `/list show` | anyone | Browse categories, lists in a category, or one list's characters |
+| `/list select` | anyone | Tick which lists the server plays with; `top:<n>` enables the N best-known instead |
+| `/list toggle` | anyone | Switch one named list in or out of the pool |
+| `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
+| `/lobby join` / `/lobby leave` | players | Join or leave the waiting lobby (or use the board's buttons) |
+| `/lobby spectate` | anyone | Opt in to a DM revealing both characters (or use the board's button) |
+| `/lobby set-characters` | host | Hand-pick both players' characters |
+| `/lobby start` | host | Deal characters and begin |
+| `/pass` | current player | End your turn (or use the turn board's button) |
+| `/lobby status` | anyone | Whose turn, time remaining |
+| `/lobby end` | host/admin | Cancel a stuck lobby or game |
 | `/rematch` | anyone | Replay the last finished game, turn order swapped (or use the reveal's button) |
 | `/leaderboard` | anyone | Server standings, or one player's record |
 
@@ -393,10 +402,10 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
   out most cartoon art, so a lot of these arrive text-only.
 
 Anything still without an image reveals as plain text, which is a supported look — use
-`/list-set-image` to fill in any you care about.
+`/list image` to fill in any you care about.
 
 `seed:pokemon` and `seed:lol` take an optional list name as a second argument. Combine
-anything at game time: `/create-lobby list:Naruto, Scrubs`.
+anything at game time: `/lobby create list:Naruto, Scrubs`.
 
 <details>
 <summary>Refreshing the AniList and Wikidata caches</summary>
@@ -446,12 +455,12 @@ src/
     turnControls.js     Turn board buttons + the guess modal
     voteControls.js     Audience ballot + host close button
     gameOverControls.js Rematch / Leaderboard buttons on the reveal
-    listBrowser.js      Paginated category/list/character browsing for /list-show
+    listBrowser.js      Paginated category/list/character browsing for /list show
     listFilter.js       Checkbox page for the server's playable list selection
   game/
     GameManager.js      Map<channelId, Lobby> — one lobby per channel
     Lobby.js            Pre-game state: host, players, spectators, settings
-    lobbySettings.js    Bounds/parsing shared by /create-lobby and the settings modal
+    lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
     Game.js             Active-game state + guess matching
     engine.js           Turn loop, DMs, confirm/reroll, win/rebuttal resolution
     lobbyBoard.js       Renders the self-updating lobby message

@@ -3,7 +3,7 @@ const { foldDiacritics } = require('../util/text');
 
 // Lists arrive disabled because the seed scripts create them in the thousands. A list
 // somebody types out by hand is the opposite case -- that is a deliberate choice, so
-// /list-create passes enabled: true and it is playable straight away.
+// /list create passes enabled: true and it is playable straight away.
 function createList(guildId, name, createdBy, category = null, { enabled = false } = {}) {
   const info = db
     .prepare(
@@ -142,7 +142,7 @@ const LABEL_LIST_LIMIT = 3;
 /**
  * Human-readable label for a whole lobby selection, e.g. "Naruto (Manga) + Scrubs (TV Shows)".
  *
- * A selection can cover a whole category -- `/create-lobby category:Video Games` pools 127
+ * A selection can cover a whole category -- `/lobby create category:Video Games` pools 127
  * lists, and rolling "Anime" pools 443 -- and naming each one would produce a label
  * thousands of characters long, well past what Discord will render in an embed. Past a
  * handful, the shared category is the honest summary; a mixed selection just gets counted.
@@ -365,10 +365,10 @@ function getListsByCategory(guildId, category) {
 }
 
 // ---------------------------------------------------------------------------
-// The server's playable selection (`enabled`), curated from /list-filter
+// The server's playable selection (`enabled`), curated from /list select
 // ---------------------------------------------------------------------------
 //
-// Only pooled draws consult this. Naming a list outright -- `/create-lobby list:Naruto` --
+// Only pooled draws consult this. Naming a list outright -- `/lobby create list:Naruto` --
 // deliberately bypasses it: the point of the selection is to keep obscure lists out of a
 // random deal, not to make them unreachable when somebody asks for one by name.
 
@@ -389,7 +389,7 @@ function getEnabledLists(guildId) {
     .all(guildId);
 }
 
-// Every category with how much of it is switched on -- drives the /list-filter landing page
+// Every category with how much of it is switched on -- drives the /list select landing page
 // and the "nothing is enabled yet" errors, which need to name what IS available.
 function listCategoriesWithEnabledCounts(guildId) {
   return db

@@ -1,9 +1,8 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const GameManager = require('../game/GameManager');
-const { startGameFromLobby } = require('../game/engine');
+const { MessageFlags } = require('discord.js');
+const GameManager = require('../../game/GameManager');
+const { startGameFromLobby } = require('../../game/engine');
 
 module.exports = {
-  data: new SlashCommandBuilder().setName('start-game').setDescription('Start the game once 2 players have joined'),
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
     if (!lobby || lobby.status !== 'WAITING') {

@@ -1,17 +1,7 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const { getListByName, addCharacter, searchListNames } = require('../../db/characterLists');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('list-add-character')
-    .setDescription('Add a character to a list')
-    .addStringOption((opt) => opt.setName('list').setDescription('List name').setRequired(true).setAutocomplete(true))
-    .addStringOption((opt) => opt.setName('character').setDescription('Character name').setRequired(true))
-    .addStringOption((opt) => opt.setName('image').setDescription('Image URL shown when this character is revealed')),
-  async autocomplete(interaction) {
-    const matches = searchListNames(interaction.guildId, interaction.options.getFocused());
-    return interaction.respond(matches.map((name) => ({ name, value: name })));
-  },
   async execute(interaction) {
     const listName = interaction.options.getString('list').trim();
     const characterName = interaction.options.getString('character').trim();
@@ -22,7 +12,7 @@ module.exports = {
     const list = getListByName(interaction.guildId, listName);
     if (!list) {
       return interaction.reply({
-        content: `No list named **${listName}** found. Create it with \`/list-create\`.`,
+        content: `No list named **${listName}** found. Create it with \`/list create\`.`,
         flags: MessageFlags.Ephemeral,
       });
     }

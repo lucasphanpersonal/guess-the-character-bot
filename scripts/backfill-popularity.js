@@ -1,4 +1,4 @@
-// Fills in character_lists.popularity from the seed files, so /list-filter can sort
+// Fills in character_lists.popularity from the seed files, so /list select can sort
 // best-known first.
 //
 // The fame score is only ever compared WITHIN a category, which is what lets two
@@ -156,7 +156,7 @@ function main() {
 
   console.log(`Ranked ${matched} lists in guild ${guildId}.`);
   if (unmatched.length) {
-    // Unranked lists still work -- they just sort last on the /list-filter page.
+    // Unranked lists still work -- they just sort last on the /list select page.
     console.log(`${unmatched.length} lists had no score and will sort last, e.g. ${unmatched.slice(0, 5).join(', ')}`);
   }
 
@@ -180,7 +180,7 @@ function main() {
   for (const c of listCategoriesWithEnabledCounts(guildId)) {
     console.log(`  ${c.category}: ${c.enabled} of ${c.count}`);
   }
-  console.log('\nAdjust with /list-filter (checkboxes) or /list-toggle <list> (one at a time).');
+  console.log('\nAdjust with /list select (checkboxes) or /list toggle <list> (one at a time).');
 }
 
 module.exports = { scoresFromAniList, scoresFromWikidata };

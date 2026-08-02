@@ -1,4 +1,4 @@
-// The lobby "board": a single message posted by /create-lobby that shows live lobby state
+// The lobby "board": a single message posted by /lobby create that shows live lobby state
 // and carries the Join / Leave / Spectate / Start buttons. Button clicks re-render this same
 // message in place (via interaction.update), so the channel doesn't fill up with one message
 // per action.
@@ -66,7 +66,18 @@ function buildSettingsRow(lobby) {
       .setCustomId(id('difficulty'))
       .setLabel(`Difficulty: ${difficultyOf(lobby.difficulty).label}`)
       .setEmoji('🎚️')
-      .setStyle(ButtonStyle.Secondary)
+      .setStyle(ButtonStyle.Secondary),
+    // Hand-picking the characters was the last lobby setting still living only in a slash
+    // command, long after every other one moved onto the board.
+    new ButtonBuilder()
+      .setCustomId(id('characters'))
+      .setLabel(Object.keys(lobby.assignedCharacters).length ? 'Characters: set' : 'Set characters')
+      .setEmoji('🎭')
+      .setStyle(
+        Object.keys(lobby.assignedCharacters).length ? ButtonStyle.Primary : ButtonStyle.Secondary
+      )
+      // Needs both players before it can ask who gets what.
+      .setDisabled(lobby.players.length !== MAX_PLAYERS)
   );
 }
 
@@ -76,10 +87,10 @@ const STATUS_NOTE = {
   VOTING: '🗳️ Audience vote in progress -- the crowd is picking both characters.',
   CONFIRMING: '🔍 Dealing characters -- both players need to confirm in their DMs.',
   IN_PROGRESS: '🎮 Game in progress.',
-  FINISHED: '🏁 Game finished. `/rematch` to run it back, or `/create-lobby` for a new one.',
+  FINISHED: '🏁 Game finished. `/rematch` to run it back, or `/lobby create` for a new one.',
   // A cancelled lobby is deleted outright, so there is nothing left for /rematch to replay
   // -- pointing at it (as FINISHED does) would just send people to an error.
-  CANCELLED: '🛑 Lobby cancelled. Use `/create-lobby` to start a new one.',
+  CANCELLED: '🛑 Lobby cancelled. Use `/lobby create` to start a new one.',
 };
 
 function buildLobbyBoardPayload(lobby) {
@@ -138,7 +149,7 @@ async function refreshLobbyBoard(lobby) {
   }
 }
 
-// All three places that post a board (/create-lobby, /rematch, the reveal's Rematch button)
+// All three places that post a board (/lobby create, /rematch, the reveal's Rematch button)
 // do it as an interaction reply, so they share the handle-keeping and the restart tracking.
 async function attachLobbyBoard(lobby, response, interaction) {
   lobby.boardMessage = response?.resource?.message ?? (await interaction.fetchReply().catch(() => null));
