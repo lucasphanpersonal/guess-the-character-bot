@@ -4,7 +4,7 @@
 // per action.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { countDistinctCharacters, getListLabelForIds } = require('../db/characterLists');
+const { countDistinctCharacters, getListLabelForIds, difficultyOf } = require('../db/characterLists');
 const { trackBoard, untrackBoard } = require('./boards');
 
 const MAX_PLAYERS = 2;
@@ -42,6 +42,34 @@ function buildButtons(lobby) {
   );
 }
 
+// Host-only controls, on their own row so they don't crowd the join/start flow everyone
+// else uses. They stay enabled for non-hosts rather than greyed out: a disabled button
+// gives no reason, and "only the host can do that" is the thing worth saying.
+function buildSettingsRow(lobby) {
+  const id = (action) => `lobby:${action}:${lobby.channelId}`;
+  const voting = lobby.mode === 'audience-vote';
+
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(id('settings'))
+      .setLabel('Settings')
+      .setEmoji('⚙️')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(id('mode'))
+      // The label states the current mode, not the action -- the board is read far more
+      // often than the button is pressed.
+      .setLabel(voting ? 'Audience vote: on' : 'Audience vote: off')
+      .setEmoji('🗳️')
+      .setStyle(voting ? ButtonStyle.Primary : ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setCustomId(id('difficulty'))
+      .setLabel(`Difficulty: ${difficultyOf(lobby.difficulty).label}`)
+      .setEmoji('🎚️')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 // Phases after WAITING keep the board honest but drop the buttons -- the turn messages take
 // over from there.
 const STATUS_NOTE = {
@@ -68,7 +96,9 @@ function buildLobbyBoardPayload(lobby) {
       {
         name: 'Settings',
         value: [
-          `${countDistinctCharacters(lobby.listIds)} characters`,
+          // Counted at the lobby's difficulty, so the number is what will actually be dealt.
+          `${countDistinctCharacters(lobby.listIds, lobby.difficulty)} characters`,
+          `🎚️ ${difficultyOf(lobby.difficulty).label}`,
           `${lobby.turnSeconds}s turns`,
           lobby.mode === 'audience-vote'
             ? `🗳️ audience vote (${lobby.voteOptions} options, ${lobby.voteSeconds}s)`
@@ -89,7 +119,7 @@ function buildLobbyBoardPayload(lobby) {
     return { embeds: [embed], components: [] };
   }
 
-  return { embeds: [embed], components: [buildButtons(lobby)] };
+  return { embeds: [embed], components: [buildButtons(lobby), buildSettingsRow(lobby)] };
 }
 
 // Edits the board in place. Used when something OTHER than a board button changed the lobby
