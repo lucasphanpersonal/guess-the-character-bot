@@ -363,37 +363,99 @@ async function fetchCharactersAdaptive(qids, skipped) {
 // "The Two Mrs. Nahasapeemapetilons" arrives looking like a sibling of The Simpsons. They
 // are dropped rather than kept, since a list holding one episode's guest cast is not a
 // franchise anybody would pick at lobby time.
-const NOT_A_WORK = new Set([
-  'Q21191270', // television series episode
-  'Q3464665', // television series season
-  'Q1983062', // episode
-  'Q93992677', // web series episode
-]);
+//
+// These are the *roots* of the hierarchy, not the whole of it: descendants are resolved
+// against Wikidata rather than listed here. Matching exact QIDs was the original approach
+// and it leaked, because Wikidata types a cartoon's episodes as "animated series episode"
+// (Q116048824, a subclass of Q1983062) which no exact-match list happened to name -- so 37
+// episodes with big enough guest casts survived into playable lists, which is precisely
+// what this filter exists to stop.
+const NOT_A_WORK_ROOTS = {
+  Q1983062: 'episode', // covers television and animated series episodes
+  Q3464665: 'television series season',
+  // Not a descendant of "episode" on Wikidata despite the name, so it has to be named
+  // separately or the roots quietly stop dropping what the old exact-match list caught.
+  Q93992677: 'web series episode',
+};
+
+// Anime is fetched from AniList instead (scripts/fetch-anilist-characters.js), which knows
+// far more about it than Wikidata does -- proper romanised names, per-character images and
+// popularity ranking rather than a sitelink count. A handful of anime reaches this sweep
+// anyway, because Netflix and Adult Swim carry some, and keeping it would mean the same show
+// arriving twice under two categories with the poorer copy sometimes winning the list name.
+//
+// Q1107 ("anime") is the whole hierarchy's root and is safe to prune from wholesale: Western
+// animation is *above* it, not under it -- "anime television series" is a subclass of
+// "animated television series" rather than the reverse -- so SpongeBob and Adventure Time
+// are unaffected.
+const ANIME_ROOT = 'Q1107';
 
 /**
- * Removes series entries that are really episodes or seasons.
+ * Removes series entries that are really episodes or seasons, plus anime that AniList
+ * covers better.
  *
  * Runs as a post-pass over the whole file rather than as a filter on the series query,
  * because it costs one cheap wbgetentities call per 50 items either way, and doing it here
  * also cleans up anything collected by earlier runs.
  */
-async function pruneNonWorks(data) {
+async function pruneUnwanted(data) {
   const qids = Object.keys(data.series);
-  let dropped = 0;
+  const typesBySeries = new Map();
+  const allTypes = new Set();
   for (let i = 0; i < qids.length; i += ENTITY_CHUNK) {
-    const batch = qids.slice(i, i + ENTITY_CHUNK);
-    const entities = await wbGetEntities(batch, 'claims');
+    const entities = await wbGetEntities(qids.slice(i, i + ENTITY_CHUNK), 'claims');
     for (const [qid, entity] of Object.entries(entities)) {
       const types = (entity.claims?.P31 || [])
         .map((c) => c.mainsnak?.datavalue?.value?.id)
         .filter(Boolean);
-      if (types.length && types.every((t) => NOT_A_WORK.has(t))) {
-        delete data.series[qid];
-        dropped++;
-      }
+      typesBySeries.set(qid, types);
+      for (const t of types) allTypes.add(t);
     }
   }
-  return dropped;
+
+  // One pass over the distinct types asking which descend from an episode/season root and
+  // which from the anime root, keeping this to a handful of queries no matter how many
+  // series there are.
+  const roots = Object.keys(NOT_A_WORK_ROOTS).map((q) => `wd:${q}`).join(' ');
+  const notAWork = new Set();
+  const isAnime = new Set();
+  const typeList = [...allTypes];
+  for (let i = 0; i < typeList.length; i += 150) {
+    const values = typeList.slice(i, i + 150).map((t) => `wd:${t}`).join(' ');
+    const rows = await sparql(
+      `SELECT ?t ?isPart ?anime WHERE {
+         VALUES ?t { ${values} }
+         BIND(EXISTS { VALUES ?root { ${roots} } ?t wdt:P279* ?root } AS ?isPart)
+         BIND(EXISTS { ?t wdt:P279* wd:${ANIME_ROOT} } AS ?anime)
+       }`,
+      { label: 'classifying episode/season/anime types' }
+    );
+    for (const row of rows) {
+      const t = qidOf(row.t.value);
+      if (row.isPart?.value === 'true') notAWork.add(t);
+      if (row.anime?.value === 'true') isAnime.add(t);
+    }
+  }
+
+  let episodes = 0;
+  let anime = 0;
+  for (const qid of qids) {
+    const types = typesBySeries.get(qid) || [];
+    if (!types.length) continue;
+    // The two rules deliberately quantify differently. Dropping an episode is a deletion
+    // guard, so every type has to agree -- an item typed as something else as well is a
+    // work and stays. Anime is a positive identification, so one type naming it is enough:
+    // Aggretsuko is an anime series that also carries "conflation" (Q14946528, a data
+    // quality marker rather than a genre), and requiring unanimity would keep it.
+    if (types.every((t) => notAWork.has(t))) {
+      delete data.series[qid];
+      episodes++;
+    } else if (types.some((t) => isAnime.has(t))) {
+      delete data.series[qid];
+      anime++;
+    }
+  }
+  return { episodes, anime };
 }
 
 /**
@@ -414,25 +476,40 @@ async function pruneNonWorks(data) {
  *
  * The classification is done on the handful of distinct P31 types rather than per series,
  * which keeps it to one extra query no matter how many series there are.
+ *
+ * Genre (P136) is consulted as a second animation signal because P31 alone is not complete:
+ * Steven Universe: The Movie is typed only as a plain "television film" and carries its
+ * animation in the genre field, so a type-only check filed it under live-action. Genre is
+ * read from the same entity fetch, so it costs nothing extra, and it is only ever used to
+ * add an animation signal -- never to decide TV vs film, where it would be far noisier.
  */
 async function deriveCategories(data) {
   const qids = Object.keys(data.series);
   const typesBySeries = new Map();
+  const genresBySeries = new Map();
   const allTypes = new Set();
   for (let i = 0; i < qids.length; i += ENTITY_CHUNK) {
     const entities = await wbGetEntities(qids.slice(i, i + ENTITY_CHUNK), 'claims');
     for (const [qid, entity] of Object.entries(entities)) {
-      const types = (entity.claims?.P31 || [])
-        .map((c) => c.mainsnak?.datavalue?.value?.id)
-        .filter(Boolean);
+      const idsOf = (prop) =>
+        (entity.claims?.[prop] || []).map((c) => c.mainsnak?.datavalue?.value?.id).filter(Boolean);
+      const types = idsOf('P31');
+      const genres = idsOf('P136');
       typesBySeries.set(qid, types);
-      for (const t of types) allTypes.add(t);
+      genresBySeries.set(qid, genres);
+      for (const t of [...types, ...genres]) allTypes.add(t);
     }
   }
 
   // One pass over the distinct types: is each one a kind of film, a kind of TV series, or
-  // a kind of animated TV series? Q11424 = film, Q15416 = television program,
-  // Q117467246 = animated television series.
+  // animated? Q11424 = film, Q15416 = television program, Q117467246 = animated television
+  // series, Q202866 = animated film.
+  //
+  // Animation needs both roots because Wikidata splits it by format rather than by being
+  // animated: "animated television film" (Steven Universe: The Movie, Kim Possible: A Sitch
+  // in Time) descends from the film root only, so checking the series root alone left those
+  // filed next to Breaking Bad. Adding the film root does not pull theatrical animation into
+  // Cartoon, since isAnimated is only consulted on the TV branch below.
   const filmish = new Set();
   const tvish = new Set();
   const animated = new Set();
@@ -444,7 +521,10 @@ async function deriveCategories(data) {
          VALUES ?t { ${values} }
          BIND(EXISTS { ?t wdt:P279* wd:Q11424 } AS ?isFilm)
          BIND(EXISTS { ?t wdt:P279* wd:Q15416 } AS ?isTv)
-         BIND(EXISTS { ?t wdt:P279* wd:Q117467246 } AS ?isAnimated)
+         BIND(EXISTS {
+           VALUES ?animRoot { wd:Q117467246 wd:Q202866 }
+           ?t wdt:P279* ?animRoot
+         } AS ?isAnimated)
        }`,
       { label: 'classifying series types' }
     );
@@ -463,7 +543,8 @@ async function deriveCategories(data) {
     // television-film pilot), and the show is the thing people would pick at lobby time.
     const isTv = types.some((t) => tvish.has(t));
     const isFilm = types.some((t) => filmish.has(t));
-    const isAnimated = types.some((t) => animated.has(t));
+    const isAnimated =
+      types.some((t) => animated.has(t)) || (genresBySeries.get(qid) || []).some((g) => animated.has(g));
     const category = isTv ? (isAnimated ? 'Cartoon' : 'Television Shows') : isFilm ? 'Movies' : series.category;
     if (category !== series.category) {
       series.category = category;
@@ -706,9 +787,9 @@ async function main() {
 
   // The two clean-up passes run last, over everything in the file, so they also fix up rows
   // written by earlier interrupted runs.
-  console.log(`\nPruning episodes and seasons from ${Object.keys(data.series).length} series...`);
-  const dropped = await pruneNonWorks(data);
-  console.log(`  dropped ${dropped}.`);
+  console.log(`\nPruning episodes, seasons and anime from ${Object.keys(data.series).length} series...`);
+  const dropped = await pruneUnwanted(data);
+  console.log(`  dropped ${dropped.episodes} episode(s)/season(s), ${dropped.anime} anime (AniList covers those).`);
   save(data);
 
   console.log('Deriving categories from each series\' own type...');
