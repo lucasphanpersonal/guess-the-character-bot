@@ -13,6 +13,11 @@ const { untrackBoard } = require('./boards');
 
 const SLOTS = ['1', '2'];
 
+// How much one press of the host's ⏱️ button buys. A vote that is still moving when the
+// clock runs out used to have only one exit -- Close -- which decides it early rather than
+// letting it finish.
+const EXTEND_SECONDS = 30;
+
 class AudienceVote {
   constructor({ lobby, candidatesBySlot }) {
     this.lobby = lobby;
@@ -24,6 +29,8 @@ class AudienceVote {
     this.timer = null;
     this.boardMessage = null;
     this.closed = false;
+    // slot -> the settled winner. Written once, by resolveSlot; see the note there.
+    this.resolvedBySlot = new Map();
   }
 
   playerIdForSlot(slot) {
@@ -41,35 +48,104 @@ class AudienceVote {
   }
 
   /**
+   * The SHAPE of a slot's tally: how many votes, spread across how many candidates, and
+   * the size of the current lead.
+   *
+   * Deliberately name-free, so it is safe on the public board where the player wearing the
+   * character can read it. "Unanimous" and "split three ways" are the dramatic facts of a
+   * vote, and none of them say WHO -- which is the whole reason the board could show
+   * nothing before this.
+   */
+  shapeForSlot(slot) {
+    const counts = new Map();
+    for (const ballot of this.ballots.values()) {
+      const pick = ballot[slot];
+      if (pick) counts.set(pick, (counts.get(pick) ?? 0) + 1);
+    }
+    const votes = [...counts.values()].reduce((a, b) => a + b, 0);
+    const distinct = counts.size;
+    const top = distinct ? Math.max(...counts.values()) : 0;
+    const leaders = [...counts.values()].filter((c) => c === top).length;
+    return { votes, distinct, top, tied: distinct > 0 && leaders > 1 };
+  }
+
+  /** Human summary of shapeForSlot, still name-free. */
+  describeSlot(slot) {
+    const { votes, distinct, top, tied } = this.shapeForSlot(slot);
+    if (!votes) return '_no votes yet_';
+    if (distinct === 1) return `**${votes}** vote${votes === 1 ? '' : 's'} — unanimous so far`;
+    const spread = `**${votes}** votes across ${distinct} characters`;
+    return tied ? `${spread} — currently tied` : `${spread} — leader has ${top}`;
+  }
+
+  /**
    * Plurality winner for a slot. Ties are broken randomly, and an empty tally falls back to
    * a random candidate -- so a silent audience can never deadlock the game.
+   *
+   * Memoized, and that is load-bearing rather than an optimisation: the two random paths
+   * above would otherwise return a DIFFERENT winner on every call, so the character dealt
+   * to a player and the one named in the end-of-game vote summary could disagree.
    */
   resolveSlot(slot) {
+    const cached = this.resolvedBySlot.get(slot);
+    if (cached) return cached;
+
     const candidates = this.candidatesBySlot[slot];
     const counts = new Map();
     for (const ballot of this.ballots.values()) {
       const pick = ballot[slot];
       if (pick) counts.set(pick, (counts.get(pick) ?? 0) + 1);
     }
+
+    let result;
     if (!counts.size) {
-      return { character: candidates[Math.floor(Math.random() * candidates.length)], votes: 0 };
+      result = { character: candidates[Math.floor(Math.random() * candidates.length)], votes: 0 };
+    } else {
+      const max = Math.max(...counts.values());
+      const tied = [...counts.entries()].filter(([, c]) => c === max).map(([name]) => name);
+      const winnerName = tied[Math.floor(Math.random() * tied.length)];
+      result = { character: candidates.find((c) => c.name === winnerName), votes: max };
     }
-    const max = Math.max(...counts.values());
-    const tied = [...counts.entries()].filter(([, c]) => c === max).map(([name]) => name);
-    const winnerName = tied[Math.floor(Math.random() * tied.length)];
-    return { character: candidates.find((c) => c.name === winnerName), votes: max };
+    this.resolvedBySlot.set(slot, result);
+    return result;
   }
 
   /** @returns {[characterRow, characterRow]} in players order. */
   resolve() {
     return SLOTS.map((slot) => this.resolveSlot(slot).character);
   }
+
+  /**
+   * What the audience actually decided, kept for the end-of-game reveal.
+   *
+   * Named characters, so this can only ever be shown once both are public -- a coin-flip
+   * tie or a silent audience is the most interesting thing that can happen in this mode,
+   * and until now it was resolved and then silently thrown away.
+   */
+  summarise() {
+    return SLOTS.map((slot) => {
+      const { votes, character } = this.resolveSlot(slot);
+      const { distinct, tied } = this.shapeForSlot(slot);
+      return {
+        slot,
+        playerId: this.playerIdForSlot(slot),
+        name: character?.name ?? null,
+        votes,
+        distinct,
+        // Both are "nobody really chose this", but for different reasons worth telling apart.
+        tieBroken: tied,
+        unopposed: votes > 0 && distinct === 1,
+        noVotes: votes === 0,
+        totalVoters: this.voterCount,
+      };
+    });
+  }
 }
 
 // Draws 2 * voteOptions distinct characters and splits them into disjoint per-player sets.
 function drawCandidates(lobby) {
   const wanted = lobby.voteOptions * 2;
-  const drawn = getRandomCharacters(lobby.listIds, wanted);
+  const drawn = getRandomCharacters(lobby.listIds, wanted, [], lobby.difficulty);
   if (drawn.length < wanted) return null;
   return { 1: drawn.slice(0, lobby.voteOptions), 2: drawn.slice(lobby.voteOptions) };
 }
@@ -87,13 +163,20 @@ function buildVoteBoardPayload(vote) {
           '**Players can\'t vote** (and won\'t be shown the options).'
     )
     .addFields(
-      { name: 'Votes cast', value: `${vote.voterCount}`, inline: true },
+      // The shape of each tally, never its contents -- a board that showed only a total had
+      // nothing to react to for the whole voting window.
+      ...SLOTS.map((slot) => ({
+        name: `Player ${slot}`,
+        value: vote.describeSlot(slot),
+        inline: true,
+      })),
       {
         name: vote.closed ? 'Closed' : 'Closes',
         // A relative timestamp ticks down client-side, so no per-second edit loop is needed.
         value: vote.closed ? '—' : `<t:${Math.floor(vote.endsAt / 1000)}:R>`,
-        inline: true,
-      }
+        inline: false,
+      },
+      { name: 'Ballots cast', value: `${vote.voterCount}`, inline: true }
     );
 
   if (vote.closed) return { embeds: [embed], components: [] };
@@ -105,6 +188,11 @@ function buildVoteBoardPayload(vote) {
       .setEmoji('🗳️')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
+      .setCustomId(`vote:extend:${lobby.channelId}`)
+      .setLabel(`+${EXTEND_SECONDS}s`)
+      .setEmoji('⏱️')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
       .setCustomId(`vote:close:${lobby.channelId}`)
       .setLabel('Close voting')
       .setEmoji('⏹️')
@@ -114,10 +202,11 @@ function buildVoteBoardPayload(vote) {
 }
 
 // EPHEMERAL ballot -- only ever sent to a single non-player voter.
-function buildBallotPayload(vote, voterId) {
+// `justPicked` names the slot the voter just changed, so the reply confirms the swap rather
+// than leaving them to infer that a second pick replaced the first instead of adding to it.
+function buildBallotPayload(vote, voterId, { justPicked = null } = {}) {
   const ballot = vote.ballots.get(voterId) ?? {};
   const rows = SLOTS.map((slot) => {
-    const playerId = vote.playerIdForSlot(slot);
     const chosen = ballot[slot];
     return new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -138,8 +227,14 @@ function buildBallotPayload(vote, voterId) {
     return `Player ${slot} (<@${playerId}>): ${ballot[slot] ? `**${ballot[slot]}**` : '_no vote yet_'}`;
   }).join('\n');
 
+  const confirmation = justPicked
+    ? `✅ Saved — **${ballot[justPicked]}** for player ${justPicked}. That replaces your previous pick.\n`
+    : '';
+
   return {
-    content: `🗳️ **Your ballot** — pick a character for each player.\n${summary}\n_You can change your picks until voting closes._`,
+    content:
+      `🗳️ **Your ballot** — pick a character for each player.\n${confirmation}${summary}\n` +
+      '_You can change your picks until voting closes._',
     components: rows,
   };
 }
@@ -166,6 +261,7 @@ function clearVoteTimer(vote) {
 module.exports = {
   AudienceVote,
   SLOTS,
+  EXTEND_SECONDS,
   drawCandidates,
   buildVoteBoardPayload,
   buildBallotPayload,

@@ -7,7 +7,7 @@ const { trackBoard, sweepBoards } = require('../src/game/boards');
 const { allBoards } = require('../src/db/activeBoards');
 const { buildLobbyBoardPayload, refreshLobbyBoard } = require('../src/game/lobbyBoard');
 const { refreshTurnBoard } = require('../src/game/turnBoard');
-const { refreshVoteBoard } = require('../src/game/audienceVote');
+const { refreshVoteBoard, AudienceVote } = require('../src/game/audienceVote');
 const engine = require('../src/game/engine');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
@@ -171,18 +171,27 @@ module.exports = {
     const channelId = `sweep-chan-${++counter}`;
     const recorder = createRecorder();
 
-    const game = { round: 1, currentPlayerId: 'p1', turnGuesses: [], turnSeconds: 90, paused: false };
+    const game = {
+      round: 1,
+      currentPlayerId: 'p1',
+      judgeId: 'p2',
+      turnGuesses: [],
+      guessLog: [],
+      turnSeconds: 90,
+      paused: false,
+    };
     game.turnBoardMessage = postedBoard(recorder, channelId, { content: 'turn board' });
     trackBoard('turn', game.turnBoardMessage);
     await refreshTurnBoard(game, channelId, { correct: true });
     assert.equal(rowsFor(channelId).length, 0, 'a finished turn leaves nothing to retire');
 
-    const vote = {
-      closed: true,
-      voterCount: 3,
-      endsAt: Date.now(),
-      lobby: { channelId, players: ['p1', 'p2'] },
-    };
+    // A real AudienceVote rather than a stub, so the board builder's actual dependencies
+    // (per-slot tallies included) are exercised instead of a shape that drifts from it.
+    const vote = new AudienceVote({
+      lobby: { channelId, players: ['p1', 'p2'], voteSeconds: 60 },
+      candidatesBySlot: { 1: [{ name: 'A' }], 2: [{ name: 'B' }] },
+    });
+    vote.closed = true;
     vote.boardMessage = postedBoard(recorder, channelId, { content: 'vote board' });
     trackBoard('vote', vote.boardMessage);
     await refreshVoteBoard(vote);

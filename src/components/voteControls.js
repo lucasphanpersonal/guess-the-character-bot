@@ -6,7 +6,13 @@
 const { MessageFlags } = require('discord.js');
 const GameManager = require('../game/GameManager');
 const engine = require('../game/engine');
-const { buildBallotPayload, refreshVoteBoard } = require('../game/audienceVote');
+const {
+  buildBallotPayload,
+  buildVoteBoardPayload,
+  refreshVoteBoard,
+  clearVoteTimer,
+  EXTEND_SECONDS,
+} = require('../game/audienceVote');
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
 
@@ -31,6 +37,22 @@ async function handle(interaction) {
     return undefined;
   }
 
+  if (action === 'extend') {
+    if (interaction.user.id !== lobby.hostId) {
+      return interaction.reply(ephemeral(`Only the host (<@${lobby.hostId}>) can extend the vote.`));
+    }
+    // Push the deadline back and re-arm the timer against the NEW deadline, so repeated
+    // presses accumulate instead of each one resetting a fixed window.
+    vote.endsAt += EXTEND_SECONDS * 1000;
+    clearVoteTimer(vote);
+    vote.timer = setTimeout(() => {
+      engine.closeAudienceVote(interaction.client, lobby, { reason: 'timer' }).catch(console.error);
+    }, Math.max(0, vote.endsAt - Date.now()));
+
+    await interaction.update(buildVoteBoardPayload(vote));
+    return interaction.followUp(ephemeral(`⏱️ Voting extended by ${EXTEND_SECONDS} seconds.`));
+  }
+
   // THE spoiler guard: a player must never see their own candidate list.
   if (lobby.players.includes(interaction.user.id)) {
     return interaction.reply(
@@ -52,7 +74,7 @@ async function handle(interaction) {
 
     vote.recordVote(interaction.user.id, slot, choice);
     // Update the voter's own ephemeral ballot, then the public tally.
-    await interaction.update(buildBallotPayload(vote, interaction.user.id));
+    await interaction.update(buildBallotPayload(vote, interaction.user.id, { justPicked: slot }));
     await refreshVoteBoard(vote);
     return undefined;
   }
