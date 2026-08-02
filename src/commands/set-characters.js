@@ -1,6 +1,10 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const GameManager = require('../game/GameManager');
-const { getCharacterByNameInLists, searchCharactersInLists } = require('../db/characterLists');
+const {
+  getCharacterByNameInLists,
+  searchCharactersInLists,
+  getListLabelForIds,
+} = require('../db/characterLists');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,7 +51,9 @@ module.exports = {
     if (!character1 || !character2) {
       const missing = [!character1 && character1Name, !character2 && character2Name].filter(Boolean);
       return interaction.reply({
-        content: `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's list(s) (${lobby.listNames.join(', ')}). Use the autocomplete suggestions.`,
+        // The summarising label, not lobby.listNames -- a category lobby holds hundreds of
+        // list names and spelling them out overflows Discord's 2,000-character limit.
+        content: `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's list(s) (${getListLabelForIds(lobby.listIds)}). Use the autocomplete suggestions.`,
         flags: MessageFlags.Ephemeral,
       });
     }

@@ -1,5 +1,6 @@
 const Lobby = require('./Lobby');
 const GameManager = require('./GameManager');
+const { getListLabelForIds } = require('../db/characterLists');
 
 // Shared by /rematch and the game-over board's Rematch button.
 // Turn order is swapped so the rebuttal-timing (dis)advantage doesn't land on the same
@@ -24,10 +25,14 @@ function createRematchLobby(previous, hostId) {
   return { lobby, firstPlayer: prevP2, secondPlayer: prevP1 };
 }
 
+// Uses the summarising label rather than lobby.listNames, which is every list by name. A
+// lobby opened with `category:Video Games` carries 581 of them, and spelling them all out
+// here produced a 14,199-character message -- seven times Discord's 2,000 limit, which the
+// API rejects outright rather than truncating.
 function rematchAnnouncement(lobby, firstPlayer, secondPlayer) {
   return (
     `🔁 Rematch! <@${firstPlayer}> and <@${secondPlayer}> are back in (going in that order this time) using ` +
-    `${lobby.listNames.map((n) => `**${n}**`).join(' + ')}. ` +
+    `**${getListLabelForIds(lobby.listIds)}**. ` +
     'Host can `/set-characters` or just hit **Start game** when ready.'
   );
 }
