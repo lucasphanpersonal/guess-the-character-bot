@@ -20,13 +20,20 @@ happen live between humans in voice.
    Comma-separate several lists (`list:Pokemon, Anime`) to draw from a combined pool.
 
    To play "any character from X", use `category` instead — `/create-lobby category:Video
-   Games` pools every list in that category (2,800+ characters across 127 games), which
-   naming them individually can't do: Discord caps the `list` option at 100 characters. Or
-   `random:true` for 🎲 category roulette.
+   Games` pools every list in that category (~4,800 characters across ~590 games), which
+   naming them individually can't do: Discord caps the `list` option at 100 characters. The
+   bundled seed data fills six categories: Anime, Manga, Video Games, Cartoon, Television
+   Shows and Movies. Or `random:true` for 🎲 category roulette, or `everything:true` to pool
+   every list in the server at once, every category together.
 
    This posts the **lobby board** — a single message with **Join / Leave / Spectate / Start
    game** buttons that updates itself in place as people join. Everything below can be done
    by clicking it; the equivalent slash commands still work and keep the board in sync.
+
+   The host also gets **⚙️ Settings** and a **🗳️ Audience vote: on/off** toggle on the board,
+   so turn length, rerolls and the vote tuning can all be changed after the lobby is open —
+   nothing has to be decided up front on the `/create-lobby` line. Settings lock once the
+   game starts.
 3. **Two people join.** The host doesn't have to be one of them. Anyone else can spectate to
    get both characters DMed to them — and anyone already sitting in the same voice channel
    as the players is auto-added as a spectator. **Start game** stays disabled until exactly
@@ -44,12 +51,36 @@ happen live between humans in voice.
 
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
-6. **On your turn**, a **turn board** appears — one message with a live countdown bar, a
-   running tally of your guesses, and **Guess / Pass** buttons. Ask your questions out loud,
-   then hit **Guess** (which opens a text box) as often as you like: **a wrong guess does
-   _not_ end your turn**. Only **Pass**, or running out of time, hands it over — and when
-   the clock hits zero the board turns amber for one final guess rather than ending
-   outright. `/guess` and `/pass` still work if you prefer typing.
+6. **On your turn**, a **turn board** appears — one message with a live countdown bar, your
+   running guess history, and two rows of buttons, one per player:
+
+   - **The other player judges.** They can see your character, so when you say a name out
+     loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
+     guesses get called out in voice and never reach a bot that only sees typing. The ❌
+     button carries a running count, so presses visibly land.
+   - **You get ⏭️ Pass**, and nothing else. There is deliberately no "submit a guess" button
+     next to it: the judge's ✅ already answers *was that right?*, and a second control for
+     the same question would mean two authorities on it — a human who can see the character,
+     and Levenshtein distance. `/guess` still exists for anyone who prefers to type.
+
+   **A wrong guess does _not_ end your turn.** Only **Pass**, or running out of time, hands
+   it over — and when the clock hits zero the board turns amber for one final guess rather
+   than ending outright. `/guess` and `/pass` still work if you prefer typing.
+
+   The board shows your running guess count for the whole game, not just this turn, and the
+   reveal reports how many it took. It's a count rather than a list because the bot only
+   hears *that* you guessed, never *what* — so remembering you already tried Levi is the
+   other player's job, exactly as it is at a real table.
+
+   #### Why the other player does the clicking
+
+   The person guessing is thinking, talking, and racing a clock. The person listening has
+   nothing to do and already knows the answer — in the physical game they're the judge
+   anyway. Asking the busy player to log their own guesses meant most guesses went
+   unrecorded, and *unevenly*: the players conscientious enough to click looked worse than
+   the ones who didn't. Moving the input to the idle player makes the count honest, and
+   retires fuzzy matching from that path entirely — a human deciding whether "Shikamaru"
+   counts beats Levenshtein deciding it.
 7. **Winning:** the first correct guess wins — unless it was the player who moved first that
    round, in which case the other player gets one rebuttal turn to even it up (correct on
    rebuttal = tie, wrong = the first player wins). The reveal comes with **Rematch** and
@@ -73,16 +104,121 @@ Guesses don't have to be exact. The bot accepts:
 - **A single well-known word** of a multi-word name — `Shikamaru` matches `Shikamaru Nara`.
   Trivial words (`the`, `of`, `a`, …) don't count on their own.
 
+### Difficulty: how obscure a character you'll be dealt
+
+Curating lists can't fix being handed somebody nobody recognises, because the obscurity is
+*inside* the list. Attack on Titan is on everyone's shortlist and its cast still runs from
+Eren (36,038 favourites) down to bit parts with three. So difficulty cuts each **cast** by
+fame rather than cutting the list:
+
+| | Keeps | Attack on Titan yields |
+| --- | --- | --- |
+| **Easy** | best-known quarter of each cast | 38 — Levi, Eren, Mikasa, Armin, Hange… |
+| **Normal** (default) | skips the deepest cuts | 91 |
+| **Everything** | every character | 151 — down to Abel and Dennis Aiblinger |
+
+Set it with `/create-lobby difficulty:` or the **🎚️ Difficulty** button on the lobby board,
+which cycles and tells you the resulting pool size. It's a per-lobby setting on purpose:
+the list selection says which franchises this server likes, difficulty says how deep tonight's
+players want to go, and those change on different schedules.
+
+The cut is applied **per list**, which matters because the two fame scales are incomparable
+(AniList favourites in the thousands, Wikipedia sitelinks in the tens). A pool-wide threshold
+would quietly delete every Wikidata-sourced character. Per-list also gives the better rule:
+keep the leads of every show, rather than every character of the best-documented shows. A
+list with no fame data passes through untouched — unranked is not the same as unpopular.
+
+### Character images, and which ones can be believed
+
+Anime and Manga characters carry AniList art — drawn from the work, per character, 100%
+coverage. Everything else came from Wikidata, whose image property is not "a picture of this
+character" but "an image associated with this item", which for a fictional character
+routinely resolves to the actor, a cosplayer, a wax figure, or a period illustration:
+
+| Character | Wikidata gave us |
+| --- | --- |
+| Jack Bauer | Kiefer Sutherland at a premiere |
+| Cruella de Vil | a Flickr convention photo |
+| Woody | a Toy Story Land mascot, photographed |
+| Santa Claus | an 1837 painting |
+
+The rule (`src/util/characterImages.js`) is about **medium**, not about guessing which files
+are bad: for live action a photo of the actor genuinely is the character's canonical look, so
+it stays; for animation and games no photograph can be right, so Commons images are dropped
+there outright. It costs some legitimate Commons-hosted game art, which is the accepted price
+of having no false positives — and a missing image costs little, while a wrong one actively
+misleads whoever is answering questions.
+
+The seeder applies it going forward. For a database seeded before it existed:
+
+```bash
+node scripts/clean-character-images.js <guildId> --dry-run
+```
+
+### Rerolls teach the pool
+
+Two things happen when somebody rerolls, both aimed at making the next game better than the
+last:
+
+**The bot remembers.** Once `REROLL_DEMOTE_THRESHOLD` (3) *different* people have rerolled
+the same character, it stops being dealt. Rows are per (character, user), so one person
+rerolling the same unlucky draw twice isn't mistaken for a consensus, and deleting from
+`character_rerolls` undoes it completely.
+
+**🚫 Never deal this show** sits next to Reroll on the confirmation DM. It drops that list
+from the server's selection *and* rerolls, in one press — the alternative is rerolling now
+and remembering to curate later, which nobody does. It costs a reroll (because it is one),
+refuses if dropping would leave the lobby nothing to deal from, and `/list-toggle` undoes it.
+
+### Choosing which lists you play with
+
+The seed data runs to ~2,000 lists, and most of them are obscure enough that being dealt one
+is a wasted turn — the reroll button was doing the job a filter should. `/list-filter` is
+that filter: a page of checkboxes (multi-select menus, 75 per page) covering every list,
+with a running count of what's on.
+
+**Setup enables the top 100 of each category**, so a server starts with a sensible pool
+rather than an empty one. That happens in `npm run backfill:popularity`, which ranks lists
+by fame and then switches on the best-known 100 per category (`--top=N` to move the line,
+`--no-enable` to rank without touching the selection). The ranking reads the seed files —
+AniList audience size for Anime and Manga, summed Wikipedia sitelinks across the cast for
+everything else. Unranked lists sort last and still work.
+
+From there curation is exceptions, and there are three ways to do it, in rough order of how
+often you'll want them:
+
+| | Best for |
+| --- | --- |
+| `/list-toggle <list>` | One list in or out. Autocomplete finds it in three keystrokes and shows ✅/⬜ for its current state. |
+| `/list-filter top:<n>` | Moving the cut line wholesale — `top:200` for every category, or with `category:` for one. Only ever adds. |
+| `/list-filter` | The checkbox page, for browsing and bulk work. Sorted best-known first, 75 checkboxes a page, with Enable/Disable page and Disable all. |
+
+The page is the fallback, not the main event: once the default is sensible, hunting a single
+show across six pages is worse than naming it.
+
+The selection governs **pooled draws only** — `category`, `everything` and `random`. Naming a
+list outright (`/create-lobby list:Naruto`) always works, enabled or not, because asking for
+one by name is already a deliberate choice. Lists made by hand with `/list-create` are
+enabled on creation for the same reason.
+
 ### Audience-vote mode
 
-Add `audience-vote:true` to `/create-lobby` and the audience decides what both players are
-wearing, instead of the bot dealing at random.
+Add `audience-vote:true` to `/create-lobby` — or hit the **🗳️ Audience vote** toggle on the
+lobby board — and the audience decides what both players are wearing, instead of the bot
+dealing at random.
 
 A vote board appears with a **Vote** button. Clicking it opens a **private ballot** listing
 candidates for each player; you pick one per player and can change your mind until voting
-closes. Voting ends on a timer (`vote-seconds`, default 60) or when the host closes it
-early, then the plurality winner for each player is locked in — ties break randomly, and if
-nobody votes at all a random candidate is used, so the game can never stall.
+closes — the ballot confirms each change, so a second pick visibly replaces the first rather
+than looking like it stacked. Voting ends on a timer (`vote-seconds`, default 90), when the
+host closes it early, or later if the host presses **⏱️ +30s** (presses accumulate). Then
+the plurality winner for each player is locked in — ties break randomly, and if nobody votes
+at all a random candidate is used, so the game can never stall.
+
+The public board reports the **shape** of each tally — "unanimous so far", "5 votes across 3
+characters — leader has 2", "currently tied" — which is the drama of a vote without any of
+its content. The full breakdown, with names, waits for the end-of-game reveal, where it's
+finally safe to show: *"unanimous, 4 of 7"*, or *"tied on 2, settled by coin flip"*.
 
 **The two players can't vote and are never shown the candidates.** The public board only
 ever shows the turnout and a countdown — never a character name — because seeing five
@@ -110,7 +246,9 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list-set-image` | anyone | Attach/update a character's image |
 | `/list-remove-character` | anyone | Remove a character |
 | `/list-show` | anyone | Browse categories, lists in a category, or one list's characters |
-| `/create-lobby` | anyone | Open a lobby + post the lobby board (`list`, `category`, or `random:true`; plus `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds`) |
+| `/list-filter` | anyone | Tick which lists the server plays with; `top:<n>` enables the N best-known instead |
+| `/list-toggle` | anyone | Switch one named list in or out of the pool |
+| `/create-lobby` | anyone | Open a lobby + post the lobby board (`list`, `category`, `everything:true`, or `random:true`; plus `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
 | `/join-lobby` / `/leave-lobby` | players | Join or leave the waiting lobby (or use the board's buttons) |
 | `/spectate` | anyone | Opt in to a DM revealing both characters (or use the board's button) |
 | `/set-characters` | host | Hand-pick both players' characters |
@@ -122,7 +260,7 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/leaderboard` | anyone | Server standings, or one player's record |
 
 List and character name options have autocomplete — worth leaning on, since the bundled seed
-data creates over a thousand lists.
+data creates over two thousand lists.
 
 ---
 
@@ -176,7 +314,7 @@ safe to run repeatedly.
 ```bash
 npm run seed:pokemon  -- <your-server-id>   # 1,025 Pokémon, with official artwork
 npm run seed:lol      -- <your-server-id>   # 173 League of Legends champions, with splash art
-npm run seed:wikidata -- <your-server-id>   # Western TV/film casts, one list per show
+npm run seed:wikidata -- <your-server-id>   # Western TV/film/game casts, one list per title
 npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per title
 ```
 
@@ -188,11 +326,11 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
 > same ground with real casts. Use `npm run reset:seeded -- <server-id>` to clear
 > seed-created lists before rebuilding from these sources.
 
-- **`seed:pokemon`** and **`seed:lol`** each create a single list, with images pulled from
-  the games' own public asset APIs (PokeAPI's sprite repo and Riot's Data Dragon).
+- **`seed:pokemon`** and **`seed:lol`** each create a single list under **Video Games**, with
+  images pulled from the games' own public asset APIs (PokeAPI's sprite repo and Riot's Data
+  Dragon).
 - **`seed:anilist`** builds one list per anime/manga title from
-  [AniList](https://anilist.co), with artwork on nearly every character. Casts are complete
-  rather than sampled — One Piece imports 815 characters. AniList stores names
+  [AniList](https://anilist.co), with artwork on nearly every character. AniList stores names
   first-name-first ("Luffy Monkey"), so they're rebuilt surname-first to give
   "Monkey D. Luffy", "Roronoa Zoro", "Nico Robin".
 
@@ -201,23 +339,58 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
   conservative: "Steins;Gate 0" and "Mob Psycho 100" keep their numbers.
 
   Characters labelled `BACKGROUND` by AniList are skipped (`--include-background` to keep
-  them), as is anything flagged adult. `--per-show N` caps each title.
-- **`seed:wikidata`** covers Western TV and film, which AniList doesn't touch. It
-  builds **one list per show or film** from [Wikidata](https://www.wikidata.org), sweeping
-  Cartoon Network, Nickelodeon, Disney Channel/XD, Adult Swim, Fox, the Disney/Pixar/
-  DreamWorks film catalogues, and HBO/AMC/Netflix drama.
+  them), as is anything flagged adult.
 
-  Each show is capped at its **30 best-known characters** (`--per-show N` to change it),
-  ranked by how many language Wikipedias cover them. The cap is per show rather than a
+  Each title is then cut to the characters people have actually heard of. AniList records a
+  **favourites** count per character, and the cut is *relative to each show's own best-known
+  member*: keep anyone with at least 2% of the top character's favourites, cap 30. A flat
+  rank cut can't work here, because fame falls off at completely different rates —
+
+  | | #1 | #10 | #30 |
+  | --- | --- | --- | --- |
+  | One Piece | 36,038 | 5,815 | 1,486 |
+  | Cowboy Bebop | 14,830 | 75 | 3 |
+
+  so "top 30" means Silvers Rayleigh in one show and a walk-on three people have heard of in
+  the other. The relative floor gives One Piece its full 30 and Cowboy Bebop the six people
+  who are actually in Cowboy Bebop. `MAIN` characters are kept whatever their favourites (the
+  show's own billing outranks a popularity vote), and a title that would be trimmed below
+  three keeps its top three rather than disappearing.
+
+  This takes the anime import from 26,778 characters to 7,930, median cast 22 → 8. Tune it
+  with `--fame-floor PERCENT` — `1` is looser (9,522), `3` stricter (7,048), `0` turns the
+  floor off and leaves only the cap (16,293) — and with `--per-show N`.
+- **`seed:wikidata`** covers Western TV, film and video games, which AniList doesn't touch.
+  It builds **one list per show, film or game** from [Wikidata](https://www.wikidata.org),
+  sweeping Cartoon Network, Nickelodeon, Disney Channel/XD, Adult Swim, Fox, the
+  Disney/Pixar/DreamWorks film catalogues, HBO/AMC/Netflix drama, and every title Wikidata
+  types as a video game — roughly 1,100 playable lists in total.
+
+  Each title is capped at its **30 best-known characters** (`--per-show N` to change it),
+  ranked by how many language Wikipedias cover them. The cap is per title rather than a
   single global fame threshold on purpose: every Ed Edd n Eddy character has *zero*
   Wikipedia articles — the whole cast lives on one shared page — so a global cutoff would
   delete Ed, Edd, Eddy, Rolf and Plank while keeping dozens of minor SpongeBob relatives.
   Fame only compares meaningfully within a show. Production bookkeeping ("Incidental 29")
   and self-answering descriptions ("Sandy's cousin") are dropped either way.
 
-  Restrict it with `--group kids-tv|adult-animation|animation-studios|live-action-tv`, and
-  preview without writing using `--dry-run`. Wikidata only carries freely-licensed images,
-  which rules out most cartoon art, so a lot of these arrive text-only.
+  Games are found by *being* games rather than by publisher. A hand-written list of 34 major
+  studios was the original approach and it reached 670 titles; asking Wikidata for "anything
+  typed as a video game with a character" sweeps 6,400 candidates, of which 3,100 turn out to
+  have a cast. Indie and older titles stop depending on whether their studio was famous
+  enough for someone to think of.
+
+  Animated shows are filed under **Cartoon** and live action under **Television Shows**, so
+  "any TV show" can't hand you SpongeBob when you wanted Breaking Bad. The split comes from
+  Wikidata's own typing of each series, not from the broadcaster that found it — Fox and
+  Adult Swim both carry live action, so grouping by source would have filed Firefly as a
+  cartoon. Anime is dropped here rather than categorised, since AniList already supplies it
+  with better names, images and ranking.
+
+  Restrict it with
+  `--group kids-tv|adult-animation|animation-studios|live-action-tv|video-games`, and preview
+  without writing using `--dry-run`. Wikidata only carries freely-licensed images, which rules
+  out most cartoon art, so a lot of these arrive text-only.
 
 Anything still without an image reveals as plain text, which is a supported look — use
 `/list-set-image` to fill in any you care about.
@@ -248,11 +421,12 @@ it from Wikidata (a long run — tens of minutes, and the public endpoint rate-l
 npm run fetch:wikidata
 ```
 
-It discovers shows by broadcaster and production company rather than from a hand-written
-list, so a cartoon nobody thought to add still lands. It's resumable — the output file
-doubles as the progress log, so `Ctrl+C` and re-run only costs the chunk in flight — and it
-splits a query in half whenever the endpoint times out, which is what lets a 300-character
-series like The Simpsons through without failing the 23 ordinary shows sharing its request.
+It discovers shows by broadcaster and production company — and games by being games — rather
+than from a hand-written list, so a cartoon or an indie title nobody thought to add still
+lands. It's resumable — the output file doubles as the progress log, so `Ctrl+C` and re-run
+only costs the chunk in flight — and it splits a query in half whenever the endpoint times
+out, which is what lets a 300-character series like The Simpsons through without failing the
+23 ordinary shows sharing its request.
 Add `--group <key>` to sweep one source group, or `--list-groups` to see them.
 </details>
 
@@ -268,13 +442,16 @@ src/
     lists/              Character-list management commands
   components/
     router.js           Routes button/select/modal events by customId namespace
-    lobbyButtons.js     Lobby board button handlers
+    lobbyButtons.js     Lobby board button handlers + the settings modal
     turnControls.js     Turn board buttons + the guess modal
     voteControls.js     Audience ballot + host close button
     gameOverControls.js Rematch / Leaderboard buttons on the reveal
+    listBrowser.js      Paginated category/list/character browsing for /list-show
+    listFilter.js       Checkbox page for the server's playable list selection
   game/
     GameManager.js      Map<channelId, Lobby> — one lobby per channel
     Lobby.js            Pre-game state: host, players, spectators, settings
+    lobbySettings.js    Bounds/parsing shared by /create-lobby and the settings modal
     Game.js             Active-game state + guess matching
     engine.js           Turn loop, DMs, confirm/reroll, win/rebuttal resolution
     lobbyBoard.js       Renders the self-updating lobby message
@@ -285,6 +462,8 @@ src/
     timerWatchdog.js    Wall-clock backstop for turn/vote deadlines (sleep-safe)
     boards.js           Tracks live button messages and retires them after a restart
     voice.js            Voice-channel join + sound playback (all best-effort)
+  util/
+    characterImages.js  Which image sources can be believed to depict the character
   db/
     connection.js       SQLite setup + lightweight column migrations
     schema.sql          character_lists, characters, game_results, active_boards
@@ -324,7 +503,7 @@ a backstop: in the normal case the `setTimeout` fires first and the pass finds n
 ## Development
 
 ```bash
-npm test                 # 115 tests, no network or Discord needed
+npm test                 # 132 tests, no network or Discord needed
 npm run generate:sounds  # regenerate the WAV sound effects
 ```
 

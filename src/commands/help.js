@@ -20,7 +20,13 @@ module.exports = {
             '`/list-add-character` -- add a character, optionally with an `image` URL\n' +
             '`/list-set-image` -- attach/update an image on an existing character\n' +
             '`/list-remove-character` -- remove one\n' +
-            '`/list-show` -- see all lists grouped by category, or one list\'s characters',
+            '`/list-show` -- see all lists grouped by category, or one list\'s characters\n' +
+            '`/list-toggle <list>` -- **switch one list in or out** of what this server plays ' +
+            'with. Autocomplete shows ✅/⬜ so you can see what a toggle will do\n' +
+            '`/list-filter top:<n>` -- enable the N best-known lists in every category (or one, ' +
+            'with `category:`)\n' +
+            '`/list-filter` -- the full checkbox page, for browsing and bulk changes. Pooled ' +
+            'draws only ever use enabled lists, which is how obscure shows stay out of the deal',
         },
         {
           name: '2️⃣ Start a game',
@@ -28,8 +34,10 @@ module.exports = {
             '`/create-lobby list:<name>` -- open a lobby (comma-separate several list names to ' +
             'draw from a combined pool; optionally set `turn-seconds` and `max-rerolls`, ' +
             '`-1` = unlimited)\n' +
-            '`/create-lobby category:<name>` -- draw from **every** list in a category at once, ' +
-            'e.g. `category:Video Games` for any video game character\n' +
+            '`/create-lobby category:<name>` -- draw from every **enabled** list in a category ' +
+            'at once, e.g. `category:Video Games` for any video game character\n' +
+            '`/create-lobby everything:true` -- pool **every list in the server**, all ' +
+            'categories at once\n' +
             'Or `random:true` to let the bot roll a random category -- 🎲 category roulette\n' +
             'That posts the **lobby board**, which updates itself as people join. Everything ' +
             'else here is a button on it:\n' +
@@ -37,6 +45,9 @@ module.exports = {
             'of them)\n' +
             '**Spectate** -- opt in to a DM revealing both characters\n' +
             '**Start game** -- host only, stays disabled until 2 players have joined\n' +
+            '**⚙️ Settings** / **🗳️ Audience vote** / **🎚️ Difficulty** -- host only: change ' +
+            'turn length, rerolls, the vote tuning and how obscure a character can be dealt, ' +
+            'without recreating the lobby (locked once the game starts)\n' +
             'The matching `/join-lobby`, `/leave-lobby`, `/spectate` and `/start-game` commands ' +
             'still work and keep the board in sync.\n' +
             '`/set-characters` -- host only, optional, no button: assign each player\'s hidden ' +
@@ -46,7 +57,8 @@ module.exports = {
         {
           name: '🗳️ Audience vote mode',
           value:
-            'Add `audience-vote:true` to `/create-lobby` and the **audience** picks both ' +
+            'Add `audience-vote:true` to `/create-lobby`, or hit the **🗳️ Audience vote** ' +
+            'toggle on the lobby board, and the **audience** picks both ' +
             'characters instead of the bot. A vote board appears with a **Vote** button — ' +
             'clicking it gives you a private ballot of candidates for each player. The two ' +
             "players can't vote and never see the options. Tune it with `vote-options` " +
@@ -58,18 +70,26 @@ module.exports = {
             "Once the game starts, you'll get a DM showing a character with **Good to go** / " +
             "**Reroll** buttons. If you (or you think the wearer) won't recognize it, reroll " +
             "(however many the host allowed) -- the game waits until both players confirm before " +
-            'turn 1 begins.',
+            'turn 1 begins.\n' +
+            '🚫 **Never deal this show** drops that list from the server for good *and* rerolls, ' +
+            "in one press. And once 3 different people have rerolled the same character, the bot " +
+            'stops dealing them -- the pool learns from what you reject.',
         },
         {
           name: '3️⃣ On your turn',
           value:
-            'A **turn board** appears with a live countdown, your guesses so far, and ' +
-            '**Guess** / **Pass** buttons. Ask your questions out loud in voice, then hit ' +
-            "**Guess** (it opens a text box) as often as you like -- guessing wrong doesn't " +
-            'end your turn, so guess early and often and keep going. Only **Pass**, or ' +
-            "running out of time, actually hands the turn over (once time's up the board goes " +
-            'amber for one truly last guess before it moves on). `/guess <character>` and ' +
-            '`/pass` still work if you prefer typing. Small typos are OK, and a well-known ' +
+            'A **turn board** appears with a live countdown, your guesses so far, and two ' +
+            'rows of buttons -- one per player:\n' +
+            '⚖️ **The other player judges.** They can see your character, so when you call a ' +
+            'name out loud they hit **✅ They got it** or **❌ Nope**. That is the main way a ' +
+            'turn resolves -- you never stop talking to log a guess, and the ❌ button keeps ' +
+            'a running count.\n' +
+            '⏭️ **Pass** is your only button -- there is no guess box, because the judge ' +
+            'already decides whether you got it. `/guess <character>` is still there if you ' +
+            'would rather type.\n' +
+            "Guessing wrong doesn't end your turn, so guess early and often. Only **Pass**, or " +
+            "running out of time, actually hands it over (once time's up the board goes amber " +
+            'for one truly last guess). Typed guesses forgive small typos, and a well-known ' +
             'first or last name alone is accepted for multi-word names.',
         },
         {
