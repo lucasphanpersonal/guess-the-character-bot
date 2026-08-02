@@ -70,16 +70,56 @@ module.exports = {
     );
   },
 
-  'category roulette only returns categories that exist'() {
+  // Roulette landing on a category whose lists are all switched off would produce a lobby
+  // that dies at Start, so an unenabled category is not a candidate at all.
+  'category roulette only returns categories with something enabled'() {
     const guildId = freshGuild();
     assert.equal(lists.getRandomCategory(guildId), null, 'no lists yet');
-    lists.createList(guildId, 'Only List', 'tester', 'Anime');
+
+    const id = lists.createList(guildId, 'Only List', 'tester', 'Anime');
+    assert.equal(lists.getRandomCategory(guildId), null, 'exists but is not enabled');
+
+    lists.setListsEnabled([id], true);
     for (let i = 0; i < 10; i++) {
       assert.equal(lists.getRandomCategory(guildId), 'Anime');
     }
     assert.deepEqual(
-      lists.getListsByCategory(guildId, 'Anime').map((l) => l.name),
+      lists.getEnabledListsByCategory(guildId, 'Anime').map((l) => l.name),
       ['Only List']
+    );
+  },
+
+  'lists start disabled, and enabling is what puts them in a pooled draw'() {
+    const guildId = freshGuild();
+    const a = lists.createList(guildId, 'Alpha', 'tester', 'Anime');
+    const b = lists.createList(guildId, 'Beta', 'tester', 'Anime');
+    assert.deepEqual(lists.getEnabledLists(guildId), [], 'nothing is playable by default');
+
+    lists.setListsEnabled([a], true);
+    assert.deepEqual(
+      lists.getEnabledLists(guildId).map((l) => l.name),
+      ['Alpha']
+    );
+
+    // The unenabled list is still findable by name -- the filter governs pooled draws only.
+    assert.equal(lists.getListByName(guildId, 'Beta').id, b);
+
+    const [counts] = lists.listCategoriesWithEnabledCounts(guildId);
+    assert.equal(counts.count, 2);
+    assert.equal(counts.enabled, 1);
+  },
+
+  'the filter page ranks by fame, with unranked lists last'() {
+    const guildId = freshGuild();
+    lists.createList(guildId, 'Obscure Show', 'tester', 'Anime');
+    lists.createList(guildId, 'Famous Show', 'tester', 'Anime');
+    lists.createList(guildId, 'Handmade', 'tester', 'Anime');
+    lists.setPopularityByName(guildId, 'Obscure Show', 500);
+    lists.setPopularityByName(guildId, 'Famous Show', 460961);
+
+    assert.deepEqual(
+      lists.listsForFilter(guildId, 'Anime').map((l) => l.name),
+      ['Famous Show', 'Obscure Show', 'Handmade']
     );
   },
 };

@@ -5,9 +5,11 @@
 // introduces is on the other side -- a lobby board that tries to print all 127 names would
 // blow past what Discord will render, so the label has to collapse.
 
-const { assert } = require('./harness');
+const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
 const lists = require('../src/db/characterLists');
 const db = require('../src/db/connection');
+const createLobby = require('../src/commands/create-lobby');
+const GameManager = require('../src/game/GameManager');
 
 let guildCounter = 0;
 function freshGuild() {
@@ -16,9 +18,12 @@ function freshGuild() {
   return guildId;
 }
 
-function seed(guildId, name, category, names) {
+// Seeded lists are enabled here because these tests are about pooling and labelling, not
+// about the /list-filter selection -- which has its own suite.
+function seed(guildId, name, category, names, { enabled = true } = {}) {
   const listId = lists.createList(guildId, name, 'tester', category);
   for (const n of names) lists.addCharacter(listId, n, 'tester');
+  if (enabled) lists.setListsEnabled([listId], true);
   return listId;
 }
 
@@ -65,12 +70,59 @@ module.exports = {
     seed(guildId, 'Metal Gear', 'Video Games', ['Solid Snake', 'Big Boss']);
     seed(guildId, 'Naruto', 'Anime', ['Naruto Uzumaki']);
 
-    const pooled = lists.getListsByCategory(guildId, 'Video Games');
+    const pooled = lists.getEnabledListsByCategory(guildId, 'Video Games');
     assert.equal(pooled.length, 2, 'only the video game lists');
     assert.equal(
       lists.countDistinctCharacters(pooled.map((l) => l.id)),
       4,
       'every character across both lists, and nothing from Anime'
     );
+  },
+
+  async 'everything:true pools every list in the server, across all categories'() {
+    const guildId = freshGuild();
+    const channelId = `everything-chan-${guildId}`;
+    seed(guildId, 'Zelda', 'Video Games', ['Link', 'Ganon']);
+    seed(guildId, 'Naruto', 'Anime', ['Naruto Uzumaki']);
+    seed(guildId, 'Scrubs', 'TV Shows', ['JD']);
+
+    const recorder = createRecorder();
+    await createLobby.execute(
+      createSlashInteraction({
+        client: createFakeClient(recorder),
+        userId: 'host',
+        guildId,
+        channelId,
+        options: { everything: true },
+        recorder,
+      })
+    );
+
+    const lobby = GameManager.getLobby(channelId);
+    assert.equal(lobby.listIds.length, 3, 'every list, not just one category');
+    assert.equal(lists.countDistinctCharacters(lobby.listIds), 4);
+    assert.match(recorder.allText(), /every list in the server/);
+    GameManager.endLobby(channelId);
+  },
+
+  async 'everything cannot be combined with a category or a list'() {
+    const guildId = freshGuild();
+    const channelId = `everything-clash-${guildId}`;
+    seed(guildId, 'Zelda', 'Video Games', ['Link', 'Ganon']);
+
+    const recorder = createRecorder();
+    await createLobby.execute(
+      createSlashInteraction({
+        client: createFakeClient(recorder),
+        userId: 'host',
+        guildId,
+        channelId,
+        options: { everything: true, category: 'Video Games' },
+        recorder,
+      })
+    );
+
+    assert.equal(GameManager.getLobby(channelId), undefined, 'no lobby was created');
+    assert.match(recorder.allText(), /Use only one of/);
   },
 };

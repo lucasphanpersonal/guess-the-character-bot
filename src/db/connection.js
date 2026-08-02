@@ -20,10 +20,22 @@ const characterColumns = db.prepare('PRAGMA table_info(characters)').all();
 if (characterColumns.length && !characterColumns.some((col) => col.name === 'image_url')) {
   db.exec('ALTER TABLE characters ADD COLUMN image_url TEXT');
 }
+if (characterColumns.length && !characterColumns.some((col) => col.name === 'fame')) {
+  db.exec('ALTER TABLE characters ADD COLUMN fame INTEGER');
+}
 
 const listColumns = db.prepare('PRAGMA table_info(character_lists)').all();
 if (listColumns.length && !listColumns.some((col) => col.name === 'category')) {
   db.exec('ALTER TABLE character_lists ADD COLUMN category TEXT');
+}
+// Existing servers start with nothing enabled, same as a fresh install: with ~2,000 seeded
+// lists there is no honest default selection to pick on someone's behalf, so /list-filter
+// is where a server says what it actually plays with.
+if (listColumns.length && !listColumns.some((col) => col.name === 'enabled')) {
+  db.exec('ALTER TABLE character_lists ADD COLUMN enabled INTEGER NOT NULL DEFAULT 0');
+}
+if (listColumns.length && !listColumns.some((col) => col.name === 'popularity')) {
+  db.exec('ALTER TABLE character_lists ADD COLUMN popularity INTEGER');
 }
 
 module.exports = db;

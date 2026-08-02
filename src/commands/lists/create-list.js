@@ -18,9 +18,13 @@ module.exports = {
     if (getListByName(interaction.guildId, name)) {
       return interaction.reply({ content: `A list named **${name}** already exists.`, flags: MessageFlags.Ephemeral });
     }
-    createList(interaction.guildId, name, interaction.user.id, category);
+    // Enabled on creation: typing a list out by hand is a deliberate choice, unlike the
+    // thousands the seed scripts add, so it should be playable without a trip to
+    // /list-filter.
+    createList(interaction.guildId, name, interaction.user.id, category, { enabled: true });
     return interaction.reply(
-      `✅ Created character list **${name}**. Add characters with \`/list-add-character list:${name} character:<name>\`.`
+      `✅ Created character list **${name}**, enabled for pooled draws. ` +
+        `Add characters with \`/list-add-character list:${name} character:<name>\`.`
     );
   },
 };

@@ -1,10 +1,15 @@
 const db = require('./connection');
 const { foldDiacritics } = require('../util/text');
 
-function createList(guildId, name, createdBy, category = null) {
+// Lists arrive disabled because the seed scripts create them in the thousands. A list
+// somebody types out by hand is the opposite case -- that is a deliberate choice, so
+// /list-create passes enabled: true and it is playable straight away.
+function createList(guildId, name, createdBy, category = null, { enabled = false } = {}) {
   const info = db
-    .prepare('INSERT INTO character_lists (guild_id, name, created_by, created_at, category) VALUES (?, ?, ?, ?, ?)')
-    .run(guildId, name, createdBy, Date.now(), category);
+    .prepare(
+      'INSERT INTO character_lists (guild_id, name, created_by, created_at, category, enabled) VALUES (?, ?, ?, ?, ?, ?)'
+    )
+    .run(guildId, name, createdBy, Date.now(), category, enabled ? 1 : 0);
   return info.lastInsertRowid;
 }
 
@@ -40,6 +45,14 @@ function addCharacter(listId, name, addedBy, imageUrl = null) {
   return info.lastInsertRowid;
 }
 
+function setCharacterFame(listId, name, fame) {
+  return (
+    db
+      .prepare('UPDATE characters SET fame = ? WHERE list_id = ? AND name = ? COLLATE NOCASE')
+      .run(fame, listId, name).changes > 0
+  );
+}
+
 function setCharacterImage(listId, name, imageUrl) {
   const info = db
     .prepare('UPDATE characters SET image_url = ? WHERE list_id = ? AND name = ? COLLATE NOCASE')
@@ -58,10 +71,6 @@ function getCharacters(listId) {
   return db
     .prepare('SELECT * FROM characters WHERE list_id = ? ORDER BY name COLLATE NOCASE')
     .all(listId);
-}
-
-function countCharacters(listId) {
-  return db.prepare('SELECT COUNT(*) as count FROM characters WHERE list_id = ?').get(listId).count;
 }
 
 // "Naruto (Manga)", or just "Anime" when the list is its own category.
@@ -108,13 +117,14 @@ function getCharacterSource(guildId, characterName, drawnListId = null) {
         ORDER BY size DESC`
     )
     .all(guildId, characterName);
-  const sameName = (a, b) => normalizeForMatch(a).toLowerCase() === normalizeForMatch(b).toLowerCase();
+  // normalizeForMatch folds case as well as diacritics, so this needs no extra lowercasing.
+  const sameName = (a, b) => normalizeForMatch(a) === normalizeForMatch(b);
   const candidates = rows.filter((row) => !sameName(row.name, characterName));
   if (!candidates.length) return null;
 
   // A list is a specific work unless it is just its own category ("Anime", "Video Games").
-  // A null category counts as a work: the Pokémon and League seeds set no category, and
-  // treating them as generic sent Pikachu's source to "Video Games" instead of "Pokémon".
+  // A null category counts as a work rather than as generic: an uncategorised list is still
+  // named after something, so "Pokémon" beats falling through to a bare category name.
   const isWork = (row) => !row.category || row.category !== row.name;
 
   // The list the character was actually dealt from settles it outright, when it names a
@@ -164,6 +174,111 @@ function getCharactersForLists(listIds) {
     .all(...listIds);
 }
 
+// ---------------------------------------------------------------------------
+// Difficulty: how deep into a cast a random draw is allowed to go
+// ---------------------------------------------------------------------------
+//
+// Curating lists cannot fix being dealt somebody obscure, because the obscurity is INSIDE
+// the list. Attack on Titan is on everybody's shortlist and its cast still runs from Eren
+// (36,038 favourites) down to bit parts with three. So difficulty cuts each cast by fame
+// instead of cutting the list.
+//
+// The cut is per list, deliberately. Fame comes from two incomparable scales (AniList
+// favourites in the thousands, Wikipedia sitelinks in the tens), so a pool-wide threshold
+// would quietly delete every Wikidata-sourced character. "The top quarter of each cast" is
+// scale-free, and it is also the more useful rule: it keeps the leads of every show rather
+// than every character of the most-documented shows.
+
+const DIFFICULTIES = {
+  easy: { label: 'Easy', keep: 0.25, blurb: 'best-known quarter of each cast' },
+  normal: { label: 'Normal', keep: 0.6, blurb: 'skips the deepest cuts' },
+  everything: { label: 'Everything', keep: 1, blurb: 'every character, however obscure' },
+};
+const DEFAULT_DIFFICULTY = 'normal';
+
+const difficultyOf = (difficulty) => DIFFICULTIES[difficulty] ?? DIFFICULTIES[DEFAULT_DIFFICULTY];
+
+/**
+ * Keeps the best-known share of each list's cast.
+ *
+ * A list with no fame data at all passes through untouched -- an unranked list is unranked,
+ * not unpopular, and silently reducing it to one arbitrary character would be worse than
+ * doing nothing. Within a partially ranked list, unranked characters sort last.
+ */
+function applyDifficulty(characters, difficulty) {
+  const { keep } = difficultyOf(difficulty);
+  if (keep >= 1) return characters;
+
+  const byList = new Map();
+  for (const c of characters) {
+    if (!byList.has(c.list_id)) byList.set(c.list_id, []);
+    byList.get(c.list_id).push(c);
+  }
+
+  const kept = [];
+  for (const cast of byList.values()) {
+    if (!cast.some((c) => c.fame != null)) {
+      kept.push(...cast);
+      continue;
+    }
+    const ranked = [...cast].sort((a, b) => (b.fame ?? -1) - (a.fame ?? -1));
+    // At least one, so a two-character list never becomes undrawable.
+    kept.push(...ranked.slice(0, Math.max(1, Math.ceil(ranked.length * keep))));
+  }
+  return kept;
+}
+
+// ---------------------------------------------------------------------------
+// Learning from rerolls
+// ---------------------------------------------------------------------------
+
+// How many DIFFERENT people have to reject a character before the bot stops dealing it.
+// Three is a consensus rather than one person's blind spot, and it is reversible: the row
+// is per (character, user), so clearing the table restores everything.
+const REROLL_DEMOTE_THRESHOLD = 3;
+
+function recordReroll(characterId, userId) {
+  if (!characterId) return 0;
+  db.prepare(
+    'INSERT OR IGNORE INTO character_rerolls (character_id, user_id, created_at) VALUES (?, ?, ?)'
+  ).run(characterId, userId, Date.now());
+  return countRerollers(characterId);
+}
+
+function countRerollers(characterId) {
+  return (
+    db
+      .prepare('SELECT COUNT(DISTINCT user_id) AS n FROM character_rerolls WHERE character_id = ?')
+      .get(characterId)?.n ?? 0
+  );
+}
+
+// The characters this server has collectively given up on, within the given lists.
+function demotedCharacterIds(listIds) {
+  if (!listIds.length) return new Set();
+  const placeholders = listIds.map(() => '?').join(',');
+  const rows = db
+    .prepare(
+      `SELECT r.character_id AS id
+         FROM character_rerolls r
+         JOIN characters c ON c.id = r.character_id
+        WHERE c.list_id IN (${placeholders})
+        GROUP BY r.character_id
+       HAVING COUNT(DISTINCT r.user_id) >= ?`
+    )
+    .all(...listIds, REROLL_DEMOTE_THRESHOLD);
+  return new Set(rows.map((r) => r.id));
+}
+
+// The pool a random deal actually draws from: the enabled lists' characters, minus the
+// deepest cuts for this difficulty, minus what the server has rerolled into the ground.
+function drawablePool(listIds, difficulty) {
+  const demoted = demotedCharacterIds(listIds);
+  return dedupeByName(
+    applyDifficulty(getCharactersForLists(listIds), difficulty).filter((c) => !demoted.has(c.id))
+  );
+}
+
 // Merging multiple lists can surface the same character name under two different list_ids
 // (e.g. two lists both containing "Mario") -- dedupe by lowercase name, keeping the first
 // occurrence, so the same character can never end up assigned to both players.
@@ -179,17 +294,17 @@ function dedupeByName(characters) {
   return deduped;
 }
 
-function countDistinctCharacters(listIds) {
-  return dedupeByName(getCharactersForLists(listIds)).length;
+// Counts what would actually be dealt, not what the lists hold -- the lobby board uses this
+// and a number that ignored difficulty would misrepresent the game about to be played.
+function countDistinctCharacters(listIds, difficulty = 'everything') {
+  return drawablePool(listIds, difficulty).length;
 }
 
 // Up to `count` distinct characters drawn from the merged, de-duplicated pool. Returns
 // fewer than requested only when the pool itself is too small.
-function getRandomCharacters(listIds, count, excludeNames = []) {
+function getRandomCharacters(listIds, count, excludeNames = [], difficulty = DEFAULT_DIFFICULTY) {
   const excludeLower = new Set([...excludeNames].map((n) => n.toLowerCase()));
-  const pool = dedupeByName(getCharactersForLists(listIds)).filter(
-    (c) => !excludeLower.has(c.name.toLowerCase())
-  );
+  const pool = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
   // Partial Fisher-Yates: only shuffle as far as we need to.
   const take = Math.min(count, pool.length);
   for (let i = 0; i < take; i++) {
@@ -199,8 +314,8 @@ function getRandomCharacters(listIds, count, excludeNames = []) {
   return pool.slice(0, take);
 }
 
-function getRandomPair(listIds) {
-  return getRandomCharacters(listIds, 2);
+function getRandomPair(listIds, difficulty = DEFAULT_DIFFICULTY) {
+  return getRandomCharacters(listIds, 2, [], difficulty);
 }
 
 function searchListNames(guildId, query, limit = 25) {
@@ -249,17 +364,135 @@ function getListsByCategory(guildId, category) {
   return db.prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category = ?').all(guildId, category);
 }
 
+// ---------------------------------------------------------------------------
+// The server's playable selection (`enabled`), curated from /list-filter
+// ---------------------------------------------------------------------------
+//
+// Only pooled draws consult this. Naming a list outright -- `/create-lobby list:Naruto` --
+// deliberately bypasses it: the point of the selection is to keep obscure lists out of a
+// random deal, not to make them unreachable when somebody asks for one by name.
+
+function getEnabledListsByCategory(guildId, category) {
+  if (category === 'Uncategorized') {
+    return db
+      .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category IS NULL AND enabled = 1')
+      .all(guildId);
+  }
+  return db
+    .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category = ? AND enabled = 1')
+    .all(guildId, category);
+}
+
+function getEnabledLists(guildId) {
+  return db
+    .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND enabled = 1 ORDER BY name COLLATE NOCASE')
+    .all(guildId);
+}
+
+// Every category with how much of it is switched on -- drives the /list-filter landing page
+// and the "nothing is enabled yet" errors, which need to name what IS available.
+function listCategoriesWithEnabledCounts(guildId) {
+  return db
+    .prepare(
+      `SELECT COALESCE(category, 'Uncategorized') as category,
+              COUNT(*) as count,
+              SUM(enabled) as enabled
+       FROM character_lists WHERE guild_id = ? GROUP BY category ORDER BY category COLLATE NOCASE`
+    )
+    .all(guildId)
+    .map((row) => ({ ...row, enabled: row.enabled ?? 0 }));
+}
+
+// Ordered most-recognisable-first so the lists worth switching on land on page 1. Lists
+// with no fame score (hand-made ones, and anything the backfill couldn't match) sort last
+// rather than being treated as unpopular.
+function listsForFilter(guildId, category) {
+  const where = category === 'Uncategorized' ? 'category IS NULL' : 'category = ?';
+  const params = category === 'Uncategorized' ? [guildId] : [guildId, category];
+  return db
+    .prepare(
+      `SELECT cl.*, COUNT(c.id) AS character_count
+         FROM character_lists cl
+         LEFT JOIN characters c ON c.list_id = cl.id
+        WHERE cl.guild_id = ? AND ${where}
+        GROUP BY cl.id
+        ORDER BY cl.popularity IS NULL, cl.popularity DESC, cl.name COLLATE NOCASE`
+    )
+    .all(...params);
+}
+
+/**
+ * Switches on the `n` best-known lists in a category, or in every category when `category`
+ * is null. Returns how many were newly enabled.
+ *
+ * Additive on purpose: it only ever turns lists ON. A server that has already curated can
+ * re-run it after a re-seed without losing hand-picked additions, and on a fresh server
+ * "enable the top 100" and "the selection IS the top 100" are the same thing anyway. Use
+ * the page's Disable all first if an exact cut is what you want.
+ */
+function enableTopN(guildId, category, n) {
+  const categories =
+    category != null
+      ? [category]
+      : listCategoriesWithEnabledCounts(guildId).map((c) => c.category);
+
+  let enabled = 0;
+  for (const cat of categories) {
+    const top = listsForFilter(guildId, cat)
+      .slice(0, n)
+      .filter((l) => l.enabled !== 1);
+    enabled += setListsEnabled(top.map((l) => l.id), true);
+  }
+  return enabled;
+}
+
+function setListsEnabled(listIds, enabled) {
+  if (!listIds.length) return 0;
+  const placeholders = listIds.map(() => '?').join(',');
+  return db
+    .prepare(`UPDATE character_lists SET enabled = ? WHERE id IN (${placeholders})`)
+    .run(enabled ? 1 : 0, ...listIds).changes;
+}
+
+// Clears the whole selection. The only way back to a known state: enableTopN only ever
+// adds, so re-cutting a server that has drifted means starting from nothing.
+function disableAllLists(guildId) {
+  return db.prepare('UPDATE character_lists SET enabled = 0 WHERE guild_id = ?').run(guildId).changes;
+}
+
+// Flips one list and reports the state it landed on, so the caller can say what happened
+// without a second read.
+function toggleListEnabled(listId) {
+  db.prepare('UPDATE character_lists SET enabled = 1 - enabled WHERE id = ?').run(listId);
+  return db.prepare('SELECT enabled FROM character_lists WHERE id = ?').get(listId)?.enabled === 1;
+}
+
+function clearPopularity(guildId) {
+  return db.prepare('UPDATE character_lists SET popularity = NULL WHERE guild_id = ?').run(guildId).changes;
+}
+
+function setPopularityByName(guildId, name, popularity) {
+  return (
+    db
+      .prepare('UPDATE character_lists SET popularity = ? WHERE guild_id = ? AND name = ? COLLATE NOCASE')
+      .run(popularity, guildId, name).changes > 0
+  );
+}
+
 // Picks one random category (uniformly among distinct categories, not weighted by list
-// count) for "category roulette" -- returns null if the guild has no lists yet.
+// count) for "category roulette". Only categories with something enabled can be rolled --
+// otherwise roulette lands on an empty pool and the lobby dies at Start.
 function getRandomCategory(guildId) {
-  const categories = listCategoriesWithCounts(guildId).map((c) => c.category);
+  const categories = listCategoriesWithEnabledCounts(guildId)
+    .filter((c) => c.enabled > 0)
+    .map((c) => c.category);
   if (!categories.length) return null;
   return categories[Math.floor(Math.random() * categories.length)];
 }
 
-function getRandomCharacterExcluding(listIds, excludeNames) {
+function getRandomCharacterExcluding(listIds, excludeNames, difficulty = DEFAULT_DIFFICULTY) {
   const excludeLower = new Set([...excludeNames].map((n) => n.toLowerCase()));
-  const candidates = dedupeByName(getCharactersForLists(listIds)).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  const candidates = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
   if (!candidates.length) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
@@ -284,7 +517,6 @@ module.exports = {
   setCharacterImage,
   removeCharacter,
   getCharacters,
-  countCharacters,
   getCharactersForLists,
   getListsByIds,
   formatListLabel,
@@ -294,10 +526,30 @@ module.exports = {
   getRandomPair,
   getRandomCharacters,
   getRandomCharacterExcluding,
+  DIFFICULTIES,
+  DEFAULT_DIFFICULTY,
+  difficultyOf,
+  applyDifficulty,
+  drawablePool,
+  recordReroll,
+  countRerollers,
+  demotedCharacterIds,
+  setCharacterFame,
+  REROLL_DEMOTE_THRESHOLD,
   searchListNames,
   listCategoriesWithCounts,
   listNamesInCategory,
   getListsByCategory,
+  getEnabledListsByCategory,
+  getEnabledLists,
+  listCategoriesWithEnabledCounts,
+  listsForFilter,
+  setListsEnabled,
+  enableTopN,
+  toggleListEnabled,
+  disableAllLists,
+  setPopularityByName,
+  clearPopularity,
   getRandomCategory,
   getCharacterByNameInLists,
   searchCharactersInLists,
