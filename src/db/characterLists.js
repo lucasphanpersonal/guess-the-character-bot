@@ -422,28 +422,32 @@ function listsForFilter(guildId, category) {
 }
 
 /**
- * Switches on the `n` best-known lists in a category, or in every category when `category`
- * is null. Returns how many were newly enabled.
+ * Makes the `n` best-known lists in a category the WHOLE selection for that category --
+ * anything below the line is switched off. With no category, every category is re-cut to
+ * its own top `n`.
  *
- * Additive on purpose: it only ever turns lists ON. A server that has already curated can
- * re-run it after a re-seed without losing hand-picked additions, and on a fresh server
- * "enable the top 100" and "the selection IS the top 100" are the same thing anyway. Use
- * the page's Disable all first if an exact cut is what you want.
+ * Exact rather than additive, because "top 50" plainly means "the top 50 is what we play
+ * with". The additive version could only ever grow a selection, so asking a category that
+ * already had 150 on for its top 50 silently did nothing while reporting success -- the
+ * worst possible outcome, since there was no way to tell it hadn't worked.
+ *
+ * Hand-picked extras do get dropped. `/list toggle` puts one back in three keystrokes,
+ * which is a smaller cost than a command that lies about what it did.
  */
-function enableTopN(guildId, category, n) {
+function setTopN(guildId, category, n) {
   const categories =
-    category != null
-      ? [category]
-      : listCategoriesWithEnabledCounts(guildId).map((c) => c.category);
+    category != null ? [category] : listCategoriesWithEnabledCounts(guildId).map((c) => c.category);
 
   let enabled = 0;
+  let disabled = 0;
   for (const cat of categories) {
-    const top = listsForFilter(guildId, cat)
-      .slice(0, n)
-      .filter((l) => l.enabled !== 1);
-    enabled += setListsEnabled(top.map((l) => l.id), true);
+    const ranked = listsForFilter(guildId, cat);
+    const keep = ranked.slice(0, n);
+    const drop = ranked.slice(n);
+    enabled += setListsEnabled(keep.filter((l) => l.enabled !== 1).map((l) => l.id), true);
+    disabled += setListsEnabled(drop.filter((l) => l.enabled === 1).map((l) => l.id), false);
   }
-  return enabled;
+  return { enabled, disabled };
 }
 
 function setListsEnabled(listIds, enabled) {
@@ -545,7 +549,7 @@ module.exports = {
   listCategoriesWithEnabledCounts,
   listsForFilter,
   setListsEnabled,
-  enableTopN,
+  setTopN,
   toggleListEnabled,
   disableAllLists,
   setPopularityByName,

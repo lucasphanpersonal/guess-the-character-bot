@@ -41,12 +41,14 @@ module.exports = {
   async autocomplete(interaction) {
     const query = interaction.options.getFocused();
     const names = searchListNames(interaction.guildId, query, 25);
-    // The current state rides along in the label, so you can see what a toggle will do
-    // before committing to it.
+    // The current state and the category both ride along in the label: the state so you can
+    // see what a toggle will do before committing, and the category so picking one list out
+    // of two thousand doesn't require remembering which shelf it lives on.
     const choices = names.map((n) => {
       const list = getListByName(interaction.guildId, n);
       const mark = list?.enabled === 1 ? '✅' : '⬜';
-      const label = `${mark} ${n}`;
+      const where = list?.category ? ` — ${list.category}` : '';
+      const label = `${mark} ${n}${where}`;
       return { name: label.length > 100 ? `${label.slice(0, 99)}…` : label, value: n.slice(0, 100) };
     });
     return interaction.respond(choices);

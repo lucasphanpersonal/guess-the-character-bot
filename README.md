@@ -199,7 +199,7 @@ often you'll want them:
 | | Best for |
 | --- | --- |
 | `/list toggle <list>` | One list in or out. Autocomplete finds it in three keystrokes and shows ✅/⬜ for its current state. |
-| `/list select top:<n>` | Moving the cut line wholesale — `top:200` for every category, or with `category:` for one. Only ever adds. |
+| `/list select top:<n>` | Moving the cut line wholesale — `top:200` for every category, or with `category:` for one. **Exact**: anything below the line is switched off. |
 | `/list select` | The checkbox page, for browsing and bulk work. Sorted best-known first, 75 checkboxes a page, with Enable/Disable page and Disable all. |
 
 The page is the fallback, not the main event: once the default is sensible, hunting a single
@@ -255,7 +255,7 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list image` | anyone | Attach/update a character's image |
 | `/list remove` | anyone | Remove a character |
 | `/list show` | anyone | Browse categories, lists in a category, or one list's characters |
-| `/list select` | anyone | Tick which lists the server plays with; `top:<n>` enables the N best-known instead |
+| `/list select` | anyone | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
 | `/list toggle` | anyone | Switch one named list in or out of the pool |
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
 | `/lobby join` / `/lobby leave` | players | Join or leave the waiting lobby (or use the board's buttons) |

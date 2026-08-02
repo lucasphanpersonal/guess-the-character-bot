@@ -128,12 +128,22 @@ function categoryView(guildId, categoryIndex, page) {
   const { slice, page: current, pages } = paginate(all, page, LISTS_PER_PAGE);
 
   const rows = [];
+  // Discord shows a select's PLACEHOLDER only while nothing is selected -- once options are
+  // ticked it lists them instead. After the top-N default everything on page 1 is ticked, so
+  // a placeholder saying which slice a menu covers is invisible exactly when it is needed.
+  // The ranges therefore go in the message body, where they always render.
+  const ranges = [];
   for (let menu = 0; menu < MENUS_PER_PAGE; menu++) {
     const chunk = slice.slice(menu * OPTIONS_PER_MENU, (menu + 1) * OPTIONS_PER_MENU);
     if (!chunk.length) break;
 
     const first = clamp(chunk[0].name, 20);
     const last = clamp(chunk[chunk.length - 1].name, 20);
+    const from = current * LISTS_PER_PAGE + menu * OPTIONS_PER_MENU + 1;
+    const on = chunk.filter((l) => l.enabled === 1).length;
+    ranges.push(
+      `**${from}–${from + chunk.length - 1}** ${first} → ${last} · ${on}/${chunk.length} on`
+    );
 
     rows.push(
       new ActionRowBuilder().addComponents(
@@ -206,8 +216,9 @@ function categoryView(guildId, categoryIndex, page) {
       (ranked
         ? '-# Sorted best-known first, so **Enable page** on page 1 switches on the most recognisable.\n'
         : '-# No fame ranking for this category -- sorted by name. Run `npm run backfill:popularity` to rank it.\n') +
-      `\nTick the lists you want. Clearing a menu switches its lists off.\n\n` +
-      `-# Page ${current + 1} of ${pages}`,
+      `\nTick the lists you want. Clearing a menu switches all of its lists off.\n\n` +
+      `${ranges.join('\n')}\n\n` +
+      `-# Page ${current + 1} of ${pages} · each menu below covers one range`,
     components: rows,
   };
 }

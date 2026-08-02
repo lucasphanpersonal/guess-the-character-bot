@@ -1,6 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const { categoriesView, categoryView } = require('../../components/listFilter');
-const { listCategoriesWithEnabledCounts, enableTopN } = require('../../db/characterLists');
+const { listCategoriesWithEnabledCounts, setTopN } = require('../../db/characterLists');
 
 module.exports = {
   async execute(interaction) {
@@ -25,13 +25,14 @@ module.exports = {
         ? counts.find((c) => c.category.toLowerCase() === requested.toLowerCase()).category
         : null;
 
-      const added = enableTopN(interaction.guildId, category, top);
+      const { enabled, disabled } = setTopN(interaction.guildId, category, top);
       const scope = category ? `**${category}**` : 'every category';
       const nowOn = listCategoriesWithEnabledCounts(interaction.guildId).reduce((sum, c) => sum + c.enabled, 0);
       return interaction.reply({
         content:
-          `✅ Enabled the top ${top} in ${scope} -- ${added} newly switched on, **${nowOn}** lists enabled in total.\n` +
-          '-# Only adds; nothing already enabled was turned off. Run `/list select` to fine-tune.',
+          `✅ ${scope} is now exactly its top ${top} -- ${enabled} switched on, ${disabled} switched ` +
+          `off, **${nowOn}** lists enabled in total.\n` +
+          '-# Anything below the line is off, including hand-picked extras. `/list toggle` puts one back.',
         flags: MessageFlags.Ephemeral,
       });
     }

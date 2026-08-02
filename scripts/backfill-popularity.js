@@ -28,7 +28,7 @@ const {
   clearPopularity,
   listLists,
   getCharacters,
-  enableTopN,
+  setTopN,
   disableAllLists,
   listCategoriesWithEnabledCounts,
   setCharacterFame,
@@ -175,8 +175,8 @@ function main() {
     console.log(`\nCleared the selection (${cleared} lists reset to off).`);
   }
 
-  const added = enableTopN(guildId, null, top);
-  console.log(`Enabled the top ${top} of each category -- ${added} newly switched on.`);
+  const { enabled, disabled } = setTopN(guildId, null, top);
+  console.log(`Every category is now exactly its top ${top} -- ${enabled} on, ${disabled} off.`);
   for (const c of listCategoriesWithEnabledCounts(guildId)) {
     console.log(`  ${c.category}: ${c.enabled} of ${c.count}`);
   }

@@ -268,14 +268,34 @@ module.exports = {
     }
 
     // No category given: every category gets its own top 5, not 5 lists overall.
-    lists.enableTopN(guildId, null, 5);
+    lists.setTopN(guildId, null, 5);
     const enabled = lists.getEnabledLists(guildId).map((l) => l.name);
     assert.equal(enabled.length, 10);
     assert.ok(enabled.includes('Anime 00') && enabled.includes('Game 00'));
     assert.ok(!enabled.includes('Anime 05'), 'the tail stays off');
   },
 
-  'enabling the top N is additive, so a curated pick survives a re-run'() {
+  // Exact, not additive: 'top 50' means the top 50 IS the selection. The additive version
+  // could only grow one, so asking a category that already had 150 on for its top 50 did
+  // nothing at all while still reporting success.
+  'setting the top N switches off everything below the line'() {
+    const guildId = freshGuild();
+    for (let i = 0; i < 10; i++) {
+      seed(guildId, `Show ${String(i).padStart(2, '0')}`, 'Anime', { popularity: 100 - i });
+    }
+    lists.setListsEnabled(lists.listsForFilter(guildId, 'Anime').map((l) => l.id), true);
+    assert.equal(lists.getEnabledLists(guildId).length, 10);
+
+    const { enabled, disabled } = lists.setTopN(guildId, 'Anime', 3);
+    assert.equal(enabled, 0, 'the top 3 were already on');
+    assert.equal(disabled, 7);
+    assert.deepEqual(
+      lists.getEnabledLists(guildId).map((l) => l.name).sort(),
+      ['Show 00', 'Show 01', 'Show 02']
+    );
+  },
+
+  'a hand-picked extra below the line is dropped, and says so via the counts'() {
     const guildId = freshGuild();
     for (let i = 0; i < 10; i++) {
       seed(guildId, `Show ${String(i).padStart(2, '0')}`, 'Anime', { popularity: 100 - i });
@@ -283,17 +303,16 @@ module.exports = {
     const favourite = lists.getListByName(guildId, 'Show 09').id;
     lists.setListsEnabled([favourite], true);
 
-    const added = lists.enableTopN(guildId, 'Anime', 3);
-    assert.equal(added, 3, 'only counts the newly switched on');
-    const enabled = lists.getEnabledLists(guildId).map((l) => l.name);
-    assert.equal(enabled.length, 4, 'the hand-picked one was not dropped');
-    assert.ok(enabled.includes('Show 09'));
+    const { enabled, disabled } = lists.setTopN(guildId, 'Anime', 3);
+    assert.equal(enabled, 3);
+    assert.equal(disabled, 1, 'the hand-picked one was below the line');
+    assert.ok(!lists.getEnabledLists(guildId).some((l) => l.name === 'Show 09'));
   },
 
   'asking for more than a category holds enables all of it without erroring'() {
     const guildId = freshGuild();
     seed(guildId, 'Only One', 'Anime', { popularity: 5 });
-    assert.equal(lists.enableTopN(guildId, 'Anime', 100), 1);
+    assert.equal(lists.setTopN(guildId, 'Anime', 100).enabled, 1);
     assert.equal(lists.getEnabledLists(guildId).length, 1);
   },
 
@@ -379,6 +398,9 @@ module.exports = {
     const byValue = Object.fromEntries(choices.map((c) => [c.value, c.name]));
     assert.match(byValue['Enabled Show'], /^✅/);
     assert.match(byValue['Disabled Show'], /^⬜/);
+    // The category too, so picking one list out of thousands doesn't need prior knowledge
+    // of which shelf it is on.
+    assert.match(byValue['Enabled Show'], /Anime/);
   },
 
   'a list created by hand is enabled straight away'() {
