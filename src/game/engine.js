@@ -608,9 +608,7 @@ async function announceCompletion(client, lobby, playerId) {
   const turns = game.finishedBy.get(playerId);
   const stillGuessing = game.activePlayers.length;
   const channel = await getChannel(client, lobby);
-  const tail = stillGuessing
-    ? ` ${stillGuessing} still guessing.`
-    : '';
+  const tail = stillGuessing ? ` ${stillGuessing} still guessing.` : '';
   await channel.send(
     characterMessage(
       `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
@@ -713,11 +711,17 @@ async function finalizeGame(client, lobby) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  const names = await Promise.all(game.turnOrder.map((id) => displayName(client, id)));
+  // Only the characters nobody has seen yet. Everyone who got theirs had it revealed at that
+  // moment, so repeating it here put the same name and artwork in the channel twice in a row
+  // -- and in a game where everybody finished, the whole reveal was a duplicate of the two
+  // messages above it. What is left is the one genuinely unanswered question: what the player
+  // who gave up was wearing.
+  const unrevealed = game.turnOrder.filter((id) => !game.finishedBy.has(id));
+  const names = await Promise.all(unrevealed.map((id) => displayName(client, id)));
   const reveal = await channel.send({
     ...characterMessage(
       voteLines.length ? `${resultLine}\n\n🗳️ **How the audience voted**\n${voteLines.join('\n')}` : resultLine,
-      game.turnOrder.map((id, i) => ({
+      unrevealed.map((id, i) => ({
         label: `${names[i]}'s character was`,
         ...game.headByPlayer[id],
       }))

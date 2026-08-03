@@ -81,8 +81,7 @@ function getLeaderboard(guildId, limit = 10) {
          SUM(CASE WHEN gp.outcome = 'won' AND winners.n = 1 THEN 1 ELSE 0 END) AS wins,
          SUM(CASE WHEN gp.outcome = 'won' AND winners.n > 1 THEN 1 ELSE 0 END) AS ties,
          SUM(CASE WHEN gp.outcome <> 'won' THEN 1 ELSE 0 END) AS losses,
-         COUNT(*) AS total,
-         MIN(gp.turns_taken) AS bestTurns
+         COUNT(*) AS total
        FROM game_players gp
        JOIN games g ON g.id = gp.game_id
        JOIN (

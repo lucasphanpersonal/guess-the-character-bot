@@ -228,6 +228,37 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Each character is revealed the moment its wearer gets it, so repeating them in the final
+  // message put the same name and artwork in the channel twice running.
+  async 'the reveal shows only characters nobody has seen yet'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    await guess(ctx, 'p1', true); // Mario revealed here
+    await engine.handleTimeout(ctx.client, ctx.lobby);
+    await guess(ctx, 'p2', false);
+    await guess(ctx, 'p2', true); // Luigi revealed here
+
+    const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`);
+    assert.deepEqual(reveal.payload.embeds, [], 'both were already revealed on completion');
+    assert.match(reveal.content, /<@p1> wins/);
+    // ...but each was still shown exactly once, on the way past.
+    const shown = channelText(ctx).match(/They were wearing/g) ?? [];
+    assert.equal(shown.length, 2);
+    cleanup(ctx);
+  },
+
+  async 'a character nobody got is revealed at the end'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    await guess(ctx, 'p1', true);
+    await pass(ctx, 'p2'); // gives up -- Luigi was never revealed
+
+    const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`);
+    assert.equal(reveal.payload.embeds.length, 1, 'only the one still unanswered');
+    assert.match(reveal.payload.embeds[0].data.description, /Luigi/);
+    cleanup(ctx);
+  },
+
   async 'the last player still guessing can give up, and Pass says so'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);

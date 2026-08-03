@@ -79,24 +79,25 @@ module.exports = {
         {
           name: '3️⃣ On your turn',
           value:
-            'A **turn board** appears with a live countdown, your guesses so far, and two ' +
+            'A **turn board** appears with a live countdown, the standings so far, and two ' +
             'rows of buttons -- one per player:\n' +
             '⚖️ **The other player judges.** They can see your character, so when you call a ' +
-            'name out loud they hit **✅ They got it** or **❌ Nope**. That is the main way a ' +
-            'turn resolves -- you never stop talking to log a guess, and the ❌ button keeps ' +
-            'a running count.\n' +
+            'name out loud they hit **✅ They got it** or **❌ Nope**. That is how a turn ' +
+            'resolves -- you never stop talking to log a guess.\n' +
             '⏭️ **Pass** is your only button -- there is no guess box, because the judge ' +
             'already decides whether you got it.\n' +
-            "Guessing wrong doesn't end your turn, so guess early and often. Only **Pass**, or " +
-            "running out of time, actually hands it over (once time's up the board goes amber " +
-            'for one truly last guess).',
+            "Guessing wrong costs you nothing and isn't counted, so guess early and often. " +
+            "Only **Pass**, or running out of time, hands the turn over (once time's up the " +
+            'board goes amber for one truly last guess).',
         },
         {
-          name: '🏆 Winning',
+          name: '🏆 Winning: fewest turns',
           value:
-            'First correct guess wins the game -- unless it was the player who went first that ' +
-            "round, in which case the other player gets one rebuttal turn before it's final " +
-            '(correct on rebuttal = tie, wrong = the first player wins).',
+            'Getting your character ends **your** part, not the game: it is revealed there and ' +
+            'then, you drop out, and everyone else keeps playing until they get theirs. ' +
+            'Whoever needed the fewest turns wins, and the same number of turns is a tie.\n' +
+            'Once you are the last one still guessing there is nobody to pass to, so ⏭️ Pass ' +
+            'becomes 🏳️ **Give up** -- the only way to end a game early.',
         },
         {
           name: '✍️ What counts as a correct guess',
@@ -108,10 +109,10 @@ module.exports = {
         {
           name: '🛠️ Anytime',
           value:
-            '`/lobby status` -- whose turn it is and time left\n' +
+            '`/lobby status` -- whose turn it is, time left, and who has already finished\n' +
             '`/lobby end` -- host or admin can cancel a stuck game\n' +
-            '`/rematch` -- replay with the same two players (order swapped) once a game finishes\n' +
-            '`/leaderboard [player]` -- server win/loss standings, or one player\'s record\n' +
+            '`/rematch` -- replay with the same two players once a game finishes\n' +
+            '`/leaderboard [player]` -- server standings, or one player\'s record and turn counts\n' +
             'The end-of-game reveal also has **Rematch** and **Leaderboard** buttons.',
         }
       );

@@ -121,7 +121,7 @@ module.exports = {
     const before = buildTurnBoardPayload(game, ctx.channelId).embeds[0].toJSON();
     const standings = before.fields.find((f) => f.name === 'Standings');
     assert.match(standings.value, /🎯 <@p1> — turn 1 \(guessing\)/);
-    assert.match(standings.value, /⏳ <@p2> — turn 0/);
+    assert.match(standings.value, /⏳ <@p2> — not started yet/);
 
     await press(ctx, 'p2', 'right');
     const after = buildTurnBoardPayload(game, ctx.channelId).embeds[0].toJSON();

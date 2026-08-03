@@ -58,7 +58,9 @@ happen live between humans in voice.
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
 6. **On your turn**, a **turn board** appears — one message with a live countdown bar, the
-   standings so far, and two rows of buttons, one per player:
+   standings so far, and two rows of buttons, one per player. It mentions you in the message
+   itself rather than only inside the embed, because Discord doesn't send a notification for
+   an embed mention, and with several players there can be minutes between your turns:
 
    - **The other player judges.** They can see your character, so when you say a name out
      loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
@@ -85,8 +87,12 @@ happen live between humans in voice.
 7. **Winning: fewest turns.** Getting your character doesn't end the game — it ends *your*
    involvement. Your character is revealed then and there, you drop out of the rotation, and
    everyone else plays on until they get theirs. The player who needed the fewest turns wins,
-   and an equal count is a tie with no tiebreaker. The reveal comes with **Rematch** and
-   **Leaderboard** buttons.
+   and an equal count is a tie with no tiebreaker.
+
+   The end-of-game message carries **Rematch** and **Leaderboard** buttons, and shows only the
+   characters *nobody* saw — in practice the one belonging to a player who gave up. Everyone
+   who finished had theirs revealed at the time, and printing them again put the same name and
+   artwork in the channel three times running.
 
    Once you're the last player still guessing there's nobody to pass to, so **⏭️ Pass**
    becomes **🏳️ Give up** — relabelled and red, rather than quietly changing meaning under

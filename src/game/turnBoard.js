@@ -24,15 +24,20 @@ function timerBar(remainingMs, totalMs) {
 // otherwise invisible -- without this the players would be reconstructing it by counting
 // messages. Rendered as lines in one field rather than a field per player, which stops
 // looking like a scoreboard and starts looking like a spreadsheet at about four.
-function standingsField(game) {
+// `turnOver` freezes the "currently guessing" marker off. Without it a board that has been
+// retired still points at whoever had just been playing, because currentPlayerId does not
+// advance until the next turn starts -- so the dead board in the channel claims a turn is
+// live when it is not.
+function standingsField(game, { turnOver = false } = {}) {
   const lines = game.turnOrder.map((playerId) => {
     const done = game.finishedBy.get(playerId);
     if (done != null) return `✅ <@${playerId}> — turn ${done}`;
     if (game.surrendered.has(playerId)) return `🏳️ <@${playerId}> — gave up`;
     const turns = game.turnsFor(playerId);
-    const marker = playerId === game.currentPlayerId ? '🎯' : '⏳';
-    const suffix = playerId === game.currentPlayerId ? ' (guessing)' : '';
-    return `${marker} <@${playerId}> — turn ${turns}${suffix}`;
+    const guessing = !turnOver && playerId === game.currentPlayerId;
+    // "turn 0" is accurate and reads like a bug, so someone yet to play says so.
+    const where = turns === 0 ? 'not started yet' : `turn ${turns}`;
+    return `${guessing ? '🎯' : '⏳'} <@${playerId}> — ${where}${guessing ? ' (guessing)' : ''}`;
   });
   // Mentions resolve in a field's VALUE but not in its name -- see the note below on titles.
   return { name: 'Standings', value: lines.join('\n') };
@@ -94,9 +99,8 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
     `🗣️ <@${game.currentPlayerId}> guesses out loud · ` +
     `⚖️ <@${game.judgeId}> hits ✅ or ❌`;
 
-  embed.addFields(standingsField(game));
-
   if (outcome) {
+    embed.addFields(standingsField(game, { turnOver: true }));
     if (outcome.cancelled) {
       embed.setColor(COLOR_OVER).setDescription('🛑 Game cancelled.');
     } else if (outcome.correct) {
@@ -108,8 +112,12 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
     } else {
       embed.setColor(COLOR_OVER).setDescription(`${whoseTurn}\n➡️ Turn over.`);
     }
-    return { embeds: [embed], components: [] };
+    // The mention is cleared with the buttons: a retired board should stop addressing
+    // anybody, and an edit never re-notifies in any case.
+    return { content: '', embeds: [embed], components: [] };
   }
+
+  embed.addFields(standingsField(game));
 
   // Being the last one still guessing means the whole channel is watching one person who has
   // no idea where they stand or how long anyone expects them to keep going. Saying it turns
@@ -120,14 +128,20 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
         'Keep going, or **Give up** to end it.'
       : '';
 
+  // Discord does NOT notify on a mention inside an embed, only on one in message content. So
+  // the description's mention is layout and this one is the actual "you're up" ping -- without
+  // it a player four minutes from their last turn has nothing telling them the clock started.
+  const content = `<@${game.currentPlayerId}>`;
+
   if (game.paused) {
     embed
       .setColor(COLOR_PAUSED)
       .setDescription(
         `${whoseTurn}\n⏰ **Time's up — last chance!**\n${roles}\n` +
-          `One more guess, or ${solo ? 'give up' : 'pass to hand it over'}.${solo}`
+          // The solo note already spells out the alternative, so it isn't offered twice.
+          `One more guess${solo ? '.' : ', or pass to hand it over.'}${solo}`
       );
-    return { embeds: [embed], components: buildButtons(game, channelId) };
+    return { content, embeds: [embed], components: buildButtons(game, channelId) };
   }
 
   const totalMs = game.turnSeconds * 1000;
@@ -141,7 +155,7 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
         `A wrong guess does *not* end the turn.${solo}`
     );
 
-  return { embeds: [embed], components: buildButtons(game, channelId) };
+  return { content, embeds: [embed], components: buildButtons(game, channelId) };
 }
 
 async function refreshTurnBoard(game, channelId, outcome = null) {

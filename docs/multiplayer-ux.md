@@ -80,6 +80,11 @@ one-minute cycle at the end. The same setting produces two very different games.
 
 # Part 2 — Interface changes
 
+**Shipped so far** (with stages 1–3): the standings field, the current-player ping, and the
+three defects found by reading the transcript back — see
+[What playing it back exposed](#what-playing-it-back-exposed) at the end. Still outstanding:
+deleting the previous turn's board, the two-message DM split, and the ✅ undo.
+
 ## Replace the per-turn board with a repost-and-delete board
 
 Post a new board each turn as today, then **delete the previous turn's board** once it's
@@ -182,3 +187,31 @@ last-chance behaviour are all player-count-independent. The judge row shrinks fr
 one shared row, so the component budget gets *looser*, not tighter. The lobby board, the vote
 board, the list browser and every slash command surface are unaffected apart from the Start
 gate and the vote mode's five-player limit.
+
+---
+
+# What playing it back exposed
+
+Everything above was written by reasoning about the interface. Once turn-count scoring was
+built, printing a real game's channel transcript end to end found three things that reasoning
+had not — all of them invisible in the code and obvious on the page.
+
+**A retired board went on claiming a turn was live.** `currentPlayerId` doesn't advance until
+the *next* turn starts, so a board frozen in between still rendered `🎯 … (guessing)` against
+whoever had just played. Every dead board in the channel history was pointing at a turn that
+had already ended. Fixed by passing `turnOver` into the standings renderer.
+
+**The end of the game was a duplicate of the two messages above it.** Each character is
+revealed as its wearer gets it, and the final reveal then showed all of them again — so in a
+game where both players finished, the same two names and images appeared three times in a row.
+The reveal now carries only the characters nobody has seen: in practice, the one belonging to
+a player who gave up, which is the single genuinely unanswered question at the end. When
+everybody finished, it is just the result line and the buttons.
+
+**"turn 0."** Technically correct for a player yet to move, and it reads like an off-by-one.
+Now "not started yet".
+
+The lesson worth keeping: none of these are logic errors, and no test would have been written
+for them, because each is a sentence that is *true* and reads wrong. A transcript dump is
+cheap — `test/harness.js` already records every message — and it is the only way any of this
+surfaces before a player sees it.

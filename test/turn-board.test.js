@@ -184,6 +184,26 @@ module.exports = {
     assert.equal(buildTurnBoardPayload(game, 'chan').embeds[0].toJSON().title, '🎯 Turn 4');
   },
 
+  // currentPlayerId doesn't move until the next turn starts, so a board frozen in between
+  // would otherwise sit in the channel insisting somebody is still guessing.
+  'a retired board stops claiming a turn is live'() {
+    const game = fakeGame();
+    const live = buildTurnBoardPayload(game, 'chan');
+    assert.match(live.embeds[0].toJSON().fields[0].value, /🎯 <@p1> — turn 1 \(guessing\)/);
+    assert.equal(live.content, '<@p1>', 'a live board pings whoever is up');
+
+    const over = buildTurnBoardPayload(game, 'chan', { correct: false });
+    const standings = over.embeds[0].toJSON().fields[0].value;
+    assert.ok(!/guessing/.test(standings), 'nobody is guessing on a dead board');
+    assert.match(standings, /⏳ <@p1> — turn 1/);
+    assert.equal(over.content, '', 'and it stops addressing anyone');
+  },
+
+  'a player yet to take a turn is not described as being on "turn 0"'() {
+    const standings = buildTurnBoardPayload(fakeGame(), 'chan').embeds[0].toJSON().fields[0].value;
+    assert.match(standings, /<@p2> — not started yet/);
+  },
+
   async 'turn controls on a finished game fail gracefully'() {
     const ctx = await runningGame();
     ctx.lobby.status = 'FINISHED';
