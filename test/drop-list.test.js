@@ -6,6 +6,7 @@
 
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -56,7 +57,7 @@ async function startedGame({ maxRerolls = 2, secondList = true } = {}) {
 }
 
 const press = ({ client, recorder, channelId, userId, action }) =>
-  engine.handleConfirmationButton(
+  confirmPhase.handleConfirmationButton(
     createButtonInteraction({ client, userId, customId: `${action}:${channelId}`, recorder })
   );
 

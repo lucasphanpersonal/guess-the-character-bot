@@ -9,6 +9,8 @@ const {
 const { buildTurnBoardPayload, timerBar } = require('../src/game/turnBoard');
 const { handleComponentInteraction } = require('../src/components/router');
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
+const Game = require('../src/game/Game');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -16,12 +18,24 @@ const db = require('../src/db/connection');
 
 let counter = 0;
 
+// A real Game rather than an object literal shaped like one, so the board's actual
+// dependencies are exercised instead of a stub that silently drifts from them.
+function fakeGame() {
+  const game = new Game({
+    lobby: { guildId: 'board-guild', players: ['p1', 'p2'] },
+    characters: [{ name: 'Mario' }, { name: 'Luigi' }],
+    turnSeconds: 90,
+  });
+  game.turnsTaken.set('p1', 1);
+  return game;
+}
+
 async function runningGame() {
   const n = ++counter;
   const guildId = `turn-guild-${n}`;
   const channelId = `turn-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Turn List', 'tester', 'Video Games');
   for (const name of ['Mario', 'Luigi', 'Peach']) lists.addCharacter(listId, name, 'tester');
@@ -46,7 +60,7 @@ async function runningGame() {
     { name: 'Luigi', image_url: null },
   ]);
   for (const userId of ['p1', 'p2']) {
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client, userId, customId: `confirm:${channelId}`, recorder })
     );
   }
@@ -94,9 +108,11 @@ module.exports = {
     const buttons = buttonsOf(boards[0].payload);
     // Judging leads, because guesses are called out in voice rather than typed.
     // No typed-guess control: the judge's ruling is the only authority on correctness.
-    assert.deepEqual(Object.keys(buttons).sort(), ['pass', 'right', 'wrong']);
+    // Spectate rides along because this is the only message reliably at the bottom of the
+    // channel; its audience is exactly the people the other three refuse.
+    assert.deepEqual(Object.keys(buttons).sort(), ['pass', 'right', 'spectate', 'wrong']);
     assert.equal(boards[0].payload.components.length, 2, 'one row each');
-    assert.match(boards[0].content, /Round 1/);
+    assert.match(boards[0].content, /Turn 1/);
     assert.match(boards[0].content, /<@p1>/);
     cleanup(ctx);
   },
@@ -144,36 +160,82 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'each new turn gets its own board and a clean guess tally'() {
+  async 'each new turn gets its own board'() {
     const ctx = await runningGame();
     await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', false);
-    assert.equal(ctx.lobby.game.turnGuesses.length, 1);
-
     await clickButton(ctx, 'p1', 'pass');
-    assert.equal(ctx.lobby.game.turnGuesses.length, 0, 'tally reset for p2\'s turn');
 
     const boards = ctx.recorder.sent.filter(
       (m) => m.target === `channel:${ctx.channelId}` && m.payload?.components?.length
     );
     assert.equal(boards.length, 2, 'a second board for the second turn');
+    assert.equal(ctx.lobby.game.turnsFor('p2'), 1, "and p2's own count started");
+    cleanup(ctx);
+  },
+
+  // A board per turn is fine for a short two-player game and becomes a wall at five players.
+  // Each one is deleted as its replacement posts, so the channel holds exactly the live one.
+  async 'a superseded board is deleted, so only the live one remains'() {
+    const ctx = await runningGame();
+    assert.equal(ctx.recorder.deleted.length, 0, 'the first board has nothing to replace');
+
+    await clickButton(ctx, 'p1', 'pass');
+    assert.equal(ctx.recorder.deleted.length, 1, "p1's board went when p2's posted");
+    await clickButton(ctx, 'p2', 'pass');
+    assert.equal(ctx.recorder.deleted.length, 2);
+
+    // Deleting is safe because the board is frozen first: a failed delete leaves an inert
+    // board rather than a live one.
+    const frozen = ctx.recorder.sent.filter((m) => m.target.endsWith(':edit') && !m.payload.components?.length);
+    assert.ok(frozen.length >= 2, 'each retired board had its buttons stripped before going');
+    cleanup(ctx);
+  },
+
+  async 'no turn board outlives the game'() {
+    const ctx = await runningGame();
+    await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', true); // p1 finishes
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // alone, gives up -> game over
+
+    const posted = ctx.recorder.sent.filter(
+      (m) => m.target === `channel:${ctx.channelId}` && m.payload?.components?.length
+    ).length;
+    // Every board posted was deleted; the reveal's buttons are a different message.
+    assert.equal(ctx.recorder.deleted.length, posted - 1, 'only the reveal keeps its buttons');
     cleanup(ctx);
   },
 
   'the board switches to a last-chance state when paused'() {
-    const game = {
-      rebuttal: false,
-      round: 1,
-      currentPlayerId: 'p1',
-      judgeId: 'p2',
-      turnSeconds: 90,
-      timer: null,
-      paused: true,
-      turnGuesses: [],
-      guessLog: [],
-    };
+    const game = fakeGame();
+    game.paused = true;
     const payload = buildTurnBoardPayload(game, 'chan');
     assert.match(payload.embeds[0].toJSON().description, /Time's up/);
     assert.equal(payload.components.length, 2, 'judge and guesser rows both still live');
+  },
+
+  'the board titles the turn with the current player\'s own count'() {
+    const game = fakeGame();
+    game.turnsTaken.set('p1', 4);
+    assert.equal(buildTurnBoardPayload(game, 'chan').embeds[0].toJSON().title, '🎯 Turn 4');
+  },
+
+  // currentPlayerId doesn't move until the next turn starts, so a board frozen in between
+  // would otherwise sit in the channel insisting somebody is still guessing.
+  'a retired board stops claiming a turn is live'() {
+    const game = fakeGame();
+    const live = buildTurnBoardPayload(game, 'chan');
+    assert.match(live.embeds[0].toJSON().fields[0].value, /🎯 <@p1> — turn 1 \(guessing\)/);
+    assert.equal(live.content, '<@p1>', 'a live board pings whoever is up');
+
+    const over = buildTurnBoardPayload(game, 'chan', { correct: false });
+    const standings = over.embeds[0].toJSON().fields[0].value;
+    assert.ok(!/guessing/.test(standings), 'nobody is guessing on a dead board');
+    assert.match(standings, /⏳ <@p1> — turn 1/);
+    assert.equal(over.content, '', 'and it stops addressing anyone');
+  },
+
+  'a player yet to take a turn is not described as being on "turn 0"'() {
+    const standings = buildTurnBoardPayload(fakeGame(), 'chan').embeds[0].toJSON().fields[0].value;
+    assert.match(standings, /<@p2> — not started yet/);
   },
 
   async 'turn controls on a finished game fail gracefully'() {

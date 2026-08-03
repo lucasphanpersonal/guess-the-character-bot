@@ -78,7 +78,7 @@ module.exports = {
     )
     .addSubcommand((sub) => sub.setName('join').setDescription('Join the waiting lobby as a player'))
     .addSubcommand((sub) => sub.setName('leave').setDescription('Leave the waiting lobby'))
-    .addSubcommand((sub) => sub.setName('start').setDescription('Start the game once 2 players have joined'))
+    .addSubcommand((sub) => sub.setName('start').setDescription('Start the game once at least 2 players have joined'))
     .addSubcommand((sub) =>
       sub.setName('end').setDescription('Cancel the lobby or game in this channel (host or admin only)')
     )
@@ -88,7 +88,7 @@ module.exports = {
         .setName('spectate')
         // Says "toggle" because it is one -- running it again stops you spectating, which
         // the old name and description both hid.
-        .setDescription("Toggle spectating: get both players' characters DMed to you")
+        .setDescription("Toggle spectating: get every player's character DMed to you")
     )
     .addSubcommand((sub) =>
       sub

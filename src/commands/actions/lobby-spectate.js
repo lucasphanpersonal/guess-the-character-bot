@@ -1,6 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const GameManager = require('../../game/GameManager');
-const { characterMessage } = require('../../game/engine');
+const { sendSpectatorDM } = require('../../game/engine');
 const { refreshLobbyBoard } = require('../../game/lobbyBoard');
 
 module.exports = {
@@ -21,26 +21,20 @@ module.exports = {
     lobby.spectators.add(interaction.user.id);
     await refreshLobbyBoard(lobby);
 
+    // Mid-game, there is no opening sweep left to catch them, so the DM goes out now.
     if (lobby.status === 'IN_PROGRESS' && lobby.game) {
-      const game = lobby.game;
-      const [p1Id, p2Id] = game.turnOrder;
-      try {
-        const [p1, p2] = await Promise.all([
-          interaction.client.users.fetch(p1Id),
-          interaction.client.users.fetch(p2Id),
-        ]);
-        await interaction.user.send(
-          characterMessage('🕵️ Spectator info:', [
-            { label: `${p1.username}'s head`, ...game.headByPlayer[p1Id] },
-            { label: `${p2.username}'s head`, ...game.headByPlayer[p2Id] },
-          ])
-        );
-      } catch {
-        return interaction.reply({ content: "You're spectating, but I couldn't DM you -- check your privacy settings.", flags: MessageFlags.Ephemeral });
-      }
-      return interaction.reply({ content: 'Sent you both characters via DM!', flags: MessageFlags.Ephemeral });
+      const sent = await sendSpectatorDM(interaction.client, lobby, interaction.user.id);
+      return interaction.reply({
+        content: sent
+          ? `Sent you all ${lobby.game.turnOrder.length} characters via DM!`
+          : "You're spectating, but I couldn't DM you -- check your privacy settings.",
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
-    return interaction.reply({ content: "You're now spectating -- you'll get a DM with both characters once the game starts.", flags: MessageFlags.Ephemeral });
+    return interaction.reply({
+      content: "You're now spectating -- you'll get a DM with every character once the game starts.",
+      flags: MessageFlags.Ephemeral,
+    });
   },
 };

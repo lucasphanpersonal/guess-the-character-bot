@@ -11,7 +11,15 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelect
 const { getRandomCharacters } = require('../db/characterLists');
 const { untrackBoard } = require('./boards');
 
-const SLOTS = ['1', '2'];
+// A slot per player, 1-indexed, so slot N maps to lobby.players[N-1].
+function slotsFor(lobby) {
+  return lobby.players.map((_, i) => String(i + 1));
+}
+
+// The ballot needs one select menu per player and a message holds five action rows, so this
+// mode cannot run past five however many are playing. The game itself has no cap -- see
+// Lobby.addPlayer -- so the limited surface refuses for itself instead of shrinking the game.
+const MAX_VOTE_PLAYERS = 5;
 
 // How much one press of the host's ⏱️ button buys. A vote that is still moving when the
 // clock runs out used to have only one exit -- Close -- which decides it early rather than
@@ -110,9 +118,13 @@ class AudienceVote {
     return result;
   }
 
-  /** @returns {[characterRow, characterRow]} in players order. */
+  get slots() {
+    return slotsFor(this.lobby);
+  }
+
+  /** @returns {characterRow[]} in players order. */
   resolve() {
-    return SLOTS.map((slot) => this.resolveSlot(slot).character);
+    return this.slots.map((slot) => this.resolveSlot(slot).character);
   }
 
   /**
@@ -123,7 +135,7 @@ class AudienceVote {
    * and until now it was resolved and then silently thrown away.
    */
   summarise() {
-    return SLOTS.map((slot) => {
+    return this.slots.map((slot) => {
       const { votes, character } = this.resolveSlot(slot);
       const { distinct, tied } = this.shapeForSlot(slot);
       return {
@@ -142,12 +154,16 @@ class AudienceVote {
   }
 }
 
-// Draws 2 * voteOptions distinct characters and splits them into disjoint per-player sets.
+// Draws players * voteOptions distinct characters and splits them into disjoint per-player
+// sets -- disjoint because one character can only sit on one head.
 function drawCandidates(lobby) {
-  const wanted = lobby.voteOptions * 2;
+  const perPlayer = lobby.voteOptions;
+  const wanted = perPlayer * lobby.players.length;
   const drawn = getRandomCharacters(lobby.listIds, wanted, [], lobby.difficulty);
   if (drawn.length < wanted) return null;
-  return { 1: drawn.slice(0, lobby.voteOptions), 2: drawn.slice(lobby.voteOptions) };
+  return Object.fromEntries(
+    lobby.players.map((_, i) => [String(i + 1), drawn.slice(i * perPlayer, (i + 1) * perPlayer)])
+  );
 }
 
 // PUBLIC board. Deliberately contains no character names -- see the note at the top.
@@ -159,13 +175,13 @@ function buildVoteBoardPayload(vote) {
     .setDescription(
       vote.closed
         ? 'Voting is closed — characters locked in!'
-        : `The audience decides what <@${lobby.players[0]}> and <@${lobby.players[1]}> are wearing.\n` +
+        : `The audience decides what ${lobby.players.map((id) => `<@${id}>`).join(', ')} are wearing.\n` +
           '**Players can\'t vote** (and won\'t be shown the options).'
     )
     .addFields(
       // The shape of each tally, never its contents -- a board that showed only a total had
       // nothing to react to for the whole voting window.
-      ...SLOTS.map((slot) => ({
+      ...vote.slots.map((slot) => ({
         name: `Player ${slot}`,
         value: vote.describeSlot(slot),
         inline: true,
@@ -206,7 +222,7 @@ function buildVoteBoardPayload(vote) {
 // than leaving them to infer that a second pick replaced the first instead of adding to it.
 function buildBallotPayload(vote, voterId, { justPicked = null } = {}) {
   const ballot = vote.ballots.get(voterId) ?? {};
-  const rows = SLOTS.map((slot) => {
+  const rows = vote.slots.map((slot) => {
     const chosen = ballot[slot];
     return new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -222,7 +238,7 @@ function buildBallotPayload(vote, voterId, { justPicked = null } = {}) {
     );
   });
 
-  const summary = SLOTS.map((slot) => {
+  const summary = vote.slots.map((slot) => {
     const playerId = vote.playerIdForSlot(slot);
     return `Player ${slot} (<@${playerId}>): ${ballot[slot] ? `**${ballot[slot]}**` : '_no vote yet_'}`;
   }).join('\n');
@@ -260,7 +276,8 @@ function clearVoteTimer(vote) {
 
 module.exports = {
   AudienceVote,
-  SLOTS,
+  slotsFor,
+  MAX_VOTE_PLAYERS,
   EXTEND_SECONDS,
   drawCandidates,
   buildVoteBoardPayload,

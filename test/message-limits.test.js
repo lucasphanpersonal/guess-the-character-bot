@@ -40,7 +40,7 @@ module.exports = {
     const guildId = freshGuild();
     const listIds = seedCategory(guildId);
 
-    const message = rematchAnnouncement({ listIds }, 'player-one', 'player-two');
+    const message = rematchAnnouncement({ listIds }, ['player-one', 'player-two']);
     assert.ok(
       message.length <= DISCORD_CONTENT_LIMIT,
       `rematch announcement is ${message.length} chars, over Discord's ${DISCORD_CONTENT_LIMIT}`
@@ -74,7 +74,7 @@ module.exports = {
     assert.ok(label.length <= DISCORD_CONTENT_LIMIT, `label is ${label.length} chars`);
     assert.equal(label, '200 lists');
 
-    const message = rematchAnnouncement({ listIds: ids }, 'a', 'b');
+    const message = rematchAnnouncement({ listIds: ids }, ['a', 'b']);
     assert.ok(message.length <= DISCORD_CONTENT_LIMIT, `rematch is ${message.length} chars`);
   },
 
@@ -85,6 +85,6 @@ module.exports = {
     lists.addCharacter(a, 'Naruto Uzumaki', 'tester');
     lists.addCharacter(b, 'Ichigo Kurosaki', 'tester');
 
-    assert.match(rematchAnnouncement({ listIds: [a, b] }, 'a', 'b'), /Naruto \(Anime\) \+ Bleach \(Anime\)/);
+    assert.match(rematchAnnouncement({ listIds: [a, b] }, ['a', 'b']), /Naruto \(Anime\) \+ Bleach \(Anime\)/);
   },
 };

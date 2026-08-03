@@ -27,9 +27,19 @@ const DRAWN_MEDIA = new Set(['Cartoon', 'Video Games']);
 
 const isAniListImage = (url) => /(^|\.)anilist\.co\//.test(url) || url.includes('anilistcdn');
 
+// Fandom is the same KIND of source as AniList, which is why it clears the same bar: a
+// character's page on their own show's wiki carries an image filed against that character --
+// a still or official art for animation, the actor in costume for live action. Either way it
+// is the canonical look.
+//
+// That is the thing Commons could never promise. Commons answers "an image associated with
+// this item", which is how Woody became a photograph of a theme-park mascot; a franchise wiki
+// answers "a picture of this character", which is the question actually being asked.
+const isFandomImage = (url) => /(^|\.)(fandom\.com|wikia\.nocookie\.net|wikia\.com)\//.test(url);
+
 function imageIsTrustworthy(category, imageUrl) {
   if (!imageUrl) return false;
-  if (isAniListImage(imageUrl)) return true;
+  if (isAniListImage(imageUrl) || isFandomImage(imageUrl)) return true;
   return !DRAWN_MEDIA.has(category);
 }
 
@@ -37,4 +47,10 @@ function imageIsTrustworthy(category, imageUrl) {
 const trustworthyImageOrNull = (category, imageUrl) =>
   imageIsTrustworthy(category, imageUrl) ? imageUrl : null;
 
-module.exports = { imageIsTrustworthy, trustworthyImageOrNull, isAniListImage, DRAWN_MEDIA };
+module.exports = {
+  imageIsTrustworthy,
+  trustworthyImageOrNull,
+  isAniListImage,
+  isFandomImage,
+  DRAWN_MEDIA,
+};

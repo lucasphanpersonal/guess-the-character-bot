@@ -18,8 +18,13 @@ module.exports = {
       if (!stats.total) {
         return interaction.reply({ content: `<@${player.id}> hasn't finished a game yet.`, flags: MessageFlags.Ephemeral });
       }
+      // Turn counts only exist for games played under turn-count scoring, so games migrated
+      // from before it are silently left out of this rather than guessed at.
+      const turns = stats.bestTurns
+        ? ` — best **${stats.bestTurns}** turn${stats.bestTurns === 1 ? '' : 's'}, averaging **${stats.avgTurns.toFixed(1)}**`
+        : '';
       return interaction.reply(
-        `📊 <@${player.id}>: **${formatRecord(stats.wins, stats.losses, stats.ties)}** (${stats.total} game${stats.total === 1 ? '' : 's'})`
+        `📊 <@${player.id}>: **${formatRecord(stats.wins, stats.losses, stats.ties)}** (${stats.total} game${stats.total === 1 ? '' : 's'})${turns}`
       );
     }
 

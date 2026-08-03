@@ -17,7 +17,7 @@ module.exports = {
 
     if (lobby.status === 'WAITING') {
       return interaction.reply({
-        content: `Lobby waiting for players (${lobby.players.length}/2): ${
+        content: `Lobby waiting for players (${lobby.players.length} so far): ${
           lobby.players.map((id) => `<@${id}>`).join(', ') || 'none yet'
         }`,
         flags: MessageFlags.Ephemeral,
@@ -45,16 +45,22 @@ module.exports = {
     }
 
     const game = lobby.game;
-    const label = game.rebuttal ? 'Rebuttal turn' : `Round ${game.round}`;
+    const label = `Turn ${game.turnsFor(game.currentPlayerId)}`;
+    // Everyone plays until they get theirs, so who's already out is half the state.
+    const done = game.turnOrder
+      .filter((id) => game.finishedBy.has(id))
+      .map((id) => `<@${id}> (turn ${game.finishedBy.get(id)})`);
+    const doneLine = done.length ? `\nAlready done: ${done.join(', ')}.` : '';
+
     if (game.paused) {
       return interaction.reply({
-        content: `${label} -- time's up for <@${game.currentPlayerId}>, waiting on their final \`/guess\` or \`/pass\`.`,
+        content: `${label} -- time's up for <@${game.currentPlayerId}>, waiting on a final ruling or a pass.${doneLine}`,
         flags: MessageFlags.Ephemeral,
       });
     }
     const remainingS = Math.ceil((game.timer?.remainingMs() ?? 0) / 1000);
     return interaction.reply({
-      content: `${label} -- it's <@${game.currentPlayerId}>'s turn, ~${remainingS}s left.`,
+      content: `${label} -- it's <@${game.currentPlayerId}>'s turn, ~${remainingS}s left.${doneLine}`,
       flags: MessageFlags.Ephemeral,
     });
   },

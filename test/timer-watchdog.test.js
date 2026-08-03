@@ -6,6 +6,7 @@ const { assert, createRecorder, createFakeClient, createButtonInteraction } = re
 
 const timerWatchdog = require('../src/game/timerWatchdog');
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -47,7 +48,7 @@ async function startedGame(options) {
   const ctx = makeLobby(options);
   await engine.startGame(ctx.client, ctx.lobby, [{ name: 'Mario' }, { name: 'Luigi' }]);
   for (const userId of ['p1', 'p2']) {
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId, customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
     );
   }

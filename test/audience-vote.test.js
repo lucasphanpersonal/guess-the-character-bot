@@ -1,6 +1,7 @@
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const {
   AudienceVote,
   drawCandidates,
@@ -27,7 +28,7 @@ function makeLobby({ voteOptions = 5, voteSeconds = 60, mode = 'audience-vote' }
   const guildId = `vote-guild-${n}`;
   const channelId = `vote-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Vote List', 'tester', 'Video Games');
   for (const name of CHARACTERS) lists.addCharacter(listId, name, 'tester');
@@ -292,7 +293,7 @@ module.exports = {
     const votedButtons = votedDm.payload.components[0].toJSON().components;
     assert.equal(votedButtons.length, 1, 'confirm only');
     assert.equal(votedButtons[0].label, 'Ready');
-    assert.match(votedDm.content, /audience picked/i);
+    assert.match(votedDm.content, /chosen by the audience/i);
     cleanup(voted);
 
     const classic = makeLobby({ mode: 'classic' });
@@ -463,7 +464,7 @@ module.exports = {
     // Play it out for real: confirm both, then guess correctly, so the reveal is produced
     // by the same path a live game takes.
     for (const userId of ['p1', 'p2']) {
-      await engine.handleConfirmationButton(
+      await confirmPhase.handleConfirmationButton(
         createButtonInteraction({
           client: ctx.client,
           userId,

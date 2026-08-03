@@ -39,13 +39,14 @@ function makeLobby({ hostId = 'host', players = [] } = {}) {
 }
 
 // The board's buttons are what users actually click, so assert against their rendered state.
+// Both rows, since the host controls live on the second one.
 function buttonsOf(payload) {
-  const row = payload.components[0];
-  if (!row) return {};
   const out = {};
-  for (const c of row.toJSON().components) {
-    const action = c.custom_id.split(':')[1];
-    out[action] = { label: c.label, disabled: Boolean(c.disabled) };
+  for (const row of payload.components ?? []) {
+    for (const c of row.toJSON().components) {
+      const action = c.custom_id.split(':')[1];
+      out[action] = { label: c.label, disabled: Boolean(c.disabled) };
+    }
   }
   return out;
 }
@@ -57,7 +58,7 @@ function click({ channelId, userId, action, recorder, client }) {
 }
 
 module.exports = {
-  'the board shows player count and disables Start until two players have joined'() {
+  'Start unlocks at two players, and Join never fills up'() {
     const { lobby } = makeLobby();
     let buttons = buttonsOf(buildLobbyBoardPayload(lobby));
     assert.equal(buttons.start.disabled, true, 'Start disabled with 0 players');
@@ -70,8 +71,22 @@ module.exports = {
     lobby.addPlayer('p2');
     buttons = buttonsOf(buildLobbyBoardPayload(lobby));
     assert.equal(buttons.start.disabled, false, 'enabled at 2 players');
-    assert.equal(buttons.join.disabled, true, 'Join disabled once full');
-    assert.equal(buttons.join.label, 'Lobby full');
+
+    // There is no maximum -- how many a table can stand is the players' call.
+    for (const id of ['p3', 'p4', 'p5', 'p6', 'p7']) lobby.addPlayer(id);
+    buttons = buttonsOf(buildLobbyBoardPayload(lobby));
+    assert.equal(buttons.join.disabled, false, 'Join never disables');
+    assert.equal(buttons.join.label, 'Join');
+    assert.match(buttons.start.label, /Start game \(7\)/);
+  },
+
+  // A modal holds five text inputs and hand-picking needs one per player, so the button
+  // disables itself rather than opening something that cannot be built.
+  'hand-picking characters switches off past five players'() {
+    const { lobby } = makeLobby({ players: ['p1', 'p2', 'p3', 'p4', 'p5'] });
+    assert.equal(buttonsOf(buildLobbyBoardPayload(lobby)).characters.disabled, false, 'fine at five');
+    lobby.addPlayer('p6');
+    assert.equal(buttonsOf(buildLobbyBoardPayload(lobby)).characters.disabled, true, 'off at six');
   },
 
   'the board lists the joined players and the host'() {
@@ -79,7 +94,7 @@ module.exports = {
     const json = buildLobbyBoardPayload(lobby).embeds[0].toJSON();
     assert.match(json.description, /<@hostUser>/, 'host is mentioned');
     const playersField = json.fields.find((f) => f.name.startsWith('Players'));
-    assert.match(playersField.name, /1\/2/);
+    assert.match(playersField.name, /Players \(1\)/);
     assert.match(playersField.value, /<@p1>/);
   },
 
@@ -107,7 +122,7 @@ module.exports = {
     // interaction.update means the click edited the board message itself.
     const update = recorder.sent.find((m) => m.target === 'update:p1');
     assert.ok(update, 'board was updated rather than a new message posted');
-    assert.match(update.payload.embeds[0].toJSON().fields[0].name, /1\/2/);
+    assert.match(update.payload.embeds[0].toJSON().fields[0].name, /Players \(1\)/);
     GameManager.endLobby(channelId);
   },
 
@@ -122,14 +137,13 @@ module.exports = {
     GameManager.endLobby(channelId);
   },
 
-  async 'a third player is told to spectate instead'() {
+  async 'a third player just joins'() {
     const { lobby, channelId } = makeLobby({ players: ['p1', 'p2'] });
     const recorder = createRecorder();
     const client = createFakeClient(recorder);
 
     await click({ channelId, userId: 'p3', action: 'join', recorder, client });
-    assert.equal(lobby.players.length, 2);
-    assert.match(recorder.allText(), /Spectate/);
+    assert.deepEqual(lobby.players, ['p1', 'p2', 'p3']);
     GameManager.endLobby(channelId);
   },
 

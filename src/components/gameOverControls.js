@@ -33,11 +33,11 @@ async function handle(interaction) {
       );
     }
 
-    const { lobby, firstPlayer, secondPlayer } = createRematchLobby(previous, interaction.user.id);
+    const { lobby, players } = createRematchLobby(previous, interaction.user.id);
     // A fresh board is posted rather than editing the reveal, so the finished game's
     // result stays readable in the channel history.
     const message = await interaction.reply({
-      content: rematchAnnouncement(lobby, firstPlayer, secondPlayer),
+      content: rematchAnnouncement(lobby, players),
       ...buildLobbyBoardPayload(lobby),
       withResponse: true,
     });

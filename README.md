@@ -1,9 +1,9 @@
 # Guess the Character Bot
 
 A Discord bot that hosts "Guess the Character" (the Hedbanz-style game from The Best in
-Jest): two players are each secretly assigned a character they **can't see themselves**, and
-take alternating turns asking yes/no questions out loud in voice chat until someone guesses
-who they are.
+Jest): every player is secretly assigned a character they **can't see themselves**, and they
+take turns asking yes/no questions out loud in voice chat until they work out who they are.
+Two people or ten — there's no upper limit.
 
 The bot is the impartial host. It deals characters, DMs each player what they need to know,
 runs the turn clock, judges guesses, and keeps score — all the actual questions and answers
@@ -40,60 +40,120 @@ happen live between humans in voice.
    so turn length, rerolls and the vote tuning can all be changed after the lobby is open —
    nothing has to be decided up front on the `/lobby create` line. Settings lock once the
    game starts.
-3. **Two people join.** The host doesn't have to be one of them. Anyone else can spectate to
-   get both characters DMed to them — and anyone already sitting in the same voice channel
-   as the players is auto-added as a spectator. **Start game** stays disabled until exactly
-   two players have joined.
+3. **People join.** Two is the minimum and there is **no maximum** — how many a table can
+   stand is the players' call, not the bot's. The host doesn't have to be one of them. Anyone
+   else can spectate to get every character DMed to them, and anyone already sitting in the
+   same voice channel as the players is auto-added as a spectator. **Start game** unlocks at
+   two.
+
+   A handful of *surfaces* do have ceilings, and they refuse for themselves rather than
+   capping the game: hand-picking characters needs a box per player and a modal holds five;
+   the audience ballot needs a menu per player and a message holds five rows. Both say so.
+   Anything that outgrows a message (the spectator DM, the reference DM) splits across
+   several instead.
 4. **Optionally `/lobby set-characters`** (host only) to hand-pick each player's character instead
    of leaving it to chance. The confirmation is ephemeral, so it can't spoil anything even
    though you type it in the shared channel.
-5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player
-   gets a DM showing the *other* player's character — that's what they'll use to answer
-   questions — along with the show or film it's from, since a name on its own is often
-   ambiguous (there's a Ditto in Pokémon *and* Ben 10, an Ed in Ed Edd n Eddy *and* Cowboy
-   Bebop). Spectators and the final reveal show the same. The DM carries **Good to go** /
-   **Reroll** buttons: either player can reroll a character they don't recognize (or think
-   the wearer won't). Turn 1 doesn't begin until both confirm.
+5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player gets
+   **two DMs**: the character they're *checking*, with the buttons beside it, and a
+   component-free list of everyone else's, so they can answer questions about them. Between
+   them that's every character but their own. Each comes with the show or film it's from,
+   since a name alone is often ambiguous (there's a Ditto in Pokémon *and* Ben 10, an Ed in
+   Ed Edd n Eddy *and* Cowboy Bebop).
+
+   It's two messages because Discord renders buttons after *every* embed — in one message the
+   controls would sit below a stack of cards with nothing saying which one they act on.
+
+   **You check exactly one character: the next player's, round the rotation.** So every
+   character has one person who may reroll it, and at two players that's each other, exactly
+   as before. One checker each is what stops two people rejecting the same character at once,
+   and stops one player's unfamiliarity overriding everyone who was happy with it. A reroll
+   re-renders the copy every *other* player is holding, since characters are shared rather
+   than per-viewer. Turn 1 doesn't begin until everyone confirms.
+
+   **Good to go isn't final.** A locked-in player keeps an **↩️ Unlock** button and can go
+   back to rerolling right up until the last person is in — the pressure to decide comes from
+   everyone waiting, not from the button being a one-way door. The moment play begins those
+   buttons are stripped, because an Unlock on a running game would be a lie; the DM stays as
+   your reference for the character you'll be answering questions about all game.
 
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
-6. **On your turn**, a **turn board** appears — one message with a live countdown bar, your
-   running guess history, and two rows of buttons, one per player:
+6. **On your turn**, a **turn board** appears — one message with a live countdown bar, the
+   standings so far, and two rows of buttons, one per player. It mentions you in the message
+   itself rather than only inside the embed, because Discord doesn't send a notification for
+   an embed mention, and with several players there can be minutes between your turns:
 
-   - **The other player judges.** They can see your character, so when you say a name out
-     loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
-     guesses get called out in voice and never reach a bot that only sees typing. The ❌
-     button carries a running count, so presses visibly land.
+   - **Everyone else judges.** They can all see your character, so when you say a name out
+     loud whoever is paying attention hits **✅ They got it** or **❌ Nope** — first press
+     decides. That's how a turn resolves, because guesses get called out in voice and never
+     reach a bot that only sees typing. Players who've already finished keep judging: they
+     were told every character at the start, so they stay useful instead of becoming
+     spectators.
+
+     **✅ asks to confirm; ❌ doesn't.** The two sit side by side and only one is reversible —
+     a stray ❌ costs nothing, while a stray ✅ ends the turn *and* publishes the character
+     you're wearing, which no undo can retract once you've seen it. ✅ lands once per player
+     per game, so the extra tap is cheap where it matters.
    - **You get ⏭️ Pass**, and nothing else. There is deliberately no way to submit a written
      guess: the judge's ✅ already answers *was that right?*, and a second control for the
      same question would mean two authorities on it.
 
-   **A wrong guess does _not_ end your turn.** Only **Pass**, or running out of time, hands
-   it over — and when the clock hits zero the board turns amber for one final guess rather
-   than ending outright. `/pass` also works as a command.
+   **A wrong guess does _not_ end your turn**, and costs you nothing at all — it isn't
+   counted anywhere. Only **Pass**, or running out of time, hands the turn over, and when
+   the clock hits zero the board turns amber for one final guess rather than ending outright.
+   `/pass` also works as a command.
 
-   The board shows your running guess count for the whole game, not just this turn, and the
-   reveal reports how many it took. It's a count rather than a list because the bot only
-   hears *that* you guessed, never *what* — so remembering you already tried Levi is the
-   other player's job, exactly as it is at a real table.
+   The board's **Standings** field is the score: who has got theirs and on which turn.
 
-   #### Why the other player does the clicking
+   Each turn posts a fresh board and **deletes the one before it**, so the channel holds
+   exactly one and it's always at the bottom. A board per turn is fine for a short two-player
+   game and becomes a wall of dead greys at five. What survives a game is the completion
+   messages and the final result — the parts worth scrolling back to.
 
-   The person guessing is thinking, talking, and racing a clock. The person listening has
-   nothing to do and already knows the answer — in the physical game they're the judge
-   anyway. Asking the busy player to log their own guesses meant most guesses went
-   unrecorded, and *unevenly*: the players conscientious enough to click looked worse than
-   the ones who didn't. Moving the input to the idle player makes the count honest, and
-   retires fuzzy matching from that path entirely — a human deciding whether "Shikamaru"
-   counts beats Levenshtein deciding it.
-7. **Winning:** the first correct guess wins — unless it was the player who moved first that
-   round, in which case the other player gets one rebuttal turn to even it up (correct on
-   rebuttal = tie, wrong = the first player wins). The reveal comes with **Rematch** and
-   **Leaderboard** buttons.
+   The board also carries **👁 Spectate**, for anyone who wandered in after the game started.
+   It's here rather than only on the lobby board because the lobby board loses its buttons the
+   moment play begins and is buried up the channel by turn three — this is the one message
+   reliably at the bottom. Its audience is exactly the people the other buttons refuse.
 
-`/lobby status` shows whose turn it is and the time left. `/lobby end` cancels a stuck game (host
-or a server admin). After a game, `/rematch` replays it with the same two players (turn
-order swapped) and `/leaderboard` shows the standings.
+   #### Why everyone else does the clicking
+
+   The person guessing is thinking, talking, and racing a clock. Everyone listening has
+   nothing to do and already knows the answer — in the physical game they're the judges
+   anyway. Asking the busy player to report their own guesses meant most guesses never
+   reached the bot at all, which is half the reason nothing is scored on them any more.
+   Moving the input to the idle player also retires fuzzy matching from that path entirely —
+   a human deciding whether "Shikamaru" counts beats Levenshtein deciding it.
+7. **Winning: fewest turns.** Getting your character doesn't end the game — it ends *your*
+   involvement. Your character is revealed then and there, you drop out of the rotation, and
+   everyone else plays on until they get theirs. The player who needed the fewest turns wins,
+   and an equal count is a tie with no tiebreaker.
+
+   The end-of-game message carries **Rematch** and **Leaderboard** buttons, and shows only the
+   characters *nobody* saw — in practice the one belonging to a player who gave up. Everyone
+   who finished had theirs revealed at the time, and printing them again put the same name and
+   artwork in the channel three times running.
+
+   Once you're the last player still guessing there's nobody to pass to, so **⏭️ Pass**
+   becomes **🏳️ Give up** — relabelled and red, rather than quietly changing meaning under
+   someone who's been passing all game out of habit. It's the only way to end a game early.
+
+   #### Why turns, and not guesses
+
+   Scoring on turns is what lets the game run to a natural end for everybody instead of
+   stopping the moment one person gets lucky. It's also the only score the bot can *observe*:
+   it hands the turns out itself. The wrong-guess count it used to keep depended on a judge
+   remembering to press ❌, so it undercounted — and undercounted worst for the players
+   conscientious enough to click.
+
+   It also retired a rule. The bot used to stop at the first correct guess and hand the other
+   player a "rebuttal" turn if the first mover won, because otherwise they'd won on a turn
+   their opponent never had. Racing your own turn count makes going first worth nothing, so
+   the exception is gone and rematches no longer swap the seating.
+
+`/lobby status` shows whose turn it is, the time left, and who's already finished. `/lobby end`
+cancels a stuck game (host or a server admin). After a game, `/rematch` replays it with the
+same players and `/leaderboard` shows the standings.
 
 One lobby/game can be active **per channel** — different channels in the same server can run
 their own games concurrently.
@@ -108,9 +168,8 @@ normalise, fold accents, and allow a Levenshtein distance scaled to name length.
 existed only to compensate for the bot judging something it couldn't hear. A person deciding
 whether "Shikamaru" counts for "Shikamaru Nara" needs no algorithm.
 
-The consequence is that the bot knows *how many* guesses were made, never *what* they were.
-So the board reports a count, and remembering that you already tried Levi is the other
-player's job.
+The consequence is that the bot never learns what was guessed — so it doesn't count guesses at
+all, and remembering that you already tried Levi is the other player's job.
 
 
 ### Difficulty: how obscure a character you'll be dealt
@@ -229,12 +288,16 @@ characters — leader has 2", "currently tied" — which is the drama of a vote 
 its content. The full breakdown, with names, waits for the end-of-game reveal, where it's
 finally safe to show: *"unanimous, 4 of 7"*, or *"tied on 2, settled by coin flip"*.
 
-**The two players can't vote and are never shown the candidates.** The public board only
+**Players can't vote and are never shown the candidates.** The public board only
 ever shows the turnout and a countdown — never a character name — because seeing five
 options for your own head would collapse the game from a thousand possibilities to five.
 `vote-options` (default 5, max 25) sets how many candidates each player gets; the combined
-character pool needs at least `vote-options × 2` distinct characters, since the two players
-get disjoint sets.
+character pool needs at least `vote-options × players` distinct characters, since every
+player gets a disjoint set.
+
+**Audience-vote mode tops out at five players.** The ballot needs one select menu per player
+and Discord allows five action rows per message, so past five it refuses and says so rather
+than the game shrinking to fit it.
 
 ### Sound effects
 
@@ -258,14 +321,14 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list select` | anyone | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
 | `/list toggle` | anyone | Switch one named list in or out of the pool |
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
-| `/lobby join` / `/lobby leave` | players | Join or leave the waiting lobby (or use the board's buttons) |
-| `/lobby spectate` | anyone | Opt in to a DM revealing both characters (or use the board's button) |
-| `/lobby set-characters` | host | Hand-pick both players' characters |
+| `/lobby join` / `/lobby leave` | anyone | Join or leave the waiting lobby — two minimum, no maximum (or use the board's buttons) |
+| `/lobby spectate` | anyone | Opt in to a DM revealing every character (or the 👁 button on the lobby *or* turn board) |
+| `/lobby set-characters` | host | Hand-pick both characters in a 2-player game; the board's 🎭 button covers up to five |
 | `/lobby start` | host | Deal characters and begin |
 | `/pass` | current player | End your turn (or use the turn board's button) |
-| `/lobby status` | anyone | Whose turn, time remaining |
+| `/lobby status` | anyone | Whose turn, time remaining, who has already finished |
 | `/lobby end` | host/admin | Cancel a stuck lobby or game |
-| `/rematch` | anyone | Replay the last finished game, turn order swapped (or use the reveal's button) |
+| `/rematch` | anyone | Replay the last finished game with the same players (or use the reveal's button) |
 | `/leaderboard` | anyone | Server standings, or one player's record |
 
 List and character name options have autocomplete — worth leaning on, since the bundled seed
@@ -321,6 +384,7 @@ Four bundled importers, all idempotent — re-running only adds what's missing, 
 safe to run repeatedly.
 
 ```bash
+npm run seed:people   -- <your-server-id>   # ~2,900 famous real people, with photographs
 npm run seed:pokemon  -- <your-server-id>   # 1,025 Pokémon, with official artwork
 npm run seed:lol      -- <your-server-id>   # 173 League of Legends champions, with splash art
 npm run seed:wikidata -- <your-server-id>   # Western TV/film/game casts, one list per title
@@ -335,6 +399,29 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
 > same ground with real casts. Use `npm run reset:seeded -- <server-id>` to clear
 > seed-created lists before rebuilding from these sources.
 
+- **`seed:people`** fills a **Real People** category with 21 lists by field — Actors,
+  Footballers, Scientists & Inventors, Politicians & Leaders, Religious Figures, Musicians,
+  Comedians and the rest — from [Wikidata](https://www.wikidata.org). Ranked by how many
+  language Wikipedias carry an article, which is the same fame signal the Wikidata-sourced
+  fictional characters use, so `difficulty` and `/list select` work on them unchanged.
+
+  **This is the one category where a photograph is simply correct.** The image rule exists
+  because Wikidata's image property answers "an image associated with this item", which for a
+  fictional character gives you the actor or a cosplayer — but for a real person it gives you
+  the person. 98% arrive with one.
+
+  Wikidata files most people under several occupations, so lists are declared in priority
+  order and the first to claim somebody keeps them. That ordering is doing real work: it is
+  what puts Maradona in Footballers rather than Actors (he is filed as both), Kobe Bryant in
+  Basketball rather than Directors (he won an Oscar for a short film), and Reagan in
+  Politicians rather than Actors. Two rules were settled by measurement rather than argument:
+  musicians are claimed before actors, because the other way round drags Shakira, Madonna,
+  Eminem and Beyoncé into the top of Actors; and boxing, American football and baseball are
+  claimed *after* the performing arts, because John Wayne, Dwayne Johnson, Bing Crosby and
+  Will Ferrell are all filed as having played them.
+
+  `--per-list N` changes how many of each field are kept (default 150) and `--dry-run` shows
+  what would happen. Refresh the roster with `npm run fetch:people`.
 - **`seed:pokemon`** and **`seed:lol`** each create a single list under **Video Games**, with
   images pulled from the games' own public asset APIs (PokeAPI's sprite repo and Riot's Data
   Dragon).
@@ -404,6 +491,27 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
 Anything still without an image reveals as plain text, which is a supported look — use
 `/list image` to fill in any you care about.
 
+### Browsing what you've got
+
+`/list show` paginates inside Discord, which is fine for checking one show and hopeless for
+43,000 characters. `npm run browse` serves a local page for it instead:
+
+```bash
+npm run browse          # then open http://localhost:4173
+```
+
+Search by name across everything, filter by category, by whether a list is in the playable
+pool, or by whether a character has artwork at all, and sort by fame or by how often people
+have rerolled someone. Clicking a list drills into it. It reads the live database
+**read-only**, so it is safe to run while the bot is up and cannot change what gets dealt --
+curation still happens through `/list toggle` and `/list select`.
+
+Two views worth knowing about: **Missing artwork** finds the characters that will reveal as
+plain text, and sorting by **Most rerolled** shows what people keep rejecting, with anything
+past three different rerollers marked *retired* -- the bot has already stopped dealing those.
+
+`--port=` and `--db=` override the defaults.
+
 `seed:pokemon` and `seed:lol` take an optional list name as a second argument. Combine
 anything at game time: `/lobby create list:Naruto, Scrubs`.
 
@@ -461,8 +569,8 @@ src/
     GameManager.js      Map<channelId, Lobby> — one lobby per channel
     Lobby.js            Pre-game state: host, players, spectators, settings
     lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
-    Game.js             Active-game state + guess matching
-    engine.js           Turn loop, DMs, confirm/reroll, win/rebuttal resolution
+    Game.js             Active-game state: turn counts, who has finished, standings
+    engine.js           Turn loop, DMs, confirm/reroll, completion and final scoring
     lobbyBoard.js       Renders the self-updating lobby message
     turnBoard.js        Renders the self-updating turn message
     audienceVote.js     Audience-vote state, ballots, tallying (spoiler-safe board)
@@ -480,7 +588,7 @@ src/
     characterLists.js   List/character queries, random selection, search
     stats.js            Win/loss records and leaderboard
   util/text.js          Shared accent/case normalization
-scripts/                One-off seed and sound-generation scripts
+scripts/                Seed and sound-generation scripts, plus the character browser
 test/                   Test suite (npm test)
 data/
   bot.sqlite            Created on first run (gitignored)
@@ -521,7 +629,8 @@ variable), so they never read or modify `data/bot.sqlite`. They cover guess matc
 list/character queries, the lobby/turn/game-over boards with their buttons and modal,
 audience-vote mode (including a guard that the public board never leaks a candidate), and
 the full game flow —
-confirm/reroll, turn rules, the rebuttal/tie/win outcomes, concurrent lobbies, and rematch —
+confirm/reroll, turn rules, turn-count scoring and its tie/win/give-up outcomes, concurrent
+lobbies, and rematch —
 using fake Discord objects. The restart sweep and the wall-clock timer watchdog are covered
 too: the harness hands back fetchable fake messages, so the sweep is driven end to end.
 

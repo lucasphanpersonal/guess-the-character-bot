@@ -25,17 +25,27 @@ if (missingSounds.length) {
   );
 }
 
-// Stricter than sendSpectatorDMs's voice lookup in engine.js (which only checks player
-// 1's channel, on purpose, for auto-spectating) -- this requires BOTH players in the same
-// channel, and is used only for the voice-join decision.
-async function findSharedVoiceChannel(guild, p1Id, p2Id) {
-  const [member1, member2] = await Promise.all([
-    guild.members.fetch(p1Id).catch(() => null),
-    guild.members.fetch(p2Id).catch(() => null),
-  ]);
-  const ch1 = member1?.voice?.channel;
-  const ch2 = member2?.voice?.channel;
-  return ch1 && ch2 && ch1.id === ch2.id ? ch1 : null;
+// The voice channel holding the most players, provided at least two of them are in it.
+//
+// At two players that is exactly the old rule -- both in the same channel or nothing -- but
+// it no longer breaks the moment a third joins. Requiring ALL players would mean one person
+// on a phone silences the sounds for everybody else, and taking the first player's channel
+// would ignore five people sitting together because player one happened to be elsewhere.
+async function findSharedVoiceChannel(guild, playerIds) {
+  const members = await Promise.all(playerIds.map((id) => guild.members.fetch(id).catch(() => null)));
+  const byChannel = new Map();
+  for (const member of members) {
+    const channel = member?.voice?.channel;
+    if (!channel) continue;
+    const entry = byChannel.get(channel.id) ?? { channel, count: 0 };
+    entry.count++;
+    byChannel.set(channel.id, entry);
+  }
+  let best = null;
+  for (const entry of byChannel.values()) {
+    if (entry.count >= 2 && (!best || entry.count > best.count)) best = entry;
+  }
+  return best?.channel ?? null;
 }
 
 // Called once, from maybeBeginPlay. Silently no-ops if the players aren't in a shared
@@ -45,8 +55,7 @@ async function joinVoiceForGame(client, lobby) {
   const game = lobby.game;
   try {
     const guild = await client.guilds.fetch(lobby.guildId);
-    const [p1Id, p2Id] = game.turnOrder;
-    const channel = await findSharedVoiceChannel(guild, p1Id, p2Id);
+    const channel = await findSharedVoiceChannel(guild, game.turnOrder);
     if (!channel) return;
 
     const connection = joinVoiceChannel({

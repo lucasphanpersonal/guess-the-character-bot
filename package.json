@@ -14,10 +14,13 @@
     "seed:lol": "node scripts/seed-league-of-legends.js",
     "seed:wikidata": "node scripts/seed-wikidata-characters.js",
     "seed:anilist": "node scripts/seed-anilist-characters.js",
+    "seed:people": "node scripts/seed-wikidata-people.js",
+    "browse": "node scripts/browse-characters.js",
     "reset:seeded": "node scripts/reset-seeded-lists.js",
     "backfill:popularity": "node scripts/backfill-popularity.js",
     "fetch:anilist": "node scripts/fetch-anilist-characters.js",
     "fetch:wikidata": "node scripts/fetch-wikidata-characters.js",
+    "fetch:people": "node scripts/fetch-wikidata-people.js",
     "generate:sounds": "node scripts/generate-chime.js && node scripts/generate-sound-effects.js",
     "postinstall": "npm run generate:sounds"
   },

@@ -1,6 +1,6 @@
 const { PermissionFlagsBits, MessageFlags } = require('discord.js');
 const GameManager = require('../../game/GameManager');
-const { clearTimers } = require('../../game/engine');
+const { clearTimers, recordAbandonedGame } = require('../../game/engine');
 const { refreshTurnBoard } = require('../../game/turnBoard');
 const { clearVoteTimer } = require('../../game/audienceVote');
 const { refreshLobbyBoard } = require('../../game/lobbyBoard');
@@ -23,6 +23,11 @@ module.exports = {
     clearVoteTimer(lobby.vote);
     lobby.vote = null;
 
+    // Whoever already got their character keeps that result. Cancelling is the remedy for one
+    // player going quiet, and it should not cost everybody else the game they finished.
+    // Recorded BEFORE the game is torn down, while the turn counts still exist.
+    const recorded = recordAbandonedGame(lobby);
+
     if (lobby.game) {
       clearTimers(lobby.game);
       // Otherwise the cancelled turn's board keeps live-looking Guess/Pass buttons.
@@ -34,6 +39,13 @@ module.exports = {
     lobby.status = 'CANCELLED';
     await refreshLobbyBoard(lobby);
     GameManager.endLobby(interaction.channelId);
-    return interaction.reply('🛑 Lobby/game cancelled.');
+
+    if (!recorded) return interaction.reply('🛑 Lobby/game cancelled.');
+    const finishers = recorded.filter((s) => s.turnsTaken !== null);
+    return interaction.reply(
+      `🛑 Game cancelled — but ${finishers.length} player${finishers.length === 1 ? '' : 's'} had ` +
+        `already finished, so that result is kept:\n` +
+        finishers.map((s) => `• <@${s.playerId}> — ${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}`).join('\n')
+    );
   },
 };
