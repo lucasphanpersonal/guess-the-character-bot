@@ -147,10 +147,15 @@ Two guards:
   A player who stops responding leaves their turn parked in the amber last-chance state
   indefinitely, and the game neither finishes nor records a result.
 
-`/lobby end` is the manual exit for that case. It currently *cancels* — the game is discarded
-and nothing is written. It should instead, for a game already in progress, **record the
-results of everyone who finished** and mark the rest as gave-up. Nothing becomes automatic; a
-human still decides, but deciding no longer throws away a completed game's worth of results.
+`/lobby end` is the manual exit for that case, and it **keeps the results of everyone who
+already finished** rather than discarding the game whole. Nothing becomes automatic — a human
+still decides to end it — but deciding no longer costs five people a game they finished
+because a sixth went quiet.
+
+Players who were still guessing are recorded as a loss, not as having given up: `gave_up`
+means the player chose to stop, and someone the host cut off made no such choice. And nothing
+is written at all unless somebody got their character, since a game abandoned in the first
+round has no result worth keeping.
 
 ### Consequence: you can't quit early
 
@@ -333,10 +338,16 @@ working throughout.
 
 ### Still outstanding
 
-**`/lobby end` discards a game in progress.** With no auto-surrender, a player who stops
-responding parks the game in its last-chance state forever, and cancelling throws away
-everyone who already finished. It should record them and mark the rest as gave-up: nothing
-becomes automatic, a human still decides, they just stop losing a completed game's results.
+~~**`/lobby end` discards a game in progress.**~~ Done. Whoever already got their character
+keeps that result; the rest are recorded as a loss rather than a surrender, because a player
+the host cut off did not choose to stop. Nothing is written at all if nobody finished -- a game
+abandoned in the first round has no result to preserve, and inventing rows would put
+half-games in the leaderboard.
+
+Worth recording that the broader idea this came from -- persisting games so they survive a
+restart -- was **rejected as over-ranked**. The bot does not realistically restart mid-game;
+what actually kills a game is one player going quiet, and `/lobby end` is the remedy. Fixing
+the remedy was the whole of the value, at a fraction of the cost.
 
 **Turn length doesn't scale with the table.** Five players at 60s is a five-minute cycle at
 the start and a one-minute one at the end. The host can change `turn-seconds` from the board,

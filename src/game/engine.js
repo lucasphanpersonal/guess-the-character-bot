@@ -445,6 +445,32 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
   return startTurn(client, lobby);
 }
 
+/**
+ * Writes the results of a game the host ended early, instead of binning them.
+ *
+ * Not about restarts -- the bot does not realistically restart mid-game. It is about the way
+ * a game actually dies: there is no auto-surrender, so a player who stops responding parks
+ * their turn in the last-chance state forever, and `/lobby end` is the documented remedy.
+ * Until now that remedy threw away everyone else's result too, which at six players means
+ * five people lose a finished game to one person's dead laptop.
+ *
+ * Deliberately narrow. Nothing is written unless somebody actually got their character --
+ * a game abandoned in the first round has no result to preserve, and inventing rows for it
+ * would put half-games in the leaderboard.
+ *
+ * @returns the standings if anything was recorded, otherwise null.
+ */
+function recordAbandonedGame(lobby) {
+  const game = lobby?.game;
+  if (!game || game.finished || game.finishedBy.size === 0) return null;
+
+  const standings = game.standings();
+  recordGame(lobby.guildId, standings);
+  // Marked finished so an in-flight turn resolution cannot also finalize and double-record.
+  game.finished = true;
+  return standings;
+}
+
 async function finalizeGame(client, lobby) {
   const game = lobby.game;
   game.finished = true;
@@ -566,6 +592,7 @@ module.exports = {
   handlePass,
   handleTimeout,
   maybeBeginPlay,
+  recordAbandonedGame,
   characterMessage,
   sendSpectatorDM,
   clearTimers,

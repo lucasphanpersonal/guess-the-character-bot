@@ -180,7 +180,10 @@ class Game {
       .map((playerId) => {
         const turns = this.finishedBy.get(playerId) ?? null;
         let outcome;
-        if (turns === null) outcome = 'gave_up';
+        // Never got their character. `gave_up` only when they actually chose to stop -- a
+        // player the host cut off mid-game did no such thing, and recording it as a surrender
+        // would put a decision in their mouth.
+        if (turns === null) outcome = this.surrendered.has(playerId) ? 'gave_up' : 'lost';
         else if (turns === best) outcome = 'won';
         else outcome = 'lost';
         return { playerId, turnsTaken: turns, outcome };

@@ -4,7 +4,7 @@
 // have ceilings is a handful of Discord surfaces (five action rows per message, ten embeds),
 // and those refuse for themselves rather than shrinking the game to fit.
 
-const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
+const { assert, createRecorder, createFakeClient, createButtonInteraction, createSlashInteraction } = require('./harness');
 const { handleComponentInteraction } = require('../src/components/router');
 const { buildTurnBoardPayload } = require('../src/game/turnBoard');
 const { buildBallotPayload } = require('../src/game/audienceVote');
@@ -229,6 +229,70 @@ module.exports = {
     );
     assert.equal(game.confirmState.p1.confirmed, true, 'still locked in');
     assert.match(ctx.recorder.allText(), /expired/);
+    cleanup(ctx);
+  },
+
+  // There is no auto-surrender, so a player who goes quiet parks the game forever and
+  // /lobby end is the remedy. It used to bin everybody else's finished game along with it.
+  async 'ending a stuck game keeps the results of whoever already finished'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+    const stats = require('../src/db/stats');
+
+    await judge(ctx, 'p1', true); // p1 done on turn 1
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    await judge(ctx, 'p3', true); // p3 done on turn 1
+    // ...and now p4 goes quiet. The host ends it.
+
+    const endCmd = require('../src/commands/actions/lobby-end');
+    await endCmd.execute(
+      createSlashInteraction({
+        client: ctx.client, userId: 'p1', guildId: ctx.lobby.guildId,
+        channelId: ctx.channelId, recorder: ctx.recorder,
+      })
+    );
+
+    assert.equal(stats.getPlayerStats(ctx.lobby.guildId, 'p1').total, 1, 'p1 kept their game');
+    assert.equal(stats.getPlayerStats(ctx.lobby.guildId, 'p1').wins, 0, 'a shared best is a tie');
+    assert.equal(stats.getPlayerStats(ctx.lobby.guildId, 'p1').ties, 1);
+    assert.equal(stats.getPlayerStats(ctx.lobby.guildId, 'p4').total, 1, 'and p4 is on the record too');
+    assert.match(ctx.recorder.allText(), /had\s+already finished, so that result is kept/);
+    cleanup(ctx);
+  },
+
+  // A game nobody finished has no result worth keeping, and inventing one would put
+  // half-games in the leaderboard.
+  async 'ending a game nobody finished records nothing'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const stats = require('../src/db/stats');
+    const guildId = ctx.lobby.guildId;
+
+    const endCmd = require('../src/commands/actions/lobby-end');
+    await endCmd.execute(
+      createSlashInteraction({
+        client: ctx.client, userId: 'p1', guildId, channelId: ctx.channelId, recorder: ctx.recorder,
+      })
+    );
+
+    for (const id of ctx.players) assert.equal(stats.getPlayerStats(guildId, id).total, 0, `${id} has no record`);
+    assert.match(ctx.recorder.allText(), /Lobby\/game cancelled/);
+    cleanup(ctx);
+  },
+
+  // A player the host cut off did not choose to stop, and recording it as a surrender would
+  // put a decision in their mouth.
+  async 'being cut off is recorded as a loss, not as giving up'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    await judge(ctx, 'p1', true);
+
+    const standings = ctx.lobby.game.standings();
+    const byId = Object.fromEntries(standings.map((s) => [s.playerId, s]));
+    assert.equal(byId.p1.outcome, 'won');
+    assert.equal(byId.p4.outcome, 'lost', 'still playing when it ended');
+    assert.equal(byId.p4.turnsTaken, null);
     cleanup(ctx);
   },
 
