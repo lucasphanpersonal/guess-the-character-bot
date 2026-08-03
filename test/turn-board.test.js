@@ -9,6 +9,7 @@ const {
 const { buildTurnBoardPayload, timerBar } = require('../src/game/turnBoard');
 const { handleComponentInteraction } = require('../src/components/router');
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const Game = require('../src/game/Game');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
@@ -59,7 +60,7 @@ async function runningGame() {
     { name: 'Luigi', image_url: null },
   ]);
   for (const userId of ['p1', 'p2']) {
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client, userId, customId: `confirm:${channelId}`, recorder })
     );
   }

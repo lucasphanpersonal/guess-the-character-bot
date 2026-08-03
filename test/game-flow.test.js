@@ -8,6 +8,7 @@ const {
 } = require('./harness');
 
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -53,7 +54,7 @@ async function startedGame({ turnSeconds = 90, maxRerolls = 2, characters = [MAR
 
 async function confirmBoth({ client, recorder, channelId }) {
   for (const userId of ['p1', 'p2']) {
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client, userId, customId: `confirm:${channelId}`, recorder })
     );
   }
@@ -87,12 +88,12 @@ module.exports = {
     const ctx = await startedGame();
     assert.equal(ctx.lobby.status, 'CONFIRMING');
 
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
     );
     assert.equal(ctx.lobby.status, 'CONFIRMING', 'one confirmation is not enough');
 
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: 'p2', customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
     );
     assert.equal(ctx.lobby.status, 'IN_PROGRESS');
@@ -305,7 +306,7 @@ module.exports = {
     const game = ctx.lobby.game;
     const originallyShownToP1 = game.headByPlayer.p2.name; // p1 was DM'd p2's head
 
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
     );
     const afterFirst = game.headByPlayer.p2.name;
@@ -313,7 +314,7 @@ module.exports = {
     assert.notEqual(afterFirst, game.headByPlayer.p1.name, 'never collides with the sibling head');
     assert.equal(game.confirmState.p1.rerollsLeft, 1);
 
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
     );
     const afterSecond = game.headByPlayer.p2.name;
@@ -322,7 +323,7 @@ module.exports = {
     assert.equal(game.confirmState.p1.rerollsLeft, 0);
 
     // Third attempt is refused and changes nothing.
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
     );
     assert.equal(game.headByPlayer.p2.name, afterSecond);
@@ -333,7 +334,7 @@ module.exports = {
     const ctx = await startedGame({ maxRerolls: -1 });
     assert.equal(ctx.lobby.game.confirmState.p1.rerollsLeft, -1);
     for (let i = 0; i < 3; i++) {
-      await engine.handleConfirmationButton(
+      await confirmPhase.handleConfirmationButton(
         createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
       );
       assert.equal(ctx.lobby.game.confirmState.p1.rerollsLeft, -1);

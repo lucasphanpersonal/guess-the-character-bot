@@ -1,21 +1,22 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const Game = require('./Game');
 const TurnTimer = require('./turnTimer');
 const GameManager = require('./GameManager');
 const voice = require('./voice');
-const {
-  getRandomCharacterExcluding,
-  getRandomCharacters,
-  getListLabelForIds,
-  recordReroll,
-  setListsEnabled,
-  getListsByIds,
-  REROLL_DEMOTE_THRESHOLD,
-} = require('../db/characterLists');
+const { getRandomCharacters, getListLabelForIds } = require('../db/characterLists');
 const { recordGame } = require('../db/stats');
 const { refreshLobbyBoard, MIN_PLAYERS } = require('./lobbyBoard');
 const { buildTurnBoardPayload, refreshTurnBoard } = require('./turnBoard');
-const { trackBoard, untrackBoard } = require('./boards');
+const { trackBoard } = require('./boards');
+// Every message that shows a character is composed and sent from one place -- see the note at
+// the top of characterDM.js for why that is a rule here rather than a preference.
+const {
+  characterMessage,
+  sendConfirmDMs,
+  lockConfirmations,
+  sendSpectatorDM,
+  sendSpectatorDMs,
+} = require('./characterDM');
 const {
   AudienceVote,
   drawCandidates,
@@ -71,273 +72,6 @@ function scheduleCountdown(lobby) {
       refreshTurnBoard(game, lobby.channelId).catch((err) => console.error(err));
     }, elapsedMs);
     game.countdownHandles.push(handle);
-  }
-}
-
-// A character's name plus the work it comes from, on its own line so the name stays the
-// thing your eye lands on. Omitted entirely when the source is unknown or would just
-// restate the name.
-function withSource(line, source) {
-  return source ? `${line}\n*from ${source}*` : line;
-}
-
-// description: the text shown above the embed(s), e.g. who this character belongs to.
-// characters: array of { label, name, imageUrl, source } -- one embed per character.
-function characterMessage(description, characters) {
-  const embeds = characters.map(({ label, name, imageUrl, source }) => {
-    const embed = new EmbedBuilder().setDescription(withSource(`**${label}**: **${name}**`, source));
-    if (imageUrl) embed.setImage(imageUrl);
-    return embed;
-  });
-  return { content: description, embeds };
-}
-
-function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropList = false } = {}) {
-  const unlimited = rerollsLeft === -1;
-  const confirmBtn = new ButtonBuilder()
-    .setCustomId(`confirm:${channelId}`)
-    .setLabel(allowReroll ? 'Good to go' : 'Ready')
-    .setEmoji('✅')
-    .setStyle(ButtonStyle.Success);
-  // In audience-vote mode the crowd already decided, so the reroll button is omitted
-  // entirely rather than shown disabled (which would read as a bug).
-  if (!allowReroll) return new ActionRowBuilder().addComponents(confirmBtn);
-
-  const rerollBtn = new ButtonBuilder()
-    .setCustomId(`reroll:${channelId}`)
-    .setLabel(unlimited ? 'Reroll' : rerollsLeft > 0 ? `Reroll (${rerollsLeft} left)` : 'No rerolls left')
-    .setEmoji('🔁')
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(!unlimited && rerollsLeft <= 0);
-
-  const row = new ActionRowBuilder().addComponents(confirmBtn, rerollBtn);
-  // The moment somebody is staring at a character they don't recognise is the only moment
-  // they will ever want to curate, so the curation lives here rather than in a command they
-  // would have to remember twenty minutes later.
-  if (canDropList) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`droplist:${channelId}`)
-        .setLabel('Never deal this show')
-        .setEmoji('🚫')
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(!unlimited && rerollsLeft <= 0)
-    );
-  }
-  return row;
-}
-
-// What a locked-in player is left holding: a way back out, until everyone is in.
-function buildUnlockRow(channelId) {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`unconfirm:${channelId}`)
-      .setLabel('Unlock')
-      .setEmoji('↩️')
-      .setStyle(ButtonStyle.Secondary)
-  );
-}
-
-// Labelled with whose character it is, in the same shape the reference DM uses, so scrolling
-// back to it answers "who was this for?" without having to remember.
-function confirmCharacterEmbed(character, ownerName) {
-  const embed = new EmbedBuilder().setDescription(
-    withSource(`**${ownerName}'s character**: **${character.name}**`, character.source)
-  );
-  if (character.imageUrl) embed.setImage(character.imageUrl);
-  return embed;
-}
-
-/**
- * The message a player acts on: the one character they're checking, whose it is, and the
- * controls for it.
- *
- * Built in one place because it is rendered from three (the opening DM and both reroll
- * paths), and three copies is how wording drifts apart -- the reroll paths had already lost
- * the audience-vote variant of the prompt.
- *
- * Naming the owner leaks nothing: everyone except the wearer already knows this character,
- * and the wearer never sees this message.
- */
-function checkMessagePayload(game, checkerId, channelId) {
-  const state = game.confirmState[checkerId];
-  const ownerId = game.checkTargetOf(checkerId);
-  const character = game.headByPlayer[ownerId];
-  const owner = game.nameOf(ownerId);
-
-  const instruction = game.rerollAllowed
-    ? `👤 You're checking **${owner}**'s character — use it to answer their questions. ` +
-      "If you don't think they'll recognise it, reroll it."
-    : `👤 **${owner}**'s character, chosen by the audience — use it to answer their questions, ` +
-      'then hit **Ready**.';
-
-  return {
-    content: `🗂️ Playing with: **${game.listLabel}**\n\n${instruction}\n_(You can't see your own.)_`,
-    embeds: [confirmCharacterEmbed(character, owner)],
-    components: [
-      buildConfirmRow(channelId, state.rerollsLeft, {
-        allowReroll: game.rerollAllowed,
-        // Only offerable when we know which list the character came from, which rules out
-        // hand-assigned characters from /lobby set-characters.
-        canDropList: game.rerollAllowed && character.listId != null,
-      }),
-    ],
-  };
-}
-
-// Discord renders at most 10 embeds per message.
-const MAX_EMBEDS = 10;
-
-function chunk(items, size) {
-  const out = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
-  return out;
-}
-
-// The characters a player needs to recognise but is NOT the checker for: everyone except
-// themselves and their check target. Empty at two players, which is why the reference
-// message only exists from three up.
-function referenceHeadsFor(game, playerId) {
-  const target = game.checkTargetOf(playerId);
-  return game.turnOrder.filter((id) => id !== playerId && id !== target);
-}
-
-/**
- * The DM each player gets when characters are dealt, as TWO messages.
- *
- * Discord renders components after every embed, so a single message would strand the button
- * row below N-1 character cards with nothing saying which one it acts on. Splitting puts the
- * controls back beside their subject, and confines the 10-embed ceiling to the message that
- * has no buttons.
- *
- * Returns false only if the DM could not be sent at all.
- */
-async function sendConfirmDMs(recipientUser, game, channelId, client) {
-  const state = game.confirmState[recipientUser.id];
-
-  try {
-    const dm = await recipientUser.send(checkMessagePayload(game, recipientUser.id, channelId));
-    trackBoard('confirm', dm);
-    state.checkMessage = dm;
-  } catch {
-    return false;
-  }
-
-  // Best-effort: the check message is the one that gates the game starting, so a reference
-  // message that fails to send is not worth refusing to play over.
-  state.referenceMessages = [];
-  const others = referenceHeadsFor(game, recipientUser.id);
-  if (others.length) {
-    for (const page of chunk(others, MAX_EMBEDS)) {
-      try {
-        state.referenceMessages.push(await recipientUser.send(referencePayload(game, page)));
-      } catch {
-        break;
-      }
-    }
-  }
-  return true;
-}
-
-// The read-only half of the DM. No components at all -- everything here belongs to somebody
-// else to check, and a control that isn't yours is just noise you have to read past.
-function referencePayload(game, playerIds) {
-  return characterMessage(
-    '📖 **The others**, so you can answer questions about them. Nothing here is yours to check.',
-    playerIds.map((id) => ({ label: `${game.nameOf(id)}'s character`, ...game.headByPlayer[id] }))
-  );
-}
-
-/**
- * Re-renders the reference message of everybody who can see `changedPlayerId`'s character,
- * after a reroll swapped it.
- *
- * Unavoidable, and the price of characters being shared rather than per-viewer: at two
- * players a reroll is private to the one person looking at it, and from three up it
- * invalidates what everyone else is holding. Confirmed players are included -- their message
- * has had its buttons stripped, but they still have to answer questions about the character
- * all game.
- */
-async function fanOutReference(game, changedPlayerId) {
-  await Promise.all(
-    game.turnOrder.map(async (viewerId) => {
-      if (viewerId === changedPlayerId) return; // never sees their own
-      if (game.checkTargetOf(viewerId) === changedPlayerId) return; // it's on their check message
-      const state = game.confirmState[viewerId];
-      const pages = state?.referenceMessages ?? [];
-      if (!pages.length) return;
-      const heads = chunk(referenceHeadsFor(game, viewerId), MAX_EMBEDS);
-      await Promise.all(
-        pages.map((message, i) =>
-          heads[i] ? message.edit(referencePayload(game, heads[i])).catch(() => {}) : null
-        )
-      );
-    })
-  );
-}
-
-/**
- * Every player's character, to one spectator.
- *
- * The single path for it, used by the opening sweep, `/lobby spectate` and the turn board's
- * 👁 button alike -- the command used to carry its own copy, which still destructured two
- * players out of the turn order and so showed a five-player game as a two-player one.
- *
- * One embed per player against a 10-embed ceiling, so a big table needs several messages.
- */
-async function sendSpectatorDM(client, lobby, userId) {
-  const game = lobby.game;
-  if (!game) return false;
-  const pages = chunk(game.turnOrder, MAX_EMBEDS);
-  try {
-    const user = await client.users.fetch(userId);
-    for (const [i, page] of pages.entries()) {
-      const header =
-        i === 0
-          ? `🗂️ Playing with: **${game.listLabel}**\n🕵️ Spectator info for the game in <#${lobby.channelId}>:`
-          : `…continued (${i + 1}/${pages.length})`;
-      await user.send(
-        characterMessage(
-          header,
-          page.map((id) => ({ label: `${game.nameOf(id)}'s head`, ...game.headByPlayer[id] }))
-        )
-      );
-    }
-    return true;
-  } catch {
-    return false; // DMs closed
-  }
-}
-
-async function sendSpectatorDMs(client, lobby) {
-  const game = lobby.game;
-  const playing = new Set(game.turnOrder);
-
-  const spectatorIds = new Set(lobby.spectators);
-  try {
-    // Every player's channel, not just the first one's -- whoever happens to be listed first
-    // may be the one person playing from their phone, and that used to mean nobody sitting
-    // with the rest got auto-added.
-    const guild = await client.guilds.fetch(lobby.guildId);
-    const members = await Promise.all(
-      game.turnOrder.map((id) => guild.members.fetch(id).catch(() => null))
-    );
-    const channels = new Map();
-    for (const member of members) {
-      const channel = member?.voice?.channel;
-      if (channel) channels.set(channel.id, channel);
-    }
-    for (const channel of channels.values()) {
-      for (const [, m] of channel.members) {
-        if (!playing.has(m.id)) spectatorIds.add(m.id);
-      }
-    }
-  } catch {
-    // best-effort voice detection only
-  }
-
-  for (const specId of spectatorIds) {
-    await sendSpectatorDM(client, lobby, specId);
   }
 }
 
@@ -467,7 +201,7 @@ async function startGame(client, lobby, characters) {
 
   const dmFailures = [];
   for (const user of users) {
-    if (!(await sendConfirmDMs(user, game, lobby.channelId, client))) {
+    if (!(await sendConfirmDMs(user, game, lobby.channelId))) {
       dmFailures.push(user.username);
       // Nobody can confirm a DM they never got, and one closed inbox must not wedge the
       // whole table -- so they are treated as ready and simply never get a reroll.
@@ -489,34 +223,6 @@ async function startGame(client, lobby, characters) {
   await maybeBeginPlay(client, lobby);
 }
 
-/**
- * Retires the ↩️ Unlock buttons once play actually begins.
- *
- * Being able to change your mind only means anything while everyone is still deciding, so
- * the moment the game starts those buttons stop being an option and become a lie. The DM
- * itself stays -- it is the reference for the character you spend the game answering
- * questions about.
- */
-async function lockConfirmations(game) {
-  await Promise.all(
-    game.turnOrder.map(async (playerId) => {
-      const message = game.confirmState[playerId]?.checkMessage;
-      if (!message) return;
-      const owner = game.nameOf(game.checkTargetOf(playerId));
-      try {
-        // Only content and components are set, so the character embed is left in place.
-        await message.edit({
-          content: `✅ Locked in — the game is under way. This is **${owner}**'s character; use it to answer their questions.`,
-          components: [],
-        });
-      } catch {
-        // Nothing to be done about a DM we can no longer edit.
-      }
-      untrackBoard(message);
-    })
-  );
-}
-
 async function maybeBeginPlay(client, lobby) {
   const game = lobby.game;
   if (!game.turnOrder.every((id) => game.confirmState[id].confirmed)) return;
@@ -533,169 +239,6 @@ async function maybeBeginPlay(client, lobby) {
   await startTurn(client, lobby);
 }
 
-async function handleConfirmationButton(interaction) {
-  const [action, channelId] = interaction.customId.split(':');
-  const lobby = GameManager.getLobby(channelId);
-  const game = lobby?.game;
-  if (!lobby || !game || lobby.status !== 'CONFIRMING' || !game.confirmState) {
-    return interaction.reply({ content: 'This confirmation has expired.', flags: MessageFlags.Ephemeral });
-  }
-
-  const playerId = interaction.user.id;
-  const state = game.confirmState[playerId];
-  if (!state) {
-    return interaction.reply({ content: "This isn't your confirmation to respond to.", flags: MessageFlags.Ephemeral });
-  }
-
-  if (action === 'confirm') {
-    if (state.confirmed) return interaction.deferUpdate();
-    state.confirmed = true;
-    const waitingOn = game.turnOrder.filter((id) => !game.confirmState[id].confirmed).length;
-    await interaction.update({
-      content: waitingOn
-        ? `✅ Locked in! Waiting on **${waitingOn}** more.\n_Changed your mind? You can unlock until everyone is in._`
-        : '✅ Locked in! Starting...',
-      embeds: interaction.message.embeds,
-      // Deliberately still a live message: until the last player is in, confirming is a
-      // decision you can take back. Kept tracked too, so a restart retires the button --
-      // which is also why lockConfirmations, not this, is where the tracking ends.
-      components: [buildUnlockRow(channelId)],
-    });
-    return maybeBeginPlay(interaction.client, lobby);
-  }
-
-  // Undo a confirmation. Only reachable while the lobby is still CONFIRMING -- the guard at
-  // the top of this function refuses everything once play has begun, and lockConfirmations
-  // strips the button at that moment anyway, so this is a race-loser's path more than a
-  // route people will find.
-  if (action === 'unconfirm') {
-    if (!state.confirmed) return interaction.deferUpdate();
-    state.confirmed = false;
-    return interaction.update(checkMessagePayload(game, playerId, channelId));
-  }
-
-  // "Never deal this show again": drop the list from the server's selection, then reroll,
-  // because whoever pressed it does not want this character either. One button doing both
-  // is the point -- the alternative is rerolling now and remembering to curate later,
-  // which nobody does.
-  if (action === 'droplist') {
-    if (!game.rerollAllowed) {
-      return interaction.reply({
-        content: "The audience picked this character — it can't be rerolled.",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    const unlimited = state.rerollsLeft === -1;
-    if (!unlimited && state.rerollsLeft <= 0) {
-      return interaction.reply({ content: "You're out of rerolls.", flags: MessageFlags.Ephemeral });
-    }
-
-    // The character this player checks -- at two players that is the other one, exactly as
-    // before; from three up it is specifically theirs to rule on.
-    const otherPlayerId = game.checkTargetOf(playerId);
-    const rejected = game.headByPlayer[otherPlayerId];
-    const [list] = rejected.listId ? getListsByIds([rejected.listId]) : [];
-    if (!list) {
-      return interaction.reply({
-        content: "Couldn't tell which list this character came from, so there's nothing to drop.",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    // Drawn from the lobby's own lists minus this one, so the replacement can't come from
-    // the show that was just rejected.
-    const remaining = lobby.listIds.filter((id) => id !== list.id);
-    // Every head in play is excluded, not just the roller's own -- two players wearing the
-    // same character would make the game unplayable for both.
-    const excludeNames = new Set([
-      ...game.turnOrder.map((id) => game.headByPlayer[id].name),
-      ...state.rejectedNames,
-    ]);
-    const replacement = remaining.length
-      ? getRandomCharacterExcluding(remaining, excludeNames, lobby.difficulty)
-      : null;
-    if (!replacement) {
-      return interaction.reply({
-        content:
-          `Dropping **${list.name}** would leave nothing else to deal from in this lobby, so ` +
-          'nothing was changed. Reroll instead, or add more lists with `/list select`.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-
-    setListsEnabled([list.id], false);
-    recordReroll(rejected.id, playerId);
-    state.rejectedNames.add(rejected.name);
-    if (!unlimited) state.rerollsLeft -= 1;
-    game.headByPlayer[otherPlayerId] = Game.head(lobby, replacement);
-    // The lobby's own pool is left alone mid-game: pulling the list out from under a game
-    // in progress would change what the other player can be dealt on their next reroll for
-    // no benefit. The server-wide switch-off is what was asked for, and it takes effect
-    // from the next lobby.
-
-    // Rebuilt from the same helper as the opening DM, after the swap, so the new character
-    // arrives labelled with whose it is exactly as the first one was.
-    await interaction.update(checkMessagePayload(game, playerId, channelId));
-    // Everyone else is holding a card that just changed under them.
-    await fanOutReference(game, otherPlayerId);
-    return interaction.followUp({
-      content:
-        `🚫 **${list.name}** is out of the pool for future games. ` +
-        'Undo any time with `/list toggle`.',
-      flags: MessageFlags.Ephemeral,
-    });
-  }
-
-  if (action === 'reroll') {
-    if (!game.rerollAllowed) {
-      return interaction.reply({
-        content: "The audience picked this character — it can't be rerolled.",
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    const unlimited = state.rerollsLeft === -1;
-    if (!unlimited && state.rerollsLeft <= 0) {
-      return interaction.reply({ content: "You're out of rerolls.", flags: MessageFlags.Ephemeral });
-    }
-    const otherPlayerId = game.checkTargetOf(playerId);
-    const currentName = game.headByPlayer[otherPlayerId].name;
-    const excludeNames = new Set([
-      ...game.turnOrder.map((id) => game.headByPlayer[id].name),
-      ...state.rejectedNames,
-    ]);
-    const replacement = getRandomCharacterExcluding(lobby.listIds, excludeNames, lobby.difficulty);
-    if (!replacement) {
-      return interaction.reply({ content: 'No other characters available in this list to reroll to.', flags: MessageFlags.Ephemeral });
-    }
-
-    // Recorded before the swap, while we still know what was rejected. Enough different
-    // people rejecting the same character retires it from random draws for good.
-    const rejected = game.headByPlayer[otherPlayerId];
-    const rejectedBy = recordReroll(rejected.id, playerId);
-
-    state.rejectedNames.add(currentName);
-    if (!unlimited) state.rerollsLeft -= 1;
-    game.headByPlayer[otherPlayerId] = Game.head(lobby, replacement);
-
-    // Rebuilt from the same helper as the opening DM, after the swap, so the new character
-    // arrives labelled with whose it is exactly as the first one was.
-    await interaction.update(checkMessagePayload(game, playerId, channelId));
-    // Everyone else is holding a card that just changed under them.
-    await fanOutReference(game, otherPlayerId);
-
-    // Told only at the moment it takes effect, so the feature explains itself once rather
-    // than needing documentation nobody reads.
-    if (rejectedBy >= REROLL_DEMOTE_THRESHOLD) {
-      return interaction.followUp({
-        content:
-          `🚮 **${rejected.name}** has now been rerolled by ${rejectedBy} different people, ` +
-          'so the bot will stop dealing them.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    return undefined;
-  }
-}
 
 /**
  * Drops the board of the turn that just ended, so the channel holds exactly one.
@@ -1022,7 +565,7 @@ module.exports = {
   submitPass,
   handlePass,
   handleTimeout,
-  handleConfirmationButton,
+  maybeBeginPlay,
   characterMessage,
   sendSpectatorDM,
   clearTimers,

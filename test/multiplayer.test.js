@@ -9,6 +9,7 @@ const { handleComponentInteraction } = require('../src/components/router');
 const { buildTurnBoardPayload } = require('../src/game/turnBoard');
 const { buildBallotPayload } = require('../src/game/audienceVote');
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -54,7 +55,7 @@ async function startedGame(playerCount, options) {
 
 async function confirmAll(ctx) {
   for (const id of ctx.players) {
-    await engine.handleConfirmationButton(
+    await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: id, customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
     );
   }

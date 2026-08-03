@@ -1,6 +1,7 @@
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 
 const engine = require('../src/game/engine');
+const confirmPhase = require('../src/game/confirmPhase');
 const {
   AudienceVote,
   drawCandidates,
@@ -463,7 +464,7 @@ module.exports = {
     // Play it out for real: confirm both, then guess correctly, so the reveal is produced
     // by the same path a live game takes.
     for (const userId of ['p1', 'p2']) {
-      await engine.handleConfirmationButton(
+      await confirmPhase.handleConfirmationButton(
         createButtonInteraction({
           client: ctx.client,
           userId,

@@ -5,7 +5,7 @@
 // registration rather than another branch in the interactionCreate handler.
 
 const { MessageFlags } = require('discord.js');
-const engine = require('../game/engine');
+const confirmPhase = require('../game/confirmPhase');
 const lobbyButtons = require('./lobbyButtons');
 const turnControls = require('./turnControls');
 const voteControls = require('./voteControls');
@@ -15,12 +15,12 @@ const listFilter = require('./listFilter');
 
 const HANDLERS = {
   // Character confirm/reroll buttons, sent in DMs when a game starts.
-  confirm: (interaction) => engine.handleConfirmationButton(interaction),
+  confirm: (interaction) => confirmPhase.handleConfirmationButton(interaction),
   // Taking a confirmation back, while everyone is still deciding.
-  unconfirm: (interaction) => engine.handleConfirmationButton(interaction),
-  reroll: (interaction) => engine.handleConfirmationButton(interaction),
+  unconfirm: (interaction) => confirmPhase.handleConfirmationButton(interaction),
+  reroll: (interaction) => confirmPhase.handleConfirmationButton(interaction),
   // "Never deal this show again", alongside Reroll on the confirmation DM.
-  droplist: (interaction) => engine.handleConfirmationButton(interaction),
+  droplist: (interaction) => confirmPhase.handleConfirmationButton(interaction),
   // Lobby board buttons.
   lobby: (interaction) => lobbyButtons.handle(interaction),
   // Turn board buttons and the guess modal.
