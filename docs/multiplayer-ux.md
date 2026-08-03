@@ -80,10 +80,14 @@ one-minute cycle at the end. The same setting produces two very different games.
 
 # Part 2 — Interface changes
 
-**Shipped so far** (with stages 1–3): the standings field, the current-player ping, and the
-three defects found by reading the transcript back — see
-[What playing it back exposed](#what-playing-it-back-exposed) at the end. Still outstanding:
-deleting the previous turn's board, the two-message DM split, and the ✅ undo.
+**Shipped:** the standings field, the current-player ping, repost-and-delete, the guard on ✅,
+and the three defects in [What playing it back exposed](#what-playing-it-back-exposed).
+
+**Not shipped, deliberately:** the two-message confirm DM. At two players the DM shows exactly
+one character — the other player's — so the split would produce a second message with nothing
+in it. The problem it solves (a button row stranded below four embeds, with nothing saying
+which one it acts on) does not exist until there are three players, so it belongs with
+lifting the cap rather than ahead of it.
 
 ## Replace the per-turn board with a repost-and-delete board
 
@@ -148,19 +152,28 @@ message that has buttons, so only the reference message ever needs pagination.
 The fan-out on reroll now has a smaller target: a reroll of P2's character re-renders message 2
 for everyone except P1 and P2, and message 1 for P1 only.
 
-## Make ✅ idempotent and give the losers of the race an answer
+## Guard ✅, because undo cannot reach what it breaks
 
-`submitJudgement` already refuses non-players and the current guesser. It needs one more state:
-a correct judgement that arrives after the turn has already resolved should reply ephemerally
-with something like "Already recorded — Alex got it" rather than surfacing an error. This will
-fire on most turns at five players, so it is normal operation, not an edge case.
+This section originally proposed a 10-second `↩️ Undo` on the completion message. That was
+wrong, and the reason is worth keeping: **an undo cannot fix the damage a misclicked ✅ does.**
 
-**On the misclick risk:** the cheapest mitigation is a 10-second `↩️ Undo` on the completion
-message, pressable only by whoever pressed ✅. It restores the player to the rotation and
-re-hides their character. It cannot un-reveal what people already read, but it fixes the
-standings and lets the game continue honestly, which is the part that matters. Worth doing at
-stage 4 rather than deferring — the failure it prevents corrupts a whole game and has no other
-remedy.
+A stray ✅ ends the turn, marks that player finished, *and publishes the character they are
+wearing*. Undo can put them back in the rotation and correct the standings — but they have now
+seen their own answer, and no button retracts that. The game is over for them either way.
+
+So the guard has to come before the press lands, not after. Pressing ✅ raises an **ephemeral,
+judge-only confirmation** — "Did Alex get it? Their character goes public and they leave the
+rotation — there's no taking it back." — and the confirmation is what records it. ❌ stays a
+single press, because pressing it by mistake costs nothing: the turn simply carries on.
+
+The asymmetry is the whole point, and it is nearly free. ✅ lands exactly once per player per
+game, so the cost is one extra tap at the one moment that deserves it, while the two buttons
+sit side by side where a mis-tap on a phone is entirely plausible.
+
+The confirmation carries the player and turn number it was raised on, so one left sitting while
+the turn timed out and moved on answers "too late" instead of landing on whoever is up now. That
+check runs *before* the who-may-judge check — otherwise a judge whose own turn had begun in the
+meantime would be told "you're guessing this turn", which is true and explains nothing.
 
 ## Smaller items
 

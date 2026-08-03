@@ -31,6 +31,8 @@ function createRecorder() {
   // Sent messages by `<channelId>:<messageId>`, so a fake client can fetch one back the way
   // the startup board sweep does.
   const messages = new Map();
+  // Message ids that were deleted, in order.
+  const deleted = [];
 
   // channelId defaults to the target's own id (`channel:123` -> `123`, `dm:p1` -> `p1`);
   // interaction replies pass the real channel explicitly, since their target is the user.
@@ -42,6 +44,13 @@ function createRecorder() {
       content: typeof payload === 'string' ? payload : payload?.content ?? '',
       // Boards are edited in place; edits are recorded against `<target>:edit`.
       edit: async (next) => record(`${target}:edit`, next, channelId),
+      // Superseded turn boards are deleted so the channel keeps only the live one. Recorded
+      // rather than dropped, so tests can assert WHICH message went.
+      delete: async () => {
+        deleted.push(message.id);
+        messages.delete(`${channelId}:${message.id}`);
+        return message;
+      },
     };
     messages.set(`${channelId}:${message.id}`, message);
     return message;
@@ -50,6 +59,7 @@ function createRecorder() {
   return {
     sent,
     record,
+    deleted,
     messageAt: (channelId, messageId) => messages.get(`${channelId}:${messageId}`),
     /** All recorded content joined, for coarse "was this mentioned anywhere" checks. */
     allText: () => sent.map((m) => m.content).join('\n'),

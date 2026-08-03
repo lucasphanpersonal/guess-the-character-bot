@@ -52,15 +52,23 @@ async function runningGame() {
   return { lobby, client, recorder, channelId };
 }
 
-const press = (ctx, userId, action) =>
+const pressId = (ctx, userId, customId) =>
   handleComponentInteraction(
-    createButtonInteraction({
-      client: ctx.client,
-      userId,
-      customId: `turn:${action}:${ctx.channelId}`,
-      recorder: ctx.recorder,
-    })
+    createButtonInteraction({ client: ctx.client, userId, customId, recorder: ctx.recorder })
   );
+
+const press = (ctx, userId, action) => pressId(ctx, userId, `turn:${action}:${ctx.channelId}`);
+
+// ✅ is a two-step control: the board button raises an ephemeral confirmation, and the
+// confirmation is what actually records it. ❌ stays a single press.
+async function rule(ctx, userId, correct) {
+  if (!correct) return press(ctx, userId, 'wrong');
+  const game = ctx.lobby.game;
+  const who = game.currentPlayerId;
+  const turn = game.turnsFor(who);
+  await press(ctx, userId, 'right');
+  return pressId(ctx, userId, `turn:yes:${ctx.channelId}:${who}:${turn}`);
+}
 
 function cleanup(ctx) {
   if (ctx.lobby.game) engine.clearTimers(ctx.lobby.game);
@@ -123,9 +131,41 @@ module.exports = {
     assert.match(standings.value, /🎯 <@p1> — turn 1 \(guessing\)/);
     assert.match(standings.value, /⏳ <@p2> — not started yet/);
 
-    await press(ctx, 'p2', 'right');
+    await rule(ctx, 'p2', true);
     const after = buildTurnBoardPayload(game, ctx.channelId).embeds[0].toJSON();
     assert.match(after.fields.find((f) => f.name === 'Standings').value, /✅ <@p1> — turn 1/);
+    cleanup(ctx);
+  },
+
+  // ✅ ends a turn AND publishes that player's character, which no undo can retract -- they
+  // would have seen their own answer. ❌ costs nothing, so only one of the two asks first.
+  async 'the check mark asks before it lands, and Nope does not'() {
+    const ctx = await runningGame();
+    const game = ctx.lobby.game;
+
+    await press(ctx, 'p2', 'right');
+    assert.equal(game.finishedBy.size, 0, 'nothing recorded on the first press');
+    const prompt = ctx.recorder.lastMatching('reply:p2');
+    assert.match(prompt.content, /no taking it back/);
+    assert.ok(prompt.payload.flags, 'asked privately, so the channel sees no hesitation');
+
+    await pressId(ctx, 'p2', `turn:yes:${ctx.channelId}:p1:1`);
+    assert.equal(game.finishedBy.get('p1'), 1, 'the confirmation is what records it');
+    cleanup(ctx);
+  },
+
+  // The confirmation names the turn it was raised on. Left sitting while that turn timed out
+  // and moved on, it must not land on whoever is up now.
+  async 'a stale confirmation cannot land on a later turn'() {
+    const ctx = await runningGame();
+    const game = ctx.lobby.game;
+
+    await press(ctx, 'p2', 'right'); // raised against p1, turn 1
+    await press(ctx, 'p1', 'pass'); // ...but p1 passes instead, so it is p2's turn now
+
+    await pressId(ctx, 'p2', `turn:yes:${ctx.channelId}:p1:1`);
+    assert.equal(game.finishedBy.size, 0, 'nobody was marked finished');
+    assert.match(ctx.recorder.allText(), /Too late/);
     cleanup(ctx);
   },
 
@@ -133,7 +173,7 @@ module.exports = {
     const ctx = await runningGame();
     const game = ctx.lobby.game;
 
-    await press(ctx, 'p2', 'right');
+    await rule(ctx, 'p2', true);
     assert.equal(game.finishedBy.get('p1'), 1);
     assert.equal(game.currentPlayerId, 'p2', 'p2 plays on -- nobody is cut off');
     cleanup(ctx);
@@ -190,7 +230,7 @@ module.exports = {
     await press(ctx, 'p2', 'wrong');
     await press(ctx, 'p1', 'pass'); // p1 into turn 2 without getting it
     await press(ctx, 'p2', 'pass');
-    await press(ctx, 'p2', 'right'); // p1 gets it on turn 2
+    await rule(ctx, 'p2', true); // p1 gets it on turn 2
     await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // alone, gives up
 
     const revealed = ctx.recorder.textMatching(`channel:${ctx.channelId}`);

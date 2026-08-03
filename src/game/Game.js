@@ -46,6 +46,10 @@ class Game {
     // The single self-updating message for the current turn. Replaced by engine.startTurn on
     // every new turn.
     this.turnBoardMessage = null;
+    // The board of the turn that just ended, frozen and awaiting deletion by the next turn --
+    // see engine.dropRetiredBoard. Left in place when the game ends, so the channel keeps a
+    // record of the final turn.
+    this.retiredBoardMessage = null;
     // The score. Everyone plays until they get their character, and fewest turns wins, so
     // turns are counted per player rather than as a shared round number -- once players start
     // dropping out of the rotation the two stop agreeing.

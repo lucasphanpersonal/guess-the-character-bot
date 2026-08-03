@@ -491,9 +491,37 @@ async function handleConfirmationButton(interaction) {
   }
 }
 
+/**
+ * Drops the board of the turn that just ended, so the channel holds exactly one.
+ *
+ * A board per turn is right at two players and a short game; five players over four rounds
+ * is twenty of them, and the live one is never where you left it. Deleting is better than
+ * editing one board in place, because a fresh post re-anchors at the bottom and marks the
+ * channel unread -- an edit does neither, and that is what tells somebody they are up.
+ *
+ * The board is frozen first (endTurn) and deleted after, rather than simply deleted: if the
+ * delete fails -- gone already, channel unreachable -- what is left behind is an inert board
+ * rather than a live one with working buttons. The extra edit is cheap insurance.
+ *
+ * What survives a game is therefore the completion messages and the final result, which are
+ * the parts worth scrolling back to. Boards are scaffolding.
+ */
+async function dropRetiredBoard(game) {
+  const message = game.retiredBoardMessage;
+  if (!message) return;
+  game.retiredBoardMessage = null;
+  try {
+    await message.delete();
+  } catch {
+    // Already gone, or the channel is unreachable. It has had its buttons stripped either
+    // way, so leaving it there is untidy rather than harmful.
+  }
+}
+
 async function startTurn(client, lobby) {
   const game = lobby.game;
   const channel = await getChannel(client, lobby);
+  await dropRetiredBoard(game);
 
   // The score is counted here, where turns are handed out, rather than anywhere a player
   // has to remember to press something.
@@ -628,6 +656,9 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
   // Freeze the outgoing turn's board (buttons removed, outcome shown) before anything
   // posts a new one, so old boards are never left clickable.
   await refreshTurnBoard(game, lobby.channelId, { correct, gaveUp });
+  // Held rather than forgotten: the next turn deletes it as it posts its own. If the game
+  // ends here instead, it stays as the last thing in the channel.
+  game.retiredBoardMessage = game.turnBoardMessage;
   game.turnBoardMessage = null;
   game.paused = false;
 
@@ -646,6 +677,8 @@ async function finalizeGame(client, lobby) {
   const game = lobby.game;
   game.finished = true;
   clearTimers(game);
+  // No turn follows to clear it, and the two messages below say everything it does.
+  await dropRetiredBoard(game);
   const wasInVoice = Boolean(game.voiceConnection);
   voice.playWinSound(game); // win/final sting, whether it's an outright win or a tie
   lobby.status = 'FINISHED';

@@ -83,7 +83,9 @@ module.exports = {
             'rows of buttons -- one per player:\n' +
             '⚖️ **The other player judges.** They can see your character, so when you call a ' +
             'name out loud they hit **✅ They got it** or **❌ Nope**. That is how a turn ' +
-            'resolves -- you never stop talking to log a guess.\n' +
+            'resolves -- you never stop talking to log a guess. ✅ asks to confirm first, ' +
+            'because it reveals your character and cannot be taken back; ❌ costs nothing, so ' +
+            'it does not.\n' +
             '⏭️ **Pass** is your only button -- there is no guess box, because the judge ' +
             'already decides whether you got it.\n' +
             "Guessing wrong costs you nothing and isn't counted, so guess early and often. " +

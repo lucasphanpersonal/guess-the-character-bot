@@ -65,6 +65,11 @@ happen live between humans in voice.
    - **The other player judges.** They can see your character, so when you say a name out
      loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
      guesses get called out in voice and never reach a bot that only sees typing.
+
+     **✅ asks to confirm; ❌ doesn't.** The two sit side by side and only one is reversible —
+     a stray ❌ costs nothing, while a stray ✅ ends the turn *and* publishes the character
+     you're wearing, which no undo can retract once you've seen it. ✅ lands once per player
+     per game, so the extra tap is cheap where it matters.
    - **You get ⏭️ Pass**, and nothing else. There is deliberately no way to submit a written
      guess: the judge's ✅ already answers *was that right?*, and a second control for the
      same question would mean two authorities on it.
@@ -75,6 +80,11 @@ happen live between humans in voice.
    `/pass` also works as a command.
 
    The board's **Standings** field is the score: who has got theirs and on which turn.
+
+   Each turn posts a fresh board and **deletes the one before it**, so the channel holds
+   exactly one and it's always at the bottom. A board per turn is fine for a short two-player
+   game and becomes a wall of dead greys at five. What survives a game is the completion
+   messages and the final result — the parts worth scrolling back to.
 
    #### Why the other player does the clicking
 

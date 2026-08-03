@@ -170,6 +170,37 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // A board per turn is fine for a short two-player game and becomes a wall at five players.
+  // Each one is deleted as its replacement posts, so the channel holds exactly the live one.
+  async 'a superseded board is deleted, so only the live one remains'() {
+    const ctx = await runningGame();
+    assert.equal(ctx.recorder.deleted.length, 0, 'the first board has nothing to replace');
+
+    await clickButton(ctx, 'p1', 'pass');
+    assert.equal(ctx.recorder.deleted.length, 1, "p1's board went when p2's posted");
+    await clickButton(ctx, 'p2', 'pass');
+    assert.equal(ctx.recorder.deleted.length, 2);
+
+    // Deleting is safe because the board is frozen first: a failed delete leaves an inert
+    // board rather than a live one.
+    const frozen = ctx.recorder.sent.filter((m) => m.target.endsWith(':edit') && !m.payload.components?.length);
+    assert.ok(frozen.length >= 2, 'each retired board had its buttons stripped before going');
+    cleanup(ctx);
+  },
+
+  async 'no turn board outlives the game'() {
+    const ctx = await runningGame();
+    await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', true); // p1 finishes
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // alone, gives up -> game over
+
+    const posted = ctx.recorder.sent.filter(
+      (m) => m.target === `channel:${ctx.channelId}` && m.payload?.components?.length
+    ).length;
+    // Every board posted was deleted; the reveal's buttons are a different message.
+    assert.equal(ctx.recorder.deleted.length, posted - 1, 'only the reveal keeps its buttons');
+    cleanup(ctx);
+  },
+
   'the board switches to a last-chance state when paused'() {
     const game = fakeGame();
     game.paused = true;
