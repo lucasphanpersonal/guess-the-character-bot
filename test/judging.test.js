@@ -193,7 +193,7 @@ module.exports = {
     const ctx = await runningGame();
     await press(ctx, 'nosy-spectator', 'wrong');
     assert.equal(ctx.lobby.game.finishedBy.size, 0);
-    assert.match(ctx.recorder.allText(), /Only <@p2> can judge/);
+    assert.match(ctx.recorder.allText(), /Only the players in this game can judge/);
     cleanup(ctx);
   },
 

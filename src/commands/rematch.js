@@ -6,7 +6,7 @@ const { buildLobbyBoardPayload, attachLobbyBoard } = require('../game/lobbyBoard
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('rematch')
-    .setDescription('Replay the last finished game in this channel with the same two players'),
+    .setDescription('Replay the last finished game in this channel with the same players'),
   async execute(interaction) {
     const previous = GameManager.getLobby(interaction.channelId);
     if (!previous || previous.status !== 'FINISHED') {

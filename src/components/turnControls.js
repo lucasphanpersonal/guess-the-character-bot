@@ -60,13 +60,17 @@ async function handle(interaction) {
       });
     }
 
+    const judges = game.judges;
+    // Named while there is one of them; past that a list of mentions is noise, and "everyone
+    // else" is the actual rule.
+    const whoJudges = judges.length === 1 ? `<@${judges[0]}>` : 'everyone else at the table';
     if (interaction.user.id === game.currentPlayerId) {
       return interaction.reply(
-        ephemeral(`You're guessing this turn — <@${game.judgeId}> rules on it. Say your guesses out loud.`)
+        ephemeral(`You're guessing this turn — ${whoJudges} rules on it. Say your guesses out loud.`)
       );
     }
     if (!game.turnOrder.includes(interaction.user.id)) {
-      return interaction.reply(ephemeral(`Only <@${game.judgeId}> can judge this turn.`));
+      return interaction.reply(ephemeral(`Only the players in this game can judge — ${whoJudges} this turn.`));
     }
 
     if (action === 'right') {

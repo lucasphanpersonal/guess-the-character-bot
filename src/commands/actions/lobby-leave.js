@@ -21,7 +21,7 @@ module.exports = {
       GameManager.endLobby(interaction.channelId);
       return interaction.reply('Host left, so the lobby has been cancelled.');
     }
-    await interaction.reply(`<@${interaction.user.id}> left the lobby (${lobby.players.length}/2).`);
+    await interaction.reply(`<@${interaction.user.id}> left the lobby (${lobby.players.length} left in).`);
     return refreshLobbyBoard(lobby);
   },
 };

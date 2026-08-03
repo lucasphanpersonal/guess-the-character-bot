@@ -17,7 +17,7 @@ module.exports = {
 
     if (lobby.status === 'WAITING') {
       return interaction.reply({
-        content: `Lobby waiting for players (${lobby.players.length}/2): ${
+        content: `Lobby waiting for players (${lobby.players.length} so far): ${
           lobby.players.map((id) => `<@${id}>`).join(', ') || 'none yet'
         }`,
         flags: MessageFlags.Ephemeral,

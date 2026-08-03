@@ -6,10 +6,10 @@ module.exports = {
     const embed = new EmbedBuilder()
       .setTitle('🎮 Guess the Character')
       .setDescription(
-        'Two players are each secretly assigned a character only the *other* player (and ' +
+        'Every player is secretly assigned a character only the *others* (and ' +
           "spectators) can see. Ask yes/no questions out loud in voice to figure out who you " +
           'are, then guess. The bot only tracks turns, timers, and guesses -- all the Q&A ' +
-          'happens live in voice chat. If both players share a voice channel, the bot joins in ' +
+          'happens live in voice chat. If the players share a voice channel, the bot joins in ' +
           'and plays sound effects for the countdown, correct/wrong guesses, and the final win.'
       )
       .addFields(
@@ -45,10 +45,10 @@ module.exports = {
           value:
             'Creating a lobby posts a board that updates itself as people join. Everything ' +
             'below is a button on it:\n' +
-            "**Join** / **Leave** -- two people need to join (the host doesn't have to be one " +
-            'of them)\n' +
-            '**Spectate** -- opt in to a DM revealing both characters\n' +
-            '**Start game** -- host only, stays disabled until 2 players have joined\n' +
+            "**Join** / **Leave** -- two people minimum, no maximum (the host doesn't have to " +
+            'be one of them)\n' +
+            "**Spectate** -- opt in to a DM revealing every player's character\n" +
+            '**Start game** -- host only, unlocks at 2 players\n' +
             '**⚙️ Settings** / **🗳️ Audience vote** / **🎚️ Difficulty** / **🎭 Set characters** ' +
             '-- host only, and all locked once the game starts\n' +
             '`/lobby join`, `/lobby leave`, `/lobby spectate`, `/lobby start` and ' +
@@ -59,19 +59,24 @@ module.exports = {
           name: '🗳️ Audience vote mode',
           value:
             'Add `audience-vote:true` to `/lobby create`, or hit the **🗳️ Audience vote** ' +
-            'toggle on the lobby board, and the **audience** picks both ' +
-            'characters instead of the bot. A vote board appears with a **Vote** button — ' +
-            'clicking it gives you a private ballot of candidates for each player. The two ' +
+            'toggle on the lobby board, and the **audience** picks every ' +
+            'character instead of the bot. A vote board appears with a **Vote** button — ' +
+            'clicking it gives you a private ballot of candidates for each player. The ' +
             "players can't vote and never see the options. Tune it with `vote-options` " +
-            '(candidates per player) and `vote-seconds`; the host can close voting early.',
+            '(candidates per player) and `vote-seconds`; the host can close voting early.\n' +
+            'Caps at **5 players** -- the ballot needs a menu each and Discord allows five ' +
+            'per message.',
         },
         {
           name: '🔍 Confirm your character',
           value:
-            "Once the game starts, you'll get a DM showing a character with **Good to go** / " +
-            "**Reroll** buttons. If you (or you think the wearer) won't recognize it, reroll " +
-            "(however many the host allowed) -- the game waits until both players confirm before " +
-            'turn 1 begins.\n' +
+            "Once the game starts you get two DMs: the one character you're **checking** " +
+            "(with **Good to go** / **Reroll** beside it) and a list of everyone else's, so " +
+            'you can answer questions about them. Between them, every character but your own.\n' +
+            'You check the **next player round the rotation**, so every character has exactly ' +
+            "one person who can reroll it. If you (or you think the wearer) won't recognize " +
+            "it, reroll (however many the host allowed) and everyone else's copy updates. " +
+            'Turn 1 waits until everyone confirms.\n' +
             '🚫 **Never deal this show** drops that list from the server for good *and* rerolls, ' +
             "in one press. And once 3 different people have rerolled the same character, the bot " +
             'stops dealing them -- the pool learns from what you reject.',
@@ -80,9 +85,9 @@ module.exports = {
           name: '3️⃣ On your turn',
           value:
             'A **turn board** appears with a live countdown, the standings so far, and two ' +
-            'rows of buttons -- one per player:\n' +
-            '⚖️ **The other player judges.** They can see your character, so when you call a ' +
-            'name out loud they hit **✅ They got it** or **❌ Nope**. That is how a turn ' +
+            'rows of buttons -- one for the judges, one for you:\n' +
+            '⚖️ **Everyone else judges.** They can all see your character, so when you call a ' +
+            'name out loud whoever is quickest hits **✅ They got it** or **❌ Nope**. That is how a turn ' +
             'resolves -- you never stop talking to log a guess. ✅ asks to confirm first, ' +
             'because it reveals your character and cannot be taken back; ❌ costs nothing, so ' +
             'it does not.\n' +
@@ -104,7 +109,7 @@ module.exports = {
         {
           name: '✍️ What counts as a correct guess',
           value:
-            'Whatever the other player accepts. They can see your character, so they rule on ' +
+            'Whatever the other players accept. They can see your character, so they rule on ' +
             'it -- no spelling rules, no typo tolerance, no arguing with a bot about whether ' +
             '"Shikamaru" should have counted.',
         },
@@ -113,7 +118,7 @@ module.exports = {
           value:
             '`/lobby status` -- whose turn it is, time left, and who has already finished\n' +
             '`/lobby end` -- host or admin can cancel a stuck game\n' +
-            '`/rematch` -- replay with the same two players once a game finishes\n' +
+            '`/rematch` -- replay with the same players once a game finishes\n' +
             '`/leaderboard [player]` -- server standings, or one player\'s record and turn counts\n' +
             'The end-of-game reveal also has **Rematch** and **Leaderboard** buttons.',
         }

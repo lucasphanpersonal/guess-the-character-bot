@@ -5,7 +5,7 @@ const GameManager = require('./GameManager');
 const voice = require('./voice');
 const {
   getRandomCharacterExcluding,
-  getRandomPair,
+  getRandomCharacters,
   getListLabelForIds,
   recordReroll,
   setListsEnabled,
@@ -13,7 +13,7 @@ const {
   REROLL_DEMOTE_THRESHOLD,
 } = require('../db/characterLists');
 const { recordGame } = require('../db/stats');
-const { refreshLobbyBoard } = require('./lobbyBoard');
+const { refreshLobbyBoard, MIN_PLAYERS } = require('./lobbyBoard');
 const { buildTurnBoardPayload, refreshTurnBoard } = require('./turnBoard');
 const { trackBoard, untrackBoard } = require('./boards');
 const {
@@ -22,6 +22,7 @@ const {
   buildVoteBoardPayload,
   refreshVoteBoard,
   clearVoteTimer,
+  MAX_VOTE_PLAYERS,
 } = require('./audienceVote');
 
 async function getChannel(client, lobby) {
@@ -148,11 +149,38 @@ function votedPrompt(listLabel) {
   );
 }
 
-// recipientUser gets DM'd about subjectPlayerId's character (the one recipientUser needs to
-// know to answer questions about). Returns false if the DM couldn't be sent at all.
-async function sendConfirmDM(recipientUser, subjectPlayerId, game, channelId) {
+// Discord renders at most 10 embeds per message.
+const MAX_EMBEDS = 10;
+
+function chunk(items, size) {
+  const out = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+// The characters a player needs to recognise but is NOT the checker for: everyone except
+// themselves and their check target. Empty at two players, which is why the reference
+// message only exists from three up.
+function referenceHeadsFor(game, playerId) {
+  const target = game.checkTargetOf(playerId);
+  return game.turnOrder.filter((id) => id !== playerId && id !== target);
+}
+
+/**
+ * The DM each player gets when characters are dealt, as TWO messages.
+ *
+ * Discord renders components after every embed, so a single message would strand the button
+ * row below N-1 character cards with nothing saying which one it acts on. Splitting puts the
+ * controls back beside their subject, and confines the 10-embed ceiling to the message that
+ * has no buttons.
+ *
+ * Returns false only if the DM could not be sent at all.
+ */
+async function sendConfirmDMs(recipientUser, game, channelId, client) {
   const state = game.confirmState[recipientUser.id];
-  const character = game.headByPlayer[subjectPlayerId];
+  const targetId = game.checkTargetOf(recipientUser.id);
+  const character = game.headByPlayer[targetId];
+
   try {
     const dm = await recipientUser.send({
       content: game.rerollAllowed ? confirmPrompt(game.listLabel) : votedPrompt(game.listLabel),
@@ -167,40 +195,99 @@ async function sendConfirmDM(recipientUser, subjectPlayerId, game, channelId) {
       ],
     });
     trackBoard('confirm', dm);
-    return true;
+    state.checkMessage = dm;
   } catch {
     return false;
   }
+
+  // Best-effort: the check message is the one that gates the game starting, so a reference
+  // message that fails to send is not worth refusing to play over.
+  state.referenceMessages = [];
+  const others = referenceHeadsFor(game, recipientUser.id);
+  if (others.length) {
+    for (const page of chunk(others, MAX_EMBEDS)) {
+      try {
+        state.referenceMessages.push(await recipientUser.send(referencePayload(game, page)));
+      } catch {
+        break;
+      }
+    }
+  }
+  return true;
+}
+
+// The read-only half of the DM. No components at all -- everything here belongs to somebody
+// else to check, and a control that isn't yours is just noise you have to read past.
+function referencePayload(game, playerIds) {
+  return characterMessage(
+    '📖 **The others**, so you can answer questions about them. Nothing here is yours to check.',
+    playerIds.map((id) => ({ label: `${game.nameOf(id)}'s character`, ...game.headByPlayer[id] }))
+  );
+}
+
+/**
+ * Re-renders the reference message of everybody who can see `changedPlayerId`'s character,
+ * after a reroll swapped it.
+ *
+ * Unavoidable, and the price of characters being shared rather than per-viewer: at two
+ * players a reroll is private to the one person looking at it, and from three up it
+ * invalidates what everyone else is holding. Confirmed players are included -- their message
+ * has had its buttons stripped, but they still have to answer questions about the character
+ * all game.
+ */
+async function fanOutReference(game, changedPlayerId) {
+  await Promise.all(
+    game.turnOrder.map(async (viewerId) => {
+      if (viewerId === changedPlayerId) return; // never sees their own
+      if (game.checkTargetOf(viewerId) === changedPlayerId) return; // it's on their check message
+      const state = game.confirmState[viewerId];
+      const pages = state?.referenceMessages ?? [];
+      if (!pages.length) return;
+      const heads = chunk(referenceHeadsFor(game, viewerId), MAX_EMBEDS);
+      await Promise.all(
+        pages.map((message, i) =>
+          heads[i] ? message.edit(referencePayload(game, heads[i])).catch(() => {}) : null
+        )
+      );
+    })
+  );
 }
 
 async function sendSpectatorDMs(client, lobby) {
   const game = lobby.game;
-  const [p1Id, p2Id] = game.turnOrder;
-  const [p1, p2] = await Promise.all([client.users.fetch(p1Id), client.users.fetch(p2Id)]);
+  const playing = new Set(game.turnOrder);
 
   const spectatorIds = new Set(lobby.spectators);
   try {
     const guild = await client.guilds.fetch(lobby.guildId);
-    const member1 = await guild.members.fetch(p1Id).catch(() => null);
-    const voiceChannel = member1?.voice?.channel;
+    const member = await guild.members.fetch(game.turnOrder[0]).catch(() => null);
+    const voiceChannel = member?.voice?.channel;
     if (voiceChannel) {
-      for (const [, member] of voiceChannel.members) {
-        if (member.id !== p1Id && member.id !== p2Id) spectatorIds.add(member.id);
+      for (const [, m] of voiceChannel.members) {
+        if (!playing.has(m.id)) spectatorIds.add(m.id);
       }
     }
   } catch {
     // best-effort voice detection only
   }
 
+  // One embed per player, against a 10-embed ceiling, so a big table needs several messages.
+  const pages = chunk(game.turnOrder, MAX_EMBEDS);
   for (const specId of spectatorIds) {
     try {
       const specUser = await client.users.fetch(specId);
-      await specUser.send(
-        characterMessage(`🗂️ Playing with: **${game.listLabel}**\nSpectator info for the game in <#${lobby.channelId}>:`, [
-          { label: `${p1.username}'s head`, ...game.headByPlayer[p1Id] },
-          { label: `${p2.username}'s head`, ...game.headByPlayer[p2Id] },
-        ])
-      );
+      for (const [i, page] of pages.entries()) {
+        const header =
+          i === 0
+            ? `🗂️ Playing with: **${game.listLabel}**\nSpectator info for the game in <#${lobby.channelId}>:`
+            : `…continued (${i + 1}/${pages.length})`;
+        await specUser.send(
+          characterMessage(
+            header,
+            page.map((id) => ({ label: `${game.nameOf(id)}'s head`, ...game.headByPlayer[id] }))
+          )
+        );
+      }
     } catch {
       // DMs closed, skip silently
     }
@@ -210,13 +297,27 @@ async function sendSpectatorDMs(client, lobby) {
 // Kicks off the audience-vote phase instead of dealing characters directly. The vote board
 // is public but names no candidates -- see the spoiler note in audienceVote.js.
 async function startAudienceVote(client, lobby) {
-  const candidatesBySlot = drawCandidates(lobby);
-  if (!candidatesBySlot) {
+  // The ballot puts one select menu per player in a message that holds five rows, so this
+  // mode has a ceiling the rest of the game does not. It refuses for itself rather than
+  // capping how many people may play.
+  if (lobby.players.length > MAX_VOTE_PLAYERS) {
     return {
       ok: false,
       error:
-        `Audience vote needs ${lobby.voteOptions * 2} distinct characters ` +
-        `(${lobby.voteOptions} per player) but this list selection has fewer.`,
+        `Audience vote tops out at ${MAX_VOTE_PLAYERS} players (the ballot needs a menu each, and ` +
+        `Discord allows five per message) — this lobby has ${lobby.players.length}. ` +
+        'Turn the vote off on the board to play normally.',
+    };
+  }
+
+  const candidatesBySlot = drawCandidates(lobby);
+  if (!candidatesBySlot) {
+    const wanted = lobby.voteOptions * lobby.players.length;
+    return {
+      ok: false,
+      error:
+        `Audience vote needs ${wanted} distinct characters ` +
+        `(${lobby.voteOptions} each for ${lobby.players.length} players) but this list selection has fewer.`,
     };
   }
 
@@ -266,23 +367,28 @@ async function closeAudienceVote(client, lobby, { reason } = {}) {
 // Shared entry point for both `/lobby start` and the lobby board's Start button, so the
 // validation and character-selection rules can't drift between the two.
 async function startGameFromLobby(client, lobby) {
-  if (lobby.players.length !== 2) {
-    return { ok: false, error: `Need exactly 2 players -- currently ${lobby.players.length}/2.` };
+  const wanted = lobby.players.length;
+  if (wanted < MIN_PLAYERS) {
+    return { ok: false, error: `Need at least ${MIN_PLAYERS} players -- currently ${wanted}.` };
   }
 
   if (lobby.mode === 'audience-vote') {
     return startAudienceVote(client, lobby);
   }
 
-  const [p1Id, p2Id] = lobby.players;
   const assigned = lobby.assignedCharacters;
   let characters;
-  if (assigned?.[p1Id] && assigned?.[p2Id]) {
-    characters = [assigned[p1Id], assigned[p2Id]];
+  if (lobby.players.every((id) => assigned?.[id])) {
+    characters = lobby.players.map((id) => assigned[id]);
   } else {
-    characters = getRandomPair(lobby.listIds, lobby.difficulty);
-    if (characters.length < 2) {
-      return { ok: false, error: 'The character list no longer has enough characters.' };
+    characters = getRandomCharacters(lobby.listIds, wanted, [], lobby.difficulty);
+    if (characters.length < wanted) {
+      return {
+        ok: false,
+        error:
+          `${wanted} players need ${wanted} different characters, and this list selection ` +
+          `only has ${characters.length} to deal at this difficulty.`,
+      };
     }
   }
 
@@ -299,23 +405,27 @@ async function startGame(client, lobby, characters) {
   lobby.status = 'CONFIRMING';
   await refreshLobbyBoard(lobby);
 
-  const [p1Id, p2Id] = game.turnOrder;
-  const [p1, p2] = await Promise.all([client.users.fetch(p1Id), client.users.fetch(p2Id)]);
+  const users = await Promise.all(game.turnOrder.map((id) => client.users.fetch(id)));
+  // Resolved once and cached on the game: names label characters in the confirm, reference
+  // and spectator DMs, which is several lookups per player per reroll otherwise.
+  game.setNames(Object.fromEntries(users.map((u) => [u.id, u.username])));
   const channel = await getChannel(client, lobby);
 
-  game.confirmState = {
-    [p1Id]: { confirmed: false, rerollsLeft: lobby.maxRerolls, rejectedNames: new Set() },
-    [p2Id]: { confirmed: false, rerollsLeft: lobby.maxRerolls, rejectedNames: new Set() },
-  };
+  game.confirmState = Object.fromEntries(
+    game.turnOrder.map((id) => [
+      id,
+      { confirmed: false, rerollsLeft: lobby.maxRerolls, rejectedNames: new Set() },
+    ])
+  );
 
   const dmFailures = [];
-  if (!(await sendConfirmDM(p1, p2Id, game, lobby.channelId))) {
-    dmFailures.push(p1.username);
-    game.confirmState[p1Id].confirmed = true;
-  }
-  if (!(await sendConfirmDM(p2, p1Id, game, lobby.channelId))) {
-    dmFailures.push(p2.username);
-    game.confirmState[p2Id].confirmed = true;
+  for (const user of users) {
+    if (!(await sendConfirmDMs(user, game, lobby.channelId, client))) {
+      dmFailures.push(user.username);
+      // Nobody can confirm a DM they never got, and one closed inbox must not wedge the
+      // whole table -- so they are treated as ready and simply never get a reroll.
+      game.confirmState[user.id].confirmed = true;
+    }
   }
 
   if (dmFailures.length) {
@@ -325,7 +435,8 @@ async function startGame(client, lobby, characters) {
   }
 
   await channel.send(
-    '🔍 Both players are reviewing their assigned characters (check your DMs) -- the game starts once they confirm.'
+    `🔍 All ${game.turnOrder.length} players are reviewing their assigned characters (check your DMs) ` +
+      '-- the game starts once everyone confirms.'
   );
 
   await maybeBeginPlay(client, lobby);
@@ -362,7 +473,7 @@ async function handleConfirmationButton(interaction) {
     if (state.confirmed) return interaction.deferUpdate();
     state.confirmed = true;
     await interaction.update({
-      content: '✅ Locked in! Waiting on the other player...',
+      content: '✅ Locked in! Waiting on everyone else...',
       embeds: interaction.message.embeds,
       components: [],
     });
@@ -386,7 +497,9 @@ async function handleConfirmationButton(interaction) {
       return interaction.reply({ content: "You're out of rerolls.", flags: MessageFlags.Ephemeral });
     }
 
-    const otherPlayerId = game.turnOrder.find((id) => id !== playerId);
+    // The character this player checks -- at two players that is the other one, exactly as
+    // before; from three up it is specifically theirs to rule on.
+    const otherPlayerId = game.checkTargetOf(playerId);
     const rejected = game.headByPlayer[otherPlayerId];
     const [list] = rejected.listId ? getListsByIds([rejected.listId]) : [];
     if (!list) {
@@ -399,7 +512,12 @@ async function handleConfirmationButton(interaction) {
     // Drawn from the lobby's own lists minus this one, so the replacement can't come from
     // the show that was just rejected.
     const remaining = lobby.listIds.filter((id) => id !== list.id);
-    const excludeNames = new Set([rejected.name, game.headByPlayer[playerId].name, ...state.rejectedNames]);
+    // Every head in play is excluded, not just the roller's own -- two players wearing the
+    // same character would make the game unplayable for both.
+    const excludeNames = new Set([
+      ...game.turnOrder.map((id) => game.headByPlayer[id].name),
+      ...state.rejectedNames,
+    ]);
     const replacement = remaining.length
       ? getRandomCharacterExcluding(remaining, excludeNames, lobby.difficulty)
       : null;
@@ -431,6 +549,8 @@ async function handleConfirmationButton(interaction) {
         }),
       ],
     });
+    // Everyone else is holding a card that just changed under them.
+    await fanOutReference(game, otherPlayerId);
     return interaction.followUp({
       content:
         `🚫 **${list.name}** is out of the pool for future games. ` +
@@ -450,9 +570,12 @@ async function handleConfirmationButton(interaction) {
     if (!unlimited && state.rerollsLeft <= 0) {
       return interaction.reply({ content: "You're out of rerolls.", flags: MessageFlags.Ephemeral });
     }
-    const otherPlayerId = game.turnOrder.find((id) => id !== playerId);
+    const otherPlayerId = game.checkTargetOf(playerId);
     const currentName = game.headByPlayer[otherPlayerId].name;
-    const excludeNames = new Set([currentName, game.headByPlayer[playerId].name, ...state.rejectedNames]);
+    const excludeNames = new Set([
+      ...game.turnOrder.map((id) => game.headByPlayer[id].name),
+      ...state.rejectedNames,
+    ]);
     const replacement = getRandomCharacterExcluding(lobby.listIds, excludeNames, lobby.difficulty);
     if (!replacement) {
       return interaction.reply({ content: 'No other characters available in this list to reroll to.', flags: MessageFlags.Ephemeral });
@@ -476,6 +599,8 @@ async function handleConfirmationButton(interaction) {
         }),
       ],
     });
+    // Everyone else is holding a card that just changed under them.
+    await fanOutReference(game, otherPlayerId);
 
     // Told only at the moment it takes effect, so the feature explains itself once rather
     // than needing documentation nobody reads.
@@ -566,10 +691,10 @@ async function submitJudgement(client, lobby, judgeId, correct) {
     return { ok: false, error: 'No game in progress.' };
   }
   if (!game.turnOrder.includes(judgeId)) {
-    return { ok: false, error: 'Only the two players can judge a guess.' };
+    return { ok: false, error: 'Only players in this game can judge a guess.' };
   }
   if (judgeId === game.currentPlayerId) {
-    return { ok: false, error: "You're the one guessing -- <@" + game.judgeId + "> judges this turn." };
+    return { ok: false, error: "You're the one guessing -- anybody else at the table judges this turn." };
   }
 
   if (correct) {
@@ -704,9 +829,15 @@ async function finalizeGame(client, lobby) {
   // The full order, which is the only place the losing turn counts are ever stated. Skipped
   // at two players, where the result line has already said everything there is to say.
   if (standings.length > 2) {
-    const places = standings.map((s, i) => {
-      const how = s.turnsTaken === null ? '_gave up_' : `${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}`;
-      return `${i + 1}. <@${s.playerId}> — ${how}`;
+    // Competition ranking, so equal turn counts share a place and the next one skips. Simply
+    // numbering the sorted list 1..N would quietly award a tiebreaker the game does not have
+    // -- two players on three turns are second and second, not second and third.
+    const finishers = standings.filter((s) => s.turnsTaken !== null);
+    const places = standings.map((s) => {
+      if (s.turnsTaken === null) return `${finishers.length + 1}. <@${s.playerId}> — _gave up_`;
+      const rank = finishers.filter((o) => o.turnsTaken < s.turnsTaken).length + 1;
+      const shared = finishers.filter((o) => o.turnsTaken === s.turnsTaken).length > 1;
+      return `${rank}${shared ? '=' : '.'} <@${s.playerId}> — ${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}`;
     });
     resultLine += `\n\n**Final standings**\n${places.join('\n')}`;
   } else {

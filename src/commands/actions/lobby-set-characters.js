@@ -15,8 +15,18 @@ module.exports = {
     if (interaction.user.id !== lobby.hostId) {
       return interaction.reply({ content: 'Only the host who created the lobby can assign characters.', flags: MessageFlags.Ephemeral });
     }
+    // This command has two fixed player/character option pairs, so it can only describe a
+    // two-player game. Bigger tables use the board's 🎭 button, whose modal grows a box per
+    // player (to Discord's limit of five).
     if (lobby.players.length !== 2) {
-      return interaction.reply({ content: `Need exactly 2 players joined first -- currently ${lobby.players.length}/2.`, flags: MessageFlags.Ephemeral });
+      return interaction.reply({
+        content:
+          lobby.players.length < 2
+            ? `Need at least 2 players joined first -- currently ${lobby.players.length}.`
+            : `This command only covers a 2-player game, and this lobby has ${lobby.players.length}. ` +
+              'Use the **🎭 Set characters** button on the lobby board instead.',
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     const player1 = interaction.options.getUser('player1');

@@ -17,7 +17,7 @@ module.exports = {
       return interaction.reply({ content: msg, flags: MessageFlags.Ephemeral });
     }
     lobby.spectators.delete(interaction.user.id);
-    await interaction.reply(`✅ <@${interaction.user.id}> joined the lobby (${lobby.players.length}/2).`);
+    await interaction.reply(`✅ <@${interaction.user.id}> joined the lobby (${lobby.players.length} in).`);
     await refreshLobbyBoard(lobby);
   },
 };

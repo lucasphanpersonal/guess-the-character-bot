@@ -279,8 +279,10 @@ Rerolls remain budgeted per player (`maxRerolls`).
 
 Each stage leaves the bot shippable, and two-player games working throughout.
 
-Stages 1–3 are **done** — the live bot now scores on turns at two players, and the rebuttal
-rule is gone. Everything from stage 4 on is the actual multiplayer work.
+**All stages are done.** The bot plays with any number of players from two up, scores on
+turns taken, and has no rebuttal rule. What follows is a record of the order it was built in,
+because the order was the point: each stage shipped on its own, and two-player games kept
+working throughout.
 
 1. ~~**Strip the guess counter.**~~ Done. `recordGuess`/`guessLog`/`turnGuesses`/
    `guessCountFor`, the tally field, the ❌ label count and the `on guess #N` clause are gone.
@@ -295,15 +297,31 @@ rule is gone. Everything from stage 4 on is the actual multiplayer work.
    scoring is otherwise invisible. Still capped at 2 players. See
    [What "reproduces the old outcomes" does and doesn't mean](#what-reproduces-the-old-outcomes-does-and-doesnt-mean)
    for how the tests were framed — winners match, end conditions deliberately don't.
-4. **Lift the lobby cap.** `Lobby.addPlayer`, the `!== 2` guards in `startGameFromLobby` and
-   the board's Start button, `getRandomPair` → `getRandomCharacters(n)`, the confirm/spectator
-   DM rework, the shared judge row.
-5. **Pass-as-surrender,** including the relabel, and `/lobby end` recording partial results.
-6. **Audience vote for N,** with the 5-player gate.
-7. **README.** The rules, the scoring, the reveal-on-completion behaviour, and why the
-   rebuttal rule is gone.
+4. ~~**Lift the lobby cap.**~~ Done, and there is no cap at all — `Lobby.addPlayer` accepts
+   anyone, Start unlocks at two, `getRandomCharacters(n)` deals one each, and judging is open
+   to every player who isn't the one guessing. `getRandomPair` is gone.
+5. ~~**Pass-as-surrender.**~~ Done at stage 3, ahead of schedule, because the rule is
+   unreachable-but-necessary at two players as much as at ten. `/lobby end` recording partial
+   results is **still outstanding** — see below.
+6. ~~**Audience vote for N.**~~ Done. `SLOTS` became one slot per player, `drawCandidates`
+   draws `voteOptions × players` disjoint characters, and the mode refuses above five.
+7. ~~**Docs.**~~ Done: README, `/help`, and these two files.
 
-Stage 3 is the one worth writing tests for first — with the caveat immediately below.
+### Still outstanding
+
+**`/lobby end` discards a game in progress.** With no auto-surrender, a player who stops
+responding parks the game in its last-chance state forever, and cancelling throws away
+everyone who already finished. It should record them and mark the rest as gave-up: nothing
+becomes automatic, a human still decides, they just stop losing a completed game's results.
+
+**Turn length doesn't scale with the table.** Five players at 60s is a five-minute cycle at
+the start and a one-minute one at the end. The host can change `turn-seconds` from the board,
+which is the manual answer; whether it should adapt on its own is unknown until somebody has
+played a big game.
+
+Stage 3 was the one worth testing first — with the caveat immediately below. Stage 4 is
+covered separately by `test/multiplayer.test.js`, which plays four- and twelve-player games
+rather than asserting on shapes.
 
 ### What "reproduces the old outcomes" does and doesn't mean
 

@@ -93,11 +93,14 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
   // names, where it renders as the raw `<@192319600095002634>`. So whose turn it is has to
   // live in the description.
   const whoseTurn = `<@${game.currentPlayerId}>'s turn`;
-  // Both players read the same message, so each row has to name its owner or the judge
-  // buttons look like they're for the person guessing.
+  // Everybody reads the same message, so each row has to say whose it is or the judge buttons
+  // look like they're for the person guessing. With more than two at the table the judge is
+  // not one nominated person, so naming them all would be a list nobody reads -- and the
+  // shared row is the point: whoever is paying attention rules on it, exactly as at a table.
+  const judges = game.judges;
   const roles =
     `🗣️ <@${game.currentPlayerId}> guesses out loud · ` +
-    `⚖️ <@${game.judgeId}> hits ✅ or ❌`;
+    `⚖️ ${judges.length === 1 ? `<@${judges[0]}>` : 'everyone else'} hits ✅ or ❌`;
 
   if (outcome) {
     embed.addFields(standingsField(game, { turnOver: true }));

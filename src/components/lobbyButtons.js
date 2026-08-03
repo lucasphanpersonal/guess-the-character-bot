@@ -13,7 +13,7 @@ const {
 } = require('discord.js');
 const GameManager = require('../game/GameManager');
 const engine = require('../game/engine');
-const { buildLobbyBoardPayload } = require('../game/lobbyBoard');
+const { buildLobbyBoardPayload, MIN_PLAYERS, MAX_ASSIGNABLE_PLAYERS } = require('../game/lobbyBoard');
 const {
   FIELDS,
   fieldsForMode,
@@ -58,26 +58,27 @@ function buildSettingsModal(lobby) {
 // Two boxes, one per player, prefilled with whatever is already assigned. No autocomplete
 // -- modals have none -- so `/lobby set-characters` stays for anyone who wants help finding
 // a name in a 12,000-character pool.
+// One input per player. A modal holds five, which is why the board button disables itself
+// past MAX_ASSIGNABLE_PLAYERS rather than opening something that cannot be built.
 function buildCharactersModal(lobby) {
-  const [p1, p2] = lobby.players;
   const modal = new ModalBuilder()
     .setCustomId(`lobby:save-characters:${lobby.channelId}`)
-    .setTitle('Hand-pick both characters');
+    .setTitle('Hand-pick the characters');
 
-  for (const [key, playerId] of [['player1', p1], ['player2', p2]]) {
+  lobby.players.forEach((playerId, i) => {
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId(key)
-          .setLabel(`Character for player ${key.slice(-1)}`)
+          .setCustomId(`player${i + 1}`)
+          .setLabel(`Character for player ${i + 1}`)
           .setStyle(TextInputStyle.Short)
           .setValue(lobby.assignedCharacters[playerId]?.name ?? '')
           .setMaxLength(100)
-          // Blank in both boxes clears the assignment back to a random deal.
+          // Leaving every box blank clears the assignment back to a random deal.
           .setRequired(false)
       )
     );
-  }
+  });
   return modal;
 }
 
@@ -125,30 +126,36 @@ async function handle(interaction) {
 
   if (action === 'characters' || action === 'save-characters') {
     if (notHost) return interaction.reply(ephemeral(notHost));
-    if (lobby.players.length !== 2) {
-      return interaction.reply(ephemeral(`Need both players joined first -- currently ${lobby.players.length}/2.`));
+    if (lobby.players.length < MIN_PLAYERS) {
+      return interaction.reply(ephemeral(`Need at least ${MIN_PLAYERS} players joined first -- currently ${lobby.players.length}.`));
+    }
+    if (lobby.players.length > MAX_ASSIGNABLE_PLAYERS) {
+      return interaction.reply(
+        ephemeral(
+          `Hand-picking tops out at ${MAX_ASSIGNABLE_PLAYERS} players -- a modal holds five boxes and this ` +
+            `needs one each, and there are ${lobby.players.length}. They'll be dealt at random.`
+        )
+      );
     }
 
     if (action === 'characters') {
       return interaction.showModal(buildCharactersModal(lobby));
     }
 
-    const [p1, p2] = lobby.players;
-    const typed = {
-      [p1]: interaction.fields.getTextInputValue('player1').trim(),
-      [p2]: interaction.fields.getTextInputValue('player2').trim(),
-    };
+    const typed = Object.fromEntries(
+      lobby.players.map((id, i) => [id, interaction.fields.getTextInputValue(`player${i + 1}`).trim()])
+    );
 
-    // Clearing both is how you go back to a random deal.
-    if (!typed[p1] && !typed[p2]) {
+    // Leaving every box blank is how you go back to a random deal.
+    if (lobby.players.every((id) => !typed[id])) {
       lobby.assignedCharacters = {};
       await interaction.update(buildLobbyBoardPayload(lobby));
-      return interaction.followUp(ephemeral('🎲 Cleared -- both characters will be dealt at random.'));
+      return interaction.followUp(ephemeral('🎲 Cleared -- characters will be dealt at random.'));
     }
 
     const resolved = {};
     const missing = [];
-    for (const playerId of [p1, p2]) {
+    for (const playerId of lobby.players) {
       const found = getCharacterByNameInLists(lobby.listIds, typed[playerId]);
       if (found) resolved[playerId] = found;
       else missing.push(typed[playerId] || '(blank)');
@@ -162,8 +169,11 @@ async function handle(interaction) {
         )
       );
     }
-    if (resolved[p1].name.toLowerCase() === resolved[p2].name.toLowerCase()) {
-      return interaction.reply(ephemeral('Both players need different characters. Nothing was changed.'));
+    // One character can only sit on one head, so duplicates would make the game unplayable
+    // for everyone wearing the repeat.
+    const names = lobby.players.map((id) => resolved[id].name.toLowerCase());
+    if (new Set(names).size !== names.length) {
+      return interaction.reply(ephemeral('Every player needs a different character. Nothing was changed.'));
     }
 
     lobby.assignedCharacters = resolved;
@@ -171,7 +181,10 @@ async function handle(interaction) {
     // reading it, and their own character is the one thing they must not see.
     await interaction.update(buildLobbyBoardPayload(lobby));
     return interaction.followUp(
-      ephemeral(`✅ Set. Only you can see this: <@${p1}> gets **${resolved[p1].name}**, <@${p2}> gets **${resolved[p2].name}**.`)
+      ephemeral(
+        '✅ Set. Only you can see this: ' +
+          lobby.players.map((id) => `<@${id}> gets **${resolved[id].name}**`).join(', ') + '.'
+      )
     );
   }
 
@@ -276,8 +289,8 @@ async function handle(interaction) {
     }
     // The button is disabled below 2 players, but someone can still leave between render
     // and click, so re-check before committing.
-    if (lobby.players.length !== 2) {
-      return interaction.reply(ephemeral(`Need exactly 2 players -- currently ${lobby.players.length}/2.`));
+    if (lobby.players.length < MIN_PLAYERS) {
+      return interaction.reply(ephemeral(`Need at least ${MIN_PLAYERS} players -- currently ${lobby.players.length}.`));
     }
 
     // Starting sends DMs and posts messages, which can easily exceed Discord's 3s

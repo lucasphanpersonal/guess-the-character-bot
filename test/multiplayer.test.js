@@ -1,0 +1,240 @@
+// Games with more than two players.
+//
+// The game itself has no cap -- how many a table can stand is the players' call. What does
+// have ceilings is a handful of Discord surfaces (five action rows per message, ten embeds),
+// and those refuse for themselves rather than shrinking the game to fit.
+
+const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
+const { handleComponentInteraction } = require('../src/components/router');
+const { buildTurnBoardPayload } = require('../src/game/turnBoard');
+const { buildBallotPayload } = require('../src/game/audienceVote');
+const engine = require('../src/game/engine');
+const Lobby = require('../src/game/Lobby');
+const GameManager = require('../src/game/GameManager');
+const lists = require('../src/db/characterLists');
+const db = require('../src/db/connection');
+
+let counter = 0;
+
+function makeLobby(playerCount, options = {}) {
+  const n = ++counter;
+  const guildId = `mp-guild-${n}`;
+  const channelId = `mp-chan-${n}`;
+  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
+
+  const listId = lists.createList(guildId, `MP List ${n}`, 'tester', 'Anime');
+  for (let i = 0; i < 60; i++) lists.addCharacter(listId, `Char ${n}-${i}`, 'tester');
+
+  const recorder = createRecorder();
+  const client = createFakeClient(recorder);
+  const lobby = new Lobby({
+    guildId,
+    channelId,
+    hostId: 'p1',
+    listIds: [listId],
+    listNames: [`MP List ${n}`],
+    turnSeconds: 90,
+    maxRerolls: 2,
+    voteOptions: 3,
+    ...options,
+  });
+  const players = Array.from({ length: playerCount }, (_, i) => `p${i + 1}`);
+  for (const id of players) lobby.addPlayer(id);
+  GameManager.createLobby(channelId, lobby);
+  return { lobby, client, recorder, channelId, players };
+}
+
+async function startedGame(playerCount, options) {
+  const ctx = makeLobby(playerCount, options);
+  const result = await engine.startGameFromLobby(ctx.client, ctx.lobby);
+  assert.equal(result.ok, true, result.error);
+  return ctx;
+}
+
+async function confirmAll(ctx) {
+  for (const id of ctx.players) {
+    await engine.handleConfirmationButton(
+      createButtonInteraction({ client: ctx.client, userId: id, customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+  }
+}
+
+const judge = (ctx, guesserId, correct) =>
+  engine.submitJudgement(ctx.client, ctx.lobby, ctx.lobby.game.turnOrder.find((id) => id !== guesserId), correct);
+
+function cleanup(ctx) {
+  if (ctx.lobby.game) engine.clearTimers(ctx.lobby.game);
+  GameManager.endLobby(ctx.channelId);
+}
+
+const dmsTo = (ctx, id) => ctx.recorder.sent.filter((m) => m.target === `dm:${id}`);
+const embedCount = (messages) => messages.reduce((n, m) => n + (m.payload.embeds?.length ?? 0), 0);
+
+module.exports = {
+  async 'every player is dealt a different character'() {
+    const ctx = await startedGame(5);
+    const names = ctx.players.map((id) => ctx.lobby.game.headByPlayer[id].name);
+    assert.equal(new Set(names).size, 5, 'one character cannot sit on two heads');
+    cleanup(ctx);
+  },
+
+  async 'starting is refused when the pool cannot cover everyone'() {
+    const ctx = makeLobby(4);
+    // Strip the list back to fewer characters than players.
+    const [listId] = ctx.lobby.listIds;
+    const rows = db.prepare('SELECT id FROM characters WHERE list_id = ?').all(listId);
+    for (const row of rows.slice(3)) db.prepare('DELETE FROM characters WHERE id = ?').run(row.id);
+
+    const result = await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /4 players need 4 different characters/);
+    cleanup(ctx);
+  },
+
+  // Each player checks the next one round the rotation, so every character has exactly one
+  // person who may reroll it -- and at two players that is each other, as it always was.
+  async 'the check rotation wraps and covers every character exactly once'() {
+    const ctx = await startedGame(4);
+    const game = ctx.lobby.game;
+    const targets = ctx.players.map((id) => game.checkTargetOf(id));
+    assert.deepEqual(targets, ['p2', 'p3', 'p4', 'p1']);
+    assert.equal(new Set(targets).size, 4, 'every character is checked, none twice');
+    for (const id of ctx.players) {
+      assert.equal(game.checkerOf(game.checkTargetOf(id)), id, 'checkerOf inverts checkTargetOf');
+    }
+    cleanup(ctx);
+  },
+
+  async 'each player sees everyone else and never their own character'() {
+    const ctx = await startedGame(4);
+    const game = ctx.lobby.game;
+
+    for (const id of ctx.players) {
+      const messages = dmsTo(ctx, id);
+      assert.equal(messages.length, 2, 'a check message and a reference message');
+      // The one you act on is alone in its message, with the buttons beside it.
+      assert.equal(messages[0].payload.embeds.length, 1);
+      assert.ok(messages[0].payload.components.length, 'check message carries the controls');
+      assert.equal(messages[1].payload.components ?? undefined, undefined, 'reference message has none');
+      assert.equal(embedCount(messages), 3, 'the other three characters, once each');
+
+      const text = messages.map((m) => m.content + JSON.stringify(m.payload.embeds)).join('\n');
+      assert.ok(!text.includes(game.headByPlayer[id].name), `${id} must never see their own character`);
+    }
+    cleanup(ctx);
+  },
+
+  // Characters are shared, not per-viewer, so a reroll invalidates what everyone else is
+  // holding. At two players that never came up: the roller was the only one looking.
+  async 'a reroll fans out to everyone who can see it, and to nobody who cannot'() {
+    const ctx = await startedGame(4);
+    const game = ctx.lobby.game;
+    const before = game.headByPlayer.p3.name;
+
+    // p2 checks p3, so this is p2's to reroll.
+    await handleComponentInteraction(
+      createButtonInteraction({ client: ctx.client, userId: 'p2', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+    assert.notEqual(game.headByPlayer.p3.name, before, "p3's character was swapped");
+
+    const edited = ctx.recorder.sent.filter((m) => m.target.endsWith(':edit') && m.target.startsWith('dm:'));
+    const targets = edited.map((m) => m.target.replace(':edit', ''));
+    assert.ok(targets.includes('dm:p1'), 'p1 holds a copy and was re-rendered');
+    assert.ok(targets.includes('dm:p4'), 'p4 too');
+    assert.ok(!targets.includes('dm:p3'), 'p3 never sees their own character');
+    cleanup(ctx);
+  },
+
+  async 'a rerolled replacement never collides with a character already in play'() {
+    const ctx = await startedGame(4);
+    const game = ctx.lobby.game;
+    await handleComponentInteraction(
+      createButtonInteraction({ client: ctx.client, userId: 'p2', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+    const names = ctx.players.map((id) => game.headByPlayer[id].name);
+    assert.equal(new Set(names).size, 4, 'still four distinct heads');
+    cleanup(ctx);
+  },
+
+  async 'anyone who is not guessing can judge'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+    assert.deepEqual(game.judges, ['p2', 'p3', 'p4'], 'everyone but the guesser');
+
+    // The board says so rather than naming one of them.
+    const board = buildTurnBoardPayload(game, ctx.channelId).embeds[0].toJSON();
+    assert.match(board.description, /everyone else hits/);
+
+    // A judgement from the third player, who is neither guessing nor "the other player".
+    const result = await engine.submitJudgement(ctx.client, ctx.lobby, 'p4', true);
+    assert.equal(result.ok, true);
+    assert.equal(game.finishedBy.get('p1'), 1);
+    cleanup(ctx);
+  },
+
+  async 'players drop out as they finish and the rotation skips them'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await judge(ctx, 'p1', true); // p1 out
+    assert.equal(game.currentPlayerId, 'p2');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    assert.equal(game.currentPlayerId, 'p3');
+    await judge(ctx, 'p3', true); // p3 out
+    assert.equal(game.currentPlayerId, 'p4', 'skips p1, who is done');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p4');
+    assert.equal(game.currentPlayerId, 'p2', 'wraps past both finishers');
+    cleanup(ctx);
+  },
+
+  // Equal turn counts are a tie with no tiebreaker, so numbering the sorted list 1..N would
+  // award one the game does not have.
+  async 'players on the same turn count share a place'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await judge(ctx, 'p1', true); // turn 1
+    await judge(ctx, 'p2', true); // turn 1
+    await judge(ctx, 'p3', true); // turn 1
+    await engine.submitPass(ctx.client, ctx.lobby, 'p4'); // alone -> gives up
+
+    const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`).content;
+    assert.match(reveal, /1= <@p1> — 1 turn/);
+    assert.match(reveal, /1= <@p2> — 1 turn/);
+    assert.match(reveal, /1= <@p3> — 1 turn/);
+    assert.match(reveal, /4\. <@p4> — _gave up_/, 'and the next place skips past the tie');
+    cleanup(ctx);
+  },
+
+  // The ballot needs one select menu per player and a message holds five action rows.
+  async 'audience vote runs at five players and refuses at six'() {
+    const five = makeLobby(5, { mode: 'audience-vote' });
+    const ok = await engine.startAudienceVote(five.client, five.lobby);
+    assert.equal(ok.ok, true, ok.error);
+    assert.equal(buildBallotPayload(five.lobby.vote, 'voter').components.length, 5, 'exactly at the limit');
+    cleanup(five);
+
+    const six = makeLobby(6, { mode: 'audience-vote' });
+    const refused = await engine.startAudienceVote(six.client, six.lobby);
+    assert.equal(refused.ok, false);
+    assert.match(refused.error, /tops out at 5 players/);
+    assert.match(refused.error, /Turn the vote off/, 'and says what to do about it');
+    cleanup(six);
+  },
+
+  async 'the spectator DM splits rather than overflowing the embed limit'() {
+    const ctx = await startedGame(12);
+    ctx.lobby.spectators.add('watcher');
+    await confirmAll(ctx);
+
+    const messages = dmsTo(ctx, 'watcher');
+    assert.ok(messages.length > 1, 'twelve characters cannot fit in one message');
+    for (const m of messages) assert.ok(m.payload.embeds.length <= 10, 'never over the ceiling');
+    assert.equal(embedCount(messages), 12, 'and every player is covered');
+    cleanup(ctx);
+  },
+};

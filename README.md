@@ -1,9 +1,9 @@
 # Guess the Character Bot
 
 A Discord bot that hosts "Guess the Character" (the Hedbanz-style game from The Best in
-Jest): two players are each secretly assigned a character they **can't see themselves**, and
-take alternating turns asking yes/no questions out loud in voice chat until someone guesses
-who they are.
+Jest): every player is secretly assigned a character they **can't see themselves**, and they
+take turns asking yes/no questions out loud in voice chat until they work out who they are.
+Two people or ten — there's no upper limit.
 
 The bot is the impartial host. It deals characters, DMs each player what they need to know,
 runs the turn clock, judges guesses, and keeps score — all the actual questions and answers
@@ -40,20 +40,36 @@ happen live between humans in voice.
    so turn length, rerolls and the vote tuning can all be changed after the lobby is open —
    nothing has to be decided up front on the `/lobby create` line. Settings lock once the
    game starts.
-3. **Two people join.** The host doesn't have to be one of them. Anyone else can spectate to
-   get both characters DMed to them — and anyone already sitting in the same voice channel
-   as the players is auto-added as a spectator. **Start game** stays disabled until exactly
-   two players have joined.
+3. **People join.** Two is the minimum and there is **no maximum** — how many a table can
+   stand is the players' call, not the bot's. The host doesn't have to be one of them. Anyone
+   else can spectate to get every character DMed to them, and anyone already sitting in the
+   same voice channel as the players is auto-added as a spectator. **Start game** unlocks at
+   two.
+
+   A handful of *surfaces* do have ceilings, and they refuse for themselves rather than
+   capping the game: hand-picking characters needs a box per player and a modal holds five;
+   the audience ballot needs a menu per player and a message holds five rows. Both say so.
+   Anything that outgrows a message (the spectator DM, the reference DM) splits across
+   several instead.
 4. **Optionally `/lobby set-characters`** (host only) to hand-pick each player's character instead
    of leaving it to chance. The confirmation is ephemeral, so it can't spoil anything even
    though you type it in the shared channel.
-5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player
-   gets a DM showing the *other* player's character — that's what they'll use to answer
-   questions — along with the show or film it's from, since a name on its own is often
-   ambiguous (there's a Ditto in Pokémon *and* Ben 10, an Ed in Ed Edd n Eddy *and* Cowboy
-   Bebop). Spectators and the final reveal show the same. The DM carries **Good to go** /
-   **Reroll** buttons: either player can reroll a character they don't recognize (or think
-   the wearer won't). Turn 1 doesn't begin until both confirm.
+5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player gets
+   **two DMs**: the character they're *checking*, with the buttons beside it, and a
+   component-free list of everyone else's, so they can answer questions about them. Between
+   them that's every character but their own. Each comes with the show or film it's from,
+   since a name alone is often ambiguous (there's a Ditto in Pokémon *and* Ben 10, an Ed in
+   Ed Edd n Eddy *and* Cowboy Bebop).
+
+   It's two messages because Discord renders buttons after *every* embed — in one message the
+   controls would sit below a stack of cards with nothing saying which one they act on.
+
+   **You check exactly one character: the next player's, round the rotation.** So every
+   character has one person who may reroll it, and at two players that's each other, exactly
+   as before. One checker each is what stops two people rejecting the same character at once,
+   and stops one player's unfamiliarity overriding everyone who was happy with it. A reroll
+   re-renders the copy every *other* player is holding, since characters are shared rather
+   than per-viewer. Turn 1 doesn't begin until everyone confirms.
 
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
@@ -62,9 +78,12 @@ happen live between humans in voice.
    itself rather than only inside the embed, because Discord doesn't send a notification for
    an embed mention, and with several players there can be minutes between your turns:
 
-   - **The other player judges.** They can see your character, so when you say a name out
-     loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
-     guesses get called out in voice and never reach a bot that only sees typing.
+   - **Everyone else judges.** They can all see your character, so when you say a name out
+     loud whoever is paying attention hits **✅ They got it** or **❌ Nope** — first press
+     decides. That's how a turn resolves, because guesses get called out in voice and never
+     reach a bot that only sees typing. Players who've already finished keep judging: they
+     were told every character at the start, so they stay useful instead of becoming
+     spectators.
 
      **✅ asks to confirm; ❌ doesn't.** The two sit side by side and only one is reversible —
      a stray ❌ costs nothing, while a stray ✅ ends the turn *and* publishes the character
@@ -86,10 +105,10 @@ happen live between humans in voice.
    game and becomes a wall of dead greys at five. What survives a game is the completion
    messages and the final result — the parts worth scrolling back to.
 
-   #### Why the other player does the clicking
+   #### Why everyone else does the clicking
 
-   The person guessing is thinking, talking, and racing a clock. The person listening has
-   nothing to do and already knows the answer — in the physical game they're the judge
+   The person guessing is thinking, talking, and racing a clock. Everyone listening has
+   nothing to do and already knows the answer — in the physical game they're the judges
    anyway. Asking the busy player to report their own guesses meant most guesses never
    reached the bot at all, which is half the reason nothing is scored on them any more.
    Moving the input to the idle player also retires fuzzy matching from that path entirely —
@@ -258,12 +277,16 @@ characters — leader has 2", "currently tied" — which is the drama of a vote 
 its content. The full breakdown, with names, waits for the end-of-game reveal, where it's
 finally safe to show: *"unanimous, 4 of 7"*, or *"tied on 2, settled by coin flip"*.
 
-**The two players can't vote and are never shown the candidates.** The public board only
+**Players can't vote and are never shown the candidates.** The public board only
 ever shows the turnout and a countdown — never a character name — because seeing five
 options for your own head would collapse the game from a thousand possibilities to five.
 `vote-options` (default 5, max 25) sets how many candidates each player gets; the combined
-character pool needs at least `vote-options × 2` distinct characters, since the two players
-get disjoint sets.
+character pool needs at least `vote-options × players` distinct characters, since every
+player gets a disjoint set.
+
+**Audience-vote mode tops out at five players.** The ballot needs one select menu per player
+and Discord allows five action rows per message, so past five it refuses and says so rather
+than the game shrinking to fit it.
 
 ### Sound effects
 
@@ -287,9 +310,9 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list select` | anyone | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
 | `/list toggle` | anyone | Switch one named list in or out of the pool |
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
-| `/lobby join` / `/lobby leave` | players | Join or leave the waiting lobby (or use the board's buttons) |
-| `/lobby spectate` | anyone | Opt in to a DM revealing both characters (or use the board's button) |
-| `/lobby set-characters` | host | Hand-pick both players' characters |
+| `/lobby join` / `/lobby leave` | anyone | Join or leave the waiting lobby — two minimum, no maximum (or use the board's buttons) |
+| `/lobby spectate` | anyone | Opt in to a DM revealing every character (or use the board's button) |
+| `/lobby set-characters` | host | Hand-pick both characters in a 2-player game; the board's 🎭 button covers up to five |
 | `/lobby start` | host | Deal characters and begin |
 | `/pass` | current player | End your turn (or use the turn board's button) |
 | `/lobby status` | anyone | Whose turn, time remaining, who has already finished |

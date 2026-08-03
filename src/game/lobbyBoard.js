@@ -7,20 +7,22 @@ const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('
 const { countDistinctCharacters, getListLabelForIds, difficultyOf } = require('../db/characterLists');
 const { trackBoard, untrackBoard } = require('./boards');
 
-const MAX_PLAYERS = 2;
+// The fewest that makes a game. There is no maximum -- see Lobby.addPlayer.
+const MIN_PLAYERS = 2;
+
+// One text input per player, against Discord's five-per-modal limit.
+const MAX_ASSIGNABLE_PLAYERS = 5;
 
 function buildButtons(lobby) {
-  const full = lobby.players.length >= MAX_PLAYERS;
-  const ready = lobby.players.length === MAX_PLAYERS;
+  const ready = lobby.players.length >= MIN_PLAYERS;
   const id = (action) => `lobby:${action}:${lobby.channelId}`;
 
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(id('join'))
-      .setLabel(full ? 'Lobby full' : 'Join')
+      .setLabel('Join')
       .setEmoji('🙋')
-      .setStyle(ButtonStyle.Primary)
-      .setDisabled(full),
+      .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
       .setCustomId(id('leave'))
       .setLabel('Leave')
@@ -34,7 +36,7 @@ function buildButtons(lobby) {
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(id('start'))
-      .setLabel(ready ? 'Start game' : `Start game (${lobby.players.length}/${MAX_PLAYERS})`)
+      .setLabel(ready ? `Start game (${lobby.players.length})` : `Start game (${lobby.players.length}/${MIN_PLAYERS})`)
       .setEmoji('▶️')
       .setStyle(ButtonStyle.Success)
       // The disabled state carries the rule, so nobody has to discover it via an error.
@@ -76,8 +78,9 @@ function buildSettingsRow(lobby) {
       .setStyle(
         Object.keys(lobby.assignedCharacters).length ? ButtonStyle.Primary : ButtonStyle.Secondary
       )
-      // Needs both players before it can ask who gets what.
-      .setDisabled(lobby.players.length !== MAX_PLAYERS)
+      // Needs everyone joined before it can ask who gets what, and can't ask at all past five
+      // -- a modal holds five text inputs, and this needs one per player.
+      .setDisabled(lobby.players.length < MIN_PLAYERS || lobby.players.length > MAX_ASSIGNABLE_PLAYERS)
   );
 }
 
@@ -85,7 +88,7 @@ function buildSettingsRow(lobby) {
 // over from there.
 const STATUS_NOTE = {
   VOTING: '🗳️ Audience vote in progress -- the crowd is picking both characters.',
-  CONFIRMING: '🔍 Dealing characters -- both players need to confirm in their DMs.',
+  CONFIRMING: '🔍 Dealing characters -- every player needs to confirm in their DMs.',
   IN_PROGRESS: '🎮 Game in progress.',
   FINISHED: '🏁 Game finished. `/rematch` to run it back, or `/lobby create` for a new one.',
   // A cancelled lobby is deleted outright, so there is nothing left for /rematch to replay
@@ -103,7 +106,7 @@ function buildLobbyBoardPayload(lobby) {
     // Mentions only render in descriptions/fields, never in a footer, so the host goes here.
     .setDescription(`🗂️ **${getListLabelForIds(lobby.listIds)}**\nHosted by <@${lobby.hostId}>`)
     .addFields(
-      { name: `Players (${lobby.players.length}/${MAX_PLAYERS})`, value: playerLines },
+      { name: `Players (${lobby.players.length})`, value: playerLines },
       {
         name: 'Settings',
         value: [
@@ -157,4 +160,10 @@ async function attachLobbyBoard(lobby, response, interaction) {
   return lobby.boardMessage;
 }
 
-module.exports = { buildLobbyBoardPayload, refreshLobbyBoard, attachLobbyBoard, MAX_PLAYERS };
+module.exports = {
+  buildLobbyBoardPayload,
+  refreshLobbyBoard,
+  attachLobbyBoard,
+  MIN_PLAYERS,
+  MAX_ASSIGNABLE_PLAYERS,
+};

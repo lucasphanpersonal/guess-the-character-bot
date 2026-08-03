@@ -67,8 +67,13 @@ class Game {
     this.surrendered = new Set();
     this.voiceConnection = null;
     this.audioPlayer = null;
-    // Populated by engine.startGame: { [playerId]: { confirmed, rerollsLeft, rejectedNames } }
+    // Populated by engine.startGame:
+    // { [playerId]: { confirmed, rerollsLeft, rejectedNames, checkMessage, referenceMessages } }
     this.confirmState = null;
+    // Display names, resolved once when the game starts. They label characters in three
+    // different DMs and are re-rendered on every reroll, which is a lot of user lookups for
+    // something that cannot change mid-game.
+    this.names = {};
     // True after a turn's timer expires until the player guesses or passes -- they get one
     // last chance to guess before the turn actually moves on.
     this.paused = false;
@@ -79,14 +84,49 @@ class Game {
   }
 
   /**
-   * The player whose job it is to judge the current turn -- one who can see the answer.
+   * Everyone entitled to rule on the current turn: every player who isn't the one guessing.
    *
-   * Players who have already finished still qualify and are deliberately included: they were
-   * told every character at the start, so they remain able to rule on a guess, and it leaves
-   * them a job instead of turning them into spectators.
+   * Players who have already finished are deliberately included. They were told every
+   * character at the start, so they remain able to rule on a guess, and it leaves them a job
+   * instead of turning them into spectators.
    */
+  get judges() {
+    return this.turnOrder.filter((id) => id !== this.currentPlayerId);
+  }
+
+  /** The single judge, for the two-player case and for messages that name one. */
   get judgeId() {
-    return this.turnOrder.find((id) => id !== this.currentPlayerId);
+    return this.judges[0];
+  }
+
+  /**
+   * Whose character this player checks before the game begins -- the next one round the
+   * rotation, wrapping. Every character therefore has exactly one person who may reroll it.
+   *
+   * Characters are shared, not per-viewer: each player sees the N-1 they aren't wearing. So a
+   * reroll is not private the way it is at two players, and letting any viewer reroll any
+   * character would mean two people can reject the same one at once, and that one player's
+   * unfamiliarity overrides N-2 who were happy. One checker each removes both, and at two
+   * players it reduces to exactly what the bot did before: each player checks the other's.
+   */
+  checkTargetOf(playerId) {
+    const i = this.turnOrder.indexOf(playerId);
+    return this.turnOrder[(i + 1) % this.turnOrder.length];
+  }
+
+  /** The inverse of checkTargetOf: who may reroll THIS player's character. */
+  checkerOf(playerId) {
+    const i = this.turnOrder.indexOf(playerId);
+    return this.turnOrder[(i - 1 + this.turnOrder.length) % this.turnOrder.length];
+  }
+
+  setNames(names) {
+    this.names = names;
+  }
+
+  /** Display name, falling back to a mention so a missed lookup still reads as somebody. */
+  nameOf(playerId) {
+    return this.names[playerId] ?? `<@${playerId}>`;
   }
 
   /** Still guessing: hasn't got their character and hasn't given up. */

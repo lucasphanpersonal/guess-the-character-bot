@@ -88,7 +88,7 @@ module.exports = {
         .setName('spectate')
         // Says "toggle" because it is one -- running it again stops you spectating, which
         // the old name and description both hid.
-        .setDescription("Toggle spectating: get both players' characters DMed to you")
+        .setDescription("Toggle spectating: get every player's character DMed to you")
     )
     .addSubcommand((sub) =>
       sub

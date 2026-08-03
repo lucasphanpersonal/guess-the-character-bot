@@ -83,11 +83,9 @@ one-minute cycle at the end. The same setting produces two very different games.
 **Shipped:** the standings field, the current-player ping, repost-and-delete, the guard on ✅,
 and the three defects in [What playing it back exposed](#what-playing-it-back-exposed).
 
-**Not shipped, deliberately:** the two-message confirm DM. At two players the DM shows exactly
-one character — the other player's — so the split would produce a second message with nothing
-in it. The problem it solves (a button row stranded below four embeds, with nothing saying
-which one it acts on) does not exist until there are three players, so it belongs with
-lifting the cap rather than ahead of it.
+The two-message confirm DM shipped with the cap lift, which is where it started to matter:
+at two players the DM holds exactly one character, so the split would have added an empty
+second message.
 
 ## Replace the per-turn board with a repost-and-delete board
 
