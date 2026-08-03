@@ -9,6 +9,7 @@ const {
 const { buildTurnBoardPayload, timerBar } = require('../src/game/turnBoard');
 const { handleComponentInteraction } = require('../src/components/router');
 const engine = require('../src/game/engine');
+const Game = require('../src/game/Game');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -16,12 +17,24 @@ const db = require('../src/db/connection');
 
 let counter = 0;
 
+// A real Game rather than an object literal shaped like one, so the board's actual
+// dependencies are exercised instead of a stub that silently drifts from them.
+function fakeGame() {
+  const game = new Game({
+    lobby: { guildId: 'board-guild', players: ['p1', 'p2'] },
+    characters: [{ name: 'Mario' }, { name: 'Luigi' }],
+    turnSeconds: 90,
+  });
+  game.turnsTaken.set('p1', 1);
+  return game;
+}
+
 async function runningGame() {
   const n = ++counter;
   const guildId = `turn-guild-${n}`;
   const channelId = `turn-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Turn List', 'tester', 'Video Games');
   for (const name of ['Mario', 'Luigi', 'Peach']) lists.addCharacter(listId, name, 'tester');
@@ -96,7 +109,7 @@ module.exports = {
     // No typed-guess control: the judge's ruling is the only authority on correctness.
     assert.deepEqual(Object.keys(buttons).sort(), ['pass', 'right', 'wrong']);
     assert.equal(boards[0].payload.components.length, 2, 'one row each');
-    assert.match(boards[0].content, /Round 1/);
+    assert.match(boards[0].content, /Turn 1/);
     assert.match(boards[0].content, /<@p1>/);
     cleanup(ctx);
   },
@@ -144,36 +157,31 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'each new turn gets its own board and a clean guess tally'() {
+  async 'each new turn gets its own board'() {
     const ctx = await runningGame();
     await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', false);
-    assert.equal(ctx.lobby.game.turnGuesses.length, 1);
-
     await clickButton(ctx, 'p1', 'pass');
-    assert.equal(ctx.lobby.game.turnGuesses.length, 0, 'tally reset for p2\'s turn');
 
     const boards = ctx.recorder.sent.filter(
       (m) => m.target === `channel:${ctx.channelId}` && m.payload?.components?.length
     );
     assert.equal(boards.length, 2, 'a second board for the second turn');
+    assert.equal(ctx.lobby.game.turnsFor('p2'), 1, "and p2's own count started");
     cleanup(ctx);
   },
 
   'the board switches to a last-chance state when paused'() {
-    const game = {
-      rebuttal: false,
-      round: 1,
-      currentPlayerId: 'p1',
-      judgeId: 'p2',
-      turnSeconds: 90,
-      timer: null,
-      paused: true,
-      turnGuesses: [],
-      guessLog: [],
-    };
+    const game = fakeGame();
+    game.paused = true;
     const payload = buildTurnBoardPayload(game, 'chan');
     assert.match(payload.embeds[0].toJSON().description, /Time's up/);
     assert.equal(payload.components.length, 2, 'judge and guesser rows both still live');
+  },
+
+  'the board titles the turn with the current player\'s own count'() {
+    const game = fakeGame();
+    game.turnsTaken.set('p1', 4);
+    assert.equal(buildTurnBoardPayload(game, 'chan').embeds[0].toJSON().title, '🎯 Turn 4');
   },
 
   async 'turn controls on a finished game fail gracefully'() {

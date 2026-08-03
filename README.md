@@ -57,43 +57,57 @@ happen live between humans in voice.
 
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
-6. **On your turn**, a **turn board** appears — one message with a live countdown bar, your
-   running guess history, and two rows of buttons, one per player:
+6. **On your turn**, a **turn board** appears — one message with a live countdown bar, the
+   standings so far, and two rows of buttons, one per player:
 
    - **The other player judges.** They can see your character, so when you say a name out
      loud they hit **✅ They got it** or **❌ Nope**. That's how a turn resolves, because
-     guesses get called out in voice and never reach a bot that only sees typing. The ❌
-     button carries a running count, so presses visibly land.
+     guesses get called out in voice and never reach a bot that only sees typing.
    - **You get ⏭️ Pass**, and nothing else. There is deliberately no way to submit a written
      guess: the judge's ✅ already answers *was that right?*, and a second control for the
      same question would mean two authorities on it.
 
-   **A wrong guess does _not_ end your turn.** Only **Pass**, or running out of time, hands
-   it over — and when the clock hits zero the board turns amber for one final guess rather
-   than ending outright. `/pass` also works as a command.
+   **A wrong guess does _not_ end your turn**, and costs you nothing at all — it isn't
+   counted anywhere. Only **Pass**, or running out of time, hands the turn over, and when
+   the clock hits zero the board turns amber for one final guess rather than ending outright.
+   `/pass` also works as a command.
 
-   The board shows your running guess count for the whole game, not just this turn, and the
-   reveal reports how many it took. It's a count rather than a list because the bot only
-   hears *that* you guessed, never *what* — so remembering you already tried Levi is the
-   other player's job, exactly as it is at a real table.
+   The board's **Standings** field is the score: who has got theirs and on which turn.
 
    #### Why the other player does the clicking
 
    The person guessing is thinking, talking, and racing a clock. The person listening has
    nothing to do and already knows the answer — in the physical game they're the judge
-   anyway. Asking the busy player to log their own guesses meant most guesses went
-   unrecorded, and *unevenly*: the players conscientious enough to click looked worse than
-   the ones who didn't. Moving the input to the idle player makes the count honest, and
-   retires fuzzy matching from that path entirely — a human deciding whether "Shikamaru"
-   counts beats Levenshtein deciding it.
-7. **Winning:** the first correct guess wins — unless it was the player who moved first that
-   round, in which case the other player gets one rebuttal turn to even it up (correct on
-   rebuttal = tie, wrong = the first player wins). The reveal comes with **Rematch** and
+   anyway. Asking the busy player to report their own guesses meant most guesses never
+   reached the bot at all, which is half the reason nothing is scored on them any more.
+   Moving the input to the idle player also retires fuzzy matching from that path entirely —
+   a human deciding whether "Shikamaru" counts beats Levenshtein deciding it.
+7. **Winning: fewest turns.** Getting your character doesn't end the game — it ends *your*
+   involvement. Your character is revealed then and there, you drop out of the rotation, and
+   everyone else plays on until they get theirs. The player who needed the fewest turns wins,
+   and an equal count is a tie with no tiebreaker. The reveal comes with **Rematch** and
    **Leaderboard** buttons.
 
-`/lobby status` shows whose turn it is and the time left. `/lobby end` cancels a stuck game (host
-or a server admin). After a game, `/rematch` replays it with the same two players (turn
-order swapped) and `/leaderboard` shows the standings.
+   Once you're the last player still guessing there's nobody to pass to, so **⏭️ Pass**
+   becomes **🏳️ Give up** — relabelled and red, rather than quietly changing meaning under
+   someone who's been passing all game out of habit. It's the only way to end a game early.
+
+   #### Why turns, and not guesses
+
+   Scoring on turns is what lets the game run to a natural end for everybody instead of
+   stopping the moment one person gets lucky. It's also the only score the bot can *observe*:
+   it hands the turns out itself. The wrong-guess count it used to keep depended on a judge
+   remembering to press ❌, so it undercounted — and undercounted worst for the players
+   conscientious enough to click.
+
+   It also retired a rule. The bot used to stop at the first correct guess and hand the other
+   player a "rebuttal" turn if the first mover won, because otherwise they'd won on a turn
+   their opponent never had. Racing your own turn count makes going first worth nothing, so
+   the exception is gone and rematches no longer swap the seating.
+
+`/lobby status` shows whose turn it is, the time left, and who's already finished. `/lobby end`
+cancels a stuck game (host or a server admin). After a game, `/rematch` replays it with the
+same players and `/leaderboard` shows the standings.
 
 One lobby/game can be active **per channel** — different channels in the same server can run
 their own games concurrently.
@@ -108,9 +122,8 @@ normalise, fold accents, and allow a Levenshtein distance scaled to name length.
 existed only to compensate for the bot judging something it couldn't hear. A person deciding
 whether "Shikamaru" counts for "Shikamaru Nara" needs no algorithm.
 
-The consequence is that the bot knows *how many* guesses were made, never *what* they were.
-So the board reports a count, and remembering that you already tried Levi is the other
-player's job.
+The consequence is that the bot never learns what was guessed — so it doesn't count guesses at
+all, and remembering that you already tried Levi is the other player's job.
 
 
 ### Difficulty: how obscure a character you'll be dealt
@@ -263,9 +276,9 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/lobby set-characters` | host | Hand-pick both players' characters |
 | `/lobby start` | host | Deal characters and begin |
 | `/pass` | current player | End your turn (or use the turn board's button) |
-| `/lobby status` | anyone | Whose turn, time remaining |
+| `/lobby status` | anyone | Whose turn, time remaining, who has already finished |
 | `/lobby end` | host/admin | Cancel a stuck lobby or game |
-| `/rematch` | anyone | Replay the last finished game, turn order swapped (or use the reveal's button) |
+| `/rematch` | anyone | Replay the last finished game with the same players (or use the reveal's button) |
 | `/leaderboard` | anyone | Server standings, or one player's record |
 
 List and character name options have autocomplete — worth leaning on, since the bundled seed
@@ -461,8 +474,8 @@ src/
     GameManager.js      Map<channelId, Lobby> — one lobby per channel
     Lobby.js            Pre-game state: host, players, spectators, settings
     lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
-    Game.js             Active-game state + guess matching
-    engine.js           Turn loop, DMs, confirm/reroll, win/rebuttal resolution
+    Game.js             Active-game state: turn counts, who has finished, standings
+    engine.js           Turn loop, DMs, confirm/reroll, completion and final scoring
     lobbyBoard.js       Renders the self-updating lobby message
     turnBoard.js        Renders the self-updating turn message
     audienceVote.js     Audience-vote state, ballots, tallying (spoiler-safe board)
@@ -521,7 +534,8 @@ variable), so they never read or modify `data/bot.sqlite`. They cover guess matc
 list/character queries, the lobby/turn/game-over boards with their buttons and modal,
 audience-vote mode (including a guard that the public board never leaks a candidate), and
 the full game flow —
-confirm/reroll, turn rules, the rebuttal/tie/win outcomes, concurrent lobbies, and rematch —
+confirm/reroll, turn rules, turn-count scoring and its tie/win/give-up outcomes, concurrent
+lobbies, and rematch —
 using fake Discord objects. The restart sweep and the wall-clock timer watchdog are covered
 too: the harness hands back fetchable fake messages, so the sweep is driven end to end.
 

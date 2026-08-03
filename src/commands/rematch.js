@@ -16,10 +16,10 @@ module.exports = {
       });
     }
 
-    const { lobby, firstPlayer, secondPlayer } = createRematchLobby(previous, interaction.user.id);
+    const { lobby, players } = createRematchLobby(previous, interaction.user.id);
     // The rematch reply doubles as the new lobby board.
     const response = await interaction.reply({
-      content: rematchAnnouncement(lobby, firstPlayer, secondPlayer),
+      content: rematchAnnouncement(lobby, players),
       ...buildLobbyBoardPayload(lobby),
       withResponse: true,
     });

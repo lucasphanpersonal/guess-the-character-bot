@@ -25,7 +25,7 @@ async function startedGame({ turnSeconds = 90, maxRerolls = 2, characters = [MAR
   const guildId = `flow-guild-${n}`;
   const channelId = `flow-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Flow List', 'tester', 'Video Games');
   for (const c of [MARIO, LUIGI, { name: 'Peach' }, { name: 'Bowser' }]) {
@@ -130,10 +130,9 @@ module.exports = {
     await guess(ctx, 'p1', false);
     assert.equal(game.currentPlayerId, 'p1', 'still p1 after a second wrong guess');
 
-    // Tallied on the turn board rather than spamming the channel -- as a count, because a
-    // guess called out in voice has no text for the bot to print.
-    assert.equal(game.turnGuesses.length, 2);
-    assert.match(channelText(ctx), /\*\*2\*\* guesses this game/);
+    // Wrong guesses cost nothing and are not counted anywhere: the bot only ever knew how
+    // many a judge remembered to press, which flattered whoever pressed least.
+    assert.equal(game.turnsFor('p1'), 1, 'guessing does not consume turns, only the clock does');
     cleanup(ctx);
   },
 
@@ -161,54 +160,91 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'first mover guessing right grants the opponent a rebuttal turn'() {
+  // The three tests below are the regression check on the whole scoring change: at two
+  // players the new rule must pick the same WINNER the rebuttal rule did in every case. What
+  // it deliberately does not preserve is when the game stops -- nobody is cut off any more.
+  async 'getting it does not end the game -- the other player plays on'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await guess(ctx, 'p1', true); // ruled correct by p2
-    assert.equal(ctx.lobby.game.rebuttal, true);
+
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'not over -- p2 still has a character to get');
+    assert.equal(ctx.lobby.game.finishedBy.get('p1'), 1, 'p1 got it on turn 1');
     assert.equal(ctx.lobby.game.currentPlayerId, 'p2');
-    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'not over yet');
+    // Publicly revealed the moment they got it: everyone else could already see it, and
+    // they have just worked it out themselves.
+    assert.match(channelText(ctx), /got it in \*\*1\*\* turn!/);
     cleanup(ctx);
   },
 
-  async 'a failed rebuttal gives the first mover the win, and says so'() {
+  async 'the player who took fewer turns wins, and the loser is told what they needed'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
-    await guess(ctx, 'p1', true);
-    await pass(ctx, 'p2'); // rebuttal squandered
+    await guess(ctx, 'p1', true); // p1 done on turn 1
+
+    // p2 is alone now, so Pass would surrender -- running out of time is how their turn
+    // ends without giving up. The ruling comes from p1, who has finished but can still see
+    // p2's character and so is still the judge.
+    await engine.handleTimeout(ctx.client, ctx.lobby);
+    await guess(ctx, 'p2', false);
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'a lone player is not cut off');
+    await guess(ctx, 'p2', true); // gets theirs on turn 2
 
     assert.equal(ctx.lobby.status, 'FINISHED');
     const final = lastChannelMessage(ctx);
-    assert.match(final, /didn't get it on the rebuttal turn/);
-    assert.match(final, /p1> wins/);
-    assert.deepEqual(stats.getPlayerStats(ctx.guildId, 'p1'), { wins: 1, losses: 0, ties: 0, total: 1 });
-    assert.deepEqual(stats.getPlayerStats(ctx.guildId, 'p2'), { wins: 0, losses: 1, ties: 0, total: 1 });
+    assert.match(final, /<@p1> wins — got it in \*\*1\*\* turn!/);
+    assert.match(final, /<@p2> needed 2/);
+    assert.deepEqual(stats.getPlayerStats(ctx.guildId, 'p1').wins, 1);
+    assert.deepEqual(stats.getPlayerStats(ctx.guildId, 'p2').losses, 1);
     cleanup(ctx);
   },
 
-  async 'a successful rebuttal is a tie'() {
+  async 'the same turn count is a tie, with no tiebreaker'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await guess(ctx, 'p1', true);
-    await guess(ctx, 'p2', true);
+    await guess(ctx, 'p2', true); // both on turn 1
 
     assert.equal(ctx.lobby.status, 'FINISHED');
-    assert.match(lastChannelMessage(ctx), /tie/);
+    assert.match(lastChannelMessage(ctx), /It's a tie/);
     assert.equal(stats.getPlayerStats(ctx.guildId, 'p1').ties, 1);
     assert.equal(stats.getPlayerStats(ctx.guildId, 'p2').ties, 1);
     cleanup(ctx);
   },
 
-  async 'the second player winning ends the game immediately (no rebuttal owed)'() {
+  async 'the second player getting it first still wins, on equal turns'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await pass(ctx, 'p1');
-    await guess(ctx, 'p2', true);
+    await guess(ctx, 'p2', true); // p2 done on turn 1, p1 has had a turn and failed it
+    // p1 is alone and can no longer even tie, but is not cut off -- they play on.
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+    await guess(ctx, 'p1', true); // gets theirs on turn 2
 
     assert.equal(ctx.lobby.status, 'FINISHED');
     const final = lastChannelMessage(ctx);
-    assert.match(final, /guessed correctly and wins/);
-    assert.ok(!/rebuttal/i.test(final), 'must not mention a rebuttal that never happened');
+    assert.match(final, /<@p2> wins/);
+    assert.ok(!/rebuttal/i.test(final), 'the rebuttal rule is gone entirely');
+    cleanup(ctx);
+  },
+
+  async 'the last player still guessing can give up, and Pass says so'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    await guess(ctx, 'p1', true);
+    const game = ctx.lobby.game;
+
+    // p2 is now the only one left, so their control is relabelled before it changes meaning.
+    const { buildTurnBoardPayload } = require('../src/game/turnBoard');
+    const passBtn = buildTurnBoardPayload(game, ctx.channelId)
+      .components[1].toJSON().components[0];
+    assert.equal(passBtn.label, 'Give up');
+    assert.match(channelText(ctx), /You're the last one guessing/);
+
+    await pass(ctx, 'p2');
+    assert.equal(ctx.lobby.status, 'FINISHED');
+    assert.match(lastChannelMessage(ctx), /<@p2> gave up/);
+    assert.equal(stats.getPlayerStats(ctx.guildId, 'p2').losses, 1);
     cleanup(ctx);
   },
 
@@ -289,6 +325,7 @@ module.exports = {
     await confirmBoth(ctx);
     await pass(ctx, 'p1');
     await guess(ctx, 'p2', true);
+    await pass(ctx, 'p1'); // p1 alone, gives up -- that's what ends it
     assert.equal(ctx.lobby.status, 'FINISHED');
     assert.equal(GameManager.getLobby(ctx.channelId), ctx.lobby, 'kept for /rematch');
 
@@ -304,7 +341,9 @@ module.exports = {
     );
     const fresh = GameManager.getLobby(ctx.channelId);
     assert.equal(fresh.status, 'WAITING');
-    assert.deepEqual(fresh.players, ['p2', 'p1'], 'turn order swaps between games');
+    // Order is no longer swapped: scoring on turns taken means the seat carries no
+    // advantage to alternate away.
+    assert.deepEqual(fresh.players, ['p1', 'p2'], 'turn order carries over');
     assert.deepEqual(fresh.listIds, ctx.lobby.listIds, 'settings carried over');
     GameManager.endLobby(ctx.channelId);
   },

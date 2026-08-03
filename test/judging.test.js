@@ -20,7 +20,7 @@ async function runningGame() {
   const guildId = `judge-guild-${n}`;
   const channelId = `judge-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Judge List', 'tester', 'Video Games');
   for (const name of ['Mario', 'Luigi', 'Peach', 'Bowser']) lists.addCharacter(listId, name, 'tester');
@@ -85,58 +85,57 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'a wrong ruling counts the guess and keeps the turn alive'() {
+  // Wrong guesses are deliberately not counted anywhere. The only count that survived is
+  // turns, because the bot hands those out itself rather than depending on a judge
+  // remembering to press -- which undercounted, worst for whoever pressed most honestly.
+  async 'a wrong ruling costs nothing and keeps the turn alive'() {
     const ctx = await runningGame();
     const game = ctx.lobby.game;
 
     await press(ctx, 'p2', 'wrong');
-    assert.equal(game.guessLog.length, 1);
-    assert.equal(game.guessCountFor('p1'), 1, 'counted against the guesser, not the judge');
     assert.equal(game.currentPlayerId, 'p1', 'a wrong guess never ends a turn');
+    assert.equal(game.turnsFor('p1'), 1, 'and never costs a turn');
 
     await press(ctx, 'p2', 'wrong');
-    assert.equal(game.guessCountFor('p1'), 2);
+    assert.equal(game.currentPlayerId, 'p1');
+    assert.equal(game.turnsFor('p1'), 1);
     cleanup(ctx);
   },
 
-  // The bot never heard the name, so it stores none -- inventing a placeholder would be
-  // worse than admitting the guess was spoken.
-  async 'a judged guess is recorded without a name, and shows only in the count'() {
-    const ctx = await runningGame();
-    await press(ctx, 'p2', 'wrong');
-
-    const [entry] = ctx.lobby.game.guessLog;
-    assert.equal(entry.correct, false);
-    assert.equal(entry.playerId, 'p1', 'against the guesser, not the judge');
-    assert.ok(!('text' in entry), 'there is no name to record');
-
-    // The board reports a count rather than a list -- there is no name to list.
-    const payload = buildTurnBoardPayload(ctx.lobby.game, ctx.channelId);
-    const field = payload.embeds[0].toJSON().fields.find((f) => f.name === 'Guesses so far');
-    assert.match(field.value, /\*\*1\*\* guess this game/);
-    cleanup(ctx);
-  },
-
-  async 'the running count rides on the button so the judge sees presses land'() {
+  async 'the Nope button carries no tally to keep'() {
     const ctx = await runningGame();
     assert.equal(labelOf(buildTurnBoardPayload(ctx.lobby.game, ctx.channelId), 'wrong'), 'Nope');
 
     await press(ctx, 'p2', 'wrong');
     await press(ctx, 'p2', 'wrong');
-    assert.equal(labelOf(buildTurnBoardPayload(ctx.lobby.game, ctx.channelId), 'wrong'), 'Nope · 2');
+    assert.equal(labelOf(buildTurnBoardPayload(ctx.lobby.game, ctx.channelId), 'wrong'), 'Nope');
     cleanup(ctx);
   },
 
-  async 'a correct ruling ends the turn without the bot matching any text'() {
+  // The board shows turns rather than guesses: it is the score, and it is the only thing
+  // here the bot observes directly.
+  async 'the board shows who has finished and on what turn'() {
+    const ctx = await runningGame();
+    const game = ctx.lobby.game;
+
+    const before = buildTurnBoardPayload(game, ctx.channelId).embeds[0].toJSON();
+    const standings = before.fields.find((f) => f.name === 'Standings');
+    assert.match(standings.value, /🎯 <@p1> — turn 1 \(guessing\)/);
+    assert.match(standings.value, /⏳ <@p2> — turn 0/);
+
+    await press(ctx, 'p2', 'right');
+    const after = buildTurnBoardPayload(game, ctx.channelId).embeds[0].toJSON();
+    assert.match(after.fields.find((f) => f.name === 'Standings').value, /✅ <@p1> — turn 1/);
+    cleanup(ctx);
+  },
+
+  async 'a correct ruling finishes that player without the bot matching any text'() {
     const ctx = await runningGame();
     const game = ctx.lobby.game;
 
     await press(ctx, 'p2', 'right');
-    assert.equal(game.guessLog.at(-1).correct, true);
-    // p1 moved first, so a correct guess buys the other player a rebuttal rather than
-    // ending the game outright.
-    assert.equal(game.rebuttal, true);
-    assert.equal(game.currentPlayerId, 'p2');
+    assert.equal(game.finishedBy.get('p1'), 1);
+    assert.equal(game.currentPlayerId, 'p2', 'p2 plays on -- nobody is cut off');
     cleanup(ctx);
   },
 
@@ -144,8 +143,8 @@ module.exports = {
     const ctx = await runningGame();
     await press(ctx, 'p1', 'right');
 
-    assert.equal(ctx.lobby.game.guessLog.length, 0, 'nothing recorded');
-    assert.equal(ctx.lobby.game.rebuttal, false, 'and the turn did not resolve');
+    assert.equal(ctx.lobby.game.finishedBy.size, 0, 'nothing recorded');
+    assert.equal(ctx.lobby.game.currentPlayerId, 'p1', 'and the turn did not resolve');
     assert.match(ctx.recorder.allText(), /You're guessing this turn/);
     cleanup(ctx);
   },
@@ -153,7 +152,7 @@ module.exports = {
   async 'a spectator cannot judge either'() {
     const ctx = await runningGame();
     await press(ctx, 'nosy-spectator', 'wrong');
-    assert.equal(ctx.lobby.game.guessLog.length, 0);
+    assert.equal(ctx.lobby.game.finishedBy.size, 0);
     assert.match(ctx.recorder.allText(), /Only <@p2> can judge/);
     cleanup(ctx);
   },
@@ -168,41 +167,35 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // The tally is per player and spans the whole game, so ending a turn does not wipe what
-  // somebody has already spent. Stopping a REPEAT guess is the other player's job now --
-  // the bot has no names to compare.
-  async 'each player keeps their own running tally across turns'() {
+  // Turns are counted per player, not as a shared round number -- which is what keeps the
+  // score meaningful once players start dropping out of the rotation.
+  async 'each player accrues their own turns'() {
     const ctx = await runningGame();
     const game = ctx.lobby.game;
 
-    await press(ctx, 'p2', 'wrong');
     await press(ctx, 'p1', 'pass');
     assert.equal(game.currentPlayerId, 'p2', "now p2's turn");
-
-    // Each player's count is their own.
-    await press(ctx, 'p1', 'wrong');
-    assert.equal(game.guessCountFor('p2'), 1);
-    assert.equal(game.guessCountFor('p1'), 1, "p1's earlier guess survived their turn ending");
+    assert.deepEqual([game.turnsFor('p1'), game.turnsFor('p2')], [1, 1]);
 
     await press(ctx, 'p2', 'pass');
-    const payload = buildTurnBoardPayload(game, ctx.channelId);
-    const field = payload.embeds[0].toJSON().fields.find((f) => f.name === 'Guesses so far');
-    assert.match(field.value, /\*\*1\*\* guess this game/, "p1's count survived a full round");
+    assert.equal(game.currentPlayerId, 'p1');
+    assert.deepEqual([game.turnsFor('p1'), game.turnsFor('p2')], [2, 1], 'p1 is on their second');
     cleanup(ctx);
   },
 
-  async 'the reveal reports how many guesses it took'() {
+  async 'the reveal reports how many turns it took'() {
     const ctx = await runningGame();
-    const game = ctx.lobby.game;
 
     await press(ctx, 'p2', 'wrong');
     await press(ctx, 'p2', 'wrong');
-    await press(ctx, 'p2', 'right');
-    // p1 was first mover, so p2 gets a rebuttal; passing it hands p1 the win.
-    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    await press(ctx, 'p1', 'pass'); // p1 into turn 2 without getting it
+    await press(ctx, 'p2', 'pass');
+    await press(ctx, 'p2', 'right'); // p1 gets it on turn 2
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // alone, gives up
 
     const revealed = ctx.recorder.textMatching(`channel:${ctx.channelId}`);
-    assert.match(revealed, /guess \*\*#3\*\*/, 'three guesses, the third of which landed');
+    assert.match(revealed, /got it in \*\*2\*\* turns/, 'wrong guesses cost nothing, the clock does');
+    assert.match(revealed, /<@p1> wins/);
     cleanup(ctx);
   },
 

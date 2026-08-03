@@ -12,7 +12,7 @@ const {
   getListsByIds,
   REROLL_DEMOTE_THRESHOLD,
 } = require('../db/characterLists');
-const { recordResult } = require('../db/stats');
+const { recordGame } = require('../db/stats');
 const { refreshLobbyBoard } = require('./lobbyBoard');
 const { buildTurnBoardPayload, refreshTurnBoard } = require('./turnBoard');
 const { trackBoard, untrackBoard } = require('./boards');
@@ -495,8 +495,9 @@ async function startTurn(client, lobby) {
   const game = lobby.game;
   const channel = await getChannel(client, lobby);
 
-  // Fresh board and a clean guess tally for the new turn.
-  game.turnGuesses = [];
+  // The score is counted here, where turns are handed out, rather than anywhere a player
+  // has to remember to press something.
+  game.turnsTaken.set(game.currentPlayerId, game.turnsFor(game.currentPlayerId) + 1);
   game.timer = new TurnTimer(game.turnSeconds * 1000, () => {
     handleTimeout(client, lobby).catch(console.error);
   });
@@ -543,8 +544,6 @@ async function submitJudgement(client, lobby, judgeId, correct) {
     return { ok: false, error: "You're the one guessing -- <@" + game.judgeId + "> judges this turn." };
   }
 
-  game.recordGuess(game.currentPlayerId, correct);
-
   if (correct) {
     voice.playCorrectSound(game);
     await endTurn(client, lobby, { correct: true });
@@ -558,10 +557,20 @@ async function submitJudgement(client, lobby, judgeId, correct) {
     return { ok: true, correct: false, turnEnded: true };
   }
 
+  // A wrong guess costs nothing and is not recorded -- the turn simply carries on. The
+  // buzzer above is the whole of its effect.
   await refreshTurnBoard(game, lobby.channelId);
   return { ok: true, correct: false, turnEnded: false };
 }
 
+/**
+ * Pass hands the turn on -- except when you are the last player still guessing, where there
+ * is nobody to hand it to and a press would only cycle straight back to you. There it means
+ * give up, and the board says so (see turnBoard.buildButtons).
+ *
+ * Because players otherwise leave the rotation only by finishing, this is reachable exactly
+ * once per game: everyone else has already got theirs.
+ */
 async function submitPass(client, lobby, playerId) {
   const game = lobby.game;
   if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
@@ -570,8 +579,10 @@ async function submitPass(client, lobby, playerId) {
   if (playerId !== game.currentPlayerId) {
     return { ok: false, error: "It's not your turn." };
   }
-  await endTurn(client, lobby, { correct: false });
-  return { ok: true };
+  const gaveUp = game.activePlayers.length === 1;
+  if (gaveUp) game.surrendered.add(playerId);
+  await endTurn(client, lobby, { correct: false, gaveUp });
+  return { ok: true, gaveUp };
 }
 
 async function handlePass(interaction, lobby) {
@@ -579,58 +590,61 @@ async function handlePass(interaction, lobby) {
   if (!result.ok) {
     return interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
   }
-  return interaction.reply({ content: 'Turn passed.', flags: MessageFlags.Ephemeral });
+  return interaction.reply({
+    content: result.gaveUp ? 'You gave up -- that ends the game.' : 'Turn passed.',
+    flags: MessageFlags.Ephemeral,
+  });
 }
 
-async function endTurn(client, lobby, { correct }) {
+/**
+ * Announces that somebody got theirs, and reveals the character they were wearing.
+ *
+ * Safe to make public: everyone else could already see it, and the player themselves has
+ * just worked it out. Its own message rather than an edit to the turn board, so it survives
+ * as the game's actual history while the boards come and go.
+ */
+async function announceCompletion(client, lobby, playerId) {
+  const game = lobby.game;
+  const turns = game.finishedBy.get(playerId);
+  const stillGuessing = game.activePlayers.length;
+  const channel = await getChannel(client, lobby);
+  const tail = stillGuessing
+    ? ` ${stillGuessing} still guessing.`
+    : '';
+  await channel.send(
+    characterMessage(
+      `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
+      [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
+    )
+  );
+}
+
+async function endTurn(client, lobby, { correct, gaveUp = false }) {
   const game = lobby.game;
   clearTimers(game);
+  const finishingPlayerId = game.currentPlayerId;
+
+  // Recorded before the board is frozen, so the outgoing board can state the outcome.
+  if (correct) game.finishedBy.set(finishingPlayerId, game.turnsFor(finishingPlayerId));
+
   // Freeze the outgoing turn's board (buttons removed, outcome shown) before anything
   // posts a new one, so old boards are never left clickable.
-  await refreshTurnBoard(game, lobby.channelId, { correct });
+  await refreshTurnBoard(game, lobby.channelId, { correct, gaveUp });
   game.turnBoardMessage = null;
   game.paused = false;
-  const finishingPlayerId = game.currentPlayerId;
-  const isP1 = game.isFirstMover(finishingPlayerId);
 
-  if (correct) {
-    if (game.rebuttal) {
-      // Rebuttal is only ever granted to P2, so a correct guess here means both got it -- a tie.
-      return finalizeGame(client, lobby, { result: 'tie', rebuttalPlayerId: finishingPlayerId });
-    }
-    if (isP1) {
-      // P1 always moves first each round, so P2 hasn't had this round's turn yet -- give them one shot.
-      game.rebuttal = true;
-      game.currentTurnIndex = 1;
-      const channel = await getChannel(client, lobby);
-      await channel.send(
-        `🔁 <@${finishingPlayerId}> got it right! Since they went first, <@${game.turnOrder[1]}> gets one rebuttal turn.`
-      );
-      return startTurn(client, lobby);
-    }
-    // P2 winning means P1 already had their turn this round -- no rebuttal owed.
-    return finalizeGame(client, lobby, { result: 'win', winnerId: finishingPlayerId, viaRebuttal: false });
-  }
+  if (correct) await announceCompletion(client, lobby, finishingPlayerId);
 
-  if (game.rebuttal) {
-    return finalizeGame(client, lobby, {
-      result: 'win',
-      winnerId: game.turnOrder[0],
-      viaRebuttal: true,
-      rebuttalPlayerId: finishingPlayerId,
-    });
-  }
-
-  if (game.currentTurnIndex === 0) {
-    game.currentTurnIndex = 1;
-  } else {
-    game.currentTurnIndex = 0;
-    game.round += 1;
-  }
+  // Everyone plays until they get their character, so one player finishing ends only their
+  // own involvement. The game is over when nobody is left guessing -- which, since players
+  // otherwise leave only by finishing, means all of them got there or all but the last one did.
+  const next = game.nextActiveIndex();
+  if (next === null) return finalizeGame(client, lobby);
+  game.currentTurnIndex = next;
   return startTurn(client, lobby);
 }
 
-async function finalizeGame(client, lobby, outcome) {
+async function finalizeGame(client, lobby) {
   const game = lobby.game;
   game.finished = true;
   clearTimers(game);
@@ -639,16 +653,39 @@ async function finalizeGame(client, lobby, outcome) {
   lobby.status = 'FINISHED';
   await refreshLobbyBoard(lobby);
   const channel = await getChannel(client, lobby);
-  const [p1Id, p2Id] = game.turnOrder;
 
-  const [p1Name, p2Name] = await Promise.all([displayName(client, p1Id), displayName(client, p2Id)]);
+  const standings = game.standings();
+  const winners = standings.filter((s) => s.outcome === 'won');
+  const best = game.bestTurnCount;
+  const turnWord = (n) => `**${n}** turn${n === 1 ? '' : 's'}`;
+
   let resultLine;
-  if (outcome.result === 'tie') {
-    resultLine = `🤝 <@${outcome.rebuttalPlayerId}> also got it right on the rebuttal turn -- it's a tie!`;
-  } else if (outcome.viaRebuttal) {
-    resultLine = `❌ <@${outcome.rebuttalPlayerId}> didn't get it on the rebuttal turn. 🏆 <@${outcome.winnerId}> wins!`;
+  if (!winners.length) {
+    // Unreachable in normal play -- giving up requires everyone else to have finished --
+    // but a game cut short some other way shouldn't crash the reveal.
+    resultLine = '🛑 Nobody got their character.';
+  } else if (winners.length > 1) {
+    resultLine = `🤝 It's a tie — ${winners.map((s) => `<@${s.playerId}>`).join(' and ')} both got it in ${turnWord(best)}!`;
   } else {
-    resultLine = `🏆 <@${outcome.winnerId}> guessed correctly and wins!`;
+    resultLine = `🏆 <@${winners[0].playerId}> wins — got it in ${turnWord(best)}!`;
+  }
+
+  // The full order, which is the only place the losing turn counts are ever stated. Skipped
+  // at two players, where the result line has already said everything there is to say.
+  if (standings.length > 2) {
+    const places = standings.map((s, i) => {
+      const how = s.turnsTaken === null ? '_gave up_' : `${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}`;
+      return `${i + 1}. <@${s.playerId}> — ${how}`;
+    });
+    resultLine += `\n\n**Final standings**\n${places.join('\n')}`;
+  } else {
+    const loser = standings.find((s) => s.outcome !== 'won');
+    if (loser) {
+      resultLine +=
+        loser.turnsTaken === null
+          ? ` <@${loser.playerId}> gave up.`
+          : ` <@${loser.playerId}> needed ${loser.turnsTaken}.`;
+    }
   }
 
   // The audience chose these characters and then heard nothing about it -- the reveal is
@@ -663,15 +700,6 @@ async function finalizeGame(client, lobby, outcome) {
     }`;
   });
 
-  // Now that guesses are judged rather than typed, this count reflects what actually
-  // happened at the table instead of only the guesses somebody remembered to submit.
-  if (outcome.result !== 'tie' && outcome.winnerId) {
-    const taken = game.guessCountFor(outcome.winnerId);
-    if (taken > 0) {
-      resultLine += ` — on guess **#${taken}**, round **${game.round}**.`;
-    }
-  }
-
   const gameOverButtons = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`over:rematch:${lobby.channelId}`)
@@ -685,13 +713,14 @@ async function finalizeGame(client, lobby, outcome) {
       .setStyle(ButtonStyle.Secondary)
   );
 
+  const names = await Promise.all(game.turnOrder.map((id) => displayName(client, id)));
   const reveal = await channel.send({
     ...characterMessage(
       voteLines.length ? `${resultLine}\n\n🗳️ **How the audience voted**\n${voteLines.join('\n')}` : resultLine,
-      [
-        { label: `${p1Name}'s character was`, ...game.headByPlayer[p1Id] },
-        { label: `${p2Name}'s character was`, ...game.headByPlayer[p2Id] },
-      ]
+      game.turnOrder.map((id, i) => ({
+        label: `${names[i]}'s character was`,
+        ...game.headByPlayer[id],
+      }))
     ),
     components: [gameOverButtons],
   });
@@ -699,8 +728,7 @@ async function finalizeGame(client, lobby, outcome) {
   // this row -- the sweep keeps the Leaderboard button, which reads from SQLite.
   trackBoard('gameover', reveal);
 
-  const result = outcome.result === 'tie' ? 'tie' : outcome.winnerId === p1Id ? 'player1' : 'player2';
-  recordResult(lobby.guildId, p1Id, p2Id, result);
+  recordGame(lobby.guildId, standings);
 
   // Give the win sound time to finish before disconnecting, instead of cutting it off.
   if (wasInVoice) {

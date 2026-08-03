@@ -38,4 +38,36 @@ if (listColumns.length && !listColumns.some((col) => col.name === 'popularity'))
   db.exec('ALTER TABLE character_lists ADD COLUMN popularity INTEGER');
 }
 
+// game_results -> games + game_players. A table split rather than a column add, so it can't
+// use the PRAGMA idiom above.
+//
+// The guard is the old table's existence, and the last step renames it away: that makes the
+// migration idempotent (a second run finds nothing called game_results) without needing a
+// migrations table. It is kept rather than dropped so the change stays reversible -- it costs
+// nothing, and a fresh database never creates it in the first place.
+const legacyResults = db
+  .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'game_results'")
+  .get();
+if (legacyResults) {
+  const migrate = db.transaction(() => {
+    const rows = db.prepare('SELECT * FROM game_results ORDER BY finished_at').all();
+    const insertGame = db.prepare(
+      'INSERT INTO games (guild_id, player_count, finished_at) VALUES (?, 2, ?)'
+    );
+    const insertPlayer = db.prepare(
+      'INSERT INTO game_players (game_id, user_id, turns_taken, outcome) VALUES (?, ?, NULL, ?)'
+    );
+    for (const row of rows) {
+      const gameId = insertGame.run(row.guild_id, row.finished_at).lastInsertRowid;
+      // turns_taken stays NULL: these games were scored on who guessed first, and never
+      // recorded how many turns it took. A tie becomes two 'won' rows, which is exactly how
+      // the new schema represents one.
+      insertPlayer.run(gameId, row.player1_id, row.result === 'player2' ? 'lost' : 'won');
+      insertPlayer.run(gameId, row.player2_id, row.result === 'player1' ? 'lost' : 'won');
+    }
+    db.exec('ALTER TABLE game_results RENAME TO game_results_legacy');
+  });
+  migrate();
+}
+
 module.exports = db;

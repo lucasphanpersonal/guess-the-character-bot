@@ -27,7 +27,7 @@ function makeLobby({ voteOptions = 5, voteSeconds = 60, mode = 'audience-vote' }
   const guildId = `vote-guild-${n}`;
   const channelId = `vote-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Vote List', 'tester', 'Video Games');
   for (const name of CHARACTERS) lists.addCharacter(listId, name, 'tester');

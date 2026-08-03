@@ -61,11 +61,30 @@ CREATE TABLE IF NOT EXISTS active_boards (
   UNIQUE(channel_id, message_id)
 );
 
-CREATE TABLE IF NOT EXISTS game_results (
+-- One row per finished game, and one per player in it.
+--
+-- This replaces a single game_results table with two hardcoded player columns and a
+-- 'player1' | 'player2' | 'tie' verdict, which cannot describe a game with three players in
+-- it. See docs/multiplayer-design.md. Existing rows are migrated in connection.js.
+CREATE TABLE IF NOT EXISTS games (
   id INTEGER PRIMARY KEY,
   guild_id TEXT NOT NULL,
-  player1_id TEXT NOT NULL,
-  player2_id TEXT NOT NULL,
-  result TEXT NOT NULL, -- 'player1', 'player2', or 'tie'
+  player_count INTEGER NOT NULL,
   finished_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS game_players (
+  game_id INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  -- Turns this player needed to get their character -- the score, fewest wins. NULL when
+  -- they never got it: they gave up, or the game predates turn tracking.
+  turns_taken INTEGER,
+  -- 'won' | 'lost' | 'gave_up'. Stored rather than derived from MIN(turns_taken) because
+  -- migrated two-player games have no turn counts, and inventing them would be a lie about
+  -- the data. A tie is simply more than one 'won' row for the same game.
+  outcome TEXT NOT NULL,
+  PRIMARY KEY (game_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_games_guild ON games(guild_id);
+CREATE INDEX IF NOT EXISTS idx_game_players_user ON game_players(user_id);

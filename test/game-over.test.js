@@ -15,7 +15,7 @@ async function finishedGame() {
   const guildId = `over-guild-${n}`;
   const channelId = `over-chan-${n}`;
   db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
-  db.prepare('DELETE FROM game_results WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM games WHERE guild_id = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Over List', 'tester', 'Video Games');
   for (const name of ['Mario', 'Luigi', 'Peach']) lists.addCharacter(listId, name, 'tester');
@@ -44,9 +44,11 @@ async function finishedGame() {
       createButtonInteraction({ client, userId, customId: `confirm:${channelId}`, recorder })
     );
   }
-  // p1 passes, p2 guesses their own head correctly -> immediate win, no rebuttal.
+  // p1 passes; p2 gets theirs on turn 1; p1 is then alone and gives up, which is what ends
+  // the game now that nobody is cut off by somebody else finishing.
   await engine.submitPass(client, lobby, 'p1');
   await engine.submitJudgement(client, lobby, 'p1', true);
+  await engine.submitPass(client, lobby, 'p1');
 
   return { lobby, client, recorder, channelId, guildId };
 }
@@ -83,7 +85,7 @@ module.exports = {
 
     const fresh = GameManager.getLobby(ctx.channelId);
     assert.equal(fresh.status, 'WAITING');
-    assert.deepEqual(fresh.players, ['p2', 'p1'], 'order swapped versus the finished game');
+    assert.deepEqual(fresh.players, ['p1', 'p2'], 'order carries over from the finished game');
     assert.deepEqual(fresh.listIds, ctx.lobby.listIds, 'settings carried over');
     assert.equal(fresh.hostId, 'p2', 'whoever clicked hosts the rematch');
     GameManager.endLobby(ctx.channelId);
@@ -141,7 +143,7 @@ module.exports = {
     );
     const fresh = GameManager.getLobby(ctx.channelId);
     assert.equal(fresh.status, 'WAITING');
-    assert.deepEqual(fresh.players, ['p2', 'p1']);
+    assert.deepEqual(fresh.players, ['p1', 'p2']);
     GameManager.endLobby(ctx.channelId);
   },
 };

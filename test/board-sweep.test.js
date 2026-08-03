@@ -9,6 +9,7 @@ const { buildLobbyBoardPayload, refreshLobbyBoard } = require('../src/game/lobby
 const { refreshTurnBoard } = require('../src/game/turnBoard');
 const { refreshVoteBoard, AudienceVote } = require('../src/game/audienceVote');
 const engine = require('../src/game/engine');
+const Game = require('../src/game/Game');
 const Lobby = require('../src/game/Lobby');
 const GameManager = require('../src/game/GameManager');
 const lists = require('../src/db/characterLists');
@@ -171,15 +172,11 @@ module.exports = {
     const channelId = `sweep-chan-${++counter}`;
     const recorder = createRecorder();
 
-    const game = {
-      round: 1,
-      currentPlayerId: 'p1',
-      judgeId: 'p2',
-      turnGuesses: [],
-      guessLog: [],
+    const game = new Game({
+      lobby: { guildId: 'sweep-guild', players: ['p1', 'p2'] },
+      characters: [{ name: 'Mario' }, { name: 'Luigi' }],
       turnSeconds: 90,
-      paused: false,
-    };
+    });
     game.turnBoardMessage = postedBoard(recorder, channelId, { content: 'turn board' });
     trackBoard('turn', game.turnBoardMessage);
     await refreshTurnBoard(game, channelId, { correct: true });
