@@ -135,7 +135,12 @@ happen live between humans in voice.
 
    Once you're the last player still guessing there's nobody to pass to, so **⏭️ Pass**
    becomes **🏳️ Give up** — relabelled and red, rather than quietly changing meaning under
-   someone who's been passing all game out of habit. It's the only way to end a game early.
+   someone who's been passing all game out of habit.
+
+   **`/lobby leave` also works mid-game**, and forfeits: no turn count, recorded as having
+   given up, no way back in. It asks first, since it can't be undone. Everyone else plays on —
+   one person having to go shouldn't end a six-player game, and until now the host cancelling
+   it for everybody was the only way out.
 
    #### Why turns, and not guesses
 
@@ -323,7 +328,7 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list select` | anyone | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
 | `/list toggle` | anyone | Switch one named list in or out of the pool |
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
-| `/lobby join` / `/lobby leave` | anyone | Join or leave the waiting lobby — two minimum, no maximum (or use the board's buttons) |
+| `/lobby join` / `/lobby leave` | anyone | Join or leave the lobby — two minimum, no maximum. Mid-game, `leave` forfeits after a confirmation |
 | `/lobby spectate` | anyone | Opt in to a DM revealing every character (or the 👁 button on the lobby *or* turn board) |
 | `/lobby set-characters` | host | Hand-pick both characters in a 2-player game; the board's 🎭 button covers up to five |
 | `/lobby start` | host | Deal characters and begin |

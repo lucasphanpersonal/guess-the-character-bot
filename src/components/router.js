@@ -25,6 +25,8 @@ const HANDLERS = {
   lobby: (interaction) => lobbyButtons.handle(interaction),
   // Turn board buttons and the guess modal.
   turn: (interaction) => turnControls.handle(interaction),
+  // Confirming that you really do want to leave a game already under way.
+  forfeit: (interaction) => turnControls.handleForfeit(interaction),
   // Audience vote board, ballot select menus, and host close button.
   vote: (interaction) => voteControls.handle(interaction),
   // End-of-game reveal buttons.

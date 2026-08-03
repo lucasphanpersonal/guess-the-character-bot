@@ -435,6 +435,51 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
 }
 
 /**
+ * A player quitting a game already in progress.
+ *
+ * Until now the only way out was getting your character, or being the last one guessing and
+ * giving up -- so a player who had to leave could not, and the host's only tool ended the game
+ * for everyone. That is a two-player assumption surviving into six-player games: one person
+ * with a dying laptop should not be able to strand five.
+ *
+ * They leave with no turn count, recorded as `gave_up`, which is the truth: they chose to
+ * stop. Everyone else plays on.
+ *
+ * If it is their turn, this goes through endTurn so the rotation advances and the resolution
+ * guard applies -- a forfeit racing a judgement must not resolve the same turn twice. If it is
+ * not their turn, nothing needs advancing: the current player is active by definition, so a
+ * forfeit by anybody else can never empty the table.
+ */
+async function submitForfeit(client, lobby, playerId) {
+  const game = lobby.game;
+  if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
+    return { ok: false, error: 'No game in progress.' };
+  }
+  if (!game.turnOrder.includes(playerId)) {
+    return { ok: false, error: "You're not playing in this game." };
+  }
+  if (!game.isActive(playerId)) {
+    return { ok: false, error: "You're already out of this game." };
+  }
+
+  game.surrendered.add(playerId);
+  const channel = await getChannel(client, lobby);
+  const left = game.activePlayers.length;
+  await channel.send(
+    `🏳️ <@${playerId}> has left the game.` +
+      (left ? ` ${left} still guessing.` : '')
+  );
+
+  if (playerId === game.currentPlayerId) {
+    await endTurn(client, lobby, { correct: false, gaveUp: true });
+  } else {
+    // Their row in the standings changed, so the live board is now out of date.
+    await refreshTurnBoard(game, lobby.channelId);
+  }
+  return { ok: true };
+}
+
+/**
  * Writes the results of a game the host ended early, instead of binning them.
  *
  * Not about restarts -- the bot does not realistically restart mid-game. It is about the way
@@ -578,6 +623,7 @@ module.exports = {
   closeAudienceVote,
   submitJudgement,
   submitPass,
+  submitForfeit,
   handlePass,
   handleTimeout,
   maybeBeginPlay,

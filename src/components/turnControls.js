@@ -136,4 +136,26 @@ async function handle(interaction) {
   return interaction.reply(ephemeral('Unknown turn action.'));
 }
 
-module.exports = { handle };
+/**
+ * The confirmation raised by `/lobby leave` during a game.
+ *
+ * Separate from `handle` because it arrives from a slash command's ephemeral reply rather
+ * than from the turn board, and it is the only control here that a player uses to remove
+ * themselves rather than to rule on somebody else.
+ */
+async function handleForfeit(interaction) {
+  const [, channelId] = interaction.customId.split(':');
+  const lobby = GameManager.getLobby(channelId);
+  const result = await engine
+    .submitForfeit(interaction.client, lobby, interaction.user.id)
+    .catch((err) => {
+      console.error(err);
+      return { ok: false, error: 'Something went wrong leaving the game.' };
+    });
+  return interaction.update({
+    content: result.ok ? '🏳️ You have left the game.' : result.error,
+    components: [],
+  });
+}
+
+module.exports = { handle, handleForfeit };

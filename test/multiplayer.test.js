@@ -351,6 +351,66 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Players used to leave a game only by finishing it, so somebody who had to go could not,
+  // and the host's only tool ended it for everybody.
+  async 'a player can leave a game in progress and the rest carry on'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    // p3 quits while p1 is up -- not their turn, so nothing should advance.
+    const before = game.currentPlayerId;
+    const result = await engine.submitForfeit(ctx.client, ctx.lobby, 'p3');
+    assert.equal(result.ok, true);
+    assert.ok(game.surrendered.has('p3'));
+    assert.equal(game.currentPlayerId, before, 'the turn did not move');
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+
+    // ...and the rotation now skips them.
+    await engine.submitPass(ctx.client, ctx.lobby, 'p1');
+    assert.equal(game.currentPlayerId, 'p2');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    assert.equal(game.currentPlayerId, 'p4', 'p3 is skipped');
+    cleanup(ctx);
+  },
+
+  async 'leaving on your own turn hands it straight on'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await engine.submitForfeit(ctx.client, ctx.lobby, 'p1'); // p1 is the current player
+    assert.equal(game.currentPlayerId, 'p2', 'the turn advanced');
+    assert.ok(game.surrendered.has('p1'));
+    cleanup(ctx);
+  },
+
+  async 'a player who left is recorded as having given up, with no turn count'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    await engine.submitForfeit(ctx.client, ctx.lobby, 'p4');
+    await judge(ctx, 'p1', true);
+    await judge(ctx, 'p2', true);
+    await judge(ctx, 'p3', true);
+
+    const byId = Object.fromEntries(ctx.lobby.game.standings().map((s) => [s.playerId, s]));
+    assert.equal(byId.p4.outcome, 'gave_up');
+    assert.equal(byId.p4.turnsTaken, null);
+    assert.equal(byId.p1.outcome, 'won');
+    cleanup(ctx);
+  },
+
+  async 'leaving twice is refused rather than recorded twice'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    await engine.submitForfeit(ctx.client, ctx.lobby, 'p3');
+    const again = await engine.submitForfeit(ctx.client, ctx.lobby, 'p3');
+    assert.equal(again.ok, false);
+    assert.match(again.error, /already out/);
+    assert.equal(ctx.lobby.game.surrendered.size, 1);
+    cleanup(ctx);
+  },
+
   async 'anyone who is not guessing can judge'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);

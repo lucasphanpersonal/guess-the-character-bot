@@ -119,6 +119,7 @@ module.exports = {
           name: '🛠️ Anytime',
           value:
             '`/lobby status` -- whose turn it is, time left, and who has already finished\n' +
+            '`/lobby leave` -- mid-game this forfeits: you drop out, the others play on\n' +
             '`/lobby end` -- host or admin can cancel a stuck game\n' +
             '`/rematch` -- replay with the same players once a game finishes\n' +
             '`/leaderboard [player]` -- server standings, or one player\'s record and turn counts\n' +
