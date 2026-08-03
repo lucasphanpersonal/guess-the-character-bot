@@ -1,7 +1,8 @@
 const db = require('./connection');
 
 /**
- * @param {Array<{playerId: string, turnsTaken: number|null, outcome: string}>} standings
+ * @param {Array<{playerId: string, turnsTaken: number|null, outcome: string,
+ *                characterId: number|null}>} standings
  *        As produced by Game#standings() -- one entry per player, outcome already decided.
  */
 function recordGame(guildId, standings) {
@@ -9,12 +10,14 @@ function recordGame(guildId, standings) {
     'INSERT INTO games (guild_id, player_count, finished_at) VALUES (?, ?, ?)'
   );
   const insertPlayer = db.prepare(
-    'INSERT INTO game_players (game_id, user_id, turns_taken, outcome) VALUES (?, ?, ?, ?)'
+    'INSERT INTO game_players (game_id, user_id, turns_taken, outcome, character_id) VALUES (?, ?, ?, ?, ?)'
   );
   const write = db.transaction(() => {
     const gameId = insertGame.run(guildId, standings.length, Date.now()).lastInsertRowid;
-    for (const { playerId, turnsTaken, outcome } of standings) {
-      insertPlayer.run(gameId, playerId, turnsTaken, outcome);
+    for (const { playerId, turnsTaken, outcome, characterId } of standings) {
+      // ?? null so a caller that predates the field writes NULL rather than tripping
+      // better-sqlite3's refusal to bind undefined.
+      insertPlayer.run(gameId, playerId, turnsTaken, outcome, characterId ?? null);
     }
     return gameId;
   });

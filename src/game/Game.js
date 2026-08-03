@@ -173,6 +173,10 @@ class Game {
    * A tie is simply more than one 'won' row -- there is no tiebreaker, deliberately. The
    * game records that two people got there in the same number of turns and stops pretending
    * to know which was better.
+   *
+   * characterId rides along because this is the last moment the pairing exists: once the game
+   * is gone, nothing can say what anyone was wearing. Null for hand-assigned characters, which
+   * have no row behind them.
    */
   standings() {
     const best = this.bestTurnCount;
@@ -186,7 +190,7 @@ class Game {
         if (turns === null) outcome = this.surrendered.has(playerId) ? 'gave_up' : 'lost';
         else if (turns === best) outcome = 'won';
         else outcome = 'lost';
-        return { playerId, turnsTaken: turns, outcome };
+        return { playerId, turnsTaken: turns, outcome, characterId: this.headByPlayer[playerId].id };
       })
       .sort((a, b) => (a.turnsTaken ?? Infinity) - (b.turnsTaken ?? Infinity));
   }

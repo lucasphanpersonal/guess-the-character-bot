@@ -1,4 +1,4 @@
-// Handlers for the audience vote (customId `vote:<action>:<channelId>[:<slot>]`).
+// Handlers for the audience vote (customId `vote:<action>:<channelId>[:<slot|page>]`).
 //
 // The public board never names a candidate; names only ever reach a voter through the
 // ephemeral ballot built here, and only after we've confirmed they aren't playing.
@@ -17,7 +17,9 @@ const {
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
 
 async function handle(interaction) {
-  const [, action, channelId, slot] = interaction.customId.split(':');
+  // The last segment is a slot for `pick` and a page number for `page`.
+  const [, action, channelId, arg] = interaction.customId.split(':');
+  const slot = arg;
   const lobby = GameManager.getLobby(channelId);
   const vote = lobby?.vote;
 
@@ -62,6 +64,11 @@ async function handle(interaction) {
 
   if (action === 'open') {
     return interaction.reply({ ...buildBallotPayload(vote, interaction.user.id), flags: MessageFlags.Ephemeral });
+  }
+
+  if (action === 'page') {
+    // Purely a change of view: nothing is recorded, so the public board has nothing to say.
+    return interaction.update(buildBallotPayload(vote, interaction.user.id, { page: Number(arg) || 0 }));
   }
 
   if (action === 'pick') {

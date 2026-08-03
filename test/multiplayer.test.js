@@ -296,6 +296,61 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Turn counts on their own cannot tell a hard character from a slow table, and a finished
+  // game is not reconstructable afterwards -- so the pairing has to be written down at the
+  // one moment it exists.
+  async 'a finished game records which character each player was wearing'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await judge(ctx, 'p1', true);
+    await judge(ctx, 'p2', true);
+    await judge(ctx, 'p3', true);
+    await engine.submitPass(ctx.client, ctx.lobby, 'p4'); // alone -> gives up, ending the game
+
+    const rows = db
+      .prepare(
+        `SELECT gp.user_id, c.name
+           FROM game_players gp
+           JOIN games g ON g.id = gp.game_id
+           JOIN characters c ON c.id = gp.character_id
+          WHERE g.guild_id = ?`
+      )
+      .all(ctx.lobby.guildId);
+
+    assert.equal(rows.length, 4, 'everyone got a character id, including the player who gave up');
+    for (const row of rows) {
+      assert.equal(row.name, game.headByPlayer[row.user_id].name, `${row.user_id} wore this one`);
+    }
+    cleanup(ctx);
+  },
+
+  // /lobby set-characters hands out names with no row behind them, so there is no id to
+  // record -- and a game must still be recordable without one.
+  async 'a hand-assigned character records a null id rather than refusing'() {
+    const ctx = await startedGame(3);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+    game.headByPlayer.p2.id = null;
+
+    await judge(ctx, 'p1', true);
+    await judge(ctx, 'p2', true);
+    await judge(ctx, 'p3', true);
+
+    const rows = db
+      .prepare(
+        `SELECT gp.user_id, gp.character_id AS characterId
+           FROM game_players gp JOIN games g ON g.id = gp.game_id
+          WHERE g.guild_id = ?`
+      )
+      .all(ctx.lobby.guildId);
+    const byId = Object.fromEntries(rows.map((r) => [r.user_id, r.characterId]));
+    assert.equal(byId.p2, null, 'no row behind it, so nothing to point at');
+    assert.equal(byId.p1, game.headByPlayer.p1.id, 'and the others are unaffected');
+    cleanup(ctx);
+  },
+
   async 'anyone who is not guessing can judge'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
@@ -403,8 +458,10 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // The ballot needs one select menu per player and a message holds five action rows.
-  async 'audience vote runs at five players and refuses at six'() {
+  // A message holds five action rows and the ballot spends one per player, so at six the
+  // ballot starts paging rather than the mode refusing. See test/audience-vote.test.js for
+  // what paging guarantees; this only proves the roster no longer decides whether it runs.
+  async 'audience vote runs at five players and pages at six'() {
     const five = makeLobby(5, { mode: 'audience-vote' });
     const ok = await engine.startAudienceVote(five.client, five.lobby);
     assert.equal(ok.ok, true, ok.error);
@@ -412,10 +469,11 @@ module.exports = {
     cleanup(five);
 
     const six = makeLobby(6, { mode: 'audience-vote' });
-    const refused = await engine.startAudienceVote(six.client, six.lobby);
-    assert.equal(refused.ok, false);
-    assert.match(refused.error, /tops out at 5 players/);
-    assert.match(refused.error, /Turn the vote off/, 'and says what to do about it');
+    const stillFine = await engine.startAudienceVote(six.client, six.lobby);
+    assert.equal(stillFine.ok, true, stillFine.error);
+    const paged = buildBallotPayload(six.lobby.vote, 'voter');
+    assert.equal(paged.components.length, 5, 'four selects and a nav row');
+    assert.match(paged.content, /Page 1 of 2/);
     cleanup(six);
   },
 

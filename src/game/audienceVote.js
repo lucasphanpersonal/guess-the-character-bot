@@ -4,7 +4,7 @@
 // SPOILER CONSTRAINT -- the single most important rule in this file:
 // the candidates for a player's head are exactly what that player has to guess. So the
 // PUBLIC vote board must never name a candidate; it shows only a tally and a countdown.
-// The actual ballot is delivered ephemerally, per voter, and the two players are refused.
+// The actual ballot is delivered ephemerally, per voter, and the players are refused it.
 // Any change here should preserve that: `buildVoteBoardPayload` must stay name-free.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
@@ -16,10 +16,35 @@ function slotsFor(lobby) {
   return lobby.players.map((_, i) => String(i + 1));
 }
 
-// The ballot needs one select menu per player and a message holds five action rows, so this
-// mode cannot run past five however many are playing. The game itself has no cap -- see
-// Lobby.addPlayer -- so the limited surface refuses for itself instead of shrinking the game.
-const MAX_VOTE_PLAYERS = 5;
+// Discord allows five action rows per message and the ballot spends one on a select menu per
+// player, so the ballot is PAGED: a roster that fits inside five rows gets no navigation at
+// all, and past that the last row becomes Prev/Next and four players ride on each page.
+//
+// Paging beat the other candidate design -- a select to choose a player, then a select of
+// that player's characters. Paging is the pattern the rest of the bot already uses
+// (listBrowser, listFilter), it keeps casting a vote to a single click, and a player-chooser
+// select would only move the ceiling from 5 to 25 rather than remove it. Paging has no
+// ceiling: the only remaining limit on this mode is having enough distinct characters to
+// draw, which drawCandidates already reports for itself.
+const MAX_ACTION_ROWS = 5;
+const PLAYERS_PER_BALLOT_PAGE = MAX_ACTION_ROWS - 1;
+
+// The slots a voter flips through, one group per page.
+function ballotPages(slots) {
+  if (slots.length <= MAX_ACTION_ROWS) return [slots];
+  const pages = [];
+  for (let i = 0; i < slots.length; i += PLAYERS_PER_BALLOT_PAGE) {
+    pages.push(slots.slice(i, i + PLAYERS_PER_BALLOT_PAGE));
+  }
+  return pages;
+}
+
+// An embed holds 25 fields and the clock and the ballot count take two of them, so a field
+// per player stops rendering somewhere past twenty. Beyond that the tallies collapse into a
+// few multi-line columns -- still one line per player, and still nobody named.
+const MAX_TALLY_FIELDS = 23;
+// Roughly 40 characters a line, against Discord's 1024-character field value.
+const TALLY_LINES_PER_FIELD = 20;
 
 // How much one press of the host's ⏱️ button buys. A vote that is still moving when the
 // clock runs out used to have only one exit -- Close -- which decides it early rather than
@@ -166,6 +191,34 @@ function drawCandidates(lobby) {
   );
 }
 
+// The shape of each tally, never its contents -- a board that showed only a total had
+// nothing to react to for the whole voting window. Name-free either way; see the top.
+function tallyFields(vote) {
+  const { slots } = vote;
+  if (slots.length <= MAX_TALLY_FIELDS) {
+    return slots.map((slot) => ({
+      name: `Player ${slot}`,
+      value: vote.describeSlot(slot),
+      inline: true,
+    }));
+  }
+
+  // Three inline fields read as three columns; a longer roster takes more only once a column
+  // would outgrow the field-value limit.
+  const columns = Math.max(3, Math.ceil(slots.length / TALLY_LINES_PER_FIELD));
+  const perColumn = Math.ceil(slots.length / Math.min(columns, MAX_TALLY_FIELDS));
+  const fields = [];
+  for (let i = 0; i < slots.length; i += perColumn) {
+    const chunk = slots.slice(i, i + perColumn);
+    fields.push({
+      name: `Players ${chunk[0]}–${chunk[chunk.length - 1]}`,
+      value: chunk.map((slot) => `**${slot}.** ${vote.describeSlot(slot)}`).join('\n'),
+      inline: true,
+    });
+  }
+  return fields;
+}
+
 // PUBLIC board. Deliberately contains no character names -- see the note at the top.
 function buildVoteBoardPayload(vote) {
   const { lobby } = vote;
@@ -179,13 +232,7 @@ function buildVoteBoardPayload(vote) {
           '**Players can\'t vote** (and won\'t be shown the options).'
     )
     .addFields(
-      // The shape of each tally, never its contents -- a board that showed only a total had
-      // nothing to react to for the whole voting window.
-      ...vote.slots.map((slot) => ({
-        name: `Player ${slot}`,
-        value: vote.describeSlot(slot),
-        inline: true,
-      })),
+      ...tallyFields(vote),
       {
         name: vote.closed ? 'Closed' : 'Closes',
         // A relative timestamp ticks down client-side, so no per-second edit loop is needed.
@@ -220,9 +267,16 @@ function buildVoteBoardPayload(vote) {
 // EPHEMERAL ballot -- only ever sent to a single non-player voter.
 // `justPicked` names the slot the voter just changed, so the reply confirms the swap rather
 // than leaving them to infer that a second pick replaced the first instead of adding to it.
-function buildBallotPayload(vote, voterId, { justPicked = null } = {}) {
+// It also decides which page comes back, so voting never scrolls you away from what you just
+// did; `page` is what the Prev/Next buttons pass instead.
+function buildBallotPayload(vote, voterId, { justPicked = null, page = null } = {}) {
   const ballot = vote.ballots.get(voterId) ?? {};
-  const rows = vote.slots.map((slot) => {
+  const pages = ballotPages(vote.slots);
+  const wanted = page ?? (justPicked ? pages.findIndex((p) => p.includes(justPicked)) : 0);
+  const current = Math.min(Math.max(wanted, 0), pages.length - 1);
+  const slots = pages[current];
+
+  const rows = slots.map((slot) => {
     const chosen = ballot[slot];
     return new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
@@ -238,7 +292,26 @@ function buildBallotPayload(vote, voterId, { justPicked = null } = {}) {
     );
   });
 
-  const summary = vote.slots.map((slot) => {
+  if (pages.length > 1) {
+    rows.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`vote:page:${vote.lobby.channelId}:${current - 1}`)
+          .setLabel('Prev')
+          .setEmoji('◀')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(current <= 0),
+        new ButtonBuilder()
+          .setCustomId(`vote:page:${vote.lobby.channelId}:${current + 1}`)
+          .setLabel('Next')
+          .setEmoji('▶')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(current >= pages.length - 1)
+      )
+    );
+  }
+
+  const summary = slots.map((slot) => {
     const playerId = vote.playerIdForSlot(slot);
     return `Player ${slot} (<@${playerId}>): ${ballot[slot] ? `**${ballot[slot]}**` : '_no vote yet_'}`;
   }).join('\n');
@@ -247,9 +320,17 @@ function buildBallotPayload(vote, voterId, { justPicked = null } = {}) {
     ? `✅ Saved — **${ballot[justPicked]}** for player ${justPicked}. That replaces your previous pick.\n`
     : '';
 
+  // The summary above covers only the page you are looking at, so a running total is the
+  // only way to tell whether there is still someone left to vote for further along.
+  const picked = vote.slots.filter((slot) => ballot[slot]).length;
+  const progress =
+    pages.length > 1
+      ? `-# Page ${current + 1} of ${pages.length} · **${picked}** of ${vote.slots.length} players picked\n`
+      : '';
+
   return {
     content:
-      `🗳️ **Your ballot** — pick a character for each player.\n${confirmation}${summary}\n` +
+      `🗳️ **Your ballot** — pick a character for each player.\n${confirmation}${progress}${summary}\n` +
       '_You can change your picks until voting closes._',
     components: rows,
   };
@@ -277,7 +358,6 @@ function clearVoteTimer(vote) {
 module.exports = {
   AudienceVote,
   slotsFor,
-  MAX_VOTE_PLAYERS,
   EXTEND_SECONDS,
   drawCandidates,
   buildVoteBoardPayload,

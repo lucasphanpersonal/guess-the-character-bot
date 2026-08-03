@@ -47,10 +47,9 @@ happen live between humans in voice.
    two.
 
    A handful of *surfaces* do have ceilings, and they refuse for themselves rather than
-   capping the game: hand-picking characters needs a box per player and a modal holds five;
-   the audience ballot needs a menu per player and a message holds five rows. Both say so.
-   Anything that outgrows a message (the spectator DM, the reference DM) splits across
-   several instead.
+   capping the game: hand-picking characters needs a box per player and a modal holds five,
+   so it says so above that. Anything that outgrows a message pages or splits instead — the
+   spectator DM, the reference DM, and the audience ballot.
 4. **Optionally `/lobby set-characters`** (host only) to hand-pick each player's character instead
    of leaving it to chance. The confirmation is ephemeral, so it can't spoil anything even
    though you type it in the shared channel.
@@ -295,9 +294,12 @@ options for your own head would collapse the game from a thousand possibilities 
 character pool needs at least `vote-options × players` distinct characters, since every
 player gets a disjoint set.
 
-**Audience-vote mode tops out at five players.** The ballot needs one select menu per player
-and Discord allows five action rows per message, so past five it refuses and says so rather
-than the game shrinking to fit it.
+**The ballot pages, so any number of players can be voted on.** It needs one select menu per
+player and Discord allows five action rows per message, so past five the fifth row becomes
+Prev/Next and four players ride on each page — with a running "X of Y players picked" count,
+since a single page can no longer show you whether you are done. Five or fewer renders exactly
+as it always did. Past 23 players the public tallies collapse into multi-line columns, because
+an embed holds 25 fields and the countdown takes two of them; they stay name-free either way.
 
 ### Sound effects
 

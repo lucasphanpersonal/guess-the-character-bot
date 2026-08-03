@@ -65,8 +65,8 @@ module.exports = {
             'clicking it gives you a private ballot of candidates for each player. The ' +
             "players can't vote and never see the options. Tune it with `vote-options` " +
             '(candidates per player) and `vote-seconds`; the host can close voting early.\n' +
-            'Caps at **5 players** -- the ballot needs a menu each and Discord allows five ' +
-            'per message.',
+            'Works with any number of players -- past five the ballot pages, with Prev/Next ' +
+            'and a running count of how many you have picked for.',
         },
         {
           name: '🔍 Confirm your character',

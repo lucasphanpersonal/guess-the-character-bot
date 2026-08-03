@@ -38,6 +38,15 @@ if (listColumns.length && !listColumns.some((col) => col.name === 'popularity'))
   db.exec('ALTER TABLE character_lists ADD COLUMN popularity INTEGER');
 }
 
+// Games recorded before this column existed keep a NULL character, and stay that way: which
+// character sat on which head was never written down, so there is nothing to backfill from.
+const gamePlayerColumns = db.prepare('PRAGMA table_info(game_players)').all();
+if (gamePlayerColumns.length && !gamePlayerColumns.some((col) => col.name === 'character_id')) {
+  db.exec(
+    'ALTER TABLE game_players ADD COLUMN character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL'
+  );
+}
+
 // game_results -> games + game_players. A table split rather than a column add, so it can't
 // use the PRAGMA idiom above.
 //

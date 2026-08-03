@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS game_players (
   -- migrated two-player games have no turn counts, and inventing them would be a lie about
   -- the data. A tie is simply more than one 'won' row for the same game.
   outcome TEXT NOT NULL,
+  -- Which character they were wearing. Turn counts alone cannot say whether a long game was
+  -- a hard character or a slow table, and this is the only moment the pairing exists -- a
+  -- finished game is not reconstructable afterwards. NULL for characters assigned by hand
+  -- via /lobby set-characters, which have no row behind them, and for every game played
+  -- before this column existed.
+  --
+  -- SET NULL rather than CASCADE or the default RESTRICT. CASCADE would delete the player out
+  -- of a game they actually played because someone later pruned a list. RESTRICT would make
+  -- `/list remove` and `npm run reset:seeded` start failing on any character that has ever
+  -- been dealt. Losing the link is the only loss the game itself survives.
+  character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,
   PRIMARY KEY (game_id, user_id)
 );
 

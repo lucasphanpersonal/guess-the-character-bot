@@ -23,7 +23,6 @@ const {
   buildVoteBoardPayload,
   refreshVoteBoard,
   clearVoteTimer,
-  MAX_VOTE_PLAYERS,
 } = require('./audienceVote');
 
 async function getChannel(client, lobby) {
@@ -78,19 +77,9 @@ function scheduleCountdown(lobby) {
 // Kicks off the audience-vote phase instead of dealing characters directly. The vote board
 // is public but names no candidates -- see the spoiler note in audienceVote.js.
 async function startAudienceVote(client, lobby) {
-  // The ballot puts one select menu per player in a message that holds five rows, so this
-  // mode has a ceiling the rest of the game does not. It refuses for itself rather than
-  // capping how many people may play.
-  if (lobby.players.length > MAX_VOTE_PLAYERS) {
-    return {
-      ok: false,
-      error:
-        `Audience vote tops out at ${MAX_VOTE_PLAYERS} players (the ballot needs a menu each, and ` +
-        `Discord allows five per message) — this lobby has ${lobby.players.length}. ` +
-        'Turn the vote off on the board to play normally.',
-    };
-  }
-
+  // No player-count ceiling any more: the ballot pages once it outgrows Discord's five action
+  // rows. What can still stop this mode is the draw below, which needs voteOptions distinct
+  // characters per player and says so for itself.
   const candidatesBySlot = drawCandidates(lobby);
   if (!candidatesBySlot) {
     const wanted = lobby.voteOptions * lobby.players.length;
