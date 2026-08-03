@@ -35,7 +35,7 @@ const listLimit = Number(flag('lists', 0)) || Infinity;
 const verbose = args.includes('--verbose');
 
 if (!guildId) {
-  console.error('Usage: node scripts/fetch-fandom-images.js <guildId> [--category=Cartoon] [--dry-run] [--lists=N] [--verbose] [--undo]');
+  console.error('Usage: node scripts/fetch-fandom-images.js <guildId> [--category=Cartoon] [--dry-run] [--lists=N] [--verbose] [--undo] [--prune]');
   process.exit(1);
 }
 
@@ -58,9 +58,22 @@ const norm = (s) =>
     .trim()
     .replace(/\s+/g, ' ');
 
-// Wiki lead images are usually right and occasionally the site furniture, which is worse than
-// nothing: a wordmark tells the player the show and hides the character.
-const JUNK_IMAGE = /(site-?logo|wordmark|favicon|wiki-?background|placeholder|no[-_]?image|noimage|question[-_]?mark|default[-_]?avatar)/i;
+/**
+ * Lead images that are about the SHOW rather than the character -- worse than nothing, since
+ * a title card names the show to someone whose whole job is to not know it.
+ *
+ * Measured over the first 760 cartoon matches, this is a 3-in-760 problem: a logo, a title
+ * card and a group shot. Tempting to fix it structurally instead, by refusing any page whose
+ * title is the show's own name -- but 8 of the 10 characters named after their series got the
+ * RIGHT image that way (BoJack Horseman, Chowder, Kim Possible), so that rule would have
+ * thrown away four good images for every bad one it caught. The narrow filter wins.
+ *
+ * Matched against the filename with separators normalised: "Steven_Universe_logo.png" has no
+ * word boundary before "logo", so \blogo\b silently misses the exact case that motivated it.
+ */
+const JUNK_IMAGE = /(\blogo\b|\bwordmark\b|favicon|wiki background|placeholder|\bno image\b|noimage|question mark|default avatar|title card|group shot|groupshot|cast photo|characters slide|\bposter\b)/i;
+
+const looksLikeJunk = (url) => JUNK_IMAGE.test(decodeURIComponent(url).replace(/[-_]+/g, ' '));
 
 const slug = (s) => String(s).toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -203,8 +216,37 @@ function undo() {
   console.log(`Cleared ${rows.length}.`);
 }
 
+/**
+ * Re-applies the junk filter to images already stored.
+ *
+ * The filter learns from what it lets through, and a run that has already written hundreds of
+ * good rows should not have to be thrown away and repeated to drop a handful of bad ones.
+ */
+function prune() {
+  const rows = db
+    .prepare(
+      `SELECT ch.id, ch.name, ch.image_url AS url, cl.name AS list
+         FROM characters ch JOIN character_lists cl ON cl.id = ch.list_id
+        WHERE cl.guild_id = ? AND COALESCE(cl.category, 'Uncategorised') = ?
+          AND (ch.image_url LIKE '%wikia.nocookie.net%' OR ch.image_url LIKE '%fandom.com%')`
+    )
+    .all(guildId, category)
+    .filter((r) => looksLikeJunk(r.url));
+
+  console.log(`${category}: ${rows.length} stored image(s) fail the junk filter${dryRun ? '  [DRY RUN]' : ''}`);
+  for (const r of rows) {
+    console.log(`  ${r.name}  [${r.list}]  ->  ${decodeURIComponent(r.url.split('/').slice(-3)[0])}`);
+  }
+  if (dryRun || !rows.length) return;
+
+  const clear = db.prepare('UPDATE characters SET image_url = NULL WHERE id = ?');
+  db.transaction((ids) => { for (const id of ids) clear.run(id); })(rows.map((r) => r.id));
+  console.log(`Cleared ${rows.length}. They read as text again, which is the honest state.`);
+}
+
 async function main() {
   if (args.includes('--undo')) return undo();
+  if (args.includes('--prune')) return prune();
 
   const lists = db
     .prepare(
@@ -254,7 +296,7 @@ async function main() {
         if (verbose) console.log(`      · ${ch.name} — nothing`);
         continue;
       }
-      if (JUNK_IMAGE.test(hit.image) || !imageIsTrustworthy(list.category, hit.image)) {
+      if (looksLikeJunk(hit.image) || !imageIsTrustworthy(list.category, hit.image)) {
         stats.rejected++;
         if (verbose) console.log(`      · ${ch.name} — rejected ${hit.image}`);
         continue;
