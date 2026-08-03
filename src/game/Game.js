@@ -65,6 +65,10 @@ class Game {
     // Whoever gave up rather than finishing. Only reachable once you are the last player
     // still guessing, so there can be at most one -- see engine.submitPass.
     this.surrendered = new Set();
+    // "<playerId>:<turnNumber>" for every turn that has already been resolved, so no turn can
+    // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
+    // isn't guessing, so simultaneous presses are routine rather than exotic.
+    this.resolvedTurns = new Set();
     this.voiceConnection = null;
     this.audioPlayer = null;
     // Populated by engine.startGame:

@@ -193,6 +193,60 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Several judges can press at the same instant, and the handler yields on its first await
+  // before it clears `paused` -- so a second press arriving in that window used to find the
+  // turn still endable and resolve it a second time, advancing the rotation twice and
+  // silently skipping whoever was next.
+  async 'two judges pressing Nope at once end the turn once, not twice'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+    await engine.handleTimeout(ctx.client, ctx.lobby); // amber: now a Nope ends the turn
+
+    // Deliberately not awaited in sequence -- that is the whole point.
+    await Promise.all([
+      engine.submitJudgement(ctx.client, ctx.lobby, 'p2', false),
+      engine.submitJudgement(ctx.client, ctx.lobby, 'p3', false),
+      engine.submitJudgement(ctx.client, ctx.lobby, 'p4', false),
+    ]);
+
+    assert.equal(game.currentPlayerId, 'p2', 'exactly one turn passed, so p2 is up');
+    assert.equal(game.turnsFor('p2'), 1, 'and p2 got their turn rather than being skipped past');
+    assert.equal(game.turnsFor('p3'), 0, 'p3 has not started');
+    cleanup(ctx);
+  },
+
+  async 'two judges confirming the same correct guess record it once'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await Promise.all([
+      engine.submitJudgement(ctx.client, ctx.lobby, 'p2', true),
+      engine.submitJudgement(ctx.client, ctx.lobby, 'p3', true),
+    ]);
+
+    assert.equal(game.finishedBy.get('p1'), 1);
+    assert.equal(game.currentPlayerId, 'p2', 'the rotation advanced once');
+    assert.equal(game.turnsFor('p2'), 1);
+    cleanup(ctx);
+  },
+
+  async 'double-tapping Pass only passes once'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await Promise.all([
+      engine.submitPass(ctx.client, ctx.lobby, 'p1'),
+      engine.submitPass(ctx.client, ctx.lobby, 'p1'),
+    ]);
+
+    assert.equal(game.currentPlayerId, 'p2');
+    assert.equal(game.turnsFor('p2'), 1, 'p2 was not passed straight over');
+    cleanup(ctx);
+  },
+
   async 'players drop out as they finish and the rotation skips them'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);

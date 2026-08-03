@@ -796,8 +796,31 @@ async function announceCompletion(client, lobby, playerId) {
 
 async function endTurn(client, lobby, { correct, gaveUp = false }) {
   const game = lobby.game;
-  clearTimers(game);
   const finishingPlayerId = game.currentPlayerId;
+
+  /**
+   * A turn resolves exactly once.
+   *
+   * Judging is open to everyone who isn't guessing, so simultaneous presses are routine --
+   * and the checks in submitJudgement all pass for each of them, because this function
+   * yields on its first await before it clears `paused`. A second press arriving in that
+   * window found the turn still endable, ran the whole resolution again, and advanced the
+   * rotation a second time: the next player was skipped without ever getting a board, and
+   * charged for a turn they never had. Three presses skipped two players.
+   *
+   * The same hole swallowed a double-tapped Pass and two judges confirming one correct
+   * guess, so the guard belongs here rather than on any one button.
+   *
+   * Keyed by turn rather than kept as a busy flag: it is exact, it cannot get stuck if
+   * something throws mid-resolution, and it still lets the *next* turn resolve normally.
+   * Checking and writing it before any await is what makes it a lock at all -- nothing else
+   * can run in between, because the event loop only switches at an await.
+   */
+  const turnKey = `${finishingPlayerId}:${game.turnsFor(finishingPlayerId)}`;
+  if (game.resolvedTurns.has(turnKey)) return;
+  game.resolvedTurns.add(turnKey);
+
+  clearTimers(game);
 
   // Recorded before the board is frozen, so the outgoing board can state the outcome.
   if (correct) game.finishedBy.set(finishingPlayerId, game.turnsFor(finishingPlayerId));

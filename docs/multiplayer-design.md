@@ -100,6 +100,30 @@ Players who have already finished keep judging. They were DM'd every character a
 so they remain qualified, and it gives them something to do rather than turning them into
 spectators.
 
+### A turn resolves exactly once
+
+Opening judging to everyone makes simultaneous presses **routine, not exotic** — and the
+resolution path yields on its first `await` before it clears `paused`, so every one of those
+presses passed every check and ran the whole resolution again.
+
+The cost was not a duplicate message. Each extra resolution **advanced the rotation again**:
+the next player was skipped without ever being shown a board, and charged a turn they never
+got — which is the score. Measured at four players, three simultaneous ❌ presses moved the
+turn from P1 to P4, skipping two people.
+
+The same hole swallowed a double-tapped Pass and two judges confirming the same correct
+guess, so the guard lives on turn resolution rather than on any one button: `endTurn` records
+`"<playerId>:<turnNumber>"` in `game.resolvedTurns` and refuses a key it has already seen.
+
+Keyed by turn rather than kept as a busy flag, because a key is exact, cannot get stuck if
+something throws mid-resolution, and still lets the *next* turn resolve normally. Checking and
+writing it **before any await** is what makes it a lock: nothing else can run in between,
+since the event loop only switches at an await.
+
+Worth stating plainly because it is invisible in a two-player game — one judge cannot race
+themselves — and it scales with the table: the more people judging, the more players get
+skipped per collision.
+
 ### Revealing on completion
 
 A finished player's character is announced in-channel immediately. It spoils nobody: everyone
