@@ -280,6 +280,32 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // An embed field caps at 1024 characters, which the standings hit around 28 players. Over
+  // that Discord rejects the embed, the board never posts, and "no player limit" turns out to
+  // have been false all along.
+  'the standings stay inside the field limit however many are playing'() {
+    const Game = require('../src/game/Game');
+    for (const count of [4, 28, 40, 80]) {
+      const players = Array.from({ length: count }, (_, i) => `19231960009500${1000 + i}`);
+      const game = new Game({
+        lobby: { guildId: 'g', players },
+        characters: players.map((_, i) => ({ name: `Char ${i}` })),
+        turnSeconds: 90,
+      });
+      players.forEach((id, i) => game.turnsTaken.set(id, (i % 9) + 1));
+      players.slice(0, 3).forEach((id, i) => game.finishedBy.set(id, i + 1));
+
+      const field = buildTurnBoardPayload(game, 'chan').embeds[0].toJSON().fields[0];
+      assert.ok(field.value.length <= 1024, `${count} players overflowed at ${field.value.length}`);
+      // Whoever is up and whoever has finished are what the standings exist to show, so they
+      // survive truncation.
+      assert.match(field.value, new RegExp(`<@${game.currentPlayerId}>`), `${count}: current player kept`);
+      for (const id of players.slice(0, 3)) {
+        assert.match(field.value, new RegExp(`<@${id}>`), `${count}: finisher kept`);
+      }
+    }
+  },
+
   async 'the spectator DM splits rather than overflowing the embed limit'() {
     const ctx = await startedGame(12);
     ctx.lobby.spectators.add('watcher');

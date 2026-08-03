@@ -292,11 +292,20 @@ async function sendSpectatorDMs(client, lobby) {
 
   const spectatorIds = new Set(lobby.spectators);
   try {
+    // Every player's channel, not just the first one's -- whoever happens to be listed first
+    // may be the one person playing from their phone, and that used to mean nobody sitting
+    // with the rest got auto-added.
     const guild = await client.guilds.fetch(lobby.guildId);
-    const member = await guild.members.fetch(game.turnOrder[0]).catch(() => null);
-    const voiceChannel = member?.voice?.channel;
-    if (voiceChannel) {
-      for (const [, m] of voiceChannel.members) {
+    const members = await Promise.all(
+      game.turnOrder.map((id) => guild.members.fetch(id).catch(() => null))
+    );
+    const channels = new Map();
+    for (const member of members) {
+      const channel = member?.voice?.channel;
+      if (channel) channels.set(channel.id, channel);
+    }
+    for (const channel of channels.values()) {
+      for (const [, m] of channel.members) {
         if (!playing.has(m.id)) spectatorIds.add(m.id);
       }
     }

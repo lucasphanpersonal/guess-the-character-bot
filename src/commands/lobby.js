@@ -78,7 +78,7 @@ module.exports = {
     )
     .addSubcommand((sub) => sub.setName('join').setDescription('Join the waiting lobby as a player'))
     .addSubcommand((sub) => sub.setName('leave').setDescription('Leave the waiting lobby'))
-    .addSubcommand((sub) => sub.setName('start').setDescription('Start the game once 2 players have joined'))
+    .addSubcommand((sub) => sub.setName('start').setDescription('Start the game once at least 2 players have joined'))
     .addSubcommand((sub) =>
       sub.setName('end').setDescription('Cancel the lobby or game in this channel (host or admin only)')
     )

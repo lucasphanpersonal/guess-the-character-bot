@@ -175,7 +175,7 @@ function buildVoteBoardPayload(vote) {
     .setDescription(
       vote.closed
         ? 'Voting is closed — characters locked in!'
-        : `The audience decides what <@${lobby.players[0]}> and <@${lobby.players[1]}> are wearing.\n` +
+        : `The audience decides what ${lobby.players.map((id) => `<@${id}>`).join(', ')} are wearing.\n` +
           '**Players can\'t vote** (and won\'t be shown the options).'
     )
     .addFields(

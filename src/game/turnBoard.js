@@ -28,8 +28,14 @@ function timerBar(remainingMs, totalMs) {
 // retired still points at whoever had just been playing, because currentPlayerId does not
 // advance until the next turn starts -- so the dead board in the channel claims a turn is
 // live when it is not.
+// An embed field's value caps at 1024 characters, which a line like
+// "✅ <@192319600095002634> — turn 12" hits at roughly 28 players. Over that Discord rejects
+// the whole embed, so the board would fail to post and the game would wedge -- an unacceptable
+// way for "no player limit" to turn out to be false.
+const MAX_FIELD_VALUE = 1024;
+
 function standingsField(game, { turnOver = false } = {}) {
-  const lines = game.turnOrder.map((playerId) => {
+  const lineFor = (playerId) => {
     const done = game.finishedBy.get(playerId);
     if (done != null) return `✅ <@${playerId}> — turn ${done}`;
     if (game.surrendered.has(playerId)) return `🏳️ <@${playerId}> — gave up`;
@@ -38,9 +44,31 @@ function standingsField(game, { turnOver = false } = {}) {
     // "turn 0" is accurate and reads like a bug, so someone yet to play says so.
     const where = turns === 0 ? 'not started yet' : `turn ${turns}`;
     return `${guessing ? '🎯' : '⏳'} <@${playerId}> — ${where}${guessing ? ' (guessing)' : ''}`;
-  });
+  };
+
+  // Whoever is up, and whoever has finished, are the two things the standings exist to show,
+  // so they are kept first and everyone else fills the space that's left.
+  const priority = (playerId) =>
+    playerId === game.currentPlayerId ? 0 : game.finishedBy.has(playerId) ? 1 : 2;
+  const ordered = [...game.turnOrder].sort((a, b) => priority(a) - priority(b));
+
+  const kept = [];
+  let length = 0;
+  for (const playerId of ordered) {
+    const line = lineFor(playerId);
+    // Leave room for the "and N more" line that a truncation will need.
+    if (length + line.length + 1 > MAX_FIELD_VALUE - 24) break;
+    kept.push(playerId);
+    length += line.length + 1;
+  }
+
+  // Rendered back in seating order, so the list reads as the table rather than as a ranking.
+  const shown = game.turnOrder.filter((id) => kept.includes(id)).map(lineFor);
+  const hidden = game.turnOrder.length - shown.length;
+  if (hidden > 0) shown.push(`_…and ${hidden} more_`);
+
   // Mentions resolve in a field's VALUE but not in its name -- see the note below on titles.
-  return { name: 'Standings', value: lines.join('\n') };
+  return { name: 'Standings', value: shown.join('\n') };
 }
 
 // Two rows, because the players have different jobs and share one message: whoever can see
