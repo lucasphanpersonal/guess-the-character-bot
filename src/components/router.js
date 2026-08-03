@@ -16,6 +16,8 @@ const listFilter = require('./listFilter');
 const HANDLERS = {
   // Character confirm/reroll buttons, sent in DMs when a game starts.
   confirm: (interaction) => engine.handleConfirmationButton(interaction),
+  // Taking a confirmation back, while everyone is still deciding.
+  unconfirm: (interaction) => engine.handleConfirmationButton(interaction),
   reroll: (interaction) => engine.handleConfirmationButton(interaction),
   // "Never deal this show again", alongside Reroll on the confirmation DM.
   droplist: (interaction) => engine.handleConfirmationButton(interaction),

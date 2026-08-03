@@ -71,6 +71,12 @@ happen live between humans in voice.
    re-renders the copy every *other* player is holding, since characters are shared rather
    than per-viewer. Turn 1 doesn't begin until everyone confirms.
 
+   **Good to go isn't final.** A locked-in player keeps an **↩️ Unlock** button and can go
+   back to rerolling right up until the last person is in — the pressure to decide comes from
+   everyone waiting, not from the button being a one-way door. The moment play begins those
+   buttons are stripped, because an Unlock on a running game would be a lie; the DM stays as
+   your reference for the character you'll be answering questions about all game.
+
    In **audience-vote mode** (see below) this is preceded by a voting round, and the DM has
    no Reroll button — the crowd already decided.
 6. **On your turn**, a **turn board** appears — one message with a live countdown bar, the

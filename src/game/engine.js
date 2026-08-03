@@ -127,6 +127,17 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropLi
   return row;
 }
 
+// What a locked-in player is left holding: a way back out, until everyone is in.
+function buildUnlockRow(channelId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`unconfirm:${channelId}`)
+      .setLabel('Unlock')
+      .setEmoji('↩️')
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 // Labelled with whose character it is, in the same shape the reference DM uses, so scrolling
 // back to it answers "who was this for?" without having to remember.
 function confirmCharacterEmbed(character, ownerName) {
@@ -478,16 +489,47 @@ async function startGame(client, lobby, characters) {
   await maybeBeginPlay(client, lobby);
 }
 
+/**
+ * Retires the ↩️ Unlock buttons once play actually begins.
+ *
+ * Being able to change your mind only means anything while everyone is still deciding, so
+ * the moment the game starts those buttons stop being an option and become a lie. The DM
+ * itself stays -- it is the reference for the character you spend the game answering
+ * questions about.
+ */
+async function lockConfirmations(game) {
+  await Promise.all(
+    game.turnOrder.map(async (playerId) => {
+      const message = game.confirmState[playerId]?.checkMessage;
+      if (!message) return;
+      const owner = game.nameOf(game.checkTargetOf(playerId));
+      try {
+        // Only content and components are set, so the character embed is left in place.
+        await message.edit({
+          content: `✅ Locked in — the game is under way. This is **${owner}**'s character; use it to answer their questions.`,
+          components: [],
+        });
+      } catch {
+        // Nothing to be done about a DM we can no longer edit.
+      }
+      untrackBoard(message);
+    })
+  );
+}
+
 async function maybeBeginPlay(client, lobby) {
   const game = lobby.game;
   if (!game.turnOrder.every((id) => game.confirmState[id].confirmed)) return;
 
+  await lockConfirmations(game);
   lobby.status = 'IN_PROGRESS';
   await refreshLobbyBoard(lobby);
   await sendSpectatorDMs(client, lobby);
   await voice.joinVoiceForGame(client, lobby);
   const channel = await getChannel(client, lobby);
-  await channel.send(`✅ Both players are ready -- starting the game! 🗂️ Playing with: **${game.listLabel}**`);
+  await channel.send(
+    `✅ All ${game.turnOrder.length} players are ready -- starting the game! 🗂️ Playing with: **${game.listLabel}**`
+  );
   await startTurn(client, lobby);
 }
 
@@ -508,13 +550,28 @@ async function handleConfirmationButton(interaction) {
   if (action === 'confirm') {
     if (state.confirmed) return interaction.deferUpdate();
     state.confirmed = true;
+    const waitingOn = game.turnOrder.filter((id) => !game.confirmState[id].confirmed).length;
     await interaction.update({
-      content: '✅ Locked in! Waiting on everyone else...',
+      content: waitingOn
+        ? `✅ Locked in! Waiting on **${waitingOn}** more.\n_Changed your mind? You can unlock until everyone is in._`
+        : '✅ Locked in! Starting...',
       embeds: interaction.message.embeds,
-      components: [],
+      // Deliberately still a live message: until the last player is in, confirming is a
+      // decision you can take back. Kept tracked too, so a restart retires the button --
+      // which is also why lockConfirmations, not this, is where the tracking ends.
+      components: [buildUnlockRow(channelId)],
     });
-    untrackBoard(interaction.message);
     return maybeBeginPlay(interaction.client, lobby);
+  }
+
+  // Undo a confirmation. Only reachable while the lobby is still CONFIRMING -- the guard at
+  // the top of this function refuses everything once play has begun, and lockConfirmations
+  // strips the button at that moment anyway, so this is a race-loser's path more than a
+  // route people will find.
+  if (action === 'unconfirm') {
+    if (!state.confirmed) return interaction.deferUpdate();
+    state.confirmed = false;
+    return interaction.update(checkMessagePayload(game, playerId, channelId));
   }
 
   // "Never deal this show again": drop the list from the server's selection, then reroll,

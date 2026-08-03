@@ -77,7 +77,8 @@ module.exports = {
             'You check the **next player round the rotation**, so every character has exactly ' +
             "one person who can reroll it. If you (or you think the wearer) won't recognize " +
             "it, reroll (however many the host allowed) and everyone else's copy updates. " +
-            'Turn 1 waits until everyone confirms.\n' +
+            'Turn 1 waits until everyone confirms -- and **Good to go** is not final: you keep ' +
+            'an ↩️ **Unlock** button until the last person is in, so you can go back and reroll.\n' +
             '🚫 **Never deal this show** drops that list from the server for good *and* rerolls, ' +
             "in one press. And once 3 different people have rerolled the same character, the bot " +
             'stops dealing them -- the pool learns from what you reject.',

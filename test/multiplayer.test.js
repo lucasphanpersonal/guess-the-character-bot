@@ -176,6 +176,61 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Locking in is a decision, and until the last person is in it is one you can take back.
+  async 'a player can unlock after saying Good to go, and reroll again'() {
+    const ctx = await startedGame(4);
+    const game = ctx.lobby.game;
+    const press = (userId, action) =>
+      handleComponentInteraction(
+        createButtonInteraction({ client: ctx.client, userId, customId: `${action}:${ctx.channelId}`, recorder: ctx.recorder })
+      );
+
+    await press('p1', 'confirm');
+    assert.equal(game.confirmState.p1.confirmed, true);
+    const locked = ctx.recorder.lastMatching('update:p1');
+    assert.match(locked.content, /Locked in/);
+    assert.deepEqual(
+      locked.payload.components.flatMap((r) => r.toJSON().components.map((c) => c.custom_id.split(':')[0])),
+      ['unconfirm'],
+      'the way back out is right there'
+    );
+
+    await press('p1', 'unconfirm');
+    assert.equal(game.confirmState.p1.confirmed, false);
+    const reopened = ctx.recorder.lastMatching('update:p1');
+    assert.match(reopened.content, /You're checking/, 'and the full prompt is back');
+
+    // ...including the reroll they had not spent.
+    const before = game.headByPlayer.p2.name;
+    await press('p1', 'reroll');
+    assert.notEqual(game.headByPlayer.p2.name, before);
+    assert.equal(ctx.lobby.status, 'CONFIRMING', 'still nobody playing');
+    cleanup(ctx);
+  },
+
+  async 'unlocking is gone once the game is under way'() {
+    const ctx = await startedGame(4);
+    const game = ctx.lobby.game;
+    await confirmAll(ctx);
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+
+    // Every check DM is stripped of its button, so "Unlock" cannot sit on a running game.
+    for (const id of ctx.players) {
+      const last = ctx.recorder.lastMatching(`dm:${id}`);
+      assert.deepEqual(last.payload.components, [], `${id}'s unlock button is gone`);
+      assert.match(last.content, /game is under way/);
+      assert.match(last.content, /character/, 'and it still says whose character it is');
+    }
+
+    // A press that raced the start is refused rather than half-applied.
+    await handleComponentInteraction(
+      createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `unconfirm:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+    assert.equal(game.confirmState.p1.confirmed, true, 'still locked in');
+    assert.match(ctx.recorder.allText(), /expired/);
+    cleanup(ctx);
+  },
+
   async 'anyone who is not guessing can judge'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
