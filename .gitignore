@@ -17,3 +17,6 @@ data/sounds/
 
 # Machine-local Claude Code settings (absolute paths, per-developer).
 .claude/settings.local.json
+
+# Bot stdout/stderr from a scripted restart -- machine-specific noise, not project files.
+data/bot-restart.log*
