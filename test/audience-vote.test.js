@@ -292,7 +292,7 @@ module.exports = {
     const votedButtons = votedDm.payload.components[0].toJSON().components;
     assert.equal(votedButtons.length, 1, 'confirm only');
     assert.equal(votedButtons[0].label, 'Ready');
-    assert.match(votedDm.content, /audience picked/i);
+    assert.match(votedDm.content, /chosen by the audience/i);
     cleanup(voted);
 
     const classic = makeLobby({ mode: 'classic' });

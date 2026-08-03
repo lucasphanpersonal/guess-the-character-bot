@@ -105,9 +105,16 @@ module.exports = {
     const toP1 = ctx.recorder.sent.find((m) => m.target === 'dm:p1');
     const toP2 = ctx.recorder.sent.find((m) => m.target === 'dm:p2');
     // The source line matters when a name is ambiguous across shows, so it is asserted
-    // alongside the name rather than matched loosely.
-    assert.equal(toP1.payload.embeds[0].data.description, '**Luigi**\n*from Flow List (Video Games)*');
-    assert.equal(toP2.payload.embeds[0].data.description, '**Mario**\n*from Flow List (Video Games)*');
+    // alongside the name rather than matched loosely -- as is the owner's name, because
+    // scrolling back to an unlabelled character answers nothing about who it was for.
+    assert.equal(
+      toP1.payload.embeds[0].data.description,
+      "**Userp2's character**: **Luigi**\n*from Flow List (Video Games)*"
+    );
+    assert.equal(
+      toP2.payload.embeds[0].data.description,
+      "**Userp1's character**: **Mario**\n*from Flow List (Video Games)*"
+    );
     cleanup(ctx);
   },
 

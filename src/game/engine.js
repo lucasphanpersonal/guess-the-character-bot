@@ -127,26 +127,51 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropLi
   return row;
 }
 
-function confirmCharacterEmbed(character) {
-  const embed = new EmbedBuilder().setDescription(withSource(`**${character.name}**`, character.source));
+// Labelled with whose character it is, in the same shape the reference DM uses, so scrolling
+// back to it answers "who was this for?" without having to remember.
+function confirmCharacterEmbed(character, ownerName) {
+  const embed = new EmbedBuilder().setDescription(
+    withSource(`**${ownerName}'s character**: **${character.name}**`, character.source)
+  );
   if (character.imageUrl) embed.setImage(character.imageUrl);
   return embed;
 }
 
-function confirmPrompt(listLabel) {
-  return (
-    `🗂️ Playing with: **${listLabel}**\n\n` +
-    "You can't see your own character! Use this to answer their questions. Not confident you " +
-    '(or they) know this one? You can reroll it instead.'
-  );
-}
+/**
+ * The message a player acts on: the one character they're checking, whose it is, and the
+ * controls for it.
+ *
+ * Built in one place because it is rendered from three (the opening DM and both reroll
+ * paths), and three copies is how wording drifts apart -- the reroll paths had already lost
+ * the audience-vote variant of the prompt.
+ *
+ * Naming the owner leaks nothing: everyone except the wearer already knows this character,
+ * and the wearer never sees this message.
+ */
+function checkMessagePayload(game, checkerId, channelId) {
+  const state = game.confirmState[checkerId];
+  const ownerId = game.checkTargetOf(checkerId);
+  const character = game.headByPlayer[ownerId];
+  const owner = game.nameOf(ownerId);
 
-function votedPrompt(listLabel) {
-  return (
-    `🗂️ Playing with: **${listLabel}**\n\n` +
-    "🗳️ The audience picked this one. You can't see your own character! Use this to answer " +
-    "their questions, then hit **Ready**."
-  );
+  const instruction = game.rerollAllowed
+    ? `👤 You're checking **${owner}**'s character — use it to answer their questions. ` +
+      "If you don't think they'll recognise it, reroll it."
+    : `👤 **${owner}**'s character, chosen by the audience — use it to answer their questions, ` +
+      'then hit **Ready**.';
+
+  return {
+    content: `🗂️ Playing with: **${game.listLabel}**\n\n${instruction}\n_(You can't see your own.)_`,
+    embeds: [confirmCharacterEmbed(character, owner)],
+    components: [
+      buildConfirmRow(channelId, state.rerollsLeft, {
+        allowReroll: game.rerollAllowed,
+        // Only offerable when we know which list the character came from, which rules out
+        // hand-assigned characters from /lobby set-characters.
+        canDropList: game.rerollAllowed && character.listId != null,
+      }),
+    ],
+  };
 }
 
 // Discord renders at most 10 embeds per message.
@@ -178,22 +203,9 @@ function referenceHeadsFor(game, playerId) {
  */
 async function sendConfirmDMs(recipientUser, game, channelId, client) {
   const state = game.confirmState[recipientUser.id];
-  const targetId = game.checkTargetOf(recipientUser.id);
-  const character = game.headByPlayer[targetId];
 
   try {
-    const dm = await recipientUser.send({
-      content: game.rerollAllowed ? confirmPrompt(game.listLabel) : votedPrompt(game.listLabel),
-      embeds: [confirmCharacterEmbed(character)],
-      components: [
-        buildConfirmRow(channelId, state.rerollsLeft, {
-          allowReroll: game.rerollAllowed,
-          // Only offerable when we know which list the character came from, which rules
-          // out hand-assigned characters from /lobby set-characters.
-          canDropList: game.rerollAllowed && character.listId != null,
-        }),
-      ],
-    });
+    const dm = await recipientUser.send(checkMessagePayload(game, recipientUser.id, channelId));
     trackBoard('confirm', dm);
     state.checkMessage = dm;
   } catch {
@@ -564,15 +576,9 @@ async function handleConfirmationButton(interaction) {
     // no benefit. The server-wide switch-off is what was asked for, and it takes effect
     // from the next lobby.
 
-    await interaction.update({
-      content: confirmPrompt(game.listLabel),
-      embeds: [confirmCharacterEmbed(game.headByPlayer[otherPlayerId])],
-      components: [
-        buildConfirmRow(channelId, state.rerollsLeft, {
-          canDropList: game.headByPlayer[otherPlayerId].listId != null,
-        }),
-      ],
-    });
+    // Rebuilt from the same helper as the opening DM, after the swap, so the new character
+    // arrives labelled with whose it is exactly as the first one was.
+    await interaction.update(checkMessagePayload(game, playerId, channelId));
     // Everyone else is holding a card that just changed under them.
     await fanOutReference(game, otherPlayerId);
     return interaction.followUp({
@@ -614,15 +620,9 @@ async function handleConfirmationButton(interaction) {
     if (!unlimited) state.rerollsLeft -= 1;
     game.headByPlayer[otherPlayerId] = Game.head(lobby, replacement);
 
-    await interaction.update({
-      content: confirmPrompt(game.listLabel),
-      embeds: [confirmCharacterEmbed(game.headByPlayer[otherPlayerId])],
-      components: [
-        buildConfirmRow(channelId, state.rerollsLeft, {
-          canDropList: game.headByPlayer[otherPlayerId].listId != null,
-        }),
-      ],
-    });
+    // Rebuilt from the same helper as the opening DM, after the swap, so the new character
+    // arrives labelled with whose it is exactly as the first one was.
+    await interaction.update(checkMessagePayload(game, playerId, channelId));
     // Everyone else is holding a card that just changed under them.
     await fanOutReference(game, otherPlayerId);
 
