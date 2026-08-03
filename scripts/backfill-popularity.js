@@ -13,6 +13,8 @@
 //   everything else   summed Wikipedia sitelinks across the cast, since Wikidata has no
 //                     series-level fame signal. A cast with articles in many languages is
 //                     a cast people have heard of.
+//   Real People       the same sitelink scale, summed across the people in each field --
+//                     so Actors outranks Ice Hockey Players, which is the truth.
 //
 // Both seed pipelines merge entries before creating lists (seasons for AniList, franchises
 // for Wikidata), so this reuses their own merge functions rather than re-deriving the
@@ -23,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const { mergeSeasons } = require('./seed-anilist-characters');
 const { mergeFranchises } = require('./seed-wikidata-characters');
+const { assignPeople } = require('./seed-wikidata-people');
 const {
   setPopularityByName,
   clearPopularity,
@@ -38,6 +41,10 @@ const {
 // script finishes the job: the best-known DEFAULT_TOP of each category go into the pool.
 // `--top=N` moves the line, `--no-enable` ranks only.
 const DEFAULT_TOP = 100;
+
+// Real People lists are named by field ("Actors"), not by title, so they carry their own
+// category constant rather than one derived from the data.
+const PEOPLE_CATEGORY = 'Real People';
 
 const SEED_DIR = path.join(__dirname, '..', 'data', 'seed');
 
@@ -65,6 +72,22 @@ function scoresFromAniList() {
   const scores = new Map();
   for (const entry of mergeSeasons(Object.values(data.series))) {
     collect(scores, entry.category, entry.label, entry.popularity);
+  }
+  return scores;
+}
+
+// Real people, scored on the same sitelink scale as the Wikidata-sourced characters.
+//
+// Uses the seeder's own assignment rather than the raw groups: a person belongs to exactly
+// one list, and summing the group as fetched would rank Actors on Shakespeare, Trump and
+// Reagan, none of whom end up in it.
+function scoresFromPeople() {
+  const data = readSeed('wikidata-people.json');
+  if (!data) return new Map();
+  const scores = new Map();
+  for (const entry of assignPeople(data.groups)) {
+    const fame = entry.people.reduce((sum, p) => sum + (p.sitelinks || 0), 0);
+    collect(scores, PEOPLE_CATEGORY, entry.list, fame);
   }
   return scores;
 }
@@ -102,6 +125,15 @@ function characterScores() {
       for (const c of entry.characters ?? []) add(entry.category, entry.label, c.name, c.sitelinks);
     }
   }
+  // Without this the difficulty setting would silently do nothing to Real People: a list
+  // with no fame data passes through untouched, so Easy would deal Marie Curie and a
+  // physicist nobody has heard of with equal probability.
+  const people = readSeed('wikidata-people.json');
+  if (people) {
+    for (const entry of assignPeople(people.groups)) {
+      for (const p of entry.people) add(PEOPLE_CATEGORY, entry.list, p.name, p.sitelinks);
+    }
+  }
   return scores;
 }
 
@@ -136,7 +168,7 @@ function main() {
   const enable = !args.includes('--no-enable') && Number.isFinite(top) && top > 0;
   const reset = args.includes('--reset');
 
-  const scores = new Map([...scoresFromWikidata(), ...scoresFromAniList()]);
+  const scores = new Map([...scoresFromWikidata(), ...scoresFromAniList(), ...scoresFromPeople()]);
   console.log(`Fame scores available for ${scores.size} titles.`);
 
   // Clear first, so a re-run after the seed data changes drops scores that no longer match

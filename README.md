@@ -384,6 +384,7 @@ Four bundled importers, all idempotent — re-running only adds what's missing, 
 safe to run repeatedly.
 
 ```bash
+npm run seed:people   -- <your-server-id>   # ~2,900 famous real people, with photographs
 npm run seed:pokemon  -- <your-server-id>   # 1,025 Pokémon, with official artwork
 npm run seed:lol      -- <your-server-id>   # 173 League of Legends champions, with splash art
 npm run seed:wikidata -- <your-server-id>   # Western TV/film/game casts, one list per title
@@ -398,6 +399,29 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
 > same ground with real casts. Use `npm run reset:seeded -- <server-id>` to clear
 > seed-created lists before rebuilding from these sources.
 
+- **`seed:people`** fills a **Real People** category with 21 lists by field — Actors,
+  Footballers, Scientists & Inventors, Politicians & Leaders, Religious Figures, Musicians,
+  Comedians and the rest — from [Wikidata](https://www.wikidata.org). Ranked by how many
+  language Wikipedias carry an article, which is the same fame signal the Wikidata-sourced
+  fictional characters use, so `difficulty` and `/list select` work on them unchanged.
+
+  **This is the one category where a photograph is simply correct.** The image rule exists
+  because Wikidata's image property answers "an image associated with this item", which for a
+  fictional character gives you the actor or a cosplayer — but for a real person it gives you
+  the person. 98% arrive with one.
+
+  Wikidata files most people under several occupations, so lists are declared in priority
+  order and the first to claim somebody keeps them. That ordering is doing real work: it is
+  what puts Maradona in Footballers rather than Actors (he is filed as both), Kobe Bryant in
+  Basketball rather than Directors (he won an Oscar for a short film), and Reagan in
+  Politicians rather than Actors. Two rules were settled by measurement rather than argument:
+  musicians are claimed before actors, because the other way round drags Shakira, Madonna,
+  Eminem and Beyoncé into the top of Actors; and boxing, American football and baseball are
+  claimed *after* the performing arts, because John Wayne, Dwayne Johnson, Bing Crosby and
+  Will Ferrell are all filed as having played them.
+
+  `--per-list N` changes how many of each field are kept (default 150) and `--dry-run` shows
+  what would happen. Refresh the roster with `npm run fetch:people`.
 - **`seed:pokemon`** and **`seed:lol`** each create a single list under **Video Games**, with
   images pulled from the games' own public asset APIs (PokeAPI's sprite repo and Riot's Data
   Dragon).
