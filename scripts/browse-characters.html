@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Character browser</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff; --panel: #f4f5f7; --line: #dfe1e5; --text: #1c1e21;
+    --muted: #6b7280; --accent: #5865f2; --on: #2e7d32; --off: #9aa0a6; --warn: #c2410c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181b; --panel: #202126; --line: #34363c; --text: #e8eaed;
+      --muted: #9aa0a6; --accent: #7d87ff; --on: #7bd88f; --off: #6b7280; --warn: #fb923c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--panel);
+    border-bottom: 1px solid var(--line); padding: 10px 16px;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row + .row { margin-top: 8px; }
+  h1 { font-size: 15px; margin: 0 12px 0 0; font-weight: 650; white-space: nowrap; }
+  input, select, button {
+    font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  #q { flex: 1 1 240px; min-width: 180px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .stat { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    border: 1px solid var(--line); background: var(--bg); border-radius: 999px;
+    padding: 3px 10px; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+  }
+  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  main { padding: 16px; }
+  .grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  }
+  .card {
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+    background: var(--panel); display: flex; flex-direction: column;
+  }
+  .thumb {
+    aspect-ratio: 3 / 4; background: var(--bg); display: grid; place-items: center;
+    overflow: hidden; border-bottom: 1px solid var(--line);
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .none { color: var(--muted); font-size: 12px; padding: 8px; text-align: center; }
+  .meta { padding: 8px 9px; display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+  .name { font-weight: 620; line-height: 1.25; overflow-wrap: anywhere; }
+  .from { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+  .tag {
+    font-size: 11px; border-radius: 5px; padding: 1px 6px;
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap;
+  }
+  .tag.on { color: var(--on); border-color: currentColor; }
+  .tag.off { color: var(--off); }
+  .tag.warn { color: var(--warn); border-color: currentColor; }
+
+  .lists { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .listrow {
+    border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; background: var(--panel);
+    display: flex; justify-content: space-between; gap: 10px; align-items: center; cursor: pointer;
+  }
+  .listrow:hover { border-color: var(--accent); }
+  .listrow .n { font-weight: 620; overflow-wrap: anywhere; }
+  .empty, .loading { color: var(--muted); padding: 40px 0; text-align: center; }
+  footer { padding: 4px 16px 40px; text-align: center; }
+  #more { padding: 9px 22px; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Character browser</h1>
+    <input id="q" type="search" placeholder="Search characters by name…" autocomplete="off">
+    <select id="category"><option value="">All categories</option></select>
+    <select id="sort">
+      <option value="fame">Best known first</option>
+      <option value="name">Name A–Z</option>
+      <option value="list">Grouped by list</option>
+      <option value="rerolled">Most rerolled</option>
+    </select>
+    <button id="mode" type="button">Show lists</button>
+  </div>
+  <div class="row">
+    <div class="chips">
+      <button class="chip" id="f-enabled" type="button" aria-pressed="false">In the playable pool</button>
+      <button class="chip" id="f-image" type="button" aria-pressed="false">Has artwork</button>
+      <button class="chip" id="f-noimage" type="button" aria-pressed="false">Missing artwork</button>
+      <button class="chip" id="f-clear" type="button">Clear</button>
+    </div>
+    <span class="stat" id="stat"></span>
+    <span class="stat" id="scope"></span>
+  </div>
+</header>
+
+<main>
+  <div id="results" class="grid"></div>
+  <div id="status" class="loading">Loading…</div>
+</main>
+<footer><button id="more" type="button" hidden>Load more</button></footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const state = { guild: '', category: '', q: '', sort: 'fame', enabled: '', image: '', list: '', listName: '', page: 0, mode: 'characters' };
+let total = 0;
+
+const fmt = (n) => n.toLocaleString();
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+async function api(path, params) {
+  const url = new URL(path, location.origin);
+  for (const [k, v] of Object.entries(params)) if (v !== '' && v != null) url.searchParams.set(k, v);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// Built as DOM nodes rather than an HTML string: every name here came from AniList or
+// Wikidata, and none of it is ours to trust with innerHTML.
+function characterCard(c) {
+  const card = el('div', 'card');
+  const thumb = el('div', 'thumb');
+  if (c.imageUrl) {
+    const img = el('img');
+    img.loading = 'lazy';
+    img.alt = c.name;
+    img.src = c.imageUrl;
+    img.referrerPolicy = 'no-referrer';
+    // Plenty of Commons URLs 404 or hotlink-block; a broken-image icon says nothing useful.
+    img.onerror = () => { thumb.replaceChildren(el('div', 'none', 'image unavailable')); };
+    thumb.append(img);
+  } else {
+    thumb.append(el('div', 'none', 'no artwork'));
+  }
+
+  const meta = el('div', 'meta');
+  meta.append(el('div', 'name', c.name));
+  const from = el('div', 'from', c.listName);
+  from.title = 'Show only this list';
+  from.style.cursor = 'pointer';
+  from.onclick = () => { state.list = c.listId; state.listName = c.listName; state.mode = 'characters'; reload(); };
+  meta.append(from);
+
+  const tags = el('div', 'tags');
+  tags.append(el('span', 'tag', c.category));
+  tags.append(el('span', 'tag ' + (c.enabled ? 'on' : 'off'), c.enabled ? 'in pool' : 'not in pool'));
+  if (c.fame != null) tags.append(el('span', 'tag', 'fame ' + fmt(c.fame)));
+  if (c.rerolls > 0) {
+    // Three different people rerolling retires a character from random draws (see the bot's
+    // REROLL_DEMOTE_THRESHOLD), so this is the number that decides whether it still gets dealt.
+    const t = el('span', 'tag warn', 'rerolled ×' + c.rerolls + (c.rerolls >= 3 ? ' · retired' : ''));
+    t.title = c.rerolls >= 3 ? 'Enough people rejected this that the bot no longer deals it' : 'Rejected during the confirm step';
+    tags.append(t);
+  }
+  meta.append(tags);
+
+  card.append(thumb, meta);
+  return card;
+}
+
+function listRow(l) {
+  const row = el('div', 'listrow');
+  const left = el('div');
+  left.append(el('div', 'n', l.name));
+  left.append(el('div', 'from', `${l.category} · ${fmt(l.characters)} characters · ${fmt(l.withImage)} with art`));
+  const right = el('span', 'tag ' + (l.enabled ? 'on' : 'off'), l.enabled ? 'in pool' : 'not in pool');
+  row.append(left, right);
+  row.title = 'Show this list’s characters';
+  row.onclick = () => { state.list = l.id; state.listName = l.name; state.mode = 'characters'; reload(); };
+  return row;
+}
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+async function load({ append = false } = {}) {
+  const results = $('results');
+  if (!append) { results.replaceChildren(); $('status').textContent = 'Loading…'; $('status').hidden = false; }
+
+  try {
+    if (state.mode === 'lists') {
+      const rows = await api('/api/lists', { guild: state.guild, category: state.category, q: state.q, enabled: state.enabled });
+      results.className = 'lists';
+      results.replaceChildren(...rows.map(listRow));
+      $('status').hidden = rows.length > 0;
+      $('status').textContent = rows.length ? '' : 'No lists match that.';
+      $('more').hidden = true;
+      $('stat').textContent = `${fmt(rows.length)} list${rows.length === 1 ? '' : 's'}${rows.length === 400 ? ' (first 400)' : ''}`;
+      return;
+    }
+
+    const data = await api('/api/characters', {
+      guild: state.guild, category: state.category, q: state.q, sort: state.sort,
+      enabled: state.enabled, image: state.image, list: state.list, page: state.page,
+    });
+    total = data.total;
+    results.className = 'grid';
+    const cards = data.rows.map(characterCard);
+    if (append) results.append(...cards); else results.replaceChildren(...cards);
+
+    const shown = state.page * data.pageSize + data.rows.length;
+    // Says "0 of 0" rather than going blank: an empty counter reads as still loading.
+    $('stat').textContent = `${fmt(shown)} of ${fmt(total)}`;
+    $('status').hidden = total > 0;
+    $('status').textContent = total ? '' : 'Nothing matches those filters.';
+    $('more').hidden = shown >= total;
+  } catch (err) {
+    $('status').hidden = false;
+    $('status').textContent = 'Error: ' + err.message;
+  }
+}
+
+function reload() { state.page = 0; syncScope(); load(); }
+
+function syncScope() {
+  const bits = [];
+  if (state.list) bits.push(state.listName);
+  $('scope').replaceChildren();
+  if (bits.length) {
+    const clear = el('button', 'chip', '✕ ' + bits.join(' · '));
+    clear.title = 'Back to everything';
+    clear.onclick = () => { state.list = ''; state.listName = ''; reload(); };
+    $('scope').append(clear);
+  }
+  $('mode').textContent = state.mode === 'lists' ? 'Show characters' : 'Show lists';
+}
+
+function toggleChip(id, apply) {
+  const btn = $(id);
+  btn.onclick = () => {
+    const next = btn.getAttribute('aria-pressed') !== 'true';
+    btn.setAttribute('aria-pressed', String(next));
+    apply(next);
+    reload();
+  };
+}
+
+(async function init() {
+  const m = await api('/api/meta', {});
+  state.guild = m.guildId;
+  for (const c of m.categories) {
+    const opt = document.createElement('option');
+    opt.value = c.category;
+    opt.textContent = `${c.category} (${fmt(c.characters)})`;
+    $('category').append(opt);
+  }
+  document.title = `Character browser · ${fmt(m.totals.characters)} characters`;
+
+  $('q').oninput = debounce((e) => { state.q = e.target.value.trim(); reload(); }, 220);
+  $('category').onchange = (e) => { state.category = e.target.value; reload(); };
+  $('sort').onchange = (e) => { state.sort = e.target.value; reload(); };
+  $('mode').onclick = () => { state.mode = state.mode === 'lists' ? 'characters' : 'lists'; reload(); };
+  $('more').onclick = () => { state.page++; load({ append: true }); };
+
+  toggleChip('f-enabled', (on) => { state.enabled = on ? 'yes' : ''; });
+  toggleChip('f-image', (on) => {
+    state.image = on ? 'yes' : '';
+    if (on) { $('f-noimage').setAttribute('aria-pressed', 'false'); }
+  });
+  toggleChip('f-noimage', (on) => {
+    state.image = on ? 'no' : '';
+    if (on) { $('f-image').setAttribute('aria-pressed', 'false'); }
+  });
+  $('f-clear').onclick = () => {
+    Object.assign(state, { category: '', q: '', enabled: '', image: '', list: '', listName: '' });
+    $('q').value = ''; $('category').value = '';
+    for (const id of ['f-enabled', 'f-image', 'f-noimage']) $(id).setAttribute('aria-pressed', 'false');
+    reload();
+  };
+
+  syncScope();
+  load();
+})();
+</script>
+</body>
+</html>

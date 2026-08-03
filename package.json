@@ -14,6 +14,7 @@
     "seed:lol": "node scripts/seed-league-of-legends.js",
     "seed:wikidata": "node scripts/seed-wikidata-characters.js",
     "seed:anilist": "node scripts/seed-anilist-characters.js",
+    "browse": "node scripts/browse-characters.js",
     "reset:seeded": "node scripts/reset-seeded-lists.js",
     "backfill:popularity": "node scripts/backfill-popularity.js",
     "fetch:anilist": "node scripts/fetch-anilist-characters.js",

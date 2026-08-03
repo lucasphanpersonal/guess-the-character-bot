@@ -467,6 +467,27 @@ npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per ti
 Anything still without an image reveals as plain text, which is a supported look — use
 `/list image` to fill in any you care about.
 
+### Browsing what you've got
+
+`/list show` paginates inside Discord, which is fine for checking one show and hopeless for
+43,000 characters. `npm run browse` serves a local page for it instead:
+
+```bash
+npm run browse          # then open http://localhost:4173
+```
+
+Search by name across everything, filter by category, by whether a list is in the playable
+pool, or by whether a character has artwork at all, and sort by fame or by how often people
+have rerolled someone. Clicking a list drills into it. It reads the live database
+**read-only**, so it is safe to run while the bot is up and cannot change what gets dealt --
+curation still happens through `/list toggle` and `/list select`.
+
+Two views worth knowing about: **Missing artwork** finds the characters that will reveal as
+plain text, and sorting by **Most rerolled** shows what people keep rejecting, with anything
+past three different rerollers marked *retired* -- the bot has already stopped dealing those.
+
+`--port=` and `--db=` override the defaults.
+
 `seed:pokemon` and `seed:lol` take an optional list name as a second argument. Combine
 anything at game time: `/lobby create list:Naruto, Scrubs`.
 
@@ -543,7 +564,7 @@ src/
     characterLists.js   List/character queries, random selection, search
     stats.js            Win/loss records and leaderboard
   util/text.js          Shared accent/case normalization
-scripts/                One-off seed and sound-generation scripts
+scripts/                Seed and sound-generation scripts, plus the character browser
 test/                   Test suite (npm test)
 data/
   bot.sqlite            Created on first run (gitignored)
