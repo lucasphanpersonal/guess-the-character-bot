@@ -105,6 +105,11 @@ happen live between humans in voice.
    game and becomes a wall of dead greys at five. What survives a game is the completion
    messages and the final result — the parts worth scrolling back to.
 
+   The board also carries **👁 Spectate**, for anyone who wandered in after the game started.
+   It's here rather than only on the lobby board because the lobby board loses its buttons the
+   moment play begins and is buried up the channel by turn three — this is the one message
+   reliably at the bottom. Its audience is exactly the people the other buttons refuse.
+
    #### Why everyone else does the clicking
 
    The person guessing is thinking, talking, and racing a clock. Everyone listening has
@@ -311,7 +316,7 @@ short tones synthesized by `npm run generate:sounds` — no audio files are down
 | `/list toggle` | anyone | Switch one named list in or out of the pool |
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
 | `/lobby join` / `/lobby leave` | anyone | Join or leave the waiting lobby — two minimum, no maximum (or use the board's buttons) |
-| `/lobby spectate` | anyone | Opt in to a DM revealing every character (or use the board's button) |
+| `/lobby spectate` | anyone | Opt in to a DM revealing every character (or the 👁 button on the lobby *or* turn board) |
 | `/lobby set-characters` | host | Hand-pick both characters in a 2-player game; the board's 🎭 button covers up to five |
 | `/lobby start` | host | Deal characters and begin |
 | `/pass` | current player | End your turn (or use the turn board's button) |

@@ -47,7 +47,8 @@ module.exports = {
             'below is a button on it:\n' +
             "**Join** / **Leave** -- two people minimum, no maximum (the host doesn't have to " +
             'be one of them)\n' +
-            "**Spectate** -- opt in to a DM revealing every player's character\n" +
+            "**Spectate** -- opt in to a DM revealing every player's character. The same 👁 " +
+            'button sits on the turn board, so you can start spectating after play is under way\n' +
             '**Start game** -- host only, unlocks at 2 players\n' +
             '**⚙️ Settings** / **🗳️ Audience vote** / **🎚️ Difficulty** / **🎭 Set characters** ' +
             '-- host only, and all locked once the game starts\n' +

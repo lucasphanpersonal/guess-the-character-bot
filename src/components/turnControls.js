@@ -5,6 +5,7 @@
 //   turn:yes:<channelId>:<playerId>:<turnNumber>  button -> and confirms it (ephemeral)
 //   turn:wrong:<channelId>                        button -> the judge rules it wrong
 //   turn:pass:<channelId>                         button -> the guesser ends their turn
+//   turn:spectate:<channelId>                     button -> a NON-player asks to see them all
 //
 // There is no "submit a guess" control here on purpose. Guesses are said out loud and ruled
 // on by the player who can see the answer; a second way to settle the same question would
@@ -98,6 +99,23 @@ async function handle(interaction) {
       });
     if (!result.ok) return interaction.followUp(ephemeral(result.error));
     return undefined;
+  }
+
+  // Checked before the whose-turn-is-it guard below, because this is the one control on the
+  // board that belongs to people who are NOT playing.
+  if (action === 'spectate') {
+    if (game.turnOrder.includes(interaction.user.id)) {
+      return interaction.reply(ephemeral("You're a player in this game — you already know everyone else's."));
+    }
+    lobby.spectators.add(interaction.user.id);
+    const sent = await engine.sendSpectatorDM(interaction.client, lobby, interaction.user.id);
+    return interaction.reply(
+      ephemeral(
+        sent
+          ? `👁 Sent you all ${game.turnOrder.length} characters via DM. Press again any time to re-send.`
+          : "You're spectating, but I couldn't DM you — check that you allow DMs from server members."
+      )
+    );
   }
 
   // Everyone can see the board, so every control has to check who actually clicked it.

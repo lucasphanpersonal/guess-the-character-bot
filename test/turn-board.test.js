@@ -107,7 +107,9 @@ module.exports = {
     const buttons = buttonsOf(boards[0].payload);
     // Judging leads, because guesses are called out in voice rather than typed.
     // No typed-guess control: the judge's ruling is the only authority on correctness.
-    assert.deepEqual(Object.keys(buttons).sort(), ['pass', 'right', 'wrong']);
+    // Spectate rides along because this is the only message reliably at the bottom of the
+    // channel; its audience is exactly the people the other three refuse.
+    assert.deepEqual(Object.keys(buttons).sort(), ['pass', 'right', 'spectate', 'wrong']);
     assert.equal(boards[0].payload.components.length, 2, 'one row each');
     assert.match(boards[0].content, /Turn 1/);
     assert.match(boards[0].content, /<@p1>/);

@@ -253,6 +253,39 @@ async function fanOutReference(game, changedPlayerId) {
   );
 }
 
+/**
+ * Every player's character, to one spectator.
+ *
+ * The single path for it, used by the opening sweep, `/lobby spectate` and the turn board's
+ * 👁 button alike -- the command used to carry its own copy, which still destructured two
+ * players out of the turn order and so showed a five-player game as a two-player one.
+ *
+ * One embed per player against a 10-embed ceiling, so a big table needs several messages.
+ */
+async function sendSpectatorDM(client, lobby, userId) {
+  const game = lobby.game;
+  if (!game) return false;
+  const pages = chunk(game.turnOrder, MAX_EMBEDS);
+  try {
+    const user = await client.users.fetch(userId);
+    for (const [i, page] of pages.entries()) {
+      const header =
+        i === 0
+          ? `🗂️ Playing with: **${game.listLabel}**\n🕵️ Spectator info for the game in <#${lobby.channelId}>:`
+          : `…continued (${i + 1}/${pages.length})`;
+      await user.send(
+        characterMessage(
+          header,
+          page.map((id) => ({ label: `${game.nameOf(id)}'s head`, ...game.headByPlayer[id] }))
+        )
+      );
+    }
+    return true;
+  } catch {
+    return false; // DMs closed
+  }
+}
+
 async function sendSpectatorDMs(client, lobby) {
   const game = lobby.game;
   const playing = new Set(game.turnOrder);
@@ -271,26 +304,8 @@ async function sendSpectatorDMs(client, lobby) {
     // best-effort voice detection only
   }
 
-  // One embed per player, against a 10-embed ceiling, so a big table needs several messages.
-  const pages = chunk(game.turnOrder, MAX_EMBEDS);
   for (const specId of spectatorIds) {
-    try {
-      const specUser = await client.users.fetch(specId);
-      for (const [i, page] of pages.entries()) {
-        const header =
-          i === 0
-            ? `🗂️ Playing with: **${game.listLabel}**\nSpectator info for the game in <#${lobby.channelId}>:`
-            : `…continued (${i + 1}/${pages.length})`;
-        await specUser.send(
-          characterMessage(
-            header,
-            page.map((id) => ({ label: `${game.nameOf(id)}'s head`, ...game.headByPlayer[id] }))
-          )
-        );
-      }
-    } catch {
-      // DMs closed, skip silently
-    }
+    await sendSpectatorDM(client, lobby, specId);
   }
 }
 
@@ -920,5 +935,6 @@ module.exports = {
   handleTimeout,
   handleConfirmationButton,
   characterMessage,
+  sendSpectatorDM,
   clearTimers,
 };

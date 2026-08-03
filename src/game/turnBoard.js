@@ -73,7 +73,19 @@ function buildButtons(game, channelId) {
       .setCustomId(`turn:pass:${channelId}`)
       .setLabel(alone ? 'Give up' : 'Pass')
       .setEmoji(alone ? '🏳️' : '⏭️')
-      .setStyle(alone ? ButtonStyle.Danger : ButtonStyle.Secondary)
+      .setStyle(alone ? ButtonStyle.Danger : ButtonStyle.Secondary),
+    // Spectating was only ever offered on the lobby board, which loses its buttons the moment
+    // the game starts and is buried up the channel by turn three -- so anyone who wandered in
+    // late had to know `/lobby spectate` existed. It lives here because this is the one
+    // message that is always at the bottom of the channel.
+    //
+    // It shares the row with Pass, whose audience is exactly complementary: the player whose
+    // turn it is cannot spectate, and a spectator has no turn to pass.
+    new ButtonBuilder()
+      .setCustomId(`turn:spectate:${channelId}`)
+      .setLabel('Spectate')
+      .setEmoji('👁')
+      .setStyle(ButtonStyle.Secondary)
   );
 
   return [judgeRow, guesserRow];

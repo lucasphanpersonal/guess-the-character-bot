@@ -71,6 +71,22 @@ function cleanup(ctx) {
 const dmsTo = (ctx, id) => ctx.recorder.sent.filter((m) => m.target === `dm:${id}`);
 const embedCount = (messages) => messages.reduce((n, m) => n + (m.payload.embeds?.length ?? 0), 0);
 
+// Every bolded token across a set of messages -- character names and labels alike.
+//
+// Matched as whole tokens rather than by substring on purpose: the seeded names run
+// "Char 1-1" ... "Char 1-59", so "Char 1-1" is a substring of "Char 1-15" and a substring
+// check calls a leak whenever a player's own name happens to prefix somebody else's.
+function boldTokens(messages) {
+  const out = new Set();
+  for (const m of messages) {
+    for (const embed of m.payload.embeds ?? []) {
+      for (const [, token] of (embed.data.description ?? '').matchAll(/\*\*([^*]+)\*\*/g)) out.add(token);
+    }
+    for (const [, token] of (m.content ?? '').matchAll(/\*\*([^*]+)\*\*/g)) out.add(token);
+  }
+  return out;
+}
+
 module.exports = {
   async 'every player is dealt a different character'() {
     const ctx = await startedGame(5);
@@ -119,8 +135,11 @@ module.exports = {
       assert.equal(messages[1].payload.components ?? undefined, undefined, 'reference message has none');
       assert.equal(embedCount(messages), 3, 'the other three characters, once each');
 
-      const text = messages.map((m) => m.content + JSON.stringify(m.payload.embeds)).join('\n');
-      assert.ok(!text.includes(game.headByPlayer[id].name), `${id} must never see their own character`);
+      const shown = boldTokens(messages);
+      assert.ok(!shown.has(game.headByPlayer[id].name), `${id} must never see their own character`);
+      for (const other of ctx.players.filter((o) => o !== id)) {
+        assert.ok(shown.has(game.headByPlayer[other].name), `${id} needs to know ${other}'s`);
+      }
     }
     cleanup(ctx);
   },
@@ -224,6 +243,41 @@ module.exports = {
     assert.match(refused.error, /tops out at 5 players/);
     assert.match(refused.error, /Turn the vote off/, 'and says what to do about it');
     cleanup(six);
+  },
+
+  // The lobby board loses its buttons the moment the game starts and is buried up the channel
+  // by turn three, so spectating mid-game used to need knowing a slash command existed.
+  async 'a latecomer can start spectating from the turn board'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await handleComponentInteraction(
+      createButtonInteraction({ client: ctx.client, userId: 'latecomer', customId: `turn:spectate:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+
+    assert.ok(ctx.lobby.spectators.has('latecomer'));
+    const dms = dmsTo(ctx, 'latecomer');
+    assert.equal(embedCount(dms), 4, 'every character, not just the first two');
+    const shown = boldTokens(dms);
+    for (const id of ctx.players) {
+      assert.ok(shown.has(game.headByPlayer[id].name), `${id}'s character is there`);
+    }
+    cleanup(ctx);
+  },
+
+  async 'a player pressing Spectate is told they already know'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const before = dmsTo(ctx, 'p2').length;
+
+    await handleComponentInteraction(
+      createButtonInteraction({ client: ctx.client, userId: 'p2', customId: `turn:spectate:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+    assert.ok(!ctx.lobby.spectators.has('p2'));
+    assert.equal(dmsTo(ctx, 'p2').length, before, 'and is sent nothing that could spoil their own');
+    assert.match(ctx.recorder.allText(), /already know/);
+    cleanup(ctx);
   },
 
   async 'the spectator DM splits rather than overflowing the embed limit'() {
