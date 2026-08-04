@@ -104,13 +104,14 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'a genuine typo is still reported, distinctly from a blank'() {
+  async 'a name outside the lobby\'s lists is worn as typed, not refused'() {
     const ctx = makeLobby(4);
     await submit(ctx, { player1: 'Zoroo', player2: 'Luffy', player3: '', player4: '' });
 
-    assert.match(ctx.recorder.allText(), /Couldn't find \*\*Zoroo\*\*/);
-    assert.ok(!/\(blank\)/.test(ctx.recorder.allText()), 'blanks are never reported as missing');
-    assert.deepEqual(ctx.lobby.assignedCharacters, {}, 'nothing was changed on a failed submission');
+    assert.equal(ctx.lobby.assignedCharacters.p1.name, 'Zoroo');
+    assert.equal(ctx.lobby.assignedCharacters.p1.id, null, 'nothing to record a reroll against');
+    assert.equal(ctx.lobby.assignedCharacters.p2.name, 'Luffy');
+    assert.ok(ctx.lobby.assignedCharacters.p2.id, 'the real character still resolves to its row');
     cleanup(ctx);
   },
 

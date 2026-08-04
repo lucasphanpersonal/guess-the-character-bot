@@ -15,7 +15,7 @@ const db = require('../src/db/connection');
 let counter = 0;
 
 // Two lists so dropping one still leaves something to reroll into.
-async function startedGame({ maxRerolls = 2, secondList = true } = {}) {
+async function startedGame({ maxRerolls = 2, secondList = true, p2Freeform = false } = {}) {
   const n = ++counter;
   const guildId = `drop-guild-${n}`;
   const channelId = `drop-chan-${n}`;
@@ -49,7 +49,9 @@ async function startedGame({ maxRerolls = 2, secondList = true } = {}) {
   GameManager.createLobby(channelId, lobby);
 
   // p2's head is the obscure character, so p1 (who sees it) is the one who reacts to it.
-  const obscureRow = lists.drawablePool([obscure], 'everything')[0];
+  // Hand-picked-with-no-match (/lobby set-characters, or the board modal) lands here too --
+  // it's a row shaped exactly like this, with id and list_id both null.
+  const obscureRow = p2Freeform ? lists.freeformCharacter('Made-Up Guy') : lists.drawablePool([obscure], 'everything')[0];
   const knownRow = secondList ? lists.drawablePool([known], 'everything')[0] : obscureRow;
   await engine.startGame(client, lobby, [knownRow, obscureRow]);
 
@@ -131,6 +133,40 @@ module.exports = {
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
     assert.equal(lists.getListsByIds([obscure])[0].enabled, 1);
     assert.match(recorder.allText(), /audience picked this character/);
+    GameManager.endLobby(channelId);
+  },
+
+  // A hand-picked name with no match in any list -- /lobby set-characters or the board modal,
+  // taken literally -- carries no list to drop, so the button offering to isn't shown at all.
+  async 'a hand-picked freeform character has no drop button to offer'() {
+    const { recorder, channelId } = await startedGame({ p2Freeform: true });
+    const dm = recorder.sent.find((m) => m.target === 'dm:p1');
+    const ids = dm.payload.components[0].toJSON().components.map((c) => c.custom_id);
+    assert.deepEqual(ids, [`confirm:${channelId}`, `reroll:${channelId}`]);
+    GameManager.endLobby(channelId);
+  },
+
+  // Reroll doesn't route through droplist's list lookup, so a freeform character rerolls
+  // exactly like any other -- it just leaves nothing to record the reroll against.
+  async 'rerolling away from a freeform character works normally'() {
+    const { lobby, client, recorder, channelId } = await startedGame({ p2Freeform: true });
+    assert.equal(lobby.game.headByPlayer.p2.name, 'Made-Up Guy');
+
+    await press({ client, recorder, channelId, userId: 'p1', action: 'reroll' });
+
+    assert.notEqual(lobby.game.headByPlayer.p2.name, 'Made-Up Guy');
+    assert.match(lobby.game.headByPlayer.p2.name, /^(Nobody|Famous)/, 'replacement drawn from the lobby lists');
+    GameManager.endLobby(channelId);
+  },
+
+  // Belt and suspenders: even if droplist is somehow reached on a freeform character (the
+  // button is hidden, but nothing stops a stale interaction), it refuses cleanly instead of
+  // crashing on a null list id.
+  async 'pressing drop anyway on a freeform character is refused, not a crash'() {
+    const { lobby, client, recorder, channelId } = await startedGame({ p2Freeform: true });
+    await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
+    assert.equal(lobby.game.headByPlayer.p2.name, 'Made-Up Guy', 'nothing changed');
+    assert.match(recorder.allText(), /Couldn't tell which list this character came from/);
     GameManager.endLobby(channelId);
   },
 };

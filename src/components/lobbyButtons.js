@@ -25,7 +25,7 @@ const {
   DIFFICULTIES,
   countDistinctCharacters,
   getCharacterByNameInLists,
-  getListLabelForIds,
+  freeformCharacter,
 } = require('../db/characterLists');
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
@@ -155,24 +155,15 @@ async function handle(interaction) {
 
     // A blank box means "deal this player at random" -- it is only a problem when EVERY box
     // is blank, and that case already returned above. Left in the loop below, a blank typed
-    // value would be looked up as a character literally named "", fail, and get reported back
-    // as "(blank)" alongside anything genuinely misspelled.
+    // value would be looked up as a character literally named "".
+    //
+    // A name that isn't in any of this lobby's lists is taken literally rather than refused
+    // -- an inside joke, a real person not in the database, whatever was typed is what gets
+    // worn. `/lobby set-characters` has autocomplete if the real thing was wanted and mistyped.
     const resolved = {};
-    const missing = [];
     for (const playerId of lobby.players) {
       if (!typed[playerId]) continue;
-      const found = getCharacterByNameInLists(lobby.listIds, typed[playerId]);
-      if (found) resolved[playerId] = found;
-      else missing.push(typed[playerId]);
-    }
-    if (missing.length) {
-      return interaction.reply(
-        ephemeral(
-          `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's lists ` +
-            `(${getListLabelForIds(lobby.listIds)}). Nothing was changed -- ` +
-            '`/lobby set-characters` has autocomplete if you want help spelling them.'
-        )
-      );
+      resolved[playerId] = getCharacterByNameInLists(lobby.listIds, typed[playerId]) || freeformCharacter(typed[playerId]);
     }
     // One character can only sit on one head, so duplicates would make the game unplayable
     // for everyone wearing the repeat. Checked only among what was actually typed -- the

@@ -343,7 +343,7 @@ module.exports = {
     GameManager.endLobby(channelId);
   },
 
-  async 'an unknown character changes nothing and says which one failed'() {
+  async 'a name outside this lobby\'s lists is worn as typed, alongside a real one'() {
     const { lobby, channelId } = makeLobby({ players: ['p1', 'p2'] });
     const recorder = createRecorder();
     const client = createFakeClient(recorder);
@@ -358,8 +358,10 @@ module.exports = {
       })
     );
 
-    assert.deepEqual(lobby.assignedCharacters, {}, 'nothing assigned');
-    assert.match(recorder.allText(), /Nobody At All/);
+    assert.equal(lobby.assignedCharacters.p1.name, 'Nobody At All');
+    assert.equal(lobby.assignedCharacters.p1.id, null, 'nothing to record a reroll against');
+    assert.equal(lobby.assignedCharacters.p2.name, 'Character 1');
+    assert.ok(lobby.assignedCharacters.p2.id, 'the real character still resolves to its row');
     GameManager.endLobby(channelId);
   },
 

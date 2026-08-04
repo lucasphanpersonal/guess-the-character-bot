@@ -505,6 +505,15 @@ function getCharacterByNameInLists(listIds, name) {
   return dedupeByName(getCharactersForLists(listIds)).find((c) => c.name.toLowerCase() === name.toLowerCase()) || null;
 }
 
+// A hand-picked name that isn't in any list -- an inside joke, a person not in the database,
+// a typo the host meant literally. Shaped like a real character row so it flows through
+// Game.head() unchanged, just with nothing to look an image or source up by: no id (so a
+// reroll away from it records against nothing), no list_id (so there's no list to offer
+// dropping), no image_url (so it reveals as text, same as any character with no artwork).
+function freeformCharacter(name) {
+  return { name, image_url: null, id: null, list_id: null };
+}
+
 // ---------------------------------------------------------------------------
 // Looking a character up across the whole server, for /character
 // ---------------------------------------------------------------------------
@@ -619,6 +628,7 @@ module.exports = {
   clearPopularity,
   getRandomCategory,
   getCharacterByNameInLists,
+  freeformCharacter,
   searchCharactersInLists,
   searchCharactersInGuild,
   getCharacterById,

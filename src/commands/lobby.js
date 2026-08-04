@@ -110,8 +110,12 @@ module.exports = {
         sub.addStringOption((opt) =>
           opt
             .setName(`character${i}`)
-            .setDescription(`player${i}'s hidden character (leave blank to deal at random)`)
+            .setDescription(`player${i}'s hidden character -- any name works, blank = random`)
             .setAutocomplete(true)
+            // A name outside this lobby's lists is worn as typed rather than refused (see
+            // lobby-set-characters.js), so this caps it at what the board's own modal boxes
+            // allow rather than Discord's 6000-char option default.
+            .setMaxLength(100)
         );
       }
       return sub;

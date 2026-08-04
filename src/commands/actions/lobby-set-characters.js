@@ -2,8 +2,8 @@ const { MessageFlags } = require('discord.js');
 const GameManager = require('../../game/GameManager');
 const {
   getCharacterByNameInLists,
+  freeformCharacter,
   searchCharactersInLists,
-  getListLabelForIds,
 } = require('../../db/characterLists');
 
 const MAX_SLOTS = 5;
@@ -70,23 +70,16 @@ module.exports = {
 
     const resolved = {}; // playerId -> character row, for slots that named one
     const cleared = []; // playerId, for slots naming a player with no character
-    const missing = [];
     for (const { player, character } of slots) {
       if (!character) {
         cleared.push(player.id);
         continue;
       }
-      const found = getCharacterByNameInLists(lobby.listIds, character);
-      if (found) resolved[player.id] = found;
-      else missing.push(character);
-    }
-    if (missing.length) {
-      return interaction.reply({
-        content: `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's list(s) ` +
-          `(${getListLabelForIds(lobby.listIds)}). Nothing was changed -- autocomplete on the character ` +
-          'fields will only offer names that actually exist.',
-        flags: MessageFlags.Ephemeral,
-      });
+      // A name that isn't in any of this lobby's lists is taken literally rather than
+      // refused -- an inside joke, a real person not in the database, whatever the host
+      // typed is what gets worn. Autocomplete is there if they wanted the real thing and
+      // mistyped it; this is for when they didn't.
+      resolved[player.id] = getCharacterByNameInLists(lobby.listIds, character) || freeformCharacter(character);
     }
 
     // Checked against the assignment as it will exist AFTER this call, not just what was

@@ -110,11 +110,12 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'a genuine typo is reported and nothing is changed'() {
+  async 'a name outside this lobby\'s lists is assigned as typed, not refused'() {
     const ctx = makeLobby(4);
     await run(ctx, { player1: { id: 'p1' }, character1: 'Zoroo' });
-    assert.match(ctx.recorder.lastMatching('reply:host').content, /Couldn't find \*\*Zoroo\*\*/);
-    assert.deepEqual(ctx.lobby.assignedCharacters, {});
+    assert.match(ctx.recorder.lastMatching('reply:host').content, /hand-picked character/);
+    assert.equal(ctx.lobby.assignedCharacters.p1.name, 'Zoroo');
+    assert.equal(ctx.lobby.assignedCharacters.p1.id, null, 'nothing to record a reroll against');
     cleanup(ctx);
   },
 
