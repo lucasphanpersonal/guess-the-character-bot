@@ -50,9 +50,13 @@ happen live between humans in voice.
    capping the game: hand-picking characters needs a box per player and a modal holds five,
    so it says so above that. Anything that outgrows a message pages or splits instead — the
    spectator DM, the reference DM, and the audience ballot.
-4. **Optionally `/lobby set-characters`** (host only) to hand-pick each player's character instead
-   of leaving it to chance. The confirmation is ephemeral, so it can't spoil anything even
-   though you type it in the shared channel.
+4. **Optionally hand-pick characters** (host only) instead of leaving every player to chance.
+   `/lobby set-characters` covers exactly two players, with autocomplete. The board's **🎭 Set
+   characters** button covers up to five via a modal, one box per player, and its boxes are
+   independent — fill in the ones you care about and leave the rest blank to deal those
+   players at random, rather than needing everyone named or nobody. Either way the
+   confirmation is ephemeral, so it can't spoil anything even though you typed it in the
+   shared channel.
 5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player gets
    **two DMs**: the character they're *checking*, with the buttons beside it, and a
    component-free list of everyone else's, so they can answer questions about them. Between

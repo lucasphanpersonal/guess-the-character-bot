@@ -153,12 +153,17 @@ async function handle(interaction) {
       return interaction.followUp(ephemeral('🎲 Cleared -- characters will be dealt at random.'));
     }
 
+    // A blank box means "deal this player at random" -- it is only a problem when EVERY box
+    // is blank, and that case already returned above. Left in the loop below, a blank typed
+    // value would be looked up as a character literally named "", fail, and get reported back
+    // as "(blank)" alongside anything genuinely misspelled.
     const resolved = {};
     const missing = [];
     for (const playerId of lobby.players) {
+      if (!typed[playerId]) continue;
       const found = getCharacterByNameInLists(lobby.listIds, typed[playerId]);
       if (found) resolved[playerId] = found;
-      else missing.push(typed[playerId] || '(blank)');
+      else missing.push(typed[playerId]);
     }
     if (missing.length) {
       return interaction.reply(
@@ -170,10 +175,11 @@ async function handle(interaction) {
       );
     }
     // One character can only sit on one head, so duplicates would make the game unplayable
-    // for everyone wearing the repeat.
-    const names = lobby.players.map((id) => resolved[id].name.toLowerCase());
-    if (new Set(names).size !== names.length) {
-      return interaction.reply(ephemeral('Every player needs a different character. Nothing was changed.'));
+    // for everyone wearing the repeat. Checked only among what was actually typed -- the
+    // players left blank are dealt at random later and can't collide with anything yet.
+    const typedNames = Object.values(resolved).map((c) => c.name.toLowerCase());
+    if (new Set(typedNames).size !== typedNames.length) {
+      return interaction.reply(ephemeral('Every hand-picked player needs a different character. Nothing was changed.'));
     }
 
     lobby.assignedCharacters = resolved;
@@ -183,7 +189,10 @@ async function handle(interaction) {
     return interaction.followUp(
       ephemeral(
         '✅ Set. Only you can see this: ' +
-          lobby.players.map((id) => `<@${id}> gets **${resolved[id].name}**`).join(', ') + '.'
+          lobby.players
+            .map((id) => `<@${id}> gets **${resolved[id] ? resolved[id].name : 'a random character'}**`)
+            .join(', ') +
+          '.'
       )
     );
   }

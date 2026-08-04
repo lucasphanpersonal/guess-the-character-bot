@@ -105,7 +105,7 @@ module.exports = {
 
     const result = await engine.startGameFromLobby(ctx.client, ctx.lobby);
     assert.equal(result.ok, false);
-    assert.match(result.error, /4 players need 4 different characters/);
+    assert.match(result.error, /4 more characters? needed/);
     cleanup(ctx);
   },
 

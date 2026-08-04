@@ -146,21 +146,32 @@ async function startGameFromLobby(client, lobby) {
     return startAudienceVote(client, lobby);
   }
 
-  const assigned = lobby.assignedCharacters;
-  let characters;
-  if (lobby.players.every((id) => assigned?.[id])) {
-    characters = lobby.players.map((id) => assigned[id]);
-  } else {
-    characters = getRandomCharacters(lobby.listIds, wanted, [], lobby.difficulty);
-    if (characters.length < wanted) {
+  // Hand-picking a FEW players and leaving the rest to chance is a normal thing to want --
+  // "I know Zoro should go to Alex, deal everyone else at random" -- so an assignment covering
+  // only some of the table is honoured for those players rather than discarded outright for
+  // covering everyone or no one.
+  const assigned = lobby.assignedCharacters ?? {};
+  const unassignedIds = lobby.players.filter((id) => !assigned[id]);
+  let randomFill = [];
+  if (unassignedIds.length) {
+    randomFill = getRandomCharacters(
+      lobby.listIds,
+      unassignedIds.length,
+      Object.values(assigned).map((c) => c.name),
+      lobby.difficulty
+    );
+    if (randomFill.length < unassignedIds.length) {
       return {
         ok: false,
         error:
-          `${wanted} players need ${wanted} different characters, and this list selection ` +
-          `only has ${characters.length} to deal at this difficulty.`,
+          `${unassignedIds.length} more character${unassignedIds.length === 1 ? '' : 's'} ` +
+          `needed and this list selection only has ${randomFill.length} left to deal at this ` +
+          'difficulty (after the ones already hand-picked).',
       };
     }
   }
+  let nextRandom = 0;
+  const characters = lobby.players.map((id) => (assigned[id] ? assigned[id] : randomFill[nextRandom++]));
 
   await startGame(client, lobby, characters);
   return { ok: true };
