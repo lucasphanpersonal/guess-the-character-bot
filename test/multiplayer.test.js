@@ -411,6 +411,35 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // A bot holds exactly one voice connection per server -- getVoiceConnection() takes a guild
+  // and nothing else. Two concurrent games therefore cannot both have sound, and before this
+  // the second game moved the bot out of the first one's channel and then destroyed the shared
+  // connection when it ended.
+  async 'two games in one server do not fight over the voice connection'() {
+    const voice = require('../src/game/voice');
+    const a = await startedGame(2);
+    const b = await startedGame(2);
+    // Same guild, which is what makes them contend. (makeLobby gives each its own by default.)
+    b.lobby.guildId = a.lobby.guildId;
+    b.lobby.game.lobby.guildId = a.lobby.guildId;
+
+    assert.equal(voice.claimVoice(a.lobby.game), true, 'the first game gets voice');
+    assert.equal(voice.claimVoice(b.lobby.game), false, 'the second is refused rather than stealing it');
+    assert.equal(voice.voiceHolder(a.lobby.guildId), a.lobby.game);
+
+    // The second game ending must not release a claim it never held.
+    voice.releaseVoice(b.lobby.game);
+    assert.equal(voice.voiceHolder(a.lobby.guildId), a.lobby.game, 'first game still holds it');
+
+    // Once the holder finishes, the claim expires and the next game can have it.
+    a.lobby.game.finished = true;
+    assert.equal(voice.voiceHolder(a.lobby.guildId), null);
+    assert.equal(voice.claimVoice(b.lobby.game), true);
+    voice.releaseVoice(b.lobby.game);
+    cleanup(a);
+    cleanup(b);
+  },
+
   async 'anyone who is not guessing can judge'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);

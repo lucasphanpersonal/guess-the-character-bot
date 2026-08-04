@@ -220,8 +220,17 @@ async function maybeBeginPlay(client, lobby) {
   lobby.status = 'IN_PROGRESS';
   await refreshLobbyBoard(lobby);
   await sendSpectatorDMs(client, lobby);
-  await voice.joinVoiceForGame(client, lobby);
+  const voiceResult = await voice.joinVoiceForGame(client, lobby);
   const channel = await getChannel(client, lobby);
+  // A bot holds one voice connection per server, so a second concurrent game cannot have
+  // sound. Saying so beats letting people wonder why the countdown went quiet -- the text
+  // countdown is the fallback and it works.
+  if (voiceResult?.takenBy) {
+    await channel.send(
+      `🔇 The game in <#${voiceResult.takenBy}> has the bot in voice, so this one is text-only. ` +
+        'The countdown still runs on the board.'
+    );
+  }
   await channel.send(
     `✅ All ${game.turnOrder.length} players are ready -- starting the game! 🗂️ Playing with: **${game.listLabel}**`
   );

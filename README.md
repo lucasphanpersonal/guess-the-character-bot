@@ -313,6 +313,12 @@ a countdown chime at decreasing intervals, plus stings for correct guesses, wron
 and the final win. Otherwise everything falls back to the text countdown. The sounds are
 short tones synthesized by `npm run generate:sounds` — no audio files are downloaded.
 
+**One game at a time gets the sound.** A bot holds exactly one voice connection per server, so
+if a second game starts in another channel it plays text-only and says so — rather than
+dragging the bot out of the first game's channel, which is what used to happen. The countdown
+on the board is the fallback and it works. If you want two games with sound at once you need a
+second bot application with its own token; one bot cannot be in two voice channels at once.
+
 ---
 
 ## Commands

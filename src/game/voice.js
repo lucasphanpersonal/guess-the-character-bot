@@ -25,6 +25,52 @@ if (missingSounds.length) {
   );
 }
 
+/**
+ * Which game currently holds the bot's voice connection in each guild.
+ *
+ * A bot has exactly ONE voice connection per server -- `getVoiceConnection(guildId)` takes a
+ * guild and nothing else, because there is nothing else to take. Two games running in two
+ * channels therefore cannot both have sound, and the failure was not a quiet one:
+ *
+ *   - joining for the second game MOVED the bot out of the first game's channel;
+ *   - a connection carries one subscription, so the second game's player displaced the
+ *     first's, and the surviving sounds played into the wrong room;
+ *   - and whichever game finished first called destroy() on the shared connection, cutting
+ *     off a game that was still being played.
+ *
+ * So voice is claimed, and the claim is honoured. The first game to want it gets it; a second
+ * concurrent game plays text-only and is told why. Nothing is silently taken from anyone.
+ */
+const voiceOwnerByGuild = new Map();
+
+const guildOf = (game) => game?.lobby?.guildId ?? null;
+
+/** The game holding voice in this guild, if it is still worth honouring. */
+function voiceHolder(guildId) {
+  const owner = voiceOwnerByGuild.get(guildId);
+  // A finished game's claim expires with it, so the next game can have the channel.
+  if (owner && owner.finished) {
+    voiceOwnerByGuild.delete(guildId);
+    return null;
+  }
+  return owner ?? null;
+}
+
+/** @returns true if `game` may use voice -- either it already holds it, or nobody does. */
+function claimVoice(game) {
+  const guildId = guildOf(game);
+  if (!guildId) return false;
+  const holder = voiceHolder(guildId);
+  if (holder && holder !== game) return false;
+  voiceOwnerByGuild.set(guildId, game);
+  return true;
+}
+
+function releaseVoice(game) {
+  const guildId = guildOf(game);
+  if (guildId && voiceOwnerByGuild.get(guildId) === game) voiceOwnerByGuild.delete(guildId);
+}
+
 // The voice channel holding the most players, provided at least two of them are in it.
 //
 // At two players that is exactly the old rule -- both in the same channel or nothing -- but
@@ -53,10 +99,16 @@ async function findSharedVoiceChannel(guild, playerIds) {
 // remains the sole fallback in every case.
 async function joinVoiceForGame(client, lobby) {
   const game = lobby.game;
+  // Checked before anything is fetched: joining would move the bot out of the other game's
+  // channel, and the other game is already being played.
+  const holder = voiceHolder(lobby.guildId);
+  if (holder && holder !== game) {
+    return { joined: false, takenBy: holder.lobby?.channelId ?? null };
+  }
   try {
     const guild = await client.guilds.fetch(lobby.guildId);
     const channel = await findSharedVoiceChannel(guild, game.turnOrder);
-    if (!channel) return;
+    if (!channel) return { joined: false };
 
     const connection = joinVoiceChannel({
       channelId: channel.id,
@@ -89,8 +141,11 @@ async function joinVoiceForGame(client, lobby) {
 
     game.voiceConnection = connection;
     game.audioPlayer = player;
+    claimVoice(game);
+    return { joined: true };
   } catch (err) {
     console.warn('[voice] Skipping voice join (continuing text-only):', err.message);
+    return { joined: false };
   }
 }
 
@@ -127,9 +182,12 @@ function playWinSound(game) {
 // turn. Idempotent/safe even if voice was never joined.
 function leaveVoiceForGame(game) {
   if (!game) return;
+  releaseVoice(game);
   try {
     game.audioPlayer?.stop();
-    game.voiceConnection?.destroy();
+    // Destroyed only by the game that opened it. The connection is shared per guild, so a
+    // game tearing down one it never claimed would cut off whoever is actually using it.
+    if (game.voiceConnection) game.voiceConnection.destroy();
   } catch (err) {
     console.warn('[voice] Error leaving voice channel:', err.message);
   } finally {
@@ -140,6 +198,9 @@ function leaveVoiceForGame(game) {
 
 module.exports = {
   joinVoiceForGame,
+  voiceHolder,
+  claimVoice,
+  releaseVoice,
   playChime,
   playCorrectSound,
   playWrongSound,
