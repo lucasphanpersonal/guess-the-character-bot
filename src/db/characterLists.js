@@ -505,6 +505,69 @@ function getCharacterByNameInLists(listIds, name) {
   return dedupeByName(getCharactersForLists(listIds)).find((c) => c.name.toLowerCase() === name.toLowerCase()) || null;
 }
 
+// ---------------------------------------------------------------------------
+// Looking a character up across the whole server, for /character
+// ---------------------------------------------------------------------------
+//
+// Deliberately NOT scoped to a lobby's lists, unlike the two functions below it: this is
+// "show me that character", not "pick one for this game", and refusing to find somebody
+// because the current lobby happens to be drawing from Anime would be a strange answer.
+//
+// The same name genuinely belongs to several characters -- there is a Ditto in Pokemon and
+// another in Ben 10 -- so results are NOT deduplicated by name the way the lobby search is.
+// The autocomplete label carries the list, and the value carries the row id, so picking a
+// suggestion resolves to exactly one character rather than to whichever shared the name.
+function searchCharactersInGuild(guildId, query, limit = 25) {
+  return db
+    .prepare(
+      `SELECT ch.id, ch.name, ch.image_url, ch.fame, cl.name AS listName, cl.category, cl.enabled
+         FROM characters ch
+         JOIN character_lists cl ON cl.id = ch.list_id
+        WHERE cl.guild_id = ? AND ch.name LIKE ? ESCAPE '\\'
+        ORDER BY
+          -- Ranked by WORD start, not string start. Ranking on string prefix alone answers
+          -- "Zoro" with Zorome and Zoroark while burying Roronoa Zoro, and "Einstein" with
+          -- Einstein Nina while burying Albert Einstein -- because the name people search by
+          -- is often not the first word. Matching either end of a word puts all of those in
+          -- the same tier, and fame then decides between them.
+          CASE
+            WHEN ch.name = ? COLLATE NOCASE THEN 0
+            WHEN ch.name LIKE ? ESCAPE '\\' THEN 1
+            WHEN ch.name LIKE ? ESCAPE '\\' THEN 1
+            ELSE 2
+          END,
+          ch.fame IS NULL, ch.fame DESC,
+          ch.name COLLATE NOCASE
+        LIMIT ?`
+    )
+    .all(
+      guildId,
+      `%${escapeLike(query)}%`,
+      query,
+      `${escapeLike(query)}%`,
+      `% ${escapeLike(query)}%`,
+      limit
+    );
+}
+
+// Guild-scoped on purpose: the id comes back from an autocomplete value, which is client
+// -supplied and so cannot be trusted to belong to this server.
+function getCharacterById(guildId, id) {
+  return (
+    db
+      .prepare(
+        `SELECT ch.id, ch.name, ch.image_url, ch.fame, ch.list_id,
+                cl.name AS listName, cl.category, cl.enabled
+           FROM characters ch
+           JOIN character_lists cl ON cl.id = ch.list_id
+          WHERE cl.guild_id = ? AND ch.id = ?`
+      )
+      .get(guildId, id) ?? null
+  );
+}
+
+const escapeLike = (s) => String(s).replace(/[\\%_]/g, '\\$&');
+
 function searchCharactersInLists(listIds, query, limit = 25) {
   return dedupeByName(getCharactersForLists(listIds))
     .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
@@ -557,4 +620,6 @@ module.exports = {
   getRandomCategory,
   getCharacterByNameInLists,
   searchCharactersInLists,
+  searchCharactersInGuild,
+  getCharacterById,
 };

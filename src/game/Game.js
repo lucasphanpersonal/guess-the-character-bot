@@ -19,8 +19,9 @@ class Game {
       source = null;
     }
     // id and listId ride along so a reroll can be recorded against the character, and so
-    // "never deal this show again" knows which list to switch off. Both are absent when a
-    // character was assigned by hand via /lobby set-characters.
+    // "never deal this show again" knows which list to switch off. Hand-picked characters
+    // carry them too -- /lobby set-characters resolves a real row -- so both survive there;
+    // they are only null for a shape that never came out of the database.
     return {
       name: character.name,
       imageUrl: character.image_url || null,
