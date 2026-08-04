@@ -6,6 +6,8 @@ const {
   getListLabelForIds,
 } = require('../../db/characterLists');
 
+const MAX_SLOTS = 5;
+
 module.exports = {
   async execute(interaction) {
     const lobby = GameManager.getLobby(interaction.channelId);
@@ -15,57 +17,100 @@ module.exports = {
     if (interaction.user.id !== lobby.hostId) {
       return interaction.reply({ content: 'Only the host who created the lobby can assign characters.', flags: MessageFlags.Ephemeral });
     }
-    // This command has two fixed player/character option pairs, so it can only describe a
-    // two-player game. Bigger tables use the board's 🎭 button, whose modal grows a box per
-    // player (to Discord's limit of five).
-    if (lobby.players.length !== 2) {
+
+    // Unlike the board's modal, this command has no way to show what is already assigned, so
+    // it is a targeted edit rather than a full re-declaration: only the slots you actually
+    // filled in this call are touched, and everything else about the lobby's existing
+    // assignedCharacters is left exactly as it was. Naming a player with no character is how
+    // you clear just that one player back to random -- the modal's "leave the box blank" done
+    // one player at a time instead of all five at once.
+    const slots = [];
+    for (let i = 1; i <= MAX_SLOTS; i++) {
+      const player = interaction.options.getUser(`player${i}`);
+      const characterRaw = interaction.options.getString(`character${i}`);
+      const character = characterRaw?.trim() || null;
+      if (!player && !character) continue;
+      slots.push({ i, player, character });
+    }
+
+    if (!slots.length) {
+      return interaction.reply({
+        content: 'Nothing to do -- pick at least one player (with or without a character for them).',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const orphanCharacter = slots.find((s) => s.character && !s.player);
+    if (orphanCharacter) {
+      return interaction.reply({
+        content: `character${orphanCharacter.i} was given without a matching player${orphanCharacter.i}. Nothing was changed.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
+    const seenPlayers = new Map();
+    for (const { i, player } of slots) {
+      if (seenPlayers.has(player.id)) {
+        return interaction.reply({
+          content: `<@${player.id}> was picked for both player${seenPlayers.get(player.id)} and player${i}. Nothing was changed.`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+      seenPlayers.set(player.id, i);
+    }
+    const notJoined = slots.find((s) => !lobby.players.includes(s.player.id));
+    if (notJoined) {
       return interaction.reply({
         content:
-          lobby.players.length < 2
-            ? `Need at least 2 players joined first -- currently ${lobby.players.length}.`
-            : `This command only covers a 2-player game, and this lobby has ${lobby.players.length}. ` +
-              'Use the **🎭 Set characters** button on the lobby board instead.',
+          `<@${notJoined.player.id}> hasn't joined this lobby. Players who have: ` +
+          `${lobby.players.map((id) => `<@${id}>`).join(', ') || '(none yet)'}.`,
         flags: MessageFlags.Ephemeral,
       });
     }
 
-    const player1 = interaction.options.getUser('player1');
-    const player2 = interaction.options.getUser('player2');
-    if (player1.id === player2.id) {
-      return interaction.reply({ content: 'player1 and player2 must be two different people.', flags: MessageFlags.Ephemeral });
+    const resolved = {}; // playerId -> character row, for slots that named one
+    const cleared = []; // playerId, for slots naming a player with no character
+    const missing = [];
+    for (const { player, character } of slots) {
+      if (!character) {
+        cleared.push(player.id);
+        continue;
+      }
+      const found = getCharacterByNameInLists(lobby.listIds, character);
+      if (found) resolved[player.id] = found;
+      else missing.push(character);
     }
-    const selected = new Set([player1.id, player2.id]);
-    const joined = new Set(lobby.players);
-    if (selected.size !== joined.size || ![...selected].every((id) => joined.has(id))) {
+    if (missing.length) {
       return interaction.reply({
-        content: `player1 and player2 must be exactly the two people who joined: ${lobby.players.map((id) => `<@${id}>`).join(' and ')}.`,
+        content: `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's list(s) ` +
+          `(${getListLabelForIds(lobby.listIds)}). Nothing was changed -- autocomplete on the character ` +
+          'fields will only offer names that actually exist.',
         flags: MessageFlags.Ephemeral,
       });
     }
 
-    const character1Name = interaction.options.getString('character1').trim();
-    const character2Name = interaction.options.getString('character2').trim();
-    const character1 = getCharacterByNameInLists(lobby.listIds, character1Name);
-    const character2 = getCharacterByNameInLists(lobby.listIds, character2Name);
-    if (!character1 || !character2) {
-      const missing = [!character1 && character1Name, !character2 && character2Name].filter(Boolean);
-      return interaction.reply({
-        // The summarising label, not lobby.listNames -- a category lobby holds hundreds of
-        // list names and spelling them out overflows Discord's 2,000-character limit.
-        content: `Couldn't find ${missing.map((n) => `**${n}**`).join(' or ')} in this lobby's list(s) (${getListLabelForIds(lobby.listIds)}). Use the autocomplete suggestions.`,
-        flags: MessageFlags.Ephemeral,
-      });
-    }
-    if (character1.name.toLowerCase() === character2.name.toLowerCase()) {
-      return interaction.reply({ content: 'player1 and player2 need different characters.', flags: MessageFlags.Ephemeral });
+    // Checked against the assignment as it will exist AFTER this call, not just what was
+    // typed just now -- naming Alex as Luffy when Sam already has Luffy from an earlier call
+    // is exactly as unplayable as naming them both Luffy in the same command.
+    const merged = { ...lobby.assignedCharacters };
+    for (const id of cleared) delete merged[id];
+    Object.assign(merged, resolved);
+    const names = Object.values(merged).map((c) => c.name.toLowerCase());
+    if (new Set(names).size !== names.length) {
+      return interaction.reply({ content: 'Two players would end up with the same character. Nothing was changed.', flags: MessageFlags.Ephemeral });
     }
 
-    lobby.assignedCharacters = { [player1.id]: character1, [player2.id]: character2 };
+    lobby.assignedCharacters = merged;
 
-    // Ephemeral and deliberately vague in wording -- if this were visible to the players in
-    // the channel, or spelled out who-gets-what, it'd spoil their own hidden character.
+    // Ephemeral and deliberately vague about who has what -- if this were visible to the
+    // players in the channel, or spelled out person-by-person, it'd spoil their own hidden
+    // character even though the host typed it in the shared channel.
+    const changed = [
+      ...Object.keys(resolved).map((id) => `<@${id}> gets a hand-picked character`),
+      ...cleared.map((id) => `<@${id}> is back to random`),
+    ];
     return interaction.reply({
-      content: `✅ Characters assigned for <@${player1.id}> and <@${player2.id}>. Run \`/lobby start\` when ready -- only you can see this confirmation.`,
+      content: `✅ ${changed.join(', ')}. Only you can see this. Run \`/lobby start\` when ready.`,
       flags: MessageFlags.Ephemeral,
     });
   },

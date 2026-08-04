@@ -92,27 +92,32 @@ module.exports = {
         // the old name and description both hid.
         .setDescription("Toggle spectating: get every player's character DMed to you")
     )
-    .addSubcommand((sub) =>
+    .addSubcommand((sub) => {
       sub
         .setName('set-characters')
-        .setDescription('Host only: hand-pick both hidden characters instead of leaving them random')
-        .addUserOption((opt) => opt.setName('player1').setDescription('First player').setRequired(true))
-        .addStringOption((opt) =>
+        .setDescription('Host only: hand-pick players’ hidden characters -- with autocomplete, unlike the board button');
+      // player1/character1 and player2/character2 stay required, matching how this command
+      // has always worked. player3-5 are optional on top of that: a slash command can't
+      // express "N pairs", so this is as many pairs as fit under Discord's 25-option cap
+      // while also matching MAX_ASSIGNABLE_PLAYERS, the modal's own ceiling.
+      //
+      // Leaving a later pair's character blank (while still naming the player) deals that
+      // player at random -- same rule as the board's modal, so the two paths behave alike.
+      for (let i = 1; i <= 5; i++) {
+        const required = i <= 2;
+        sub.addUserOption((opt) =>
+          opt.setName(`player${i}`).setDescription(`Player ${i}${required ? '' : ' (optional)'}`).setRequired(required)
+        );
+        sub.addStringOption((opt) =>
           opt
-            .setName('character1')
-            .setDescription("player1's hidden character")
-            .setRequired(true)
+            .setName(`character${i}`)
+            .setDescription(`player${i}'s hidden character${required ? '' : ' (blank = deal at random)'}`)
+            .setRequired(false)
             .setAutocomplete(true)
-        )
-        .addUserOption((opt) => opt.setName('player2').setDescription('Second player').setRequired(true))
-        .addStringOption((opt) =>
-          opt
-            .setName('character2')
-            .setDescription("player2's hidden character")
-            .setRequired(true)
-            .setAutocomplete(true)
-        )
-    ),
+        );
+      }
+      return sub;
+    }),
 
   async execute(interaction) {
     return ACTIONS[interaction.options.getSubcommand()].execute(interaction);

@@ -50,13 +50,22 @@ happen live between humans in voice.
    capping the game: hand-picking characters needs a box per player and a modal holds five,
    so it says so above that. Anything that outgrows a message pages or splits instead — the
    spectator DM, the reference DM, and the audience ballot.
-4. **Optionally hand-pick characters** (host only) instead of leaving every player to chance.
-   `/lobby set-characters` covers exactly two players, with autocomplete. The board's **🎭 Set
-   characters** button covers up to five via a modal, one box per player, and its boxes are
-   independent — fill in the ones you care about and leave the rest blank to deal those
-   players at random, rather than needing everyone named or nobody. Either way the
-   confirmation is ephemeral, so it can't spoil anything even though you typed it in the
-   shared channel.
+4. **Optionally hand-pick characters** (host only) instead of leaving every player to chance,
+   for up to 5. Two ways to do it, and both let you assign as few or as many players as you
+   want — leave the rest to chance:
+
+   - **`/lobby set-characters`** has real autocomplete on every character field, because
+     that's a feature of slash-command options that Discord does not extend to modals. It's
+     also incremental rather than all-at-once: each call only touches the players you name in
+     it, so you can assign one player now and another later without re-typing the first, and
+     naming a player with no character clears just that one back to random.
+   - **The board's 🎭 Set characters** button opens a modal instead — one box per joined
+     player, pre-filled with whatever's already assigned. No autocomplete (Discord can't do
+     that inside a modal), so a name has to match exactly; leave a box blank to deal that
+     player at random.
+
+   Either way the confirmation is ephemeral, so it can't spoil anything even though you typed
+   it in the shared channel.
 5. **Hit Start game** on the board (host only; `/lobby start` does the same). Each player gets
    **two DMs**: the character they're *checking*, with the buttons beside it, and a
    component-free list of everyone else's, so they can answer questions about them. Between
@@ -340,7 +349,7 @@ second bot application with its own token; one bot cannot be in two voice channe
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
 | `/lobby join` / `/lobby leave` | anyone | Join or leave the lobby — two minimum, no maximum. Mid-game, `leave` forfeits after a confirmation |
 | `/lobby spectate` | anyone | Opt in to a DM revealing every character (or the 👁 button on the lobby *or* turn board) |
-| `/lobby set-characters` | host | Hand-pick both characters in a 2-player game; the board's 🎭 button covers up to five |
+| `/lobby set-characters` | host | Hand-pick any number of players' characters, up to 5 — with autocomplete (the board's 🎭 button covers the same range without it) |
 | `/lobby start` | host | Deal characters and begin |
 | `/pass` | current player | End your turn (or use the turn board's button) |
 | `/lobby status` | anyone | Whose turn, time remaining, who has already finished |
