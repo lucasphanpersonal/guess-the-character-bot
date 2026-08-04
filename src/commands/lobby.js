@@ -96,23 +96,21 @@ module.exports = {
       sub
         .setName('set-characters')
         .setDescription('Host only: hand-pick players’ hidden characters -- with autocomplete, unlike the board button');
-      // player1/character1 and player2/character2 stay required, matching how this command
-      // has always worked. player3-5 are optional on top of that: a slash command can't
-      // express "N pairs", so this is as many pairs as fit under Discord's 25-option cap
-      // while also matching MAX_ASSIGNABLE_PLAYERS, the modal's own ceiling.
+      // player1 and player2 stay required, matching how this command has always worked --
+      // and Discord requires every required option in a subcommand to be declared before any
+      // optional one, so those two are added first and everything else follows.
       //
-      // Leaving a later pair's character blank (while still naming the player) deals that
-      // player at random -- same rule as the board's modal, so the two paths behave alike.
+      // No character option is required, even character1/2: naming a player with no
+      // character is how you clear that one player back to random (see execute()), which has
+      // to be expressible for the first two players too, not only three through five.
+      sub.addUserOption((opt) => opt.setName('player1').setDescription('Player 1').setRequired(true));
+      sub.addUserOption((opt) => opt.setName('player2').setDescription('Player 2').setRequired(true));
       for (let i = 1; i <= 5; i++) {
-        const required = i <= 2;
-        sub.addUserOption((opt) =>
-          opt.setName(`player${i}`).setDescription(`Player ${i}${required ? '' : ' (optional)'}`).setRequired(required)
-        );
+        if (i > 2) sub.addUserOption((opt) => opt.setName(`player${i}`).setDescription(`Player ${i} (optional)`));
         sub.addStringOption((opt) =>
           opt
             .setName(`character${i}`)
-            .setDescription(`player${i}'s hidden character${required ? '' : ' (blank = deal at random)'}`)
-            .setRequired(false)
+            .setDescription(`player${i}'s hidden character (leave blank to deal at random)`)
             .setAutocomplete(true)
         );
       }
