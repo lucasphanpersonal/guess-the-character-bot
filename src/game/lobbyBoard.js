@@ -6,8 +6,9 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { countDistinctCharacters, getListLabelForIds, difficultyOf } = require('../db/characterLists');
 const { trackBoard, untrackBoard } = require('./boards');
+const { MAX_PLAYERS } = require('./Lobby');
 
-// The fewest that makes a game. There is no maximum -- see Lobby.addPlayer.
+// The fewest that makes a game.
 const MIN_PLAYERS = 2;
 
 // One text input per player, against Discord's five-per-modal limit.
@@ -20,9 +21,10 @@ function buildButtons(lobby) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(id('join'))
-      .setLabel('Join')
+      .setLabel(`Join (${lobby.players.length}/${MAX_PLAYERS})`)
       .setEmoji('🙋')
-      .setStyle(ButtonStyle.Primary),
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(lobby.players.length >= MAX_PLAYERS),
     new ButtonBuilder()
       .setCustomId(id('leave'))
       .setLabel('Leave')
@@ -36,7 +38,11 @@ function buildButtons(lobby) {
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
       .setCustomId(id('start'))
-      .setLabel(ready ? `Start game (${lobby.players.length})` : `Start game (${lobby.players.length}/${MIN_PLAYERS})`)
+      .setLabel(
+        ready
+          ? `Start game (${lobby.players.length}/${MAX_PLAYERS})`
+          : `Start game (${lobby.players.length}/${MIN_PLAYERS} min)`
+      )
       .setEmoji('▶️')
       .setStyle(ButtonStyle.Success)
       // The disabled state carries the rule, so nobody has to discover it via an error.
@@ -106,7 +112,7 @@ function buildLobbyBoardPayload(lobby) {
     // Mentions only render in descriptions/fields, never in a footer, so the host goes here.
     .setDescription(`🗂️ **${getListLabelForIds(lobby.listIds)}**\nHosted by <@${lobby.hostId}>`)
     .addFields(
-      { name: `Players (${lobby.players.length})`, value: playerLines },
+      { name: `Players (${lobby.players.length}/${MAX_PLAYERS})`, value: playerLines },
       {
         name: 'Settings',
         value: [
@@ -165,5 +171,6 @@ module.exports = {
   refreshLobbyBoard,
   attachLobbyBoard,
   MIN_PLAYERS,
+  MAX_PLAYERS,
   MAX_ASSIGNABLE_PLAYERS,
 };

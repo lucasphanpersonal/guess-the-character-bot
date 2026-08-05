@@ -3,7 +3,7 @@
 A Discord bot that hosts "Guess the Character" (the Hedbanz-style game from The Best in
 Jest): every player is secretly assigned a character they **can't see themselves**, and they
 take turns asking yes/no questions out loud in voice chat until they work out who they are.
-Two people or ten — there's no upper limit.
+Two to eight people can play.
 
 The bot is the impartial host. It deals characters, DMs each player what they need to know,
 runs the turn clock, judges guesses, and keeps score — all the actual questions and answers
@@ -40,16 +40,15 @@ happen live between humans in voice.
    so turn length, rerolls and the vote tuning can all be changed after the lobby is open —
    nothing has to be decided up front on the `/lobby create` line. Settings lock once the
    game starts.
-3. **People join.** Two is the minimum and there is **no maximum** — how many a table can
-   stand is the players' call, not the bot's. The host doesn't have to be one of them. Anyone
-   else can spectate to get every character DMed to them, and anyone already sitting in the
-   same voice channel as the players is auto-added as a spectator. **Start game** unlocks at
-   two.
+3. **People join.** Two is the minimum and eight is the maximum. The host doesn't have to be
+   one of them. Anyone else can spectate to get every character DMed to them, and anyone
+   already sitting in the same voice channel as the players is auto-added as a spectator.
+   **Start game** unlocks at two.
 
-   A handful of *surfaces* do have ceilings, and they refuse for themselves rather than
-   capping the game: hand-picking characters needs a box per player and a modal holds five,
-   so it says so above that. Anything that outgrows a message pages or splits instead — the
-   spectator DM, the reference DM, and the audience ballot.
+   The eight-player cap keeps the roster and boards within Discord's message limits.
+   Hand-picking characters remains a smaller host-only surface: a modal holds five inputs, so
+   it is available only through five players. Spectator/reference DMs split when necessary,
+   and audience ballots page from six players onward.
 4. **Optionally hand-pick characters** (host only) instead of leaving every player to chance,
    for up to 5. Two ways to do it, and both let you assign as few or as many players as you
    want — leave the rest to chance:
@@ -254,13 +253,14 @@ rerolling the same unlucky draw twice isn't mistaken for a consensus, and deleti
 from the server's selection *and* rerolls, in one press — the alternative is rerolling now
 and remembering to curate later, which nobody does. It costs a reroll (because it is one),
 refuses if dropping would leave the lobby nothing to deal from, and `/list toggle` undoes it.
+Because this changes the shared pool, it requires the **Manage Server** permission.
 
 ### Choosing which lists you play with
 
 The seed data runs to ~2,000 lists, and most of them are obscure enough that being dealt one
-is a wasted turn — the reroll button was doing the job a filter should. `/list select` is
-that filter: a page of checkboxes (multi-select menus, 75 per page) covering every list,
-with a running count of what's on.
+is a wasted turn — the reroll button was doing the job a filter should. Server managers use
+`/list select` for that filter: a page of checkboxes (multi-select menus, 75 per page)
+covering every list, with a running count of what's on.
 
 **Setup enables the top 100 of each category**, so a server starts with a sensible pool
 rather than an empty one. That happens in `npm run backfill:popularity`, which ranks lists
@@ -312,12 +312,10 @@ options for your own head would collapse the game from a thousand possibilities 
 character pool needs at least `vote-options × players` distinct characters, since every
 player gets a disjoint set.
 
-**The ballot pages, so any number of players can be voted on.** It needs one select menu per
-player and Discord allows five action rows per message, so past five the fifth row becomes
-Prev/Next and four players ride on each page — with a running "X of Y players picked" count,
-since a single page can no longer show you whether you are done. Five or fewer renders exactly
-as it always did. Past 23 players the public tallies collapse into multi-line columns, because
-an embed holds 25 fields and the countdown takes two of them; they stay name-free either way.
+**The ballot pages for six to eight players.** It needs one select menu per player and Discord
+allows five action rows per message, so past five the fifth row becomes Prev/Next and four
+players ride on each page — with a running "X of Y players picked" count, since a single page
+can no longer show you whether you are done. Five or fewer renders exactly as it always did.
 
 ### Sound effects
 
@@ -339,15 +337,15 @@ second bot application with its own token; one bot cannot be in two voice channe
 | Command | Who | What it does |
 | --- | --- | --- |
 | `/help` | anyone | Rules and command summary |
-| `/list create` | anyone | Create a character list, tagged with a category |
-| `/list add` | anyone | Add a character, optionally with an image URL |
-| `/list image` | anyone | Attach/update a character's image |
-| `/list remove` | anyone | Remove a character |
+| `/list create` | Manage Server | Create a character list, tagged with a category |
+| `/list add` | Manage Server | Add a character, optionally with an image URL |
+| `/list image` | Manage Server | Attach/update a character's image |
+| `/list remove` | Manage Server | Remove a character |
 | `/list show` | anyone | Browse categories, lists in a category, or one list's characters |
-| `/list select` | anyone | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
-| `/list toggle` | anyone | Switch one named list in or out of the pool |
+| `/list select` | Manage Server | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
+| `/list toggle` | Manage Server | Switch one named list in or out of the pool |
 | `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
-| `/lobby join` / `/lobby leave` | anyone | Join or leave the lobby — two minimum, no maximum. Mid-game, `leave` forfeits after a confirmation |
+| `/lobby join` / `/lobby leave` | anyone | Join or leave the lobby — two minimum, eight maximum. Mid-game, `leave` forfeits after a confirmation |
 | `/lobby spectate` | anyone | Opt in to a DM revealing every character (or the 👁 button on the lobby *or* turn board) |
 | `/lobby set-characters` | host | Hand-pick any number of players' characters, up to 5 — with autocomplete (the board's 🎭 button covers the same range without it) |
 | `/lobby start` | host | Deal characters and begin |

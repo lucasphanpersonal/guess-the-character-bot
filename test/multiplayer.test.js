@@ -601,9 +601,8 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // An embed field caps at 1024 characters, which the standings hit around 28 players. Over
-  // that Discord rejects the embed, the board never posts, and "no player limit" turns out to
-  // have been false all along.
+  // Lobbies cap at eight, but keeping the renderer defensive protects an old or corrupted
+  // in-memory roster from producing an invalid board.
   'the standings stay inside the field limit however many are playing'() {
     const Game = require('../src/game/Game');
     for (const count of [4, 28, 40, 80]) {
@@ -627,15 +626,15 @@ module.exports = {
     }
   },
 
-  async 'the spectator DM splits rather than overflowing the embed limit'() {
-    const ctx = await startedGame(12);
+  async 'the spectator DM fits at the player cap'() {
+    const ctx = await startedGame(8);
     ctx.lobby.spectators.add('watcher');
     await confirmAll(ctx);
 
     const messages = dmsTo(ctx, 'watcher');
-    assert.ok(messages.length > 1, 'twelve characters cannot fit in one message');
+    assert.equal(messages.length, 1, 'eight characters fit in one message');
     for (const m of messages) assert.ok(m.payload.embeds.length <= 10, 'never over the ceiling');
-    assert.equal(embedCount(messages), 12, 'and every player is covered');
+    assert.equal(embedCount(messages), 8, 'and every player is covered');
     cleanup(ctx);
   },
 };

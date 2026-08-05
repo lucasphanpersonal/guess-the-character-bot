@@ -1,12 +1,14 @@
 const { MessageFlags } = require('discord.js');
 const { categoriesView, categoryView } = require('../../components/listFilter');
 const { listCategoriesWithEnabledCounts, setTopN } = require('../../db/characterLists');
+const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
   async execute(interaction) {
     if (!interaction.guildId) {
       return interaction.reply({ content: 'This command must be used in a server.', flags: MessageFlags.Ephemeral });
     }
+    if (!(await requireManageGuild(interaction))) return;
 
     const requested = interaction.options.getString('category');
     const top = interaction.options.getInteger('top');

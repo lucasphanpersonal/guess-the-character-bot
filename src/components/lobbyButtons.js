@@ -245,10 +245,11 @@ async function handle(interaction) {
   }
 
   if (action === 'join') {
-    // Already-joined is the only way this fails now: there is no lobby size limit.
     const result = lobby.addPlayer(userId);
     if (!result.ok) {
-      return interaction.reply(ephemeral("You're already in this lobby."));
+      return interaction.reply(
+        ephemeral(result.reason === 'full' ? 'This lobby is full (8 players). You can spectate instead.' : "You're already in this lobby.")
+      );
     }
     // Joining as a player means you're no longer a spectator.
     lobby.spectators.delete(userId);

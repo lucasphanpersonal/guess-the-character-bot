@@ -1,5 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const Game = require('./Game');
+const { MAX_PLAYERS } = require('./Lobby');
 const TurnTimer = require('./turnTimer');
 const GameManager = require('./GameManager');
 const voice = require('./voice');
@@ -14,6 +15,7 @@ const {
   characterMessage,
   sendConfirmDMs,
   lockConfirmations,
+  cancelConfirmations,
   sendSpectatorDM,
   sendSpectatorDMs,
 } = require('./characterDM');
@@ -77,9 +79,8 @@ function scheduleCountdown(lobby) {
 // Kicks off the audience-vote phase instead of dealing characters directly. The vote board
 // is public but names no candidates -- see the spoiler note in audienceVote.js.
 async function startAudienceVote(client, lobby) {
-  // No player-count ceiling any more: the ballot pages once it outgrows Discord's five action
-  // rows. What can still stop this mode is the draw below, which needs voteOptions distinct
-  // characters per player and says so for itself.
+  // The ballot pages beyond five players; the lobby itself is capped at eight. The draw below
+  // still needs voteOptions distinct characters per player and says so for itself.
   const candidatesBySlot = drawCandidates(lobby);
   if (!candidatesBySlot) {
     const wanted = lobby.voteOptions * lobby.players.length;
@@ -129,9 +130,13 @@ async function closeAudienceVote(client, lobby, { reason } = {}) {
   );
 
   lobby.vote = null;
-  await startGame(client, lobby, characters);
+  const started = await startGame(client, lobby, characters);
+  if (!started.ok) {
+    await channel.send(`⚠️ ${started.error}`);
+    return started;
+  }
   lobby.game.voteSummary = voteSummary;
-  return { ok: true };
+  return started;
 }
 
 // Shared entry point for both `/lobby start` and the lobby board's Start button, so the
@@ -140,6 +145,9 @@ async function startGameFromLobby(client, lobby) {
   const wanted = lobby.players.length;
   if (wanted < MIN_PLAYERS) {
     return { ok: false, error: `Need at least ${MIN_PLAYERS} players -- currently ${wanted}.` };
+  }
+  if (wanted > MAX_PLAYERS) {
+    return { ok: false, error: `A lobby can have at most ${MAX_PLAYERS} players -- currently ${wanted}.` };
   }
 
   if (lobby.mode === 'audience-vote') {
@@ -173,8 +181,7 @@ async function startGameFromLobby(client, lobby) {
   let nextRandom = 0;
   const characters = lobby.players.map((id) => (assigned[id] ? assigned[id] : randomFill[nextRandom++]));
 
-  await startGame(client, lobby, characters);
-  return { ok: true };
+  return startGame(client, lobby, characters);
 }
 
 async function startGame(client, lobby, characters) {
@@ -203,16 +210,21 @@ async function startGame(client, lobby, characters) {
   for (const user of users) {
     if (!(await sendConfirmDMs(user, game, lobby.channelId))) {
       dmFailures.push(user.username);
-      // Nobody can confirm a DM they never got, and one closed inbox must not wedge the
-      // whole table -- so they are treated as ready and simply never get a reroll.
-      game.confirmState[user.id].confirmed = true;
     }
   }
 
   if (dmFailures.length) {
-    await channel.send(
-      `⚠️ Couldn't DM: ${dmFailures.join(', ')}. They need to enable DMs from server members to play.`
-    );
+    // A player who lacks a check or reference card cannot judge every turn. Return the lobby
+    // to WAITING rather than treating them as confirmed and starting an unwinnable game.
+    lobby.status = 'WAITING';
+    await cancelConfirmations(game);
+    lobby.game = null;
+    await refreshLobbyBoard(lobby);
+    return {
+      ok: false,
+      error:
+        `Couldn't DM ${dmFailures.join(', ')}. They need to enable DMs from server members before the host retries.`,
+    };
   }
 
   await channel.send(
@@ -221,14 +233,18 @@ async function startGame(client, lobby, characters) {
   );
 
   await maybeBeginPlay(client, lobby);
+  return { ok: true };
 }
 
 async function maybeBeginPlay(client, lobby) {
   const game = lobby.game;
+  if (lobby.status !== 'CONFIRMING') return;
   if (!game.turnOrder.every((id) => game.confirmState[id].confirmed)) return;
 
-  await lockConfirmations(game);
+  // Claim the phase before retiring DM buttons. Two final confirmations can finish their
+  // interaction updates together; only the first may start the turn.
   lobby.status = 'IN_PROGRESS';
+  await lockConfirmations(game);
   await refreshLobbyBoard(lobby);
   await sendSpectatorDMs(client, lobby);
   const voiceResult = await voice.joinVoiceForGame(client, lobby);

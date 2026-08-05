@@ -18,6 +18,7 @@ const {
   REROLL_DEMOTE_THRESHOLD,
 } = require('../db/characterLists');
 const { buildUnlockRow, checkMessagePayload, fanOutReference } = require('./characterDM');
+const { requireManageGuild } = require('../util/permissions');
 
 // Required lazily, inside the handler below, rather than at the top of the file: engine.js
 // pulls in characterDM.js and this module pulls in engine.js, and a lazy require is what
@@ -70,6 +71,7 @@ async function handleConfirmationButton(interaction) {
   // is the point -- the alternative is rerolling now and remembering to curate later,
   // which nobody does.
   if (action === 'droplist') {
+    if (!(await requireManageGuild(interaction, lobby.guildId))) return;
     if (!game.rerollAllowed) {
       return interaction.reply({
         content: "The audience picked this character — it can't be rerolled.",

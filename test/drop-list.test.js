@@ -15,7 +15,7 @@ const db = require('../src/db/connection');
 let counter = 0;
 
 // Two lists so dropping one still leaves something to reroll into.
-async function startedGame({ maxRerolls = 2, secondList = true, p2Freeform = false } = {}) {
+async function startedGame({ maxRerolls = 2, secondList = true, p2Freeform = false, canManageGuild = true } = {}) {
   const n = ++counter;
   const guildId = `drop-guild-${n}`;
   const channelId = `drop-chan-${n}`;
@@ -34,6 +34,13 @@ async function startedGame({ maxRerolls = 2, secondList = true, p2Freeform = fal
 
   const recorder = createRecorder();
   const client = createFakeClient(recorder);
+  if (canManageGuild) {
+    client.guilds.fetch = async () => ({
+      members: {
+        fetch: async (id) => (id === 'p1' ? { permissions: { has: () => true } } : null),
+      },
+    });
+  }
   const lobby = new Lobby({
     guildId,
     channelId,
@@ -116,6 +123,18 @@ module.exports = {
 
     assert.equal(lists.getListsByIds([obscure])[0].enabled, 1);
     assert.match(recorder.allText(), /out of rerolls/);
+    GameManager.endLobby(channelId);
+  },
+
+  async 'a player without Manage Server cannot drop a shared list'() {
+    const { lobby, client, recorder, channelId, obscure } = await startedGame({ canManageGuild: false });
+    const before = lobby.game.headByPlayer.p2.name;
+
+    await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
+
+    assert.equal(lists.getListsByIds([obscure])[0].enabled, 1);
+    assert.equal(lobby.game.headByPlayer.p2.name, before);
+    assert.match(recorder.allText(), /Manage Server permission/);
     GameManager.endLobby(channelId);
   },
 

@@ -45,7 +45,7 @@ module.exports = {
           value:
             'Creating a lobby posts a board that updates itself as people join. Everything ' +
             'below is a button on it:\n' +
-            "**Join** / **Leave** -- two people minimum, no maximum (the host doesn't have to " +
+            "**Join** / **Leave** -- two people minimum, eight maximum (the host doesn't have to " +
             'be one of them)\n' +
             "**Spectate** -- opt in to a DM revealing every player's character. The same 👁 " +
             'button sits on the turn board, so you can start spectating after play is under way\n' +
@@ -65,7 +65,7 @@ module.exports = {
             'clicking it gives you a private ballot of candidates for each player. The ' +
             "players can't vote and never see the options. Tune it with `vote-options` " +
             '(candidates per player) and `vote-seconds`; the host can close voting early.\n' +
-            'Works with any number of players -- past five the ballot pages, with Prev/Next ' +
+            'Works for two to eight players -- past five the ballot pages, with Prev/Next ' +
             'and a running count of how many you have picked for.',
         },
         {

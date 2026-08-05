@@ -536,7 +536,7 @@ module.exports = {
   },
 
   async 'a roster too big for one page is paged, and every player is votable'() {
-    const ctx = makeLobby({ playerCount: 9, voteOptions: 3, extraCharacters: 20 });
+    const ctx = makeLobby({ playerCount: 8, voteOptions: 3, extraCharacters: 15 });
     const started = await engine.startAudienceVote(ctx.client, ctx.lobby);
     assert.equal(started.ok, true, started.error);
 
@@ -544,15 +544,15 @@ module.exports = {
     let payload = ctx.recorder.lastMatching('reply:watcher').payload;
 
     const seen = new Set(slotsOn(payload));
-    for (let page = 0; page < 3; page++) {
+    for (let page = 0; page < 2; page++) {
       assert.ok(payload.components.length <= 5, `page ${page} exceeds Discord's five action rows`);
       // The nav row is the last one, and it is the only row that is not a candidate select.
       const nav = payload.components.at(-1).toJSON().components;
       assert.deepEqual(nav.map((b) => b.label), ['Prev', 'Next'], `page ${page} has Prev/Next`);
       assert.equal(nav[0].disabled, page === 0, 'Prev is dead on the first page');
-      assert.equal(nav[1].disabled, page === 2, 'Next is dead on the last page');
+      assert.equal(nav[1].disabled, page === 1, 'Next is dead on the last page');
 
-      if (page === 2) break;
+      if (page === 1) break;
       await turnPage(ctx, 'watcher', page + 1);
       payload = ctx.recorder.lastMatching('update:watcher').payload;
       for (const slot of slotsOn(payload)) seen.add(slot);
@@ -563,28 +563,28 @@ module.exports = {
   },
 
   async 'a pick on a later page can still be changed, and says so'() {
-    const ctx = makeLobby({ playerCount: 9, voteOptions: 3, extraCharacters: 20 });
+    const ctx = makeLobby({ playerCount: 8, voteOptions: 3, extraCharacters: 15 });
     await engine.startAudienceVote(ctx.client, ctx.lobby);
     const vote = ctx.lobby.vote;
-    const [first, second] = vote.candidatesBySlot['9'];
+    const [first, second] = vote.candidatesBySlot['8'];
 
-    await pick(ctx, 'watcher', '9', first.name);
+    await pick(ctx, 'watcher', '8', first.name);
     // Confirming a pick must not navigate away from the page it was made on.
     const afterFirst = ctx.recorder.lastMatching('update:watcher').payload;
-    assert.ok(slotsOn(afterFirst).includes('9'), 'stayed on player 9\'s page');
-    assert.match(afterFirst.content, /Page 3 of 3/);
+    assert.ok(slotsOn(afterFirst).includes('8'), 'stayed on player 8\'s page');
+    assert.match(afterFirst.content, /Page 2 of 2/);
 
-    await pick(ctx, 'watcher', '9', second.name);
+    await pick(ctx, 'watcher', '8', second.name);
     const afterSecond = ctx.recorder.lastMatching('update:watcher').payload;
     assert.equal(vote.voterCount, 1, 'still one ballot');
-    assert.equal(vote.ballots.get('watcher')['9'], second.name, 'latest pick wins');
+    assert.equal(vote.ballots.get('watcher')['8'], second.name, 'latest pick wins');
     assert.match(afterSecond.content, /replaces your previous pick/);
-    assert.match(afterSecond.content, /\*\*1\*\* of 9 players picked/);
+    assert.match(afterSecond.content, /\*\*1\*\* of 8 players picked/);
     cleanup(ctx);
   },
 
   async 'a paged vote leaves the public board just as name-free'() {
-    const ctx = makeLobby({ playerCount: 9, voteOptions: 3, extraCharacters: 20 });
+    const ctx = makeLobby({ playerCount: 8, voteOptions: 3, extraCharacters: 15 });
     await engine.startAudienceVote(ctx.client, ctx.lobby);
     const vote = ctx.lobby.vote;
     // Vote for everyone, so every tally on the board has something to describe.
@@ -598,24 +598,22 @@ module.exports = {
         assert.ok(!channelText.includes(c.name), `channel leaked candidate "${c.name}"`);
       }
     }
-    assert.equal(buildVoteBoardPayload(vote).embeds[0].toJSON().fields.length, 11, 'a field each, plus the two footers');
+    assert.equal(buildVoteBoardPayload(vote).embeds[0].toJSON().fields.length, 10, 'a field each, plus the two footers');
     cleanup(ctx);
   },
 
-  // An embed holds 25 fields, so past ~23 players the per-player tallies have to share.
-  'a roster past the embed field limit collapses the tallies into columns'() {
-    const ctx = makeLobby({ playerCount: 30, voteOptions: 2, extraCharacters: 50 });
+  'a roster at the player cap keeps every tally within embed limits'() {
+    const ctx = makeLobby({ playerCount: 8, voteOptions: 2, extraCharacters: 5 });
     const candidatesBySlot = drawCandidates(ctx.lobby);
     const vote = new AudienceVote({ lobby: ctx.lobby, candidatesBySlot });
-    vote.recordVote('v1', '30', candidatesBySlot['30'][0].name);
+    vote.recordVote('v1', '8', candidatesBySlot['8'][0].name);
 
     const { fields } = buildVoteBoardPayload(vote).embeds[0].toJSON();
     assert.ok(fields.length <= 25, `${fields.length} fields exceeds the embed limit`);
     for (const field of fields) assert.ok(field.value.length <= 1024, 'field value within limits');
 
     const text = payloadStrings(buildVoteBoardPayload(vote));
-    // Every player still gets their own line, and none of them names anything.
-    assert.match(text, /\*\*30\.\*\* \*\*1\*\* vote — unanimous so far/);
+    assert.match(text, /Player 8.*\*\*1\*\* vote — unanimous so far/);
     for (const slot of vote.slots) {
       for (const c of candidatesBySlot[slot]) assert.ok(!text.includes(c.name), `board leaked ${c.name}`);
     }

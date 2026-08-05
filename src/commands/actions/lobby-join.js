@@ -8,10 +8,13 @@ module.exports = {
     if (!lobby || lobby.status !== 'WAITING') {
       return interaction.reply({ content: 'No lobby waiting for players right now. Create one with `/lobby create`.', flags: MessageFlags.Ephemeral });
     }
-    // Already-joined is the only way this fails now: there is no lobby size limit.
     const result = lobby.addPlayer(interaction.user.id);
     if (!result.ok) {
-      return interaction.reply({ content: "You're already in this lobby.", flags: MessageFlags.Ephemeral });
+      const content =
+        result.reason === 'full'
+          ? 'This lobby is full (8 players). You can spectate instead.'
+          : "You're already in this lobby.";
+      return interaction.reply({ content, flags: MessageFlags.Ephemeral });
     }
     lobby.spectators.delete(interaction.user.id);
     await interaction.reply(`✅ <@${interaction.user.id}> joined the lobby (${lobby.players.length} in).`);

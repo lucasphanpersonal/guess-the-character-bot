@@ -108,13 +108,13 @@ function createFakeClient(recorder) {
   };
 }
 
-function createSlashInteraction({ client, userId, guildId, channelId, options = {}, recorder }) {
+function createSlashInteraction({ client, userId, guildId, channelId, options = {}, recorder, canManageGuild = false }) {
   return {
     client,
     user: { id: userId },
     guildId,
     channelId,
-    memberPermissions: { has: () => false },
+    memberPermissions: { has: () => canManageGuild },
     options: {
       getString: (name) => (name in options ? options[name] : null),
       getInteger: (name) => (name in options ? options[name] : null),

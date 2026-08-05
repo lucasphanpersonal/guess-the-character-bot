@@ -155,7 +155,7 @@ function referencePayload(game, playerIds) {
  * controls back beside their subject, and confines the 10-embed ceiling to the message that
  * has no buttons.
  *
- * Returns false only if the DM could not be sent at all.
+ * Returns false if the player cannot receive every card needed to judge the game.
  */
 async function sendConfirmDMs(recipientUser, game, channelId) {
   const state = game.confirmState[recipientUser.id];
@@ -177,7 +177,7 @@ async function sendConfirmDMs(recipientUser, game, channelId) {
       try {
         state.referenceMessages.push(await recipientUser.send(referencePayload(game, page)));
       } catch {
-        break;
+        return false;
       }
     }
   }
@@ -220,16 +220,15 @@ async function fanOutReference(game, changedPlayerId) {
  * itself stays -- it is the reference for the character you spend the game answering
  * questions about.
  */
-async function lockConfirmations(game) {
+async function retireConfirmations(game, contentForPlayer) {
   await Promise.all(
     game.turnOrder.map(async (playerId) => {
       const message = game.confirmState[playerId]?.checkMessage;
       if (!message) return;
-      const owner = game.nameOf(game.checkTargetOf(playerId));
       try {
         // Only content and components are set, so the character embed is left in place.
         await message.edit({
-          content: `✅ Locked in — the game is under way. This is **${owner}**'s character; use it to answer their questions.`,
+          content: contentForPlayer(playerId),
           components: [],
         });
       } catch {
@@ -237,6 +236,24 @@ async function lockConfirmations(game) {
       }
       untrackBoard(message);
     })
+  );
+}
+
+async function lockConfirmations(game) {
+  return retireConfirmations(
+    game,
+    (playerId) =>
+      `✅ Locked in — the game is under way. This is **${game.nameOf(game.checkTargetOf(playerId))}'s character; ` +
+      'use it to answer their questions.'
+  );
+}
+
+async function cancelConfirmations(game) {
+  return retireConfirmations(
+    game,
+    () =>
+      '⚠️ The game did not start because a player could not receive their DMs. ' +
+      'Ask the host to try again once every player enables DMs from server members.'
   );
 }
 
@@ -314,6 +331,7 @@ module.exports = {
   sendConfirmDMs,
   fanOutReference,
   lockConfirmations,
+  cancelConfirmations,
   sendSpectatorDM,
   sendSpectatorDMs,
 };

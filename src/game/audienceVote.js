@@ -23,9 +23,8 @@ function slotsFor(lobby) {
 // Paging beat the other candidate design -- a select to choose a player, then a select of
 // that player's characters. Paging is the pattern the rest of the bot already uses
 // (listBrowser, listFilter), it keeps casting a vote to a single click, and a player-chooser
-// select would only move the ceiling from 5 to 25 rather than remove it. Paging has no
-// ceiling: the only remaining limit on this mode is having enough distinct characters to
-// draw, which drawCandidates already reports for itself.
+// select would only move the ceiling from 5 to 25 rather than remove it. Lobbies cap at eight,
+// while the draw still has to find enough distinct characters for every player.
 const MAX_ACTION_ROWS = 5;
 const PLAYERS_PER_BALLOT_PAGE = MAX_ACTION_ROWS - 1;
 
