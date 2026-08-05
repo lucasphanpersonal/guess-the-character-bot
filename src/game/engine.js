@@ -345,7 +345,7 @@ async function handleTimeout(client, lobby) {
 
     // Auto-surrender: the player never acted on their last-chance opportunity.
     await submitForfeit(client, lobby, currentPlayerId).catch((err) => console.error(err));
-  }, 15000); // 15 seconds for the last-chance window
+  }, 30000); // 30 seconds for the last-chance window
 }
 
 // Shared by /guess, the turn board's Guess button (via its modal), and any future entry
