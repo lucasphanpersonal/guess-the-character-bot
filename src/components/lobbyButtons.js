@@ -116,7 +116,9 @@ async function handle(interaction) {
     }
 
     if (lobby.mode === 'audience-vote') {
-      const poolError = votePoolError(lobby.listIds, values.voteOptions ?? lobby.voteOptions, lobby.difficulty);
+      // Validate against at least MIN_PLAYERS to ensure settings work if more players join
+      const playerCount = Math.max(lobby.players.length, MIN_PLAYERS);
+      const poolError = votePoolError(lobby.listIds, values.voteOptions ?? lobby.voteOptions, playerCount, lobby.difficulty);
       if (poolError) return interaction.reply(ephemeral(`Nothing changed: ${poolError}`));
     }
 
@@ -224,8 +226,9 @@ async function handle(interaction) {
     }
 
     // Same guard /lobby create applies, re-run here because the pool is fixed but the
-    // vote settings are not.
-    const poolError = votePoolError(lobby.listIds, lobby.voteOptions, lobby.difficulty);
+    // vote settings are not. Check against minimum players to ensure we have enough
+    // distinct characters for a full game (assuming at least MIN_PLAYERS join).
+    const poolError = votePoolError(lobby.listIds, lobby.voteOptions, MIN_PLAYERS, lobby.difficulty);
     if (poolError) return interaction.reply(ephemeral(poolError));
 
     lobby.mode = 'audience-vote';

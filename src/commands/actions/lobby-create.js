@@ -43,7 +43,9 @@ module.exports = {
     const voteOptions = interaction.options.getInteger('vote-options') ?? DEFAULTS.voteOptions;
     const voteSeconds = interaction.options.getInteger('vote-seconds') ?? DEFAULTS.voteSeconds;
 
-    const poolError = audienceVote && votePoolError(listIds, voteOptions, difficulty);
+    // At creation time, check with minimum players (2) to prevent creating an unplayable lobby
+    const MIN_PLAYERS = 2;
+    const poolError = audienceVote && votePoolError(listIds, voteOptions, MIN_PLAYERS, difficulty);
     if (poolError) {
       return interaction.reply({ content: poolError, flags: MessageFlags.Ephemeral });
     }

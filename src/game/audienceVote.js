@@ -221,6 +221,7 @@ function tallyFields(vote) {
 // PUBLIC board. Deliberately contains no character names -- see the note at the top.
 function buildVoteBoardPayload(vote) {
   const { lobby } = vote;
+  const gameInstanceId = lobby.game?.gameInstanceId || '';
   const embed = new EmbedBuilder()
     .setTitle('🗳️ Audience vote')
     .setColor(vote.closed ? 0x4f545c : 0xeb459e)
@@ -245,17 +246,17 @@ function buildVoteBoardPayload(vote) {
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`vote:open:${lobby.channelId}`)
+      .setCustomId(`vote:open:${lobby.channelId}:${gameInstanceId}`)
       .setLabel('Vote')
       .setEmoji('🗳️')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
-      .setCustomId(`vote:extend:${lobby.channelId}`)
+      .setCustomId(`vote:extend:${lobby.channelId}:${gameInstanceId}`)
       .setLabel(`+${EXTEND_SECONDS}s`)
       .setEmoji('⏱️')
       .setStyle(ButtonStyle.Secondary),
     new ButtonBuilder()
-      .setCustomId(`vote:close:${lobby.channelId}`)
+      .setCustomId(`vote:close:${lobby.channelId}:${gameInstanceId}`)
       .setLabel('Close voting')
       .setEmoji('⏹️')
       .setStyle(ButtonStyle.Secondary)
@@ -274,12 +275,13 @@ function buildBallotPayload(vote, voterId, { justPicked = null, page = null } = 
   const wanted = page ?? (justPicked ? pages.findIndex((p) => p.includes(justPicked)) : 0);
   const current = Math.min(Math.max(wanted, 0), pages.length - 1);
   const slots = pages[current];
+  const gameInstanceId = vote.lobby.game?.gameInstanceId || '';
 
   const rows = slots.map((slot) => {
     const chosen = ballot[slot];
     return new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
-        .setCustomId(`vote:pick:${vote.lobby.channelId}:${slot}`)
+        .setCustomId(`vote:pick:${vote.lobby.channelId}:${slot}:${gameInstanceId}`)
         .setPlaceholder(`Character for player ${slot}`)
         .addOptions(
           vote.candidatesBySlot[slot].map((c) => ({
@@ -295,13 +297,13 @@ function buildBallotPayload(vote, voterId, { justPicked = null, page = null } = 
     rows.push(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-          .setCustomId(`vote:page:${vote.lobby.channelId}:${current - 1}`)
+          .setCustomId(`vote:page:${vote.lobby.channelId}:${current - 1}:${gameInstanceId}`)
           .setLabel('Prev')
           .setEmoji('◀')
           .setStyle(ButtonStyle.Secondary)
           .setDisabled(current <= 0),
         new ButtonBuilder()
-          .setCustomId(`vote:page:${vote.lobby.channelId}:${current + 1}`)
+          .setCustomId(`vote:page:${vote.lobby.channelId}:${current + 1}:${gameInstanceId}`)
           .setLabel('Next')
           .setEmoji('▶')
           .setStyle(ButtonStyle.Secondary)

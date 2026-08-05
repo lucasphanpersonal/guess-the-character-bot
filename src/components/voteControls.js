@@ -17,13 +17,35 @@ const {
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
 
 async function handle(interaction) {
-  // The last segment is a slot for `pick` and a page number for `page`.
-  const [, action, channelId, arg] = interaction.customId.split(':');
-  const slot = arg;
+  const parts = interaction.customId.split(':');
+  const action = parts[1];
+  const channelId = parts[2];
+  
+  let slot; // for 'pick' action
+  let pageNum; // for 'page' action
+  let gameInstanceId;
+  
+  if (action === 'pick') {
+    slot = parts[3];
+    gameInstanceId = parts[4];
+  } else if (action === 'page') {
+    pageNum = parts[3];
+    gameInstanceId = parts[4];
+  } else {
+    // open, close, extend
+    gameInstanceId = parts[3];
+  }
+  
   const lobby = GameManager.getLobby(channelId);
   const vote = lobby?.vote;
+  const game = lobby?.game;
 
   if (!lobby || !vote || vote.closed || lobby.status !== 'VOTING') {
+    return interaction.reply(ephemeral('That vote is no longer open.'));
+  }
+
+  // Validate gameInstanceId to prevent stale controls from old games (if present)
+  if (gameInstanceId && gameInstanceId !== game?.gameInstanceId) {
     return interaction.reply(ephemeral('That vote is no longer open.'));
   }
 
@@ -68,7 +90,7 @@ async function handle(interaction) {
 
   if (action === 'page') {
     // Purely a change of view: nothing is recorded, so the public board has nothing to say.
-    return interaction.update(buildBallotPayload(vote, interaction.user.id, { page: Number(arg) || 0 }));
+    return interaction.update(buildBallotPayload(vote, interaction.user.id, { page: Number(pageNum) || 0 }));
   }
 
   if (action === 'pick') {

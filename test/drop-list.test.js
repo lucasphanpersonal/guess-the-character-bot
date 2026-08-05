@@ -75,7 +75,15 @@ module.exports = {
     const { recorder, channelId } = await startedGame();
     const dm = recorder.sent.find((m) => m.target === 'dm:p1');
     const ids = dm.payload.components[0].toJSON().components.map((c) => c.custom_id);
-    assert.deepEqual(ids, [`confirm:${channelId}`, `reroll:${channelId}`, `droplist:${channelId}`]);
+    
+    // Extract gameInstanceId from the customId format (last segment after ':')
+    const gameInstanceId = ids[0].split(':')[2];
+    
+    assert.deepEqual(ids, [
+      `confirm:${channelId}:${gameInstanceId}`,
+      `reroll:${channelId}:${gameInstanceId}`,
+      `droplist:${channelId}:${gameInstanceId}`,
+    ]);
     GameManager.endLobby(channelId);
   },
 
@@ -161,7 +169,14 @@ module.exports = {
     const { recorder, channelId } = await startedGame({ p2Freeform: true });
     const dm = recorder.sent.find((m) => m.target === 'dm:p1');
     const ids = dm.payload.components[0].toJSON().components.map((c) => c.custom_id);
-    assert.deepEqual(ids, [`confirm:${channelId}`, `reroll:${channelId}`]);
+    
+    // Extract gameInstanceId from the customId format (last segment after ':')
+    const gameInstanceId = ids[0].split(':')[2];
+    
+    assert.deepEqual(ids, [
+      `confirm:${channelId}:${gameInstanceId}`,
+      `reroll:${channelId}:${gameInstanceId}`,
+    ]);
     GameManager.endLobby(channelId);
   },
 

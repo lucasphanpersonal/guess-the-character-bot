@@ -40,10 +40,10 @@ function characterMessage(description, characters) {
   return { content: description, embeds };
 }
 
-function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropList = false } = {}) {
+function buildConfirmRow(channelId, gameInstanceId, rerollsLeft, { allowReroll = true, canDropList = false } = {}) {
   const unlimited = rerollsLeft === -1;
   const confirmBtn = new ButtonBuilder()
-    .setCustomId(`confirm:${channelId}`)
+    .setCustomId(`confirm:${channelId}:${gameInstanceId}`)
     .setLabel(allowReroll ? 'Good to go' : 'Ready')
     .setEmoji('✅')
     .setStyle(ButtonStyle.Success);
@@ -52,7 +52,7 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropLi
   if (!allowReroll) return new ActionRowBuilder().addComponents(confirmBtn);
 
   const rerollBtn = new ButtonBuilder()
-    .setCustomId(`reroll:${channelId}`)
+    .setCustomId(`reroll:${channelId}:${gameInstanceId}`)
     .setLabel(unlimited ? 'Reroll' : rerollsLeft > 0 ? `Reroll (${rerollsLeft} left)` : 'No rerolls left')
     .setEmoji('🔁')
     .setStyle(ButtonStyle.Secondary)
@@ -65,7 +65,7 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropLi
   if (canDropList) {
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(`droplist:${channelId}`)
+        .setCustomId(`droplist:${channelId}:${gameInstanceId}`)
         .setLabel('Never deal this show')
         .setEmoji('🚫')
         .setStyle(ButtonStyle.Danger)
@@ -76,10 +76,10 @@ function buildConfirmRow(channelId, rerollsLeft, { allowReroll = true, canDropLi
 }
 
 // What a locked-in player is left holding: a way back out, until everyone is in.
-function buildUnlockRow(channelId) {
+function buildUnlockRow(channelId, gameInstanceId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`unconfirm:${channelId}`)
+      .setCustomId(`unconfirm:${channelId}:${gameInstanceId}`)
       .setLabel('Unlock')
       .setEmoji('↩️')
       .setStyle(ButtonStyle.Secondary)
@@ -120,7 +120,7 @@ function checkMessagePayload(game, checkerId, channelId) {
     content: `🗂️ Playing with: **${game.listLabel}**\n\n${instruction}\n_(You can't see your own.)_`,
     embeds: [confirmCharacterEmbed(character, owner)],
     components: [
-      buildConfirmRow(channelId, state.rerollsLeft, {
+      buildConfirmRow(channelId, game.gameInstanceId, state.rerollsLeft, {
         allowReroll: game.rerollAllowed,
         // Only offerable when we know which list the character came from, which rules out
         // hand-assigned characters from /lobby set-characters.
