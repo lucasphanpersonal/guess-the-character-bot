@@ -1,8 +1,10 @@
 const { MessageFlags } = require('discord.js');
 const { getListByName, addCharacter, searchListNames } = require('../../db/characterLists');
+const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
   async execute(interaction) {
+    if (!(await requireManageGuild(interaction))) return;
     const listName = interaction.options.getString('list').trim();
     const characterName = interaction.options.getString('character').trim();
     const imageUrl = interaction.options.getString('image')?.trim() || null;

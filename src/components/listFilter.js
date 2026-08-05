@@ -30,6 +30,7 @@ const {
   listsForFilter,
   setListsEnabled,
 } = require('../db/characterLists');
+const { requireManageGuild } = require('../util/permissions');
 
 // Discord's hard limits: 25 options per select, 5 action rows per message.
 const OPTIONS_PER_MENU = 25;
@@ -239,6 +240,7 @@ async function handle(interaction) {
   const currentPage = Number(page) || 0;
 
   if (action === 'pick') {
+    if (!(await requireManageGuild(interaction))) return;
     // The submitted values are the ticks in THIS menu only, so the menu's own 25 lists are
     // the universe being rewritten -- everything it offered and didn't return is now off.
     const categories = listCategoriesWithEnabledCounts(guildId);
@@ -259,6 +261,7 @@ async function handle(interaction) {
   }
 
   if (action === 'all' || action === 'none' || action === 'clear') {
+    if (!(await requireManageGuild(interaction))) return;
     const categories = listCategoriesWithEnabledCounts(guildId);
     const category = categories[categoryIndex];
     if (!category) return interaction.update(ephemeralPayload(categoriesView(guildId, 0)));

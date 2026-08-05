@@ -42,11 +42,12 @@ function buttonsOf(payload) {
     .filter((c) => c.type === 2);
 }
 
-function click({ guildId, customId, recorder, values }) {
+function click({ guildId, customId, recorder, values, canManageGuild = true }) {
   return handleComponentInteraction({
     customId,
     guildId,
     user: { id: 'curator' },
+    memberPermissions: { has: () => canManageGuild },
     values,
     update: async (payload) => recorder.record('update:curator', payload, 'chan'),
     reply: async (payload) => recorder.record('reply:curator', payload, 'chan'),
@@ -155,6 +156,17 @@ module.exports = {
     const recorder = createRecorder();
     await click({ guildId, customId: 'filter:none:0:0', recorder });
     assert.equal(lists.getEnabledLists(guildId).length, 5, 'only page two survives');
+  },
+
+  async 'only managers can change the shared list selection'() {
+    const guildId = freshGuild();
+    seed(guildId, 'Naruto', 'Anime');
+    const recorder = createRecorder();
+
+    await click({ guildId, customId: 'filter:all:0:0', recorder, canManageGuild: false });
+
+    assert.equal(lists.getEnabledLists(guildId).length, 0);
+    assert.match(recorder.allText(), /Manage Server permission/);
   },
 
   // ---------------------------------------------------------------------------
@@ -340,6 +352,7 @@ module.exports = {
         channelId: 'chan',
         options: { top: 4 },
         recorder,
+        canManageGuild: true,
       })
     );
 
@@ -364,6 +377,7 @@ module.exports = {
           channelId: 'chan',
           options: { list: 'Cowboy Bebop' },
           recorder,
+          canManageGuild: true,
         })
       );
 

@@ -1,6 +1,6 @@
 # Multiplayer design
 
-Generalising the game from exactly two players to any number, and replacing the
+Generalising the game from exactly two players to up to eight, and replacing the
 first-correct-guess-wins race with "everyone plays until they get it, ranked by turns taken".
 
 This is a **simplification**, not just a generalisation: the rebuttal rule, the guess counter
@@ -216,16 +216,16 @@ Wins/losses/ties come from `outcome` (a tie being a `'won'` row in a game with m
 
 ## Where the caps actually land
 
-The core loop has no player ceiling. Three peripheral surfaces do, and they are Discord's
-limits rather than design choices — so each is gated at its own limit instead of one global cap
-on the game.
+The game deliberately caps lobbies at **eight players**. That keeps the roster safely inside
+Discord's embed limits and gives every player a manageable number of people to judge. The
+remaining Discord surfaces have their own smaller presentation limits.
 
 | Surface | Discord limit | Ceiling | Handling |
 | --- | --- | --- | --- |
-| Audience-vote ballot (`buildBallotPayload`) | 5 action rows per message; it builds one select per player | **5 players** | Audience-vote mode refuses to start above 5, saying why. Paginating the ballot is possible later. |
-| Spectator DM (`sendSpectatorDMs`) | 10 embeds per message | **10 players** | Split across multiple messages past 10. |
-| `/lobby set-characters` | 25 options per command; it needs 2 per player | **12 players** | Gate the command above 12. It is a niche host tool. |
-| Confirm DM (see below) | 10 embeds per message | **11 players** | Same split. |
+| Audience-vote ballot (`buildBallotPayload`) | 5 action rows per message | 5 selects | Pages at 6–8 players. |
+| Spectator DM (`sendSpectatorDMs`) | 10 embeds per message | 10 embeds | The eight-player cap stays within one message. |
+| `/lobby set-characters` | 5 modal inputs | **5 players** | The host tool disables itself above five. |
+| Confirm DM (see below) | 10 embeds per message | 10 embeds | The eight-player cap stays within one message. |
 | `drawCandidates` | needs `voteOptions × players` distinct characters | pool-dependent | Already reported by the existing error path; just needs the new multiplier. |
 
 `SLOTS = ['1', '2']` in `audienceVote.js` becomes a slot per player throughout — the vote board
@@ -295,7 +295,7 @@ belonged to. Splitting restores the adjacency and confines the 10-embed ceiling 
 that has no buttons.
 
 2N DMs per game — nowhere near the rate limits that rule out the per-character variant (N−1
-separate DMs each with their own button row, which is N×(N−1), or 90 at ten players).
+separate DMs each with their own button row, which grows quadratically with the table).
 
 `Good to go` keeps its current meaning of "I've read all of these and I'm happy with mine",
 and play still begins once every player has pressed it.
@@ -308,7 +308,7 @@ Rerolls remain budgeted per player (`maxRerolls`).
 
 Each stage leaves the bot shippable, and two-player games working throughout.
 
-**All stages are done.** The bot plays with any number of players from two up, scores on
+**All stages are done.** The bot plays with two to eight players, scores on
 turns taken, and has no rebuttal rule. What follows is a record of the order it was built in,
 because the order was the point: each stage shipped on its own, and two-player games kept
 working throughout.
@@ -326,14 +326,14 @@ working throughout.
    scoring is otherwise invisible. Still capped at 2 players. See
    [What "reproduces the old outcomes" does and doesn't mean](#what-reproduces-the-old-outcomes-does-and-doesnt-mean)
    for how the tests were framed — winners match, end conditions deliberately don't.
-4. ~~**Lift the lobby cap.**~~ Done, and there is no cap at all — `Lobby.addPlayer` accepts
-   anyone, Start unlocks at two, `getRandomCharacters(n)` deals one each, and judging is open
-   to every player who isn't the one guessing. `getRandomPair` is gone.
+4. ~~**Lift the lobby cap.**~~ Done, with a deliberate cap of eight — `Lobby.addPlayer`
+   enforces it, Start unlocks at two, `getRandomCharacters(n)` deals one each, and judging is
+   open to every player who isn't the one guessing. `getRandomPair` is gone.
 5. ~~**Pass-as-surrender.**~~ Done at stage 3, ahead of schedule, because the rule is
-   unreachable-but-necessary at two players as much as at ten. `/lobby end` recording partial
+   unreachable-but-necessary at two players as much as at eight. `/lobby end` recording partial
    results is **still outstanding** — see below.
 6. ~~**Audience vote for N.**~~ Done. `SLOTS` became one slot per player, `drawCandidates`
-   draws `voteOptions × players` disjoint characters, and the mode refuses above five.
+   draws `voteOptions × players` disjoint characters, and ballots page from six through eight.
 7. ~~**Docs.**~~ Done: README, `/help`, and these two files.
 
 ### Still outstanding

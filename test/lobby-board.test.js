@@ -58,11 +58,11 @@ function click({ channelId, userId, action, recorder, client }) {
 }
 
 module.exports = {
-  'Start unlocks at two players, and Join never fills up'() {
+  'Start unlocks at two players, and Join closes at eight'() {
     const { lobby } = makeLobby();
     let buttons = buttonsOf(buildLobbyBoardPayload(lobby));
     assert.equal(buttons.start.disabled, true, 'Start disabled with 0 players');
-    assert.match(buttons.start.label, /0\/2/);
+    assert.match(buttons.start.label, /0\/2 min/);
 
     lobby.addPlayer('p1');
     buttons = buttonsOf(buildLobbyBoardPayload(lobby));
@@ -71,13 +71,15 @@ module.exports = {
     lobby.addPlayer('p2');
     buttons = buttonsOf(buildLobbyBoardPayload(lobby));
     assert.equal(buttons.start.disabled, false, 'enabled at 2 players');
+    assert.equal(buttons.start.label, 'Start game (2/8)');
 
-    // There is no maximum -- how many a table can stand is the players' call.
-    for (const id of ['p3', 'p4', 'p5', 'p6', 'p7']) lobby.addPlayer(id);
+    for (const id of ['p3', 'p4', 'p5', 'p6', 'p7', 'p8']) lobby.addPlayer(id);
     buttons = buttonsOf(buildLobbyBoardPayload(lobby));
-    assert.equal(buttons.join.disabled, false, 'Join never disables');
-    assert.equal(buttons.join.label, 'Join');
-    assert.match(buttons.start.label, /Start game \(7\)/);
+    assert.equal(buttons.join.disabled, true, 'Join disables at the cap');
+    assert.equal(buttons.join.label, 'Join (8/8)');
+    assert.equal(buttons.start.label, 'Start game (8/8)');
+    assert.deepEqual(lobby.addPlayer('p9'), { ok: false, reason: 'full' });
+    assert.equal(lobby.players.length, 8);
   },
 
   // A modal holds five text inputs and hand-picking needs one per player, so the button
@@ -94,7 +96,7 @@ module.exports = {
     const json = buildLobbyBoardPayload(lobby).embeds[0].toJSON();
     assert.match(json.description, /<@hostUser>/, 'host is mentioned');
     const playersField = json.fields.find((f) => f.name.startsWith('Players'));
-    assert.match(playersField.name, /Players \(1\)/);
+    assert.match(playersField.name, /Players \(1\/8\)/);
     assert.match(playersField.value, /<@p1>/);
   },
 
@@ -122,7 +124,7 @@ module.exports = {
     // interaction.update means the click edited the board message itself.
     const update = recorder.sent.find((m) => m.target === 'update:p1');
     assert.ok(update, 'board was updated rather than a new message posted');
-    assert.match(update.payload.embeds[0].toJSON().fields[0].name, /Players \(1\)/);
+    assert.match(update.payload.embeds[0].toJSON().fields[0].name, /Players \(1\/8\)/);
     GameManager.endLobby(channelId);
   },
 
@@ -144,6 +146,18 @@ module.exports = {
 
     await click({ channelId, userId: 'p3', action: 'join', recorder, client });
     assert.deepEqual(lobby.players, ['p1', 'p2', 'p3']);
+    GameManager.endLobby(channelId);
+  },
+
+  async 'a stale Join button cannot exceed the player cap'() {
+    const { lobby, channelId } = makeLobby({ players: Array.from({ length: 8 }, (_, i) => `p${i + 1}`) });
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+
+    await click({ channelId, userId: 'p9', action: 'join', recorder, client });
+
+    assert.equal(lobby.players.length, 8);
+    assert.match(recorder.allText(), /lobby is full \(8 players\)/);
     GameManager.endLobby(channelId);
   },
 

@@ -1,11 +1,13 @@
 const { MessageFlags } = require('discord.js');
 const { createList, getListByName } = require('../../db/characterLists');
+const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
   async execute(interaction) {
     if (!interaction.guildId) {
       return interaction.reply({ content: 'This command must be used in a server.', flags: MessageFlags.Ephemeral });
     }
+    if (!(await requireManageGuild(interaction))) return;
     const name = interaction.options.getString('name').trim();
     const category = interaction.options.getString('category').trim();
     if (getListByName(interaction.guildId, name)) {

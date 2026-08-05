@@ -1,3 +1,5 @@
+const MAX_PLAYERS = 8;
+
 class Lobby {
   constructor({
     guildId,
@@ -38,12 +40,9 @@ class Lobby {
     this.assignedCharacters = {};
   }
 
-  // No upper bound, deliberately: how many people a table can stand is the players' call, not
-  // the bot's. The surfaces that genuinely cannot scale (the audience ballot, the set-characters
-  // modal -- both bounded by Discord's five-rows-per-message) refuse for themselves and say why,
-  // rather than shrinking the game to fit the most limited thing attached to it.
   addPlayer(userId) {
     if (this.players.includes(userId)) return { ok: false, reason: 'already-joined' };
+    if (this.players.length >= MAX_PLAYERS) return { ok: false, reason: 'full' };
     this.players.push(userId);
     return { ok: true };
   }
@@ -57,3 +56,4 @@ class Lobby {
 }
 
 module.exports = Lobby;
+module.exports.MAX_PLAYERS = MAX_PLAYERS;

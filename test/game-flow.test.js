@@ -21,7 +21,7 @@ const LUIGI = { name: 'Luigi', image_url: null };
 let counter = 0;
 
 // Builds a lobby with two joined players and runs it up to IN_PROGRESS (both confirmed).
-async function startedGame({ turnSeconds = 90, maxRerolls = 2, characters = [MARIO, LUIGI] } = {}) {
+async function startedGame({ turnSeconds = 90, maxRerolls = 2, characters = [MARIO, LUIGI], start = true } = {}) {
   const n = ++counter;
   const guildId = `flow-guild-${n}`;
   const channelId = `flow-chan-${n}`;
@@ -48,7 +48,7 @@ async function startedGame({ turnSeconds = 90, maxRerolls = 2, characters = [MAR
   lobby.addPlayer('p2');
   GameManager.createLobby(channelId, lobby);
 
-  await engine.startGame(client, lobby, characters);
+  if (start) await engine.startGame(client, lobby, characters);
   return { lobby, client, recorder, guildId, channelId, listId };
 }
 
@@ -97,6 +97,84 @@ module.exports = {
       createButtonInteraction({ client: ctx.client, userId: 'p2', customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
     );
     assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+    cleanup(ctx);
+  },
+
+  async 'simultaneous final confirmations start exactly one turn'() {
+    const ctx = await startedGame();
+    await Promise.all(
+      ['p1', 'p2'].map((userId) =>
+        confirmPhase.handleConfirmationButton(
+          createButtonInteraction({ client: ctx.client, userId, customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
+        )
+      )
+    );
+
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+    assert.equal(ctx.lobby.game.turnsFor('p1'), 1, 'the opening turn is handed out once');
+    assert.equal(
+      ctx.recorder.sent.filter(
+        ({ target, content }) =>
+          target === `channel:${ctx.channelId}` && content.includes('All 2 players are ready -- starting the game!')
+      ).length,
+      1,
+      'the game-start announcement is sent once'
+    );
+    cleanup(ctx);
+  },
+
+  async 'a player whose DMs are closed returns the lobby to WAITING for a retry'() {
+    const ctx = await startedGame({ start: false });
+    const fetchUser = ctx.client.users.fetch;
+    let dmsBlocked = true;
+    ctx.client.users.fetch = async (id) => {
+      const user = await fetchUser(id);
+      if (id !== 'p2' || !dmsBlocked) return user;
+      return { ...user, send: async () => { throw new Error('DMs are disabled'); } };
+    };
+
+    const failed = await engine.startGameFromLobby(ctx.client, ctx.lobby);
+
+    assert.equal(failed.ok, false);
+    assert.match(failed.error, /Couldn't DM Userp2/);
+    assert.equal(ctx.lobby.status, 'WAITING');
+    assert.equal(ctx.lobby.game, null);
+    assert.match(ctx.recorder.textMatching('dm:p1:edit'), /game did not start/i);
+
+    dmsBlocked = false;
+    const retried = await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    assert.equal(retried.ok, true);
+    assert.equal(ctx.lobby.status, 'CONFIRMING');
+    cleanup(ctx);
+  },
+
+  async 'a failed multi-player start retires reference cards before retrying'() {
+    const ctx = await startedGame({ start: false });
+    ctx.lobby.addPlayer('p3');
+    const fetchUser = ctx.client.users.fetch;
+    let dmsBlocked = true;
+    ctx.client.users.fetch = async (id) => {
+      const user = await fetchUser(id);
+      if (id !== 'p3' || !dmsBlocked) return user;
+      return { ...user, send: async () => { throw new Error('DMs are disabled'); } };
+    };
+
+    const failed = await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Peach' }]);
+
+    assert.equal(failed.ok, false);
+    const referenceRetirement = ctx.recorder.sent.find(
+      ({ target, payload }) =>
+        target === 'dm:p1:edit' &&
+        payload.content.includes('game did not start') &&
+        Array.isArray(payload.embeds) &&
+        payload.embeds.length === 0
+    );
+    assert.ok(referenceRetirement, 'p1’s reference card is cleared after the failed start');
+
+    dmsBlocked = false;
+    const retried = await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Bowser' }]);
+    assert.equal(retried.ok, true);
+    assert.match(ctx.recorder.textFor('dm:p1').at(-1), /Bowser/);
     cleanup(ctx);
   },
 
