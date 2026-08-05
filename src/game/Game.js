@@ -44,6 +44,9 @@ class Game {
     this.finished = false;
     this.timer = null;
     this.countdownHandles = [];
+    // Unique instance ID for this game, used in button customIds to prevent stale controls
+    // from old games in the same channel from affecting this one.
+    this.gameInstanceId = Math.random().toString(36).substring(2, 9);
     // The single self-updating message for the current turn. Replaced by engine.startTurn on
     // every new turn.
     this.turnBoardMessage = null;
@@ -82,6 +85,8 @@ class Game {
     // True after a turn's timer expires until the player guesses or passes -- they get one
     // last chance to guess before the turn actually moves on.
     this.paused = false;
+    // Handle for auto-surrender timer after last-chance window expires.
+    this.autoSurrenderHandle = null;
   }
 
   get currentPlayerId() {

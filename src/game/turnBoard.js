@@ -74,14 +74,15 @@ function standingsField(game, { turnOver = false } = {}) {
 // Two rows, because the players have different jobs and share one message: whoever can see
 // the answer rules on it, and the player guessing decides when to stop.
 function buildButtons(game, channelId) {
+  const gameInstanceId = game.gameInstanceId;
   const judgeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`turn:right:${channelId}`)
+      .setCustomId(`turn:right:${channelId}:${gameInstanceId}`)
       .setLabel('They got it')
       .setEmoji('✅')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`turn:wrong:${channelId}`)
+      .setCustomId(`turn:wrong:${channelId}:${gameInstanceId}`)
       .setLabel('Nope')
       .setEmoji('❌')
       .setStyle(ButtonStyle.Danger)
@@ -98,7 +99,7 @@ function buildButtons(game, channelId) {
   const alone = game.activePlayers.length === 1;
   const guesserRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`turn:pass:${channelId}`)
+      .setCustomId(`turn:pass:${channelId}:${gameInstanceId}`)
       .setLabel(alone ? 'Give up' : 'Pass')
       .setEmoji(alone ? '🏳️' : '⏭️')
       .setStyle(alone ? ButtonStyle.Danger : ButtonStyle.Secondary),
@@ -110,7 +111,7 @@ function buildButtons(game, channelId) {
     // It shares the row with Pass, whose audience is exactly complementary: the player whose
     // turn it is cannot spectate, and a spectator has no turn to pass.
     new ButtonBuilder()
-      .setCustomId(`turn:spectate:${channelId}`)
+      .setCustomId(`turn:spectate:${channelId}:${gameInstanceId}`)
       .setLabel('Spectate')
       .setEmoji('👁')
       .setStyle(ButtonStyle.Secondary)

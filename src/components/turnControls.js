@@ -27,10 +27,10 @@ const JUDGE_ACTIONS = new Set(['right', 'wrong', 'yes']);
 // So the harmless button stays a single press and the irreversible one asks first. The cost
 // is one extra tap at most once per player per game, since ✅ lands exactly once for each of
 // them; the thing it prevents costs the whole game.
-function confirmRow(channelId, playerId, turnNumber) {
+function confirmRow(channelId, playerId, turnNumber, gameInstanceId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`turn:yes:${channelId}:${playerId}:${turnNumber}`)
+      .setCustomId(`turn:yes:${channelId}:${playerId}:${turnNumber}:${gameInstanceId}`)
       .setLabel('Yes, they got it')
       .setEmoji('✅')
       .setStyle(ButtonStyle.Success)
@@ -38,12 +38,34 @@ function confirmRow(channelId, playerId, turnNumber) {
 }
 
 async function handle(interaction) {
-  const [, action, channelId, targetId, targetTurn] = interaction.customId.split(':');
+  const parts = interaction.customId.split(':');
+  const action = parts[1];
+  const channelId = parts[2];
   const lobby = GameManager.getLobby(channelId);
   const game = lobby?.game;
 
   if (!lobby || !game || lobby.status !== 'IN_PROGRESS' || game.finished) {
     return interaction.reply(ephemeral('That game is no longer running.'));
+  }
+
+  // Validate gameInstanceId to prevent stale controls from old games
+  const expectedGameInstanceId = game.gameInstanceId;
+  let providedGameInstanceId;
+  let targetId;
+  let targetTurn;
+
+  if (action === 'yes') {
+    // turn:yes:channelId:playerId:turnNumber:gameInstanceId
+    targetId = parts[3];
+    targetTurn = parts[4];
+    providedGameInstanceId = parts[5];
+  } else {
+    // turn:right:channelId:gameInstanceId, etc.
+    providedGameInstanceId = parts[3];
+  }
+
+  if (providedGameInstanceId && providedGameInstanceId !== expectedGameInstanceId) {
+    return interaction.reply(ephemeral('That control is no longer available.'));
   }
 
   // The board carries two players' controls, so the ownership check depends on the button.
@@ -80,7 +102,7 @@ async function handle(interaction) {
         content:
           `Did <@${who}> get it? Their character goes public and they leave the rotation — ` +
           "there's no taking it back.",
-        components: [confirmRow(channelId, who, game.turnsFor(who))],
+        components: [confirmRow(channelId, who, game.turnsFor(who), game.gameInstanceId)],
         flags: MessageFlags.Ephemeral,
       });
     }

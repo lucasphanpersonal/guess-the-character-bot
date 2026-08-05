@@ -66,15 +66,15 @@ function parseSettings(raw) {
   return { ok: errors.length === 0, values, errors };
 }
 
-// Each player needs their own disjoint candidate set, so the pool has to cover both.
+// Each player needs their own disjoint candidate set, so the pool has to cover all of them.
 // Returns an explanation, or null when the pool is big enough.
-function votePoolError(listIds, voteOptions, difficulty = 'everything') {
+function votePoolError(listIds, voteOptions, playerCount, difficulty = 'everything') {
   const available = countDistinctCharacters(listIds, difficulty);
-  if (available >= voteOptions * 2) return null;
+  const needed = voteOptions * playerCount;
+  if (available >= needed) return null;
   return (
-    `Audience vote with ${voteOptions} options per player needs ${voteOptions * 2} distinct ` +
-    `characters, but this selection only has ${available}. Pick more lists, or offer fewer ` +
-    'candidates per player.'
+    `Audience vote with ${voteOptions} options per player needs ${needed} distinct ` +
+    `characters (${voteOptions} × ${playerCount} players), but this selection only has ${available}. Pick more lists, or offer fewer candidates per player.`
   );
 }
 

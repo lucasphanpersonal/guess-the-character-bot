@@ -26,10 +26,19 @@ const { requireManageGuild } = require('../util/permissions');
 const maybeBeginPlay = (...a) => require('./engine').maybeBeginPlay(...a);
 
 async function handleConfirmationButton(interaction) {
-  const [action, channelId] = interaction.customId.split(':');
+  const parts = interaction.customId.split(':');
+  const action = parts[0];
+  const channelId = parts[1];
+  const gameInstanceId = parts[2];
+  
   const lobby = GameManager.getLobby(channelId);
   const game = lobby?.game;
   if (!lobby || !game || lobby.status !== 'CONFIRMING' || !game.confirmState) {
+    return interaction.reply({ content: 'This confirmation has expired.', flags: MessageFlags.Ephemeral });
+  }
+
+  // Validate gameInstanceId to prevent stale controls from old games (if present)
+  if (gameInstanceId && gameInstanceId !== game.gameInstanceId) {
     return interaction.reply({ content: 'This confirmation has expired.', flags: MessageFlags.Ephemeral });
   }
 
@@ -51,7 +60,7 @@ async function handleConfirmationButton(interaction) {
       // Deliberately still a live message: until the last player is in, confirming is a
       // decision you can take back. Kept tracked too, so a restart retires the button --
       // which is also why lockConfirmations, not this, is where the tracking ends.
-      components: [buildUnlockRow(channelId)],
+      components: [buildUnlockRow(channelId, gameInstanceId)],
     });
     return maybeBeginPlay(interaction.client, lobby);
   }

@@ -19,7 +19,10 @@ function formatLeaderboard(guildId) {
 }
 
 async function handle(interaction) {
-  const [, action, channelId] = interaction.customId.split(':');
+  const parts = interaction.customId.split(':');
+  const action = parts[1];
+  const channelId = parts[2];
+  const gameInstanceId = parts[3];
 
   if (action === 'leaderboard') {
     return interaction.reply(ephemeral(formatLeaderboard(interaction.guildId)));
@@ -28,6 +31,13 @@ async function handle(interaction) {
   if (action === 'rematch') {
     const previous = GameManager.getLobby(channelId);
     if (!previous || previous.status !== 'FINISHED') {
+      return interaction.reply(
+        ephemeral('That game has already been replaced -- use `/lobby create` to start a new one.')
+      );
+    }
+
+    // Validate gameInstanceId to prevent stale controls from old games (if present)
+    if (gameInstanceId && gameInstanceId !== previous.game?.gameInstanceId) {
       return interaction.reply(
         ephemeral('That game has already been replaced -- use `/lobby create` to start a new one.')
       );

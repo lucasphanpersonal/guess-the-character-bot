@@ -57,6 +57,10 @@ function clearTimers(game) {
   game.timer?.clear();
   for (const handle of game.countdownHandles) clearTimeout(handle);
   game.countdownHandles = [];
+  if (game.autoSurrenderHandle) {
+    clearTimeout(game.autoSurrenderHandle);
+    game.autoSurrenderHandle = null;
+  }
 }
 
 function scheduleCountdown(lobby) {
@@ -326,6 +330,22 @@ async function handleTimeout(client, lobby) {
   game.paused = true;
   // The board itself switches to the amber "last chance" state -- no extra message needed.
   await refreshTurnBoard(game, lobby.channelId);
+
+  // Schedule auto-surrender if the player doesn't act within 15 seconds of the last-chance
+  // timeout. This prevents an AFK player from parking indefinitely at the timeout state.
+  // Clear any prior auto-surrender timer from a previous turn first.
+  if (game.autoSurrenderHandle) {
+    clearTimeout(game.autoSurrenderHandle);
+  }
+
+  const currentPlayerId = game.currentPlayerId;
+  game.autoSurrenderHandle = setTimeout(async () => {
+    // Double-check the game is still running and it's still the same player's turn.
+    if (game.finished || game.currentPlayerId !== currentPlayerId || !game.paused) return;
+
+    // Auto-surrender: the player never acted on their last-chance opportunity.
+    await submitForfeit(client, lobby, currentPlayerId).catch((err) => console.error(err));
+  }, 15000); // 15 seconds for the last-chance window
 }
 
 // Shared by /guess, the turn board's Guess button (via its modal), and any future entry
@@ -560,6 +580,7 @@ async function finalizeGame(client, lobby) {
   const wasInVoice = Boolean(game.voiceConnection);
   voice.playWinSound(game); // win/final sting, whether it's an outright win or a tie
   lobby.status = 'FINISHED';
+  GameManager.markFinished(lobby.channelId);
   await refreshLobbyBoard(lobby);
   const channel = await getChannel(client, lobby);
 
@@ -617,12 +638,12 @@ async function finalizeGame(client, lobby) {
 
   const gameOverButtons = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`over:rematch:${lobby.channelId}`)
+      .setCustomId(`over:rematch:${lobby.channelId}:${game.gameInstanceId}`)
       .setLabel('Rematch')
       .setEmoji('🔁')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`over:leaderboard:${lobby.channelId}`)
+      .setCustomId(`over:leaderboard:${lobby.channelId}:${game.gameInstanceId}`)
       .setLabel('Leaderboard')
       .setEmoji('🏆')
       .setStyle(ButtonStyle.Secondary)
