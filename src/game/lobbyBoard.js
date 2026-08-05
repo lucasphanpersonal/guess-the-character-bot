@@ -150,9 +150,11 @@ async function refreshLobbyBoard(lobby) {
   const payload = buildLobbyBoardPayload(lobby);
   try {
     await lobby.boardMessage.edit(payload);
-    // Past WAITING the board has no buttons left, so a restart has nothing to retire on it.
-    // A failed edit deliberately keeps the row: the board may still be showing its buttons.
+    // Past WAITING the board has no buttons left, so a restart has nothing to retire. A failed
+    // game start can restore WAITING after that, so restoring controls must make the board live
+    // in restart tracking again.
     if (!payload.components.length) untrackBoard(lobby.boardMessage);
+    else trackBoard('lobby', lobby.boardMessage);
   } catch (err) {
     console.warn('[lobbyBoard] Could not refresh the lobby board:', err.message);
   }

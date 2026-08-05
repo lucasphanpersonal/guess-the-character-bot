@@ -249,11 +249,23 @@ async function lockConfirmations(game) {
 }
 
 async function cancelConfirmations(game) {
-  return retireConfirmations(
+  const cancelledContent =
+    '⚠️ The game did not start because a player could not receive their DMs. ' +
+    'Ask the host to try again once every player enables DMs from server members.';
+  await retireConfirmations(
     game,
-    () =>
-      '⚠️ The game did not start because a player could not receive their DMs. ' +
-      'Ask the host to try again once every player enables DMs from server members.'
+    () => cancelledContent
+  );
+  await Promise.all(
+    game.turnOrder.flatMap((playerId) =>
+      (game.confirmState[playerId]?.referenceMessages ?? []).map(async (message) => {
+        try {
+          await message.edit({ content: cancelledContent, embeds: [], components: [] });
+        } catch {
+          // Nothing to be done about a DM we can no longer edit.
+        }
+      })
+    )
   );
 }
 

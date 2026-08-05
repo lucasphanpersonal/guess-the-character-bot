@@ -284,6 +284,37 @@ module.exports = {
     cleanup(ctx);
   },
 
+  async 'a failed post-vote start reuses the audience’s resolved characters on retry'() {
+    const ctx = makeLobby();
+    await engine.startAudienceVote(ctx.client, ctx.lobby);
+    const vote = ctx.lobby.vote;
+    const resolvedNames = vote.resolve().map((character) => character.name);
+    const fetchUser = ctx.client.users.fetch;
+    let dmsBlocked = true;
+    ctx.client.users.fetch = async (id) => {
+      const user = await fetchUser(id);
+      if (id !== 'p2' || !dmsBlocked) return user;
+      return { ...user, send: async () => { throw new Error('DMs are disabled'); } };
+    };
+
+    const failed = await engine.closeAudienceVote(ctx.client, ctx.lobby, { reason: 'host' });
+    assert.equal(failed.ok, false);
+    assert.equal(ctx.lobby.status, 'WAITING');
+    assert.equal(ctx.lobby.vote, vote, 'the closed vote remains available for retry');
+    assert.equal(vote.closed, true);
+
+    dmsBlocked = false;
+    const retried = await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    assert.equal(retried.ok, true);
+    assert.equal(ctx.lobby.status, 'CONFIRMING');
+    assert.equal(ctx.lobby.vote, null, 'the vote is retired after its characters are delivered');
+    assert.deepEqual(
+      ctx.lobby.game.turnOrder.map((playerId) => ctx.lobby.game.headByPlayer[playerId].name),
+      resolvedNames
+    );
+    cleanup(ctx);
+  },
+
   async 'the close announcement reports turnout but never the winning names'() {
     const ctx = makeLobby();
     await engine.startAudienceVote(ctx.client, ctx.lobby);

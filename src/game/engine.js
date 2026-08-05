@@ -129,13 +129,20 @@ async function closeAudienceVote(client, lobby, { reason } = {}) {
       `ballot${vote.voterCount === 1 ? '' : 's'} cast. The audience has spoken!`
   );
 
-  lobby.vote = null;
-  const started = await startGame(client, lobby, characters);
+  const started = await startResolvedAudienceGame(client, lobby, vote, characters, voteSummary);
   if (!started.ok) {
     await channel.send(`⚠️ ${started.error}`);
-    return started;
   }
+  return started;
+}
+
+// A closed vote stays on the lobby until every player receives the confirmation cards. If one
+// DM fails, retrying must honour the audience's settled result rather than opening a new ballot.
+async function startResolvedAudienceGame(client, lobby, vote, characters = vote.resolve(), voteSummary = vote.summarise()) {
+  const started = await startGame(client, lobby, characters);
+  if (!started.ok) return started;
   lobby.game.voteSummary = voteSummary;
+  lobby.vote = null;
   return started;
 }
 
@@ -151,6 +158,9 @@ async function startGameFromLobby(client, lobby) {
   }
 
   if (lobby.mode === 'audience-vote') {
+    if (lobby.vote?.closed) {
+      return startResolvedAudienceGame(client, lobby, lobby.vote);
+    }
     return startAudienceVote(client, lobby);
   }
 

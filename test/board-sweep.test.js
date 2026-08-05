@@ -169,6 +169,34 @@ module.exports = {
     GameManager.endLobby(channelId);
   },
 
+  async 'a failed start re-tracks restored lobby controls for restart cleanup'() {
+    const channelId = `sweep-chan-${++counter}`;
+    const recorder = createRecorder();
+    const client = createFakeClient(recorder);
+    const lobby = makeLobby(channelId);
+    lobby.boardMessage = postedBoard(recorder, channelId, buildLobbyBoardPayload(lobby));
+    trackBoard('lobby', lobby.boardMessage);
+    const fetchUser = client.users.fetch;
+    client.users.fetch = async (id) => {
+      const user = await fetchUser(id);
+      if (id !== 'p2') return user;
+      return { ...user, send: async () => { throw new Error('DMs are disabled'); } };
+    };
+
+    const started = await engine.startGame(client, lobby, [{ name: 'Mario' }, { name: 'Luigi' }]);
+    assert.equal(started.ok, false);
+    assert.equal(lobby.status, 'WAITING');
+    const [row] = rowsFor(channelId);
+    assert.equal(row?.kind, 'lobby', 'restored controls are live again');
+    assert.equal(row?.messageId, lobby.boardMessage.id);
+
+    await sweepBoards(client);
+    const lastEdit = editsTo(recorder, channelId).at(-1);
+    assert.deepEqual(lastEdit.payload.components, [], 'a restart retires the restored controls');
+    assert.match(lastEdit.payload.content, /bot restarted/i);
+    GameManager.endLobby(channelId);
+  },
+
   async 'an ended turn board and a closed vote board are untracked too'() {
     const channelId = `sweep-chan-${++counter}`;
     const recorder = createRecorder();

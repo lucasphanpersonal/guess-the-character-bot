@@ -148,6 +148,36 @@ module.exports = {
     cleanup(ctx);
   },
 
+  async 'a failed multi-player start retires reference cards before retrying'() {
+    const ctx = await startedGame({ start: false });
+    ctx.lobby.addPlayer('p3');
+    const fetchUser = ctx.client.users.fetch;
+    let dmsBlocked = true;
+    ctx.client.users.fetch = async (id) => {
+      const user = await fetchUser(id);
+      if (id !== 'p3' || !dmsBlocked) return user;
+      return { ...user, send: async () => { throw new Error('DMs are disabled'); } };
+    };
+
+    const failed = await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Peach' }]);
+
+    assert.equal(failed.ok, false);
+    const referenceRetirement = ctx.recorder.sent.find(
+      ({ target, payload }) =>
+        target === 'dm:p1:edit' &&
+        payload.content.includes('game did not start') &&
+        Array.isArray(payload.embeds) &&
+        payload.embeds.length === 0
+    );
+    assert.ok(referenceRetirement, 'p1’s reference card is cleared after the failed start');
+
+    dmsBlocked = false;
+    const retried = await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Bowser' }]);
+    assert.equal(retried.ok, true);
+    assert.match(ctx.recorder.textFor('dm:p1').at(-1), /Bowser/);
+    cleanup(ctx);
+  },
+
   async 'each player is DM\'d the OTHER player\'s character'() {
     const ctx = await startedGame();
     // p1 must be told Luigi (p2's head) so they can answer p2's questions -- never Mario.
