@@ -6,7 +6,7 @@
 // Wikidata's SPARQL endpoint, the same one the fictional-character fetcher uses. No API key.
 //
 //   ?p wdt:P31 wd:Q5        instance of human
-//   ?p wdt:P106 wd:<QID>    occupation
+//   ?p wdt:P106/P136 wd:<QID>    occupation or musical genre
 //   ?p wikibase:sitelinks ?n    how many language Wikipedias have an article on them
 //
 // Sitelinks are the fame signal, and for real people they are a good one: Barack Obama has
@@ -90,7 +90,44 @@ const GROUPS = [
   // would be the weaker of the two lists.
   { key: 'comedians', list: 'Comedians', min: 30, qids: ['Q245068'] },
   { key: 'musicians', list: 'Musicians & Singers', min: 50, qids: ['Q177220', 'Q639669', 'Q2252262'] },
+  // P106 is sparse for newer performers: in the [10,500) range it finds only two hip-hop
+  // musicians and no Korean idols. P136 is where Wikidata actually files those artists, so
+  // keep both signals. These lists follow Musicians so established artists already claimed
+  // there do not appear twice; the lower floor is for the current artists that list misses.
+  {
+    key: 'hiphop',
+    list: 'Rappers & Hip-Hop',
+    min: 10,
+    qids: ['Q100493654'],
+    genres: ['Q11401'],
+  },
+  {
+    key: 'kpop',
+    list: 'K-Pop Idols',
+    min: 10,
+    qids: ['Q521987'],
+    genres: ['Q213665'],
+  },
+  // Chinese idol (Q84955099) currently has only two people, neither above 10 sitelinks.
+  // C-pop and Mandopop are the useful Wikidata signals for established Chinese pop performers;
+  // their label does not overclaim that every genre-tagged performer is an idol.
+  {
+    key: 'cpop',
+    list: 'C-Pop Artists',
+    min: 10,
+    genres: ['Q1192110', 'Q973150'],
+  },
   { key: 'actors', list: 'Actors', min: 60, qids: ['Q33999', 'Q10800557'] },
+  // "Chinese" here covers the major Chinese entertainment industries recorded by Wikidata
+  // citizenship: the PRC, Hong Kong, Taiwan, and Macao. It follows Actors so the general
+  // list continues to claim established crossover stars above its existing 60-sitelink floor.
+  {
+    key: 'chineseactors',
+    list: 'Chinese Actors',
+    min: 10,
+    qids: ['Q33999', 'Q10800557'],
+    citizenships: ['Q148', 'Q8646', 'Q865', 'Q14773'],
+  },
   // Musicians before BOTH actors and composers.
   //
   // Before composers because the two are indistinguishable from the data -- Michael Jackson
@@ -118,15 +155,21 @@ const GROUPS = [
 
 const args = process.argv.slice(2);
 const flag = (name) => {
+  const i = args.indexOf(`--${name}`);
+  if (i !== -1 && args[i + 1] && !args[i + 1].startsWith('--')) return args[i + 1];
   const hit = args.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : null;
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function peopleQuery(qid, lo, hi) {
+function peopleQuery(property, qid, lo, hi, citizenships = []) {
+  const citizenshipFilter = citizenships.length
+    ? `\n  VALUES ?citizenship { ${citizenships.map((qid) => `wd:${qid}`).join(' ')} }\n  ?p wdt:P27 ?citizenship .`
+    : '';
   return `SELECT ?p ?pLabel ?sitelinks ?img WHERE {
-  ?p wdt:P31 wd:Q5 ; wdt:P106 wd:${qid} ; wikibase:sitelinks ?sitelinks .
+  ?p wdt:P31 wd:Q5 ; wdt:${property} wd:${qid} ; wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${lo} && ?sitelinks < ${hi})
+  ${citizenshipFilter}
   OPTIONAL { ?p wdt:P18 ?img }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
 }`;
@@ -170,27 +213,27 @@ function bands(min) {
 }
 
 /**
- * Everyone in one occupation above a floor.
+ * Everyone matching one Wikidata property value above a floor.
  *
- * Tries the whole range in one query first, because most occupations answer that way in a few
+ * Tries the whole range in one query first, because most filters answer that way in a few
  * seconds and banding them would be twenty requests for no benefit. Only the heavy ones --
  * politician, association football player -- fall through to the bands.
  */
-async function fetchOccupation(qid, min) {
+async function fetchProperty(property, qid, min, citizenships) {
   try {
-    const rows = await runSparql(peopleQuery(qid, min, SITELINK_CEILING));
+    const rows = await runSparql(peopleQuery(property, qid, min, SITELINK_CEILING, citizenships));
     await sleep(PAUSE_MS);
     return rows;
   } catch {
-    console.log(`      · ${qid} too heavy in one query — falling back to sitelink bands`);
+    console.log(`      · ${property}:${qid} too heavy in one query — falling back to sitelink bands`);
   }
 
   const rows = [];
   for (const [lo, hi] of bands(min)) {
     try {
-      rows.push(...(await runSparql(peopleQuery(qid, lo, hi))));
+      rows.push(...(await runSparql(peopleQuery(property, qid, lo, hi, citizenships))));
     } catch (err) {
-      console.warn(`      ! ${qid} [${lo},${hi}) gave up: ${err.message}`);
+      console.warn(`      ! ${property}:${qid} [${lo},${hi}) gave up: ${err.message}`);
     }
     await sleep(PAUSE_MS);
   }
@@ -199,8 +242,12 @@ async function fetchOccupation(qid, min) {
 
 async function fetchGroup(group) {
   const byId = new Map();
-  for (const qid of group.qids) {
-    const rows = await fetchOccupation(qid, group.min);
+  const filters = [
+    ...(group.qids ?? []).map((qid) => ({ property: 'P106', qid })),
+    ...(group.genres ?? []).map((qid) => ({ property: 'P136', qid })),
+  ];
+  for (const { property, qid } of filters) {
+    const rows = await fetchProperty(property, qid, group.min, group.citizenships);
     for (const row of rows) {
       const id = row.p.value.split('/').pop();
       if (byId.has(id)) continue;
@@ -214,7 +261,7 @@ async function fetchGroup(group) {
         image: row.img?.value ?? null,
       });
     }
-    console.log(`    ${qid}: ${byId.size} cumulative`);
+    console.log(`    ${property}:${qid}: ${byId.size} cumulative`);
   }
   return [...byId.values()].sort((a, b) => b.sitelinks - a.sitelinks);
 }
@@ -232,7 +279,7 @@ async function main() {
   const only = flag('group');
   const todo = GROUPS.filter((g) => (!only || g.key === only) && !out[g.key]);
   if (!todo.length) {
-    console.log('Nothing to fetch. --refresh to start over, or --group=<key> for one.');
+    console.log('Nothing to fetch. --refresh to start over, or --group <key> for one.');
     return;
   }
   console.log(`Fetching ${todo.length} group(s). The output file doubles as the resume log.\n`);
@@ -247,7 +294,7 @@ async function main() {
       JSON.stringify(
         {
           fetchedAt: new Date().toISOString(),
-          source: 'Wikidata SPARQL (P31 human, P106 occupation, ranked by sitelinks)',
+          source: 'Wikidata SPARQL (P31 human, P106 occupation/P136 genre, ranked by sitelinks)',
           groups: out,
         },
         null,
