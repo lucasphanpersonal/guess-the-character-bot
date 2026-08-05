@@ -220,17 +220,20 @@ async function fanOutReference(game, changedPlayerId) {
  * itself stays -- it is the reference for the character you spend the game answering
  * questions about.
  */
-async function retireConfirmations(game, contentForPlayer) {
+async function retireConfirmations(game, contentForPlayer, { clearEmbeds = false } = {}) {
   await Promise.all(
     game.turnOrder.map(async (playerId) => {
       const message = game.confirmState[playerId]?.checkMessage;
       if (!message) return;
       try {
-        // Only content and components are set, so the character embed is left in place.
-        await message.edit({
+        const payload = {
           content: contentForPlayer(playerId),
           components: [],
-        });
+        };
+        // A successful start leaves the character card as a useful in-game reference. A
+        // cancelled start must not leave a stale character visible before a retry.
+        if (clearEmbeds) payload.embeds = [];
+        await message.edit(payload);
       } catch {
         // Nothing to be done about a DM we can no longer edit.
       }
@@ -254,7 +257,8 @@ async function cancelConfirmations(game) {
     'Ask the host to try again once every player enables DMs from server members.';
   await retireConfirmations(
     game,
-    () => cancelledContent
+    () => cancelledContent,
+    { clearEmbeds: true }
   );
   await Promise.all(
     game.turnOrder.flatMap((playerId) =>

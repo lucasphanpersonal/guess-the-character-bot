@@ -148,7 +148,7 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'a failed multi-player start retires reference cards before retrying'() {
+  async 'a failed multi-player start retires every character card before retrying'() {
     const ctx = await startedGame({ start: false });
     ctx.lobby.addPlayer('p3');
     const fetchUser = ctx.client.users.fetch;
@@ -162,14 +162,14 @@ module.exports = {
     const failed = await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Peach' }]);
 
     assert.equal(failed.ok, false);
-    const referenceRetirement = ctx.recorder.sent.find(
-      ({ target, payload }) =>
-        target === 'dm:p1:edit' &&
-        payload.content.includes('game did not start') &&
-        Array.isArray(payload.embeds) &&
-        payload.embeds.length === 0
+    const retiredCards = ctx.recorder.sent.filter(
+      ({ target, payload }) => target === 'dm:p1:edit' && payload.content.includes('game did not start')
     );
-    assert.ok(referenceRetirement, 'p1’s reference card is cleared after the failed start');
+    assert.equal(retiredCards.length, 2, 'p1’s check and reference cards are both retired');
+    assert.ok(
+      retiredCards.every(({ payload }) => Array.isArray(payload.embeds) && payload.embeds.length === 0),
+      'retired cards do not retain stale characters'
+    );
 
     dmsBlocked = false;
     const retried = await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Bowser' }]);
