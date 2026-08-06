@@ -1,5 +1,5 @@
 const { MessageFlags } = require('discord.js');
-const { getListByName, addCharacter, searchListNames } = require('../../db/characterLists');
+const { getListByName, addCharacter, searchListNames, searchCharactersInLists } = require('../../db/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
@@ -28,4 +28,17 @@ module.exports = {
     }
     return interaction.reply(`✅ Added **${characterName}** to **${listName}**.`);
   },
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name === 'list') {
+      const matches = searchListNames(interaction.guildId, focused.value, 25);
+      return interaction.respond(matches.map((name) => ({ name, value: name })));
+    }
+    if (focused.name === 'character') {
+      const listName = interaction.options.getString('list');
+      if (!listName) return interaction.respond([]);
+      const matches = searchCharactersInLists(interaction.guildId, focused.value, [listName]);
+      return interaction.respond(matches.map((name) => ({ name, value: name })));
+    }
+  }
 };
