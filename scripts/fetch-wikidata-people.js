@@ -125,8 +125,21 @@ const GROUPS = [
   // Groups are not people (P31 Q215380 rather than human), but they belong in this real-world
   // category and make natural guessing-game subjects. K-pop precedes the general group list so
   // its groups remain discoverable as their own list.
-  { key: 'kpopgroups', list: 'K-Pop Groups', min: 10, entityTypes: ['Q215380'], genres: ['Q213665'] },
-  { key: 'bands', list: 'Bands & Musical Groups', min: 10, entityTypes: ['Q215380'] },
+  {
+    key: 'kpopgroups',
+    list: 'K-Pop Groups',
+    min: 10,
+    entityTypes: ['Q215380'],
+    includeTypeSubclasses: true,
+    genres: ['Q213665'],
+  },
+  {
+    key: 'bands',
+    list: 'Bands & Musical Groups',
+    min: 10,
+    entityTypes: ['Q215380'],
+    includeTypeSubclasses: true,
+  },
   { key: 'actors', list: 'Actors', min: 60, qids: ['Q33999', 'Q10800557'] },
   // "Chinese" here covers the major Chinese entertainment industries recorded by Wikidata
   // citizenship: the PRC, Hong Kong, Taiwan, and Macao. It follows Actors so the general
@@ -172,13 +185,17 @@ const flag = (name) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function peopleQuery(entityType, property, qid, lo, hi, citizenships = []) {
+function peopleQuery(entityType, property, qid, lo, hi, citizenships = [], includeTypeSubclasses = false) {
   const citizenshipFilter = citizenships.length
     ? `\n  VALUES ?citizenship { ${citizenships.map((qid) => `wd:${qid}`).join(' ')} }\n  ?p wdt:P27 ?citizenship .`
     : '';
-  const propertyFilter = property ? `; wdt:${property} wd:${qid}` : '';
+  const entityTypeFilter = includeTypeSubclasses
+    ? `?p wdt:P31/wdt:P279* wd:${entityType} .`
+    : `?p wdt:P31 wd:${entityType} .`;
+  const propertyFilter = property ? `\n  ?p wdt:${property} wd:${qid} .` : '';
   return `SELECT ?p ?pLabel ?sitelinks ?img WHERE {
-  ?p wdt:P31 wd:${entityType}${propertyFilter} ; wikibase:sitelinks ?sitelinks .
+  ${entityTypeFilter}${propertyFilter}
+  ?p wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${lo} && ?sitelinks < ${hi})
   ${citizenshipFilter}
   OPTIONAL { ?p wdt:P18 ?img }
@@ -230,10 +247,12 @@ function bands(min) {
  * seconds and banding them would be twenty requests for no benefit. Only the heavy ones --
  * politician, association football player -- fall through to the bands.
  */
-async function fetchProperty(entityType, property, qid, min, citizenships) {
+async function fetchProperty(entityType, property, qid, min, citizenships, includeTypeSubclasses) {
   const filterLabel = property ? `${property}:${qid}` : `P31:${entityType}`;
   try {
-    const rows = await runSparql(peopleQuery(entityType, property, qid, min, SITELINK_CEILING, citizenships));
+    const rows = await runSparql(
+      peopleQuery(entityType, property, qid, min, SITELINK_CEILING, citizenships, includeTypeSubclasses)
+    );
     await sleep(PAUSE_MS);
     return rows;
   } catch {
@@ -243,7 +262,11 @@ async function fetchProperty(entityType, property, qid, min, citizenships) {
   const rows = [];
   for (const [lo, hi] of bands(min)) {
     try {
-      rows.push(...(await runSparql(peopleQuery(entityType, property, qid, lo, hi, citizenships))));
+      rows.push(
+        ...(await runSparql(
+          peopleQuery(entityType, property, qid, lo, hi, citizenships, includeTypeSubclasses)
+        ))
+      );
     } catch (err) {
       console.warn(`      ! ${filterLabel} [${lo},${hi}) gave up: ${err.message}`);
     }
@@ -261,7 +284,14 @@ async function fetchGroup(group) {
   if (!filters.length) filters.push({ property: null, qid: null });
   for (const entityType of group.entityTypes ?? ['Q5']) {
     for (const { property, qid } of filters) {
-      const rows = await fetchProperty(entityType, property, qid, group.min, group.citizenships);
+      const rows = await fetchProperty(
+        entityType,
+        property,
+        qid,
+        group.min,
+        group.citizenships,
+        group.includeTypeSubclasses
+      );
       for (const row of rows) {
         const id = row.p.value.split('/').pop();
         if (byId.has(id)) continue;
@@ -289,10 +319,10 @@ async function main() {
   }
 
   fs.mkdirSync(path.dirname(OUT_PATH), { recursive: true });
-  const existing = fs.existsSync(OUT_PATH) ? JSON.parse(fs.readFileSync(OUT_PATH, 'utf8')) : {};
-  const out = args.includes('--refresh') ? {} : existing.groups ?? {};
-
   const only = flag('group');
+  const existing = fs.existsSync(OUT_PATH) ? JSON.parse(fs.readFileSync(OUT_PATH, 'utf8')) : {};
+  const out = args.includes('--refresh') && !only ? {} : existing.groups ?? {};
+  if (args.includes('--refresh') && only) delete out[only];
   const todo = GROUPS.filter((g) => (!only || g.key === only) && !out[g.key]);
   if (!todo.length) {
     console.log('Nothing to fetch. --refresh to start over, or --group <key> for one.');
