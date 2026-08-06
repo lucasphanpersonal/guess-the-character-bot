@@ -1,11 +1,11 @@
-// Builds data/seed/wikidata-people.json -- famous REAL people, grouped by what they are best
-// known for, for a category the bot had nothing in: actors, athletes, scientists, politicians,
-// religious figures and the rest.
+// Builds data/seed/wikidata-people.json -- famous real-world people and music groups, grouped
+// by what they are best known for, for a category the bot had nothing in: actors, athletes,
+// scientists, politicians, bands and the rest.
 //
 // SOURCE
 // Wikidata's SPARQL endpoint, the same one the fictional-character fetcher uses. No API key.
 //
-//   ?p wdt:P31 wd:Q5        instance of human
+//   ?p wdt:P31 wd:<QID>     instance of human or musical group
 //   ?p wdt:P106/P136 wd:<QID>    occupation or musical genre
 //   ?p wikibase:sitelinks ?n    how many language Wikipedias have an article on them
 //
@@ -19,7 +19,7 @@
 // cosplayer or a wax figure. For a real person that same property gives you a photograph of
 // the person, which is exactly right -- 99% of what this fetches arrives with one.
 //
-// ONE PERSON, ONE LIST
+// ONE ENTITY, ONE LIST
 // Wikidata gives Ronald Reagan both "politician" and "actor", and Albert Camus both "writer"
 // and "association football player" (he kept goal for Racing Universitaire d'Alger). Rather
 // than ask the query to resolve that -- which is what made it time out -- GROUPS is in
@@ -117,6 +117,16 @@ const GROUPS = [
     min: 10,
     genres: ['Q1192110', 'Q973150'],
   },
+  // Genre tags catch artists filed only as a general musician or singer. Like the regional
+  // lists above, these follow Musicians so the new lower floor fills its modern-artist gap
+  // without duplicating artists already established enough for the 50-sitelink general list.
+  { key: 'pop', list: 'Pop Artists', min: 10, genres: ['Q37073'] },
+  { key: 'rock', list: 'Rock Artists', min: 10, genres: ['Q11399'] },
+  // Groups are not people (P31 Q215380 rather than human), but they belong in this real-world
+  // category and make natural guessing-game subjects. K-pop precedes the general group list so
+  // its groups remain discoverable as their own list.
+  { key: 'kpopgroups', list: 'K-Pop Groups', min: 10, entityTypes: ['Q215380'], genres: ['Q213665'] },
+  { key: 'bands', list: 'Bands & Musical Groups', min: 10, entityTypes: ['Q215380'] },
   { key: 'actors', list: 'Actors', min: 60, qids: ['Q33999', 'Q10800557'] },
   // "Chinese" here covers the major Chinese entertainment industries recorded by Wikidata
   // citizenship: the PRC, Hong Kong, Taiwan, and Macao. It follows Actors so the general
@@ -162,12 +172,13 @@ const flag = (name) => {
 };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function peopleQuery(property, qid, lo, hi, citizenships = []) {
+function peopleQuery(entityType, property, qid, lo, hi, citizenships = []) {
   const citizenshipFilter = citizenships.length
     ? `\n  VALUES ?citizenship { ${citizenships.map((qid) => `wd:${qid}`).join(' ')} }\n  ?p wdt:P27 ?citizenship .`
     : '';
+  const propertyFilter = property ? `; wdt:${property} wd:${qid}` : '';
   return `SELECT ?p ?pLabel ?sitelinks ?img WHERE {
-  ?p wdt:P31 wd:Q5 ; wdt:${property} wd:${qid} ; wikibase:sitelinks ?sitelinks .
+  ?p wdt:P31 wd:${entityType}${propertyFilter} ; wikibase:sitelinks ?sitelinks .
   FILTER(?sitelinks >= ${lo} && ?sitelinks < ${hi})
   ${citizenshipFilter}
   OPTIONAL { ?p wdt:P18 ?img }
@@ -219,21 +230,22 @@ function bands(min) {
  * seconds and banding them would be twenty requests for no benefit. Only the heavy ones --
  * politician, association football player -- fall through to the bands.
  */
-async function fetchProperty(property, qid, min, citizenships) {
+async function fetchProperty(entityType, property, qid, min, citizenships) {
+  const filterLabel = property ? `${property}:${qid}` : `P31:${entityType}`;
   try {
-    const rows = await runSparql(peopleQuery(property, qid, min, SITELINK_CEILING, citizenships));
+    const rows = await runSparql(peopleQuery(entityType, property, qid, min, SITELINK_CEILING, citizenships));
     await sleep(PAUSE_MS);
     return rows;
   } catch {
-    console.log(`      · ${property}:${qid} too heavy in one query — falling back to sitelink bands`);
+    console.log(`      · ${filterLabel} too heavy in one query — falling back to sitelink bands`);
   }
 
   const rows = [];
   for (const [lo, hi] of bands(min)) {
     try {
-      rows.push(...(await runSparql(peopleQuery(property, qid, lo, hi, citizenships))));
+      rows.push(...(await runSparql(peopleQuery(entityType, property, qid, lo, hi, citizenships))));
     } catch (err) {
-      console.warn(`      ! ${property}:${qid} [${lo},${hi}) gave up: ${err.message}`);
+      console.warn(`      ! ${filterLabel} [${lo},${hi}) gave up: ${err.message}`);
     }
     await sleep(PAUSE_MS);
   }
@@ -246,22 +258,26 @@ async function fetchGroup(group) {
     ...(group.qids ?? []).map((qid) => ({ property: 'P106', qid })),
     ...(group.genres ?? []).map((qid) => ({ property: 'P136', qid })),
   ];
-  for (const { property, qid } of filters) {
-    const rows = await fetchProperty(property, qid, group.min, group.citizenships);
-    for (const row of rows) {
-      const id = row.p.value.split('/').pop();
-      if (byId.has(id)) continue;
-      const name = row.pLabel?.value ?? '';
-      // An unlabelled entity comes back as its own Q-number, which is not a person's name.
-      if (!name || /^Q\d+$/.test(name)) continue;
-      byId.set(id, {
-        id,
-        name,
-        sitelinks: Number(row.sitelinks.value),
-        image: row.img?.value ?? null,
-      });
+  if (!filters.length) filters.push({ property: null, qid: null });
+  for (const entityType of group.entityTypes ?? ['Q5']) {
+    for (const { property, qid } of filters) {
+      const rows = await fetchProperty(entityType, property, qid, group.min, group.citizenships);
+      for (const row of rows) {
+        const id = row.p.value.split('/').pop();
+        if (byId.has(id)) continue;
+        const name = row.pLabel?.value ?? '';
+        // An unlabelled entity comes back as its own Q-number, which is not playable text.
+        if (!name || /^Q\d+$/.test(name)) continue;
+        byId.set(id, {
+          id,
+          name,
+          sitelinks: Number(row.sitelinks.value),
+          image: row.img?.value ?? null,
+        });
+      }
+      const filterLabel = property ? `${property}:${qid}` : `P31:${entityType}`;
+      console.log(`    ${filterLabel}: ${byId.size} cumulative`);
     }
-    console.log(`    ${property}:${qid}: ${byId.size} cumulative`);
   }
   return [...byId.values()].sort((a, b) => b.sitelinks - a.sitelinks);
 }
@@ -294,18 +310,18 @@ async function main() {
       JSON.stringify(
         {
           fetchedAt: new Date().toISOString(),
-          source: 'Wikidata SPARQL (P31 human, P106 occupation/P136 genre, ranked by sitelinks)',
+          source: 'Wikidata SPARQL (P31 human/musical group, P106 occupation/P136 genre, ranked by sitelinks)',
           groups: out,
         },
         null,
         2
       )
     );
-    console.log(`  -> ${people.length} people, ${people.filter((p) => p.image).length} with a photo\n`);
+    console.log(`  -> ${people.length} entries, ${people.filter((p) => p.image).length} with an image\n`);
   }
 
   const total = Object.values(out).reduce((n, g) => n + g.people.length, 0);
-  console.log(`Done. ${total} people across ${Object.keys(out).length} groups -> ${OUT_PATH}`);
+  console.log(`Done. ${total} entries across ${Object.keys(out).length} groups -> ${OUT_PATH}`);
 }
 
 // Only when invoked directly -- seed-wikidata-people.js imports GROUPS for the priority

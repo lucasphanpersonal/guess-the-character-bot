@@ -1,12 +1,12 @@
 // Seeds the "Real People" category from data/seed/wikidata-people.json (built by
-// scripts/fetch-wikidata-people.js): actors, athletes, scientists, politicians, religious
-// figures, musicians and the rest, one list per field.
+// scripts/fetch-wikidata-people.js): actors, athletes, scientists, politicians, music groups
+// and the rest, one list per field.
 //
 // Everything the bot could deal until now was fictional, which quietly ruled out the version
 // of this game most people have actually played -- the one where the name on your forehead is
 // a real person.
 //
-// ONE PERSON, ONE LIST
+// ONE ENTITY, ONE LIST
 // Wikidata gives Ronald Reagan "politician" AND "actor", Albert Camus "writer" and
 // "association football player", Arnold Schwarzenegger three or four. Groups are processed in
 // the order fetch-wikidata-people.js declares them and the first list to claim somebody keeps
@@ -172,7 +172,7 @@ function main() {
     );
   }
 
-  console.log(`\n${dryRun ? 'Would create' : 'Created'} ${created} list(s), ${added} people added.`);
+  console.log(`\n${dryRun ? 'Would create' : 'Created'} ${created} list(s), ${added} entries added.`);
   if (skippedSmall) console.log(`${skippedSmall} list(s) skipped for being too small.`);
   if (!dryRun) {
     console.log(
