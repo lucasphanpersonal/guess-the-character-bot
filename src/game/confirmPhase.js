@@ -159,6 +159,8 @@ async function handleConfirmationButton(interaction) {
     if (!unlimited && state.rerollsLeft <= 0) {
       return interaction.reply({ content: "You're out of rerolls.", flags: MessageFlags.Ephemeral });
     }
+    // Acknowledge before the SQLite-backed draw so Discord never expires a slow interaction.
+    await interaction.deferUpdate();
     const otherPlayerId = game.checkTargetOf(playerId);
     const currentName = game.headByPlayer[otherPlayerId].name;
     const excludeNames = new Set([
@@ -167,7 +169,10 @@ async function handleConfirmationButton(interaction) {
     ]);
     const replacement = getRandomCharacterExcluding(lobby.listIds, excludeNames, lobby.difficulty);
     if (!replacement) {
-      return interaction.reply({ content: 'No other characters available in this list to reroll to.', flags: MessageFlags.Ephemeral });
+      return interaction.followUp({
+        content: 'No other characters available in this list to reroll to.',
+        flags: MessageFlags.Ephemeral,
+      });
     }
 
     // Recorded before the swap, while we still know what was rejected. Enough different
@@ -181,7 +186,7 @@ async function handleConfirmationButton(interaction) {
 
     // Rebuilt from the same helper as the opening DM, after the swap, so the new character
     // arrives labelled with whose it is exactly as the first one was.
-    await interaction.update(checkMessagePayload(game, playerId, channelId));
+    await interaction.editReply(checkMessagePayload(game, playerId, channelId));
     // Everyone else is holding a card that just changed under them.
     await fanOutReference(game, otherPlayerId);
 

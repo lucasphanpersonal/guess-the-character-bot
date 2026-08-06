@@ -384,8 +384,14 @@ module.exports = {
     const game = ctx.lobby.game;
     const originallyShownToP1 = game.headByPlayer.p2.name; // p1 was DM'd p2's head
 
+    ctx.recorder.clear();
     await confirmPhase.handleConfirmationButton(
       createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `reroll:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+    assert.deepEqual(
+      ctx.recorder.sent.slice(0, 2).map((message) => message.target),
+      ['defer:p1', 'editreply:p1'],
+      'the button is acknowledged before its replacement card is rendered'
     );
     const afterFirst = game.headByPlayer.p2.name;
     assert.notEqual(afterFirst, originallyShownToP1);

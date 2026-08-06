@@ -153,6 +153,7 @@ function createButtonInteraction({ client, userId, customId, recorder, guildId, 
       return { resource: { message } };
     },
     fetchReply: async () => recorder.record(`fetchReply:${userId}`, '', channelId),
+    editReply: async (payload) => recorder.record(`editreply:${userId}`, payload, channelId),
     followUp: async (payload) => recorder.record(`followup:${userId}`, payload),
     deferUpdate: async () => recorder.record(`defer:${userId}`, ''),
     showModal: async (modal) => recorder.record(`modal:${userId}`, JSON.stringify(modal.toJSON())),
