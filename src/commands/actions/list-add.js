@@ -1,5 +1,11 @@
 const { MessageFlags } = require('discord.js');
-const { getListByName, addCharacter, searchListNames, searchCharactersInLists } = require('../../db/characterLists');
+const { 
+  getListByName, 
+  addCharacter, 
+  searchListNames, 
+  searchCharactersInLists, 
+  setCharacterImage 
+} = require('../../db/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
@@ -9,7 +15,10 @@ module.exports = {
     const characterName = interaction.options.getString('character').trim();
     const imageUrl = interaction.options.getString('image')?.trim() || null;
     if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
-      return interaction.reply({ content: 'Image must be a URL starting with http:// or https://.', flags: MessageFlags.Ephemeral });
+      return interaction.reply({ 
+        content: 'Image must be a URL starting with http:// or https://.', 
+        flags: MessageFlags.Ephemeral 
+      });
     }
     const list = getListByName(interaction.guildId, listName);
     if (!list) {
@@ -20,13 +29,23 @@ module.exports = {
     }
     try {
       addCharacter(list.id, characterName, interaction.user.id, imageUrl);
+      return interaction.reply(`✅ Added **${characterName}** to **${listName}**.`);
     } catch (err) {
       if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        return interaction.reply({ content: `**${characterName}** is already in **${listName}**.`, flags: MessageFlags.Ephemeral });
+        // If an image URL was provided, update the existing character's image in-place
+        if (imageUrl) {
+          setCharacterImage(list.id, characterName, imageUrl);
+          return interaction.reply(`✅ Updated image for **${characterName}** in **${listName}**.`);
+        }
+        
+        // Otherwise, throw the standard duplicate error
+        return interaction.reply({ 
+          content: `**${characterName}** is already in **${listName}**.`, 
+          flags: MessageFlags.Ephemeral 
+        });
       }
       throw err;
     }
-    return interaction.reply(`✅ Added **${characterName}** to **${listName}**.`);
   },
   async autocomplete(interaction) {
     const focused = interaction.options.getFocused(true);
