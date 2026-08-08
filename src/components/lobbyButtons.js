@@ -13,7 +13,7 @@ const {
 } = require('discord.js');
 const GameManager = require('../game/GameManager');
 const engine = require('../game/engine');
-const { buildLobbyBoardPayload, MIN_PLAYERS, MAX_ASSIGNABLE_PLAYERS } = require('../game/lobbyBoard');
+const { buildLobbyBoardPayload, refreshLobbyBoard, MIN_PLAYERS, MAX_ASSIGNABLE_PLAYERS } = require('../game/lobbyBoard');
 const {
   FIELDS,
   fieldsForMode,
@@ -260,8 +260,21 @@ async function handle(interaction) {
   }
 
   if (action === 'leave') {
+    const wasHost = userId === lobby.hostId;
     if (!lobby.removePlayer(userId)) {
       return interaction.reply(ephemeral("You're not in the lobby."));
+    }
+    // Mirrors /lobby leave: the host leaving has to cancel the lobby, not just remove them
+    // from the player list. hostId is never reassigned, and Start plus every settings
+    // control are gated on being the host -- so leaving it pointed at someone no longer in
+    // the lobby stranded everyone else in it with no host to start and no way out short of
+    // a Manage Server member running /lobby end.
+    if (wasHost) {
+      lobby.status = 'CANCELLED';
+      await interaction.deferUpdate();
+      await refreshLobbyBoard(lobby);
+      GameManager.endLobby(channelId);
+      return interaction.followUp('Host left, so the lobby has been cancelled.');
     }
     return interaction.update(buildLobbyBoardPayload(lobby));
   }

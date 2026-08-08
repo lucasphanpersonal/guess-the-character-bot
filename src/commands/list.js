@@ -70,6 +70,7 @@ module.exports = {
             .setName('category')
             .setDescription('Category or media type, e.g. Anime or Video Games')
             .setRequired(true)
+            .setAutocomplete(true)
         )
     )
     .addSubcommand((sub) =>

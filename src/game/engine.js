@@ -53,8 +53,18 @@ function countdownCheckpoints(turnSeconds) {
 
 // Only clears pending timers -- the turn board message is deliberately left alone so the
 // caller can render a final state on it before the next turn replaces it.
+//
+// game.timer is dropped, not just cleared: endTurn calls this before its own run of awaited
+// Discord API calls (refreshTurnBoard, announceCompletion, startTurn's channel.send), and the
+// timerWatchdog's periodic pass can land in that window. A cleared-but-still-referenced timer
+// still answers expiresAt() with the OLD turn's deadline, which is in the past by the time a
+// turn is ending near its own limit -- so the watchdog would call handleTimeout on a turn that
+// is already over (or, worse, already replaced by the next one), pausing a player who just
+// started their turn. With game.timer null in that window, expiresAt() reads as "nothing to
+// enforce" until startTurn hands out a real one.
 function clearTimers(game) {
   game.timer?.clear();
+  game.timer = null;
   for (const handle of game.countdownHandles) clearTimeout(handle);
   game.countdownHandles = [];
   if (game.autoSurrenderHandle) {
@@ -258,7 +268,7 @@ async function maybeBeginPlay(client, lobby) {
   // Claim the phase before retiring DM buttons. Two final confirmations can finish their
   // interaction updates together; only the first may start the turn.
   lobby.status = 'IN_PROGRESS';
-  await lockConfirmations(game);
+  await lockConfirmations(game, lobby.channelId);
   await refreshLobbyBoard(lobby);
   await sendSpectatorDMs(client, lobby);
   const voiceResult = await voice.joinVoiceForGame(client, lobby);
@@ -324,6 +334,33 @@ async function startTurn(client, lobby) {
   scheduleCountdown(lobby);
 }
 
+/**
+ * Runs 30 seconds after a turn's last-chance timeout, if the player never acted on it --
+ * exported (rather than inlined in the setTimeout below) so the tests can drive it directly
+ * instead of waiting on the real 30 seconds, the same way timerWatchdog.checkOverdue is
+ * driven directly instead of waiting on its interval.
+ *
+ * The last player standing has nobody to pass to, so going quiet isn't a choice to give up
+ * the way pressing the (relabelled) Give Up button is -- see submitPass. Ending the game
+ * underneath a player who is simply still thinking, or briefly away, is worse than just
+ * handing them another turn: nextActiveIndex() finds nobody else active and loops the
+ * rotation straight back to them, so this reads as an ordinary "turn over" and their count
+ * keeps climbing instead of the game ending in a forced surrender nobody chose.
+ */
+async function checkAutoSurrender(client, lobby, currentPlayerId) {
+  const game = lobby.game;
+  // Double-check the game is still running and it's still the same player's turn.
+  if (!game || game.finished || game.currentPlayerId !== currentPlayerId || !game.paused) return;
+
+  if (game.activePlayers.length === 1) {
+    await endTurn(client, lobby, { correct: false, gaveUp: false });
+    return;
+  }
+
+  // Auto-surrender: the player never acted on their last-chance opportunity.
+  await submitForfeit(client, lobby, currentPlayerId);
+}
+
 async function handleTimeout(client, lobby) {
   const game = lobby.game;
   if (!game || game.finished) return;
@@ -331,7 +368,7 @@ async function handleTimeout(client, lobby) {
   // The board itself switches to the amber "last chance" state -- no extra message needed.
   await refreshTurnBoard(game, lobby.channelId);
 
-  // Schedule auto-surrender if the player doesn't act within 15 seconds of the last-chance
+  // Schedule auto-surrender if the player doesn't act within 30 seconds of the last-chance
   // timeout. This prevents an AFK player from parking indefinitely at the timeout state.
   // Clear any prior auto-surrender timer from a previous turn first.
   if (game.autoSurrenderHandle) {
@@ -339,12 +376,8 @@ async function handleTimeout(client, lobby) {
   }
 
   const currentPlayerId = game.currentPlayerId;
-  game.autoSurrenderHandle = setTimeout(async () => {
-    // Double-check the game is still running and it's still the same player's turn.
-    if (game.finished || game.currentPlayerId !== currentPlayerId || !game.paused) return;
-
-    // Auto-surrender: the player never acted on their last-chance opportunity.
-    await submitForfeit(client, lobby, currentPlayerId).catch((err) => console.error(err));
+  game.autoSurrenderHandle = setTimeout(() => {
+    checkAutoSurrender(client, lobby, currentPlayerId).catch((err) => console.error(err));
   }, 30000); // 30 seconds for the last-chance window
 }
 
@@ -693,6 +726,7 @@ module.exports = {
   submitForfeit,
   handlePass,
   handleTimeout,
+  checkAutoSurrender,
   maybeBeginPlay,
   recordAbandonedGame,
   characterMessage,

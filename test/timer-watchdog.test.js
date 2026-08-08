@@ -87,6 +87,30 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // clearTimers drops game.timer entirely rather than leaving a cleared-but-stale object
+  // behind. Without that, a turn that ends near its own deadline (a correct guess in the
+  // last few seconds, say) leaves game.timer answering expiresAt() with the deadline that
+  // JUST passed, for however long endTurn's run of awaited Discord calls takes before
+  // startTurn hands out a real timer for the NEXT turn. A watchdog pass landing in that
+  // window would see "overdue" and pause a turn that never had a timeout to begin with --
+  // this is the mechanism, tested directly rather than by racing real setTimeouts.
+  async "a turn just cleared by clearTimers reports no deadline, so the watchdog can't act on the stale one"() {
+    const ctx = await startedGame({ turnSeconds: 90 });
+    const { lobby } = ctx;
+    const oldExpiry = lobby.game.timer.expiresAt();
+
+    engine.clearTimers(lobby.game);
+    assert.equal(lobby.game.timer, null, 'the old timer is dropped, not just stopped');
+
+    // Even asked about a `now` well past the turn that just ended, there's nothing left to
+    // find overdue -- exactly the window between endTurn clearing the old turn and startTurn
+    // assigning the next one.
+    const expired = await timerWatchdog.checkOverdue(ctx.client, oldExpiry + 5000);
+    assert.equal(expired.turns, 0);
+    assert.equal(lobby.game.paused, false, 'nothing paused a turn that was never actually overdue');
+    cleanup(ctx);
+  },
+
   async 'an already-paused turn is not expired a second time'() {
     const ctx = await startedGame({ turnSeconds: 90 });
     await engine.handleTimeout(ctx.client, ctx.lobby);

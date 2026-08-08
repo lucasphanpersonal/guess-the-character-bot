@@ -246,6 +246,48 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // The last player standing has nobody to pass to -- pressing the (relabelled) Give Up
+  // button is a real, deliberate surrender, but going quiet through the 30s last-chance
+  // window is not a choice, and used to be treated as one anyway (see checkAutoSurrender).
+  async "the last player standing isn't auto-surrendered for going quiet -- they just keep guessing"() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+
+    await guess(ctx, 'p1', true); // p1 done on turn 1, p2 is now alone
+    assert.equal(game.activePlayers.length, 1);
+    assert.equal(game.currentPlayerId, 'p2');
+
+    await engine.handleTimeout(ctx.client, ctx.lobby); // the ordinary timeout: paused, last chance
+    assert.equal(game.paused, true);
+
+    // The 30s grace period after that elapses with no action from p2.
+    await engine.checkAutoSurrender(ctx.client, ctx.lobby, 'p2');
+
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'not surrendered, not ended');
+    assert.equal(game.surrendered.has('p2'), false);
+    assert.equal(game.currentPlayerId, 'p2', 'nobody else to hand the turn to -- it comes right back');
+    assert.equal(game.turnsFor('p2'), 2, 'a fresh turn was handed out, not a forced game-over');
+    assert.equal(game.paused, false, 'the new turn starts live, not still paused');
+    cleanup(ctx);
+  },
+
+  // Contrast with the same 30s silence when somebody else is still in the running: there the
+  // auto-surrender is exactly what's wanted, so it must survive this change untouched.
+  async 'a player who is NOT last is still auto-surrendered for going quiet through the grace period'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+    assert.equal(game.activePlayers.length, 2);
+
+    await engine.handleTimeout(ctx.client, ctx.lobby);
+    await engine.checkAutoSurrender(ctx.client, ctx.lobby, 'p1');
+
+    assert.equal(game.surrendered.has('p1'), true);
+    assert.equal(game.currentPlayerId, 'p2', 'the turn passed to the other player');
+    cleanup(ctx);
+  },
+
   // The three tests below are the regression check on the whole scoring change: at two
   // players the new rule must pick the same WINNER the rebuttal rule did in every case. What
   // it deliberately does not preserve is when the game stops -- nobody is cut off any more.

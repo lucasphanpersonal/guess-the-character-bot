@@ -40,39 +40,63 @@ function characterMessage(description, characters) {
   return { content: description, embeds };
 }
 
-function buildConfirmRow(channelId, gameInstanceId, rerollsLeft, { allowReroll = true, canDropList = false } = {}) {
+function buildConfirmRow(
+  channelId,
+  gameInstanceId,
+  rerollsLeft,
+  { allowReroll = true, canDropList = false, imageButton = null } = {}
+) {
   const unlimited = rerollsLeft === -1;
   const confirmBtn = new ButtonBuilder()
     .setCustomId(`confirm:${channelId}:${gameInstanceId}`)
     .setLabel(allowReroll ? 'Good to go' : 'Ready')
     .setEmoji('✅')
     .setStyle(ButtonStyle.Success);
-  // In audience-vote mode the crowd already decided, so the reroll button is omitted
-  // entirely rather than shown disabled (which would read as a bug).
-  if (!allowReroll) return new ActionRowBuilder().addComponents(confirmBtn);
 
-  const rerollBtn = new ButtonBuilder()
-    .setCustomId(`reroll:${channelId}:${gameInstanceId}`)
-    .setLabel(unlimited ? 'Reroll' : rerollsLeft > 0 ? `Reroll (${rerollsLeft} left)` : 'No rerolls left')
-    .setEmoji('🔁')
-    .setStyle(ButtonStyle.Secondary)
-    .setDisabled(!unlimited && rerollsLeft <= 0);
+  const components = [confirmBtn];
 
-  const row = new ActionRowBuilder().addComponents(confirmBtn, rerollBtn);
-  // The moment somebody is staring at a character they don't recognise is the only moment
-  // they will ever want to curate, so the curation lives here rather than in a command they
-  // would have to remember twenty minutes later.
-  if (canDropList) {
-    row.addComponents(
-      new ButtonBuilder()
-        .setCustomId(`droplist:${channelId}:${gameInstanceId}`)
-        .setLabel('Never deal this show')
-        .setEmoji('🚫')
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(!unlimited && rerollsLeft <= 0)
-    );
+  // In audience-vote mode the crowd already decided, so the reroll button (and the drop-list
+  // button riding on it) is omitted entirely rather than shown disabled, which would read as
+  // a bug. The image button is an unrelated decision, so it isn't gated on this.
+  if (allowReroll) {
+    const rerollBtn = new ButtonBuilder()
+      .setCustomId(`reroll:${channelId}:${gameInstanceId}`)
+      .setLabel(unlimited ? 'Reroll' : rerollsLeft > 0 ? `Reroll (${rerollsLeft} left)` : 'No rerolls left')
+      .setEmoji('🔁')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(!unlimited && rerollsLeft <= 0);
+    components.push(rerollBtn);
+
+    // The moment somebody is staring at a character they don't recognise is the only moment
+    // they will ever want to curate, so the curation lives here rather than in a command they
+    // would have to remember twenty minutes later.
+    if (canDropList) {
+      components.push(
+        new ButtonBuilder()
+          .setCustomId(`droplist:${channelId}:${gameInstanceId}`)
+          .setLabel('Never deal this show')
+          .setEmoji('🚫')
+          .setStyle(ButtonStyle.Danger)
+          .setDisabled(!unlimited && rerollsLeft <= 0)
+      );
+    }
   }
-  return row;
+
+  if (imageButton) components.push(imageButton);
+
+  return new ActionRowBuilder().addComponents(components);
+}
+
+// Offered whenever the character has a real row behind it to save to -- hand-picked freeform
+// characters from /lobby set-characters (see Game.head) have none. Labelled by whether one is
+// already set, since "some of them are inaccurate" is as much the point as characters that
+// never had an image at all.
+function buildImageButton(channelId, gameInstanceId, hasImage) {
+  return new ButtonBuilder()
+    .setCustomId(`image:${channelId}:${gameInstanceId}`)
+    .setLabel(hasImage ? 'Replace image' : 'Add image')
+    .setEmoji('🖼️')
+    .setStyle(ButtonStyle.Secondary);
 }
 
 // What a locked-in player is left holding: a way back out, until everyone is in.
@@ -125,9 +149,37 @@ function checkMessagePayload(game, checkerId, channelId) {
         // Only offerable when we know which list the character came from, which rules out
         // hand-assigned characters from /lobby set-characters.
         canDropList: game.rerollAllowed && character.listId != null,
+        imageButton:
+          character.listId != null ? buildImageButton(channelId, game.gameInstanceId, !!character.imageUrl) : null,
       }),
     ],
   };
+}
+
+/**
+ * The check message once play is under way: the Good to go / Reroll / Unlock buttons are
+ * gone (that decision is made), but the image button isn't a confirm-phase control -- it's a
+ * standing "fix this if it's wrong" offer, and a bad image is exactly as likely to be noticed
+ * mid-game, staring at it turn after turn, as it is in the few seconds before confirming.
+ */
+function lockedCheckPayload(game, checkerId, channelId) {
+  const ownerId = game.checkTargetOf(checkerId);
+  const character = game.headByPlayer[ownerId];
+  const owner = game.nameOf(ownerId);
+  const components = character.listId != null
+    ? [new ActionRowBuilder().addComponents(buildImageButton(channelId, game.gameInstanceId, !!character.imageUrl))]
+    : [];
+  return {
+    content: `✅ Locked in — the game is under way. This is **${owner}'s character**; use it to answer their questions.`,
+    embeds: [confirmCharacterEmbed(character, owner)],
+    components,
+  };
+}
+
+/** Whichever of the two check-message shapes is current, so a post-lock-in image save can
+ * re-render the message it came from without the caller needing to know which phase it's in. */
+function checkStatePayload(game, checkerId, channelId, locked) {
+  return locked ? lockedCheckPayload(game, checkerId, channelId) : checkMessagePayload(game, checkerId, channelId);
 }
 
 // The characters a player needs to recognise but is NOT the checker for: everyone except
@@ -213,53 +265,41 @@ async function fanOutReference(game, changedPlayerId) {
 }
 
 /**
- * Retires the ↩️ Unlock buttons once play actually begins.
+ * Retires the Good to go / Reroll / Unlock buttons once play actually begins.
  *
  * Being able to change your mind only means anything while everyone is still deciding, so
  * the moment the game starts those buttons stop being an option and become a lie. The DM
  * itself stays -- it is the reference for the character you spend the game answering
  * questions about.
  */
-async function retireConfirmations(game, contentForPlayer, { clearEmbeds = false } = {}) {
+async function retireConfirmations(game, payloadForPlayer) {
   await Promise.all(
     game.turnOrder.map(async (playerId) => {
       const message = game.confirmState[playerId]?.checkMessage;
       if (!message) return;
+      const payload = payloadForPlayer(playerId);
       try {
-        const payload = {
-          content: contentForPlayer(playerId),
-          components: [],
-        };
-        // A successful start leaves the character card as a useful in-game reference. A
-        // cancelled start must not leave a stale character visible before a retry.
-        if (clearEmbeds) payload.embeds = [];
         await message.edit(payload);
       } catch {
         // Nothing to be done about a DM we can no longer edit.
       }
-      untrackBoard(message);
+      // A payload with no components left has nothing left to sweep on restart. One that
+      // still carries the image button (the character came from a list) stays tracked so a
+      // restart strips that button cleanly too, same as every other live board.
+      if (!payload.components?.length) untrackBoard(message);
     })
   );
 }
 
-async function lockConfirmations(game) {
-  return retireConfirmations(
-    game,
-    (playerId) =>
-      `✅ Locked in — the game is under way. This is **${game.nameOf(game.checkTargetOf(playerId))}'s character; ` +
-      'use it to answer their questions.'
-  );
+async function lockConfirmations(game, channelId) {
+  return retireConfirmations(game, (playerId) => lockedCheckPayload(game, playerId, channelId));
 }
 
 async function cancelConfirmations(game) {
   const cancelledContent =
     '⚠️ The game did not start because a player could not receive their DMs. ' +
     'Ask the host to try again once every player enables DMs from server members.';
-  await retireConfirmations(
-    game,
-    () => cancelledContent,
-    { clearEmbeds: true }
-  );
+  await retireConfirmations(game, () => ({ content: cancelledContent, embeds: [], components: [] }));
   await Promise.all(
     game.turnOrder.flatMap((playerId) =>
       (game.confirmState[playerId]?.referenceMessages ?? []).map(async (message) => {
@@ -343,7 +383,9 @@ module.exports = {
   chunk,
   characterMessage,
   buildUnlockRow,
+  buildImageButton,
   checkMessagePayload,
+  checkStatePayload,
   sendConfirmDMs,
   fanOutReference,
   lockConfirmations,

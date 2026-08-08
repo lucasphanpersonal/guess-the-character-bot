@@ -21,6 +21,9 @@ const HANDLERS = {
   reroll: (interaction) => confirmPhase.handleConfirmationButton(interaction),
   // "Never deal this show again", alongside Reroll on the confirmation DM.
   droplist: (interaction) => confirmPhase.handleConfirmationButton(interaction),
+  // Add/replace image button on the check DM, and the modal it opens.
+  image: (interaction) => confirmPhase.handleImageButton(interaction),
+  'image-submit': (interaction) => confirmPhase.handleImageModalSubmit(interaction),
   // Lobby board buttons.
   lobby: (interaction) => lobbyButtons.handle(interaction),
   // Turn board buttons and the guess modal.

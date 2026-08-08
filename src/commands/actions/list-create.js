@@ -1,5 +1,5 @@
 const { MessageFlags } = require('discord.js');
-const { createList, getListByName } = require('../../db/characterLists');
+const { createList, getListByName, listCategoriesWithCounts } = require('../../db/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
@@ -21,5 +21,16 @@ module.exports = {
       `✅ Created character list **${name}**, enabled for pooled draws. ` +
         `Add characters with \`/list add list:${name} character:<name>\`.`
     );
+  },
+  // Suggests categories already in use, so "Anime" and "Anim" don't end up as two different
+  // categories by typo -- but nothing stops typing a genuinely new one, same as everywhere
+  // else in this bot an autocompleted string isn't a fixed set of choices.
+  async autocomplete(interaction) {
+    const query = interaction.options.getFocused().toLowerCase();
+    const categories = listCategoriesWithCounts(interaction.guildId)
+      .map((c) => c.category)
+      .filter((c) => c.toLowerCase().includes(query))
+      .slice(0, 25);
+    return interaction.respond(categories.map((name) => ({ name, value: name })));
   },
 };

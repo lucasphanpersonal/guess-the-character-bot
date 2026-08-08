@@ -83,6 +83,7 @@ module.exports = {
       `confirm:${channelId}:${gameInstanceId}`,
       `reroll:${channelId}:${gameInstanceId}`,
       `droplist:${channelId}:${gameInstanceId}`,
+      `image:${channelId}:${gameInstanceId}`,
     ]);
     GameManager.endLobby(channelId);
   },

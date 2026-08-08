@@ -47,4 +47,24 @@ module.exports = {
     assert.equal(lists.getEnabledLists(guildId).length, 0);
     assert.equal((recorder.allText().match(/Manage Server permission/g) ?? []).length, 6);
   },
+
+  // Suggests categories already in use, so a typo doesn't silently start a second "Anim"
+  // category next to "Anime" -- but it's a suggestion, not a fixed set of choices, so it
+  // never blocks a genuinely new one.
+  async "/list create's category argument autocompletes from this guild's existing categories"() {
+    const guildId = `permissions-guild-${++counter}`;
+    db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+    lists.createList(guildId, 'Naruto', 'owner', 'Anime');
+    lists.createList(guildId, 'One Piece', 'owner', 'Anime');
+    lists.createList(guildId, 'Pokemon', 'owner', 'Video Games');
+    const recorder = createRecorder();
+
+    await create.autocomplete(interaction(recorder, guildId, { __focused: { name: 'category', value: 'ani' } }));
+
+    assert.deepEqual(
+      JSON.parse(recorder.lastMatching('autocomplete:member').content),
+      [{ name: 'Anime', value: 'Anime' }],
+      'matches case-insensitively and excludes categories that do not match'
+    );
+  },
 };

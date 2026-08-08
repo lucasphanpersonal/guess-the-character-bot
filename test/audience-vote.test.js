@@ -352,8 +352,9 @@ module.exports = {
     await click(voted, 'host', 'close');
     const votedDm = voted.recorder.lastMatching('dm:p1');
     const votedButtons = votedDm.payload.components[0].toJSON().components;
-    assert.equal(votedButtons.length, 1, 'confirm only');
+    assert.equal(votedButtons.length, 2, 'confirm + image (drawn from a real list, so it has one to offer)');
     assert.equal(votedButtons[0].label, 'Ready');
+    assert.equal(votedButtons[1].label, 'Add image');
     assert.match(votedDm.content, /chosen by the audience/i);
     cleanup(voted);
 

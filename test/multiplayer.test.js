@@ -215,10 +215,12 @@ module.exports = {
     await confirmAll(ctx);
     assert.equal(ctx.lobby.status, 'IN_PROGRESS');
 
-    // Every check DM is stripped of its button, so "Unlock" cannot sit on a running game.
+    // "Unlock" cannot sit on a running game, so it's gone -- but the image button stays,
+    // since a wrong image is just as likely to be spotted mid-game as before confirming.
     for (const id of ctx.players) {
       const last = ctx.recorder.lastMatching(`dm:${id}`);
-      assert.deepEqual(last.payload.components, [], `${id}'s unlock button is gone`);
+      const ids = last.payload.components[0].toJSON().components.map((c) => c.custom_id);
+      assert.deepEqual(ids, [`image:${ctx.channelId}:${game.gameInstanceId}`], `${id}'s unlock button is gone`);
       assert.match(last.content, /game is under way/);
       assert.match(last.content, /character/, 'and it still says whose character it is');
     }

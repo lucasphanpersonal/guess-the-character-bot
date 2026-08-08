@@ -7,7 +7,7 @@
 //
 // Rendering lives in characterDM.js; this file is only the decisions.
 
-const { MessageFlags } = require('discord.js');
+const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
 const Game = require('./Game');
 const GameManager = require('./GameManager');
 const {
@@ -15,9 +15,10 @@ const {
   recordReroll,
   setListsEnabled,
   getListsByIds,
+  setCharacterImage,
   REROLL_DEMOTE_THRESHOLD,
 } = require('../db/characterLists');
-const { buildUnlockRow, checkMessagePayload, fanOutReference } = require('./characterDM');
+const { buildUnlockRow, checkMessagePayload, checkStatePayload, fanOutReference } = require('./characterDM');
 const { requireManageGuild } = require('../util/permissions');
 
 // Required lazily, inside the handler below, rather than at the top of the file: engine.js
@@ -204,4 +205,73 @@ async function handleConfirmationButton(interaction) {
   }
 }
 
-module.exports = { handleConfirmationButton };
+// Shared by the image button and its modal submission: finds the game this control belongs
+// to and the character the clicking player is the designated checker for. Unlike
+// handleConfirmationButton's guard, this deliberately does NOT require lobby.status ===
+// 'CONFIRMING' -- a bad image is just as likely to be spotted mid-game as in the few seconds
+// before confirming, and the button stays on the DM for exactly that reason.
+function resolveCheckerCharacter(interaction) {
+  const [, channelId, gameInstanceId] = interaction.customId.split(':');
+  const lobby = GameManager.getLobby(channelId);
+  const game = lobby?.game;
+  const playerId = interaction.user.id;
+  if (!lobby || !game || !game.confirmState?.[playerId] || (gameInstanceId && gameInstanceId !== game.gameInstanceId)) {
+    return { error: 'This confirmation has expired.' };
+  }
+  const character = game.headByPlayer[game.checkTargetOf(playerId)];
+  // Hand-picked characters from /lobby set-characters (see Game.head) have no list behind
+  // them, so there's no row to save an image to.
+  if (character.listId == null) {
+    return { error: "This character wasn't drawn from a list, so there's nowhere to save an image for it." };
+  }
+  return { lobby, game, channelId, gameInstanceId, playerId, character };
+}
+
+function buildImageModal(channelId, gameInstanceId, character) {
+  const modal = new ModalBuilder().setCustomId(`image-submit:${channelId}:${gameInstanceId}`).setTitle('Character image');
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('url')
+        .setLabel(`Image URL for ${character.name}`.slice(0, 45))
+        .setStyle(TextInputStyle.Short)
+        .setValue(character.imageUrl ?? '')
+        .setPlaceholder('https://...')
+        .setMaxLength(500)
+        .setRequired(true)
+    )
+  );
+  return modal;
+}
+
+async function handleImageButton(interaction) {
+  const resolved = resolveCheckerCharacter(interaction);
+  if (resolved.error) return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+  // showModal has to be the FIRST response to the interaction -- it can't follow a defer.
+  return interaction.showModal(buildImageModal(resolved.channelId, resolved.gameInstanceId, resolved.character));
+}
+
+async function handleImageModalSubmit(interaction) {
+  const resolved = resolveCheckerCharacter(interaction);
+  if (resolved.error) return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+  const { lobby, game, channelId, playerId, character } = resolved;
+
+  const url = interaction.fields.getTextInputValue('url').trim();
+  if (!/^https?:\/\//i.test(url)) {
+    return interaction.reply({
+      content: 'Image must be a URL starting with http:// or https://. Nothing was changed.',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const ownerId = game.checkTargetOf(playerId);
+  setCharacterImage(character.listId, character.name, url);
+  character.imageUrl = url; // keep the in-memory head in sync with the row just written
+
+  await interaction.update(checkStatePayload(game, playerId, channelId, lobby.status !== 'CONFIRMING'));
+  // Everyone else holding this character as a reference card is looking at the old image.
+  await fanOutReference(game, ownerId);
+  return interaction.followUp({ content: `🖼️ Saved the image for **${character.name}**.`, flags: MessageFlags.Ephemeral });
+}
+
+module.exports = { handleConfirmationButton, handleImageButton, handleImageModalSubmit };
