@@ -474,12 +474,20 @@ async function announceCompletion(client, lobby, playerId) {
   const stillGuessing = game.activePlayers.length;
   const channel = await getChannel(client, lobby);
   const tail = stillGuessing ? ` ${stillGuessing} still guessing.` : '';
-  await channel.send(
-    characterMessage(
-      `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
-      [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
-    )
-  );
+  // Best-effort: this is a cosmetic history message. A transient send failure (rate limit,
+  // momentary 5xx, channel briefly unreachable) must never propagate, because endTurn has
+  // already recorded the turn resolved -- letting it throw here would skip rotation
+  // advancement (startTurn/finalizeGame) with no way to re-drive it, wedging the game.
+  try {
+    await channel.send(
+      characterMessage(
+        `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
+        [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
+      )
+    );
+  } catch (err) {
+    console.warn('[engine] Could not announce completion:', err.message);
+  }
 }
 
 async function endTurn(client, lobby, { correct, gaveUp = false }) {
