@@ -234,8 +234,11 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // There is no auto-surrender, so a player who goes quiet parks the game forever and
-  // /lobby end is the remedy. It used to bin everybody else's finished game along with it.
+  // A player who goes quiet while others are still guessing is auto-surrendered, but when
+  // they are the last one left (as here, once everyone else has finished or passed) there is
+  // nobody to pass to and the game parks forever -- /lobby end is the remedy. It used to bin
+  // everybody else's finished game along with it. Here the host ends it directly rather than
+  // waiting on the grace timer, so the scenario doesn't depend on the timer at all.
   async 'ending a stuck game keeps the results of whoever already finished'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);

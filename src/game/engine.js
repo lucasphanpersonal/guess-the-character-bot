@@ -357,8 +357,10 @@ async function checkAutoSurrender(client, lobby, currentPlayerId) {
     return;
   }
 
-  // Auto-surrender: the player never acted on their last-chance opportunity.
-  await submitForfeit(client, lobby, currentPlayerId);
+  // Auto-surrender: the player never acted on their last-chance opportunity. This is
+  // involuntary -- they chose nothing by going quiet -- so it is recorded as a plain loss,
+  // not a `gave_up`. See submitForfeit's `voluntary` flag and Game.standings().
+  await submitForfeit(client, lobby, currentPlayerId, { voluntary: false });
 }
 
 async function handleTimeout(client, lobby) {
@@ -371,6 +373,15 @@ async function handleTimeout(client, lobby) {
   // Schedule auto-surrender if the player doesn't act within 30 seconds of the last-chance
   // timeout. This prevents an AFK player from parking indefinitely at the timeout state.
   // Clear any prior auto-surrender timer from a previous turn first.
+  //
+  // LIMITATION: this is a plain setTimeout and is NOT enforced by timerWatchdog, which only
+  // re-checks turn timers and vote deadlines against the wall clock (see timerWatchdog.js). If
+  // the host machine sleeps or the event loop stalls while this timer is pending, it fires late
+  // by however long the process was frozen rather than at the wall-clock deadline. The turn
+  // timer that precedes it IS watchdog-enforced, so a sleeping machine still reaches the
+  // last-chance state on wake; only the 30s grace after it can drift. `/lobby end` remains the
+  // guaranteed manual exit. Left as-is deliberately: promoting this to a watchdog-tracked
+  // deadline is possible but not worth the extra state for a 30s grace window.
   if (game.autoSurrenderHandle) {
     clearTimeout(game.autoSurrenderHandle);
   }
@@ -549,15 +560,18 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
  * for everyone. That is a two-player assumption surviving into six-player games: one person
  * with a dying laptop should not be able to strand five.
  *
- * They leave with no turn count, recorded as `gave_up`, which is the truth: they chose to
- * stop. Everyone else plays on.
+ * A voluntary leave (`/lobby leave`, the default) has no turn count and is recorded as
+ * `gave_up`, which is the truth: they chose to stop. An involuntary one -- `voluntary: false`,
+ * used by checkAutoSurrender when a player goes AFK through the last-chance grace period -- is
+ * recorded as a plain loss instead, because going quiet is not a choice to surrender. Both
+ * leave the rotation; only the intent behind the exit differs. Everyone else plays on.
  *
  * If it is their turn, this goes through endTurn so the rotation advances and the resolution
  * guard applies -- a forfeit racing a judgement must not resolve the same turn twice. If it is
  * not their turn, nothing needs advancing: the current player is active by definition, so a
  * forfeit by anybody else can never empty the table.
  */
-async function submitForfeit(client, lobby, playerId) {
+async function submitForfeit(client, lobby, playerId, { voluntary = true } = {}) {
   const game = lobby.game;
   if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
     return { ok: false, error: 'No game in progress.' };
@@ -570,15 +584,19 @@ async function submitForfeit(client, lobby, playerId) {
   }
 
   game.surrendered.add(playerId);
+  // The involuntary subset scores as a loss, not a give-up -- see Game.standings().
+  if (!voluntary) game.autoForfeited.add(playerId);
   const channel = await getChannel(client, lobby);
   const left = game.activePlayers.length;
-  await channel.send(
-    `🏳️ <@${playerId}> has left the game.` +
-      (left ? ` ${left} still guessing.` : '')
-  );
+  const departure = voluntary
+    ? `🏳️ <@${playerId}> has left the game.`
+    : `🏳️ <@${playerId}> was removed after going quiet.`;
+  await channel.send(departure + (left ? ` ${left} still guessing.` : ''));
 
   if (playerId === game.currentPlayerId) {
-    await endTurn(client, lobby, { correct: false, gaveUp: true });
+    // The outgoing board reads "Gave up" only for a deliberate leave; an AFK removal shows the
+    // ordinary "Turn over" instead, so the board never claims a choice that wasn't made.
+    await endTurn(client, lobby, { correct: false, gaveUp: voluntary });
   } else {
     // Their row in the standings changed, so the live board is now out of date.
     await refreshTurnBoard(game, lobby.channelId);
@@ -590,10 +608,12 @@ async function submitForfeit(client, lobby, playerId) {
  * Writes the results of a game the host ended early, instead of binning them.
  *
  * Not about restarts -- the bot does not realistically restart mid-game. It is about the way
- * a game actually dies: there is no auto-surrender, so a player who stops responding parks
- * their turn in the last-chance state forever, and `/lobby end` is the documented remedy.
- * Until now that remedy threw away everyone else's result too, which at six players means
- * five people lose a finished game to one person's dead laptop.
+ * a game can stall: an AFK player is auto-surrendered 30s after their last-chance timeout
+ * (see checkAutoSurrender) whenever someone else is still guessing, but when the AFK player is
+ * the last one left there is nobody to hand the turn to, so it loops back to them and the game
+ * never ends on its own -- `/lobby end` is the documented remedy for that case (and for a host
+ * who simply wants to stop early). Until now that remedy threw away everyone else's result
+ * too, which at six players means five people lose a finished game to one person's dead laptop.
  *
  * Deliberately narrow. Nothing is written unless somebody actually got their character --
  * a game abandoned in the first round has no result to preserve, and inventing rows for it

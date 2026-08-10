@@ -143,11 +143,15 @@ Two guards:
   last one it renders as `🏳️ Give up` in red. The board already re-renders on every countdown
   checkpoint, so this costs nothing. Without it, a player who has been passing all game
   forfeits out of muscle memory.
-- **It is the only way out.** There is no auto-surrender on repeated timeouts (deliberate).
-  A player who stops responding leaves their turn parked in the amber last-chance state
-  indefinitely, and the game neither finishes nor records a result.
+- **Going quiet is handled, but not always terminal.** 30 seconds after a turn's last-chance
+  timeout elapses with no action, the player is auto-surrendered (see `checkAutoSurrender`) —
+  *provided somebody else is still guessing*, in which case the turn simply passes on. Because
+  this is involuntary, it is recorded as a plain **loss**, not a `gave_up`. But when the AFK
+  player is the **last one left** there is nobody to pass to: the turn loops straight back to
+  them and the game never ends on its own. That single case still parks in the amber
+  last-chance state, and neither finishes nor records a result until a human steps in.
 
-`/lobby end` is the manual exit for that case, and it **keeps the results of everyone who
+`/lobby end` is the manual exit for that last case, and it **keeps the results of everyone who
 already finished** rather than discarding the game whole. Nothing becomes automatic — a human
 still decides to end it — but deciding no longer costs five people a game they finished
 because a sixth went quiet.
@@ -408,8 +412,10 @@ Flagged rather than decided, because they only matter once it's being played:
 - **Turn length probably wants to fall as players finish.** A six-way game at 60s is a
   six-minute cycle; by the time two players are left it is two minutes and the pace changes
   character. Left alone for now — the host can already change `turn-seconds` from the board.
-- **A disconnected player parks the game.** No auto-surrender is deliberate, so `/lobby end` is
-  the answer, and stage 5 makes it a non-destructive one.
+- **A disconnected player parks the game only when they are last.** An AFK player is
+  auto-surrendered (as a loss, not a give-up) whenever someone else is still guessing; it is
+  only the last-player-left case that has nobody to pass to and loops back forever, for which
+  `/lobby end` is the answer — and stage 5 makes it a non-destructive one.
 - **Ties are common at small turn counts.** Two players getting it on turn 2 is unremarkable,
   and there is deliberately no tiebreaker. If that turns out to feel flat, the tiebreaker
   people will reach for is wall-clock time within the round — which is available for free and
