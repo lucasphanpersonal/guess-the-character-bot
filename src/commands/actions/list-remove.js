@@ -1,5 +1,5 @@
 const { MessageFlags } = require('discord.js');
-const { getListByName, removeCharacter, searchListNames, searchCharactersInLists } = require('../../db/characterLists');
+const { getListByName, removeCharacter } = require('../../db/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {

@@ -80,7 +80,9 @@ module.exports = {
         .addStringOption((opt) =>
           opt.setName('list').setDescription('List name').setRequired(true).setAutocomplete(true)
         )
-        .addStringOption((opt) => opt.setName('character').setDescription('Character name').setRequired(true))
+        .addStringOption((opt) =>
+          opt.setName('character').setDescription('Character name').setRequired(true).setAutocomplete(true)
+        )
         .addStringOption((opt) =>
           opt.setName('image').setDescription('Image URL shown when this character is revealed')
         )
