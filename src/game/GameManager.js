@@ -35,10 +35,10 @@ module.exports = {
     lobbies.clear();
     finishTimes.clear();
   },
-  // Evict finished lobbies older than the TTL. Called periodically by the bot's startup
-  // or via a timer to keep memory bounded.
-  evictStaleLobbies() {
-    const now = Date.now();
+  // Evict finished lobbies older than the TTL to keep memory bounded. Driven by an hourly
+  // interval started in the bot's clientReady handler (src/index.js); tests pass an explicit
+  // `now` to advance the clock rather than waiting on the interval.
+  evictStaleLobbies(now = Date.now()) {
     for (const [channelId, finishTime] of finishTimes.entries()) {
       if (now - finishTime > finishedLobbyTTL) {
         lobbies.delete(channelId);
