@@ -66,8 +66,9 @@ class Game {
     // playerId -> the turn they got their character on. Presence means they are out of the
     // rotation, and is what `active` is defined against.
     this.finishedBy = new Map();
-    // Whoever gave up rather than finishing. Only reachable once you are the last player
-    // still guessing, so there can be at most one -- see engine.submitPass.
+    // Whoever gave up rather than finishing: the last survivor ending it, an eliminated
+    // player bowing out of an epilogue they can't win, or anyone leaving mid-game. So there
+    // can be several -- see engine.submitPass and engine.submitForfeit.
     this.surrendered = new Set();
     // "<playerId>:<turnNumber>" for every turn that has already been resolved, so no turn can
     // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
@@ -171,6 +172,33 @@ class Game {
   get bestTurnCount() {
     const counts = [...this.finishedBy.values()];
     return counts.length ? Math.min(...counts) : null;
+  }
+
+  /**
+   * A player who can no longer match the leader's turn count -- so every turn they take from
+   * here changes nothing about who wins (see docs/multiplayer-design.md, "the loser now plays
+   * an epilogue"). They haven't finished and haven't given up: those are separate outcomes.
+   * There is simply a finish already on the board that they cannot equal.
+   *
+   * The doc's definition is "eliminated once min(finished turn counts) < your next turn
+   * number". The subtlety is what "your next turn number" is at the moment we ask. It is the
+   * earliest turn they could still finish on:
+   *
+   *   - For the player currently guessing, that is the turn in hand. `engine.startTurn` has
+   *     already incremented their `turnsTaken` for it, so `turnsFor` IS that turn's number,
+   *     and they can still TIE by getting it now whenever that number <= bestTurnCount.
+   *   - For anyone waiting, their earliest chance is their NEXT turn, `turnsFor + 1`.
+   *
+   * Hence the +1 for everyone but the current player. Without it, a guesser on turn k whose
+   * leader also finished on k -- who can still tie by getting it this very turn -- would be
+   * told they were out a turn too early.
+   */
+  isEliminated(playerId) {
+    const best = this.bestTurnCount;
+    if (best == null) return false;
+    if (this.finishedBy.has(playerId) || this.surrendered.has(playerId)) return false;
+    const earliestFinish = this.turnsFor(playerId) + (playerId === this.currentPlayerId ? 0 : 1);
+    return earliestFinish > best;
   }
 
   /**

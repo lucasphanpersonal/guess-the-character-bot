@@ -30,6 +30,22 @@ function fakeGame() {
   return game;
 }
 
+// Three players with p1 already finished, so p2 -- who is up -- may or may not still be in
+// contention depending on the turn counts. `p2Turns` past the leader's count means p2 can no
+// longer match it, and p3 is still active so p2 is eliminated-but-not-last.
+function threeWayGame({ leaderTurn = 1, p2Turns = 2, p3Turns = 1 } = {}) {
+  const game = new Game({
+    lobby: { guildId: 'board-guild', players: ['p1', 'p2', 'p3'] },
+    characters: [{ name: 'Mario' }, { name: 'Luigi' }, { name: 'Peach' }],
+    turnSeconds: 90,
+  });
+  game.finishedBy.set('p1', leaderTurn);
+  game.turnsTaken.set('p2', p2Turns);
+  game.turnsTaken.set('p3', p3Turns);
+  game.currentTurnIndex = 1; // p2 is up
+  return game;
+}
+
 async function runningGame() {
   const n = ++counter;
   const guildId = `turn-guild-${n}`;
@@ -236,6 +252,39 @@ module.exports = {
   'a player yet to take a turn is not described as being on "turn 0"'() {
     const standings = buildTurnBoardPayload(fakeGame(), 'chan').embeds[0].toJSON().fields[0].value;
     assert.match(standings, /<@p2> — not started yet/);
+  },
+
+  // Eliminated (can't catch the leader) but not the last one guessing -- the board owes them
+  // the promised context line and turns their Pass into a labelled, red Give up.
+  'an eliminated but not-last player is told they can no longer catch the leader'() {
+    const game = threeWayGame({ leaderTurn: 1, p2Turns: 2, p3Turns: 1 });
+    assert.equal(game.isEliminated('p2'), true, 'p2 is on turn 2 with the leader done on turn 1');
+
+    const payload = buildTurnBoardPayload(game, 'chan');
+    const desc = payload.embeds[0].toJSON().description;
+    assert.match(desc, /<@p1> finished on turn 1/, 'names the leader and their count');
+    assert.match(desc, /can't catch them/);
+    assert.match(desc, /still get your own character/, 'and says their own is still worth getting');
+    assert.ok(!/last one guessing/.test(desc), 'not the lone-survivor note -- others are still in');
+
+    const buttons = buttonsOf(payload);
+    assert.equal(buttons.pass.label, 'Give up', 'Pass is repurposed');
+    assert.equal(buttons.pass.style, 4, 'and turns red (Danger)');
+  },
+
+  // The boundary: the leader finished on the same turn number p2 is on now, so p2 can still
+  // TIE by getting it this very turn. They are not eliminated, and nothing is repurposed.
+  'a player who can still tie keeps the grey Pass and gets no eliminated note'() {
+    const game = threeWayGame({ leaderTurn: 2, p2Turns: 2, p3Turns: 1 });
+    assert.equal(game.isEliminated('p2'), false, 'getting it on this turn would tie the leader');
+
+    const payload = buildTurnBoardPayload(game, 'chan');
+    const desc = payload.embeds[0].toJSON().description;
+    assert.ok(!/can't catch/.test(desc), 'no eliminated note while still in contention');
+
+    const buttons = buttonsOf(payload);
+    assert.equal(buttons.pass.label, 'Pass', 'still a plain Pass');
+    assert.equal(buttons.pass.style, 2, 'still grey (Secondary)');
   },
 
   async 'turn controls on a finished game fail gracefully'() {
