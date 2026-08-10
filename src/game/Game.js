@@ -66,17 +66,13 @@ class Game {
     // playerId -> the turn they got their character on. Presence means they are out of the
     // rotation, and is what `active` is defined against.
     this.finishedBy = new Map();
-    // Everyone who left the rotation without finishing, by any of four routes: a lone
-    // survivor pressing Give Up, an eliminated player bowing out of an epilogue they can't
-    // win (both engine.submitPass), a mid-game `/lobby leave` (engine.submitForfeit), or an
-    // AFK player auto-forfeited after the last-chance grace period (engine.checkAutoSurrender).
-    // Membership is what `active` is defined against, so all of them belong here regardless of
-    // intent -- and there can be several.
+    // Everyone who left the rotation without finishing -- always a deliberate act: a lone
+    // survivor pressing Give Up, an eliminated player bowing out of an epilogue they can't win
+    // (both engine.submitPass), or a mid-game `/lobby leave` (engine.submitForfeit). Nobody is
+    // ever added here for merely going quiet -- a timed-out turn just passes (see
+    // engine.checkLastChanceTimeout). Membership is what `active` is defined against, and there
+    // can be several.
     this.surrendered = new Set();
-    // The involuntary subset of `surrendered`: players removed for going AFK, who made no
-    // choice to stop. Kept apart so standings() can score them as a plain loss rather than a
-    // `gave_up` -- see the note there and in engine.checkAutoSurrender.
-    this.autoForfeited = new Set();
     // "<playerId>:<turnNumber>" for every turn that has already been resolved, so no turn can
     // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
     // isn't guessing, so simultaneous presses are routine rather than exotic.
@@ -93,8 +89,9 @@ class Game {
     // True after a turn's timer expires until the player guesses or passes -- they get one
     // last chance to guess before the turn actually moves on.
     this.paused = false;
-    // Handle for auto-surrender timer after last-chance window expires.
-    this.autoSurrenderHandle = null;
+    // Handle for the last-chance grace timer; when it lapses the turn passes (see
+    // engine.checkLastChanceTimeout) -- it never removes anyone.
+    this.lastChanceHandle = null;
   }
 
   get currentPlayerId() {
@@ -225,13 +222,11 @@ class Game {
       .map((playerId) => {
         const turns = this.finishedBy.get(playerId) ?? null;
         let outcome;
-        // Never got their character. `gave_up` only when they actually chose to stop -- a
-        // player the host cut off mid-game, or one auto-forfeited for going AFK, did no such
-        // thing, and recording it as a surrender would put a decision in their mouth.
-        if (turns === null) {
-          outcome =
-            this.surrendered.has(playerId) && !this.autoForfeited.has(playerId) ? 'gave_up' : 'lost';
-        }
+        // Never got their character. `gave_up` when they chose to stop (surrender is always a
+        // deliberate act now); otherwise a plain loss -- e.g. a player the host cut off mid-game,
+        // who made no such choice, so recording it as a surrender would put a decision in their
+        // mouth.
+        if (turns === null) outcome = this.surrendered.has(playerId) ? 'gave_up' : 'lost';
         else if (turns === best) outcome = 'won';
         else outcome = 'lost';
         return { playerId, turnsTaken: turns, outcome, characterId: this.headByPlayer[playerId].id };

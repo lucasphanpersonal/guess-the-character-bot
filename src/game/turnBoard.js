@@ -38,13 +38,8 @@ function standingsField(game, { turnOver = false } = {}) {
   const lineFor = (playerId) => {
     const done = game.finishedBy.get(playerId);
     if (done != null) return `✅ <@${playerId}> — turn ${done}`;
-    if (game.surrendered.has(playerId)) {
-      // An AFK auto-forfeit left the rotation without choosing to; only a deliberate exit
-      // reads as "gave up". See Game.autoForfeited and standings().
-      return game.autoForfeited.has(playerId)
-        ? `🏳️ <@${playerId}> — out`
-        : `🏳️ <@${playerId}> — gave up`;
-    }
+    // Surrender is always a deliberate exit now, so it always reads as "gave up".
+    if (game.surrendered.has(playerId)) return `🏳️ <@${playerId}> — gave up`;
     const turns = game.turnsFor(playerId);
     const guessing = !turnOver && playerId === game.currentPlayerId;
     // "turn 0" is accurate and reads like a bug, so someone yet to play says so.

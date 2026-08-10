@@ -247,10 +247,10 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // The last player standing has nobody to pass to -- pressing the (relabelled) Give Up
-  // button is a real, deliberate surrender, but going quiet through the 30s last-chance
-  // window is not a choice, and used to be treated as one anyway (see checkAutoSurrender).
-  async "the last player standing isn't auto-surrendered for going quiet -- they just keep guessing"() {
+  // Nobody is ever removed for going quiet. The last player standing has nobody to pass to,
+  // so a lapsed last-chance window just hands them another turn (see checkLastChanceTimeout);
+  // leaving is only ever the deliberate Give Up button.
+  async "the last player standing isn't removed for going quiet -- they just keep guessing"() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     const game = ctx.lobby.game;
@@ -263,7 +263,7 @@ module.exports = {
     assert.equal(game.paused, true);
 
     // The 30s grace period after that elapses with no action from p2.
-    await engine.checkAutoSurrender(ctx.client, ctx.lobby, 'p2');
+    await engine.checkLastChanceTimeout(ctx.client, ctx.lobby, 'p2');
 
     assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'not surrendered, not ended');
     assert.equal(game.surrendered.has('p2'), false);
@@ -273,42 +273,22 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // Contrast with the same 30s silence when somebody else is still in the running: there the
-  // auto-surrender is exactly what's wanted, so it must survive this change untouched.
-  async 'a player who is NOT last is still auto-surrendered for going quiet through the grace period'() {
+  // A non-last player who goes quiet is NOT removed either: the turn simply passes to the next
+  // player, and the quiet player keeps their place in the rotation to be up again later.
+  async 'a non-last player who goes quiet is not removed -- the turn just passes on'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     const game = ctx.lobby.game;
     assert.equal(game.activePlayers.length, 2);
+    assert.equal(game.currentPlayerId, 'p1');
 
     await engine.handleTimeout(ctx.client, ctx.lobby);
-    await engine.checkAutoSurrender(ctx.client, ctx.lobby, 'p1');
+    await engine.checkLastChanceTimeout(ctx.client, ctx.lobby, 'p1');
 
-    assert.equal(game.surrendered.has('p1'), true);
+    assert.equal(game.surrendered.has('p1'), false, 'never forced out for going quiet');
+    assert.equal(game.isActive('p1'), true, 'still in the game');
     assert.equal(game.currentPlayerId, 'p2', 'the turn passed to the other player');
-    cleanup(ctx);
-  },
-
-  // Going AFK is involuntary, so it must NOT be recorded as a `gave_up` the way a deliberate
-  // leave or a lone-survivor Give Up is -- it scores as a plain loss, and the leaderboard
-  // stays clean of choices nobody made.
-  async 'an AFK auto-forfeit is recorded as a loss, not as having given up'() {
-    const ctx = await startedGame();
-    await confirmBoth(ctx);
-    const game = ctx.lobby.game;
-
-    await engine.handleTimeout(ctx.client, ctx.lobby);
-    await engine.checkAutoSurrender(ctx.client, ctx.lobby, 'p1'); // p1 removed for going quiet
-
-    assert.equal(game.surrendered.has('p1'), true, 'still out of the rotation');
-    assert.equal(game.autoForfeited.has('p1'), true, 'tracked as an involuntary exit');
-
-    const byId = Object.fromEntries(game.standings().map((s) => [s.playerId, s]));
-    assert.equal(byId.p1.outcome, 'lost', 'AFK removal is a loss, not gave_up');
-    assert.equal(byId.p1.turnsTaken, null);
-
-    // The departure message says they were removed, not that they chose to leave.
-    assert.match(channelText(ctx), /<@p1> was removed after going quiet/);
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
     cleanup(ctx);
   },
 
