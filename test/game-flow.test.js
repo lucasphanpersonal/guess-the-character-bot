@@ -2,6 +2,7 @@ const {
   assert,
   createRecorder,
   createFakeClient,
+  failNextChannelSend,
   createButtonInteraction,
   createSlashInteraction,
   attachFakeVoice,
@@ -288,6 +289,29 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Going AFK is involuntary, so it must NOT be recorded as a `gave_up` the way a deliberate
+  // leave or a lone-survivor Give Up is -- it scores as a plain loss, and the leaderboard
+  // stays clean of choices nobody made.
+  async 'an AFK auto-forfeit is recorded as a loss, not as having given up'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+
+    await engine.handleTimeout(ctx.client, ctx.lobby);
+    await engine.checkAutoSurrender(ctx.client, ctx.lobby, 'p1'); // p1 removed for going quiet
+
+    assert.equal(game.surrendered.has('p1'), true, 'still out of the rotation');
+    assert.equal(game.autoForfeited.has('p1'), true, 'tracked as an involuntary exit');
+
+    const byId = Object.fromEntries(game.standings().map((s) => [s.playerId, s]));
+    assert.equal(byId.p1.outcome, 'lost', 'AFK removal is a loss, not gave_up');
+    assert.equal(byId.p1.turnsTaken, null);
+
+    // The departure message says they were removed, not that they chose to leave.
+    assert.match(channelText(ctx), /<@p1> was removed after going quiet/);
+    cleanup(ctx);
+  },
+
   // The three tests below are the regression check on the whole scoring change: at two
   // players the new rule must pick the same WINNER the rebuttal rule did in every case. What
   // it deliberately does not preserve is when the game stops -- nobody is cut off any more.
@@ -302,6 +326,28 @@ module.exports = {
     // Publicly revealed the moment they got it: everyone else could already see it, and
     // they have just worked it out themselves.
     assert.match(channelText(ctx), /got it in \*\*1\*\* turn!/);
+    cleanup(ctx);
+  },
+
+  // A transient channel.send failure on the completion announcement must not wedge the game:
+  // the turn is already recorded resolved, so if the throw escaped endTurn the rotation would
+  // never advance and no new board would post -- leaving the game frozen with only /lobby end
+  // as an exit. The announcement is cosmetic, so its failure is swallowed and play continues.
+  async 'a failed completion announcement still hands the turn to the next player'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+
+    // Fail only the completion announcement ("... got it in N turn(s)!"), not the board edits.
+    failNextChannelSend(ctx.client, (text) => /got it in \*\*\d+\*\* turn/.test(text));
+
+    await guess(ctx, 'p1', true); // ruled correct by p2; announcement send throws
+
+    // The turn still resolved and rotation still advanced despite the failed side-effect.
+    assert.equal(game.finishedBy.get('p1'), 1, 'p1 still recorded as finished on turn 1');
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'game is not wedged');
+    assert.equal(game.currentPlayerId, 'p2', 'the turn advanced to p2');
+    assert.equal(game.turnsFor('p2'), 1, 'p2 actually got a fresh turn board');
     cleanup(ctx);
   },
 

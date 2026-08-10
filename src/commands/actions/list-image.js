@@ -26,4 +26,18 @@ module.exports = {
       flags: MessageFlags.Ephemeral,
     });
   },
+  async autocomplete(interaction) {
+    const focused = interaction.options.getFocused(true);
+    if (focused.name === 'list') {
+      const matches = searchListNames(interaction.guildId, focused.value, 25);
+      return interaction.respond(matches.map((name) => ({ name, value: name })));
+    }
+    if (focused.name === 'character') {
+      const listName = interaction.options.getString('list');
+      if (!listName) return interaction.respond([]);
+      const list = getListByName(interaction.guildId, listName);
+      const matches = list ? searchCharactersInLists([list.id], focused.value) : [];
+      return interaction.respond(matches.map((name) => ({ name, value: name })));
+    }
+  },
 };

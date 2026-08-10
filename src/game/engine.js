@@ -357,8 +357,10 @@ async function checkAutoSurrender(client, lobby, currentPlayerId) {
     return;
   }
 
-  // Auto-surrender: the player never acted on their last-chance opportunity.
-  await submitForfeit(client, lobby, currentPlayerId);
+  // Auto-surrender: the player never acted on their last-chance opportunity. This is
+  // involuntary -- they chose nothing by going quiet -- so it is recorded as a plain loss,
+  // not a `gave_up`. See submitForfeit's `voluntary` flag and Game.standings().
+  await submitForfeit(client, lobby, currentPlayerId, { voluntary: false });
 }
 
 async function handleTimeout(client, lobby) {
@@ -371,6 +373,15 @@ async function handleTimeout(client, lobby) {
   // Schedule auto-surrender if the player doesn't act within 30 seconds of the last-chance
   // timeout. This prevents an AFK player from parking indefinitely at the timeout state.
   // Clear any prior auto-surrender timer from a previous turn first.
+  //
+  // LIMITATION: this is a plain setTimeout and is NOT enforced by timerWatchdog, which only
+  // re-checks turn timers and vote deadlines against the wall clock (see timerWatchdog.js). If
+  // the host machine sleeps or the event loop stalls while this timer is pending, it fires late
+  // by however long the process was frozen rather than at the wall-clock deadline. The turn
+  // timer that precedes it IS watchdog-enforced, so a sleeping machine still reaches the
+  // last-chance state on wake; only the 30s grace after it can drift. `/lobby end` remains the
+  // guaranteed manual exit. Left as-is deliberately: promoting this to a watchdog-tracked
+  // deadline is possible but not worth the extra state for a 30s grace window.
   if (game.autoSurrenderHandle) {
     clearTimeout(game.autoSurrenderHandle);
   }
@@ -429,12 +440,19 @@ async function submitJudgement(client, lobby, judgeId, correct) {
 }
 
 /**
- * Pass hands the turn on -- except when you are the last player still guessing, where there
- * is nobody to hand it to and a press would only cycle straight back to you. There it means
- * give up, and the board says so (see turnBoard.buildButtons).
+ * Pass hands the turn on -- except when there is no longer any point handing it on, where it
+ * means give up and the board says so (see turnBoard.buildButtons). That happens two ways:
  *
- * Because players otherwise leave the rotation only by finishing, this is reachable exactly
- * once per game: everyone else has already got theirs.
+ *   - You are the last player still guessing: nobody to hand it to, and a press would only
+ *     cycle straight back to you.
+ *   - You are eliminated but not last: you can no longer catch the leader, so continuing to
+ *     take full turns is an epilogue you never chose (see Game.isEliminated). Giving up here
+ *     is a labelled, red-button decision -- a player still in contention keeps the grey Pass
+ *     that just hands the turn over.
+ *
+ * Surrendering as a non-last player must NOT end the game: endTurn's nextActiveIndex still
+ * finds the other active players and play continues for them, exactly as submitForfeit does
+ * for someone who leaves mid-game. Only the last-survivor case empties the table.
  */
 async function submitPass(client, lobby, playerId) {
   const game = lobby.game;
@@ -444,10 +462,11 @@ async function submitPass(client, lobby, playerId) {
   if (playerId !== game.currentPlayerId) {
     return { ok: false, error: "It's not your turn." };
   }
-  const gaveUp = game.activePlayers.length === 1;
+  const gaveUp = game.activePlayers.length === 1 || game.isEliminated(playerId);
   if (gaveUp) game.surrendered.add(playerId);
   await endTurn(client, lobby, { correct: false, gaveUp });
-  return { ok: true, gaveUp };
+  // game.finished is set only when the table emptied -- i.e. the last survivor gave up.
+  return { ok: true, gaveUp, gameOver: game.finished };
 }
 
 async function handlePass(interaction, lobby) {
@@ -455,10 +474,11 @@ async function handlePass(interaction, lobby) {
   if (!result.ok) {
     return interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
   }
-  return interaction.reply({
-    content: result.gaveUp ? 'You gave up -- that ends the game.' : 'Turn passed.',
-    flags: MessageFlags.Ephemeral,
-  });
+  let content;
+  if (!result.gaveUp) content = 'Turn passed.';
+  else if (result.gameOver) content = 'You gave up -- that ends the game.';
+  else content = 'You gave up -- everyone else plays on.';
+  return interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
 /**
@@ -474,12 +494,20 @@ async function announceCompletion(client, lobby, playerId) {
   const stillGuessing = game.activePlayers.length;
   const channel = await getChannel(client, lobby);
   const tail = stillGuessing ? ` ${stillGuessing} still guessing.` : '';
-  await channel.send(
-    characterMessage(
-      `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
-      [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
-    )
-  );
+  // Best-effort: this is a cosmetic history message. A transient send failure (rate limit,
+  // momentary 5xx, channel briefly unreachable) must never propagate, because endTurn has
+  // already recorded the turn resolved -- letting it throw here would skip rotation
+  // advancement (startTurn/finalizeGame) with no way to re-drive it, wedging the game.
+  try {
+    await channel.send(
+      characterMessage(
+        `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
+        [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
+      )
+    );
+  } catch (err) {
+    console.warn('[engine] Could not announce completion:', err.message);
+  }
 }
 
 async function endTurn(client, lobby, { correct, gaveUp = false }) {
@@ -541,15 +569,18 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
  * for everyone. That is a two-player assumption surviving into six-player games: one person
  * with a dying laptop should not be able to strand five.
  *
- * They leave with no turn count, recorded as `gave_up`, which is the truth: they chose to
- * stop. Everyone else plays on.
+ * A voluntary leave (`/lobby leave`, the default) has no turn count and is recorded as
+ * `gave_up`, which is the truth: they chose to stop. An involuntary one -- `voluntary: false`,
+ * used by checkAutoSurrender when a player goes AFK through the last-chance grace period -- is
+ * recorded as a plain loss instead, because going quiet is not a choice to surrender. Both
+ * leave the rotation; only the intent behind the exit differs. Everyone else plays on.
  *
  * If it is their turn, this goes through endTurn so the rotation advances and the resolution
  * guard applies -- a forfeit racing a judgement must not resolve the same turn twice. If it is
  * not their turn, nothing needs advancing: the current player is active by definition, so a
  * forfeit by anybody else can never empty the table.
  */
-async function submitForfeit(client, lobby, playerId) {
+async function submitForfeit(client, lobby, playerId, { voluntary = true } = {}) {
   const game = lobby.game;
   if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
     return { ok: false, error: 'No game in progress.' };
@@ -562,15 +593,19 @@ async function submitForfeit(client, lobby, playerId) {
   }
 
   game.surrendered.add(playerId);
+  // The involuntary subset scores as a loss, not a give-up -- see Game.standings().
+  if (!voluntary) game.autoForfeited.add(playerId);
   const channel = await getChannel(client, lobby);
   const left = game.activePlayers.length;
-  await channel.send(
-    `🏳️ <@${playerId}> has left the game.` +
-      (left ? ` ${left} still guessing.` : '')
-  );
+  const departure = voluntary
+    ? `🏳️ <@${playerId}> has left the game.`
+    : `🏳️ <@${playerId}> was removed after going quiet.`;
+  await channel.send(departure + (left ? ` ${left} still guessing.` : ''));
 
   if (playerId === game.currentPlayerId) {
-    await endTurn(client, lobby, { correct: false, gaveUp: true });
+    // The outgoing board reads "Gave up" only for a deliberate leave; an AFK removal shows the
+    // ordinary "Turn over" instead, so the board never claims a choice that wasn't made.
+    await endTurn(client, lobby, { correct: false, gaveUp: voluntary });
   } else {
     // Their row in the standings changed, so the live board is now out of date.
     await refreshTurnBoard(game, lobby.channelId);
@@ -582,10 +617,12 @@ async function submitForfeit(client, lobby, playerId) {
  * Writes the results of a game the host ended early, instead of binning them.
  *
  * Not about restarts -- the bot does not realistically restart mid-game. It is about the way
- * a game actually dies: there is no auto-surrender, so a player who stops responding parks
- * their turn in the last-chance state forever, and `/lobby end` is the documented remedy.
- * Until now that remedy threw away everyone else's result too, which at six players means
- * five people lose a finished game to one person's dead laptop.
+ * a game can stall: an AFK player is auto-surrendered 30s after their last-chance timeout
+ * (see checkAutoSurrender) whenever someone else is still guessing, but when the AFK player is
+ * the last one left there is nobody to hand the turn to, so it loops back to them and the game
+ * never ends on its own -- `/lobby end` is the documented remedy for that case (and for a host
+ * who simply wants to stop early). Until now that remedy threw away everyone else's result
+ * too, which at six players means five people lose a finished game to one person's dead laptop.
  *
  * Deliberately narrow. Nothing is written unless somebody actually got their character --
  * a game abandoned in the first round has no result to preserve, and inventing rows for it

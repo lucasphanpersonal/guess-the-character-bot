@@ -38,7 +38,13 @@ function standingsField(game, { turnOver = false } = {}) {
   const lineFor = (playerId) => {
     const done = game.finishedBy.get(playerId);
     if (done != null) return `✅ <@${playerId}> — turn ${done}`;
-    if (game.surrendered.has(playerId)) return `🏳️ <@${playerId}> — gave up`;
+    if (game.surrendered.has(playerId)) {
+      // An AFK auto-forfeit left the rotation without choosing to; only a deliberate exit
+      // reads as "gave up". See Game.autoForfeited and standings().
+      return game.autoForfeited.has(playerId)
+        ? `🏳️ <@${playerId}> — out`
+        : `🏳️ <@${playerId}> — gave up`;
+    }
     const turns = game.turnsFor(playerId);
     const guessing = !turnOver && playerId === game.currentPlayerId;
     // "turn 0" is accurate and reads like a bug, so someone yet to play says so.
@@ -93,16 +99,17 @@ function buildButtons(game, channelId) {
   // it would mean two authorities on the same question -- a human who can see the character,
   // and Levenshtein distance. One is better.
   //
-  // Once you are the last player still guessing there is nobody to pass to, so the button
-  // means give up. It is relabelled and turns red rather than quietly changing meaning under
-  // a player who has been pressing Pass all game out of habit.
-  const alone = game.activePlayers.length === 1;
+  // Once there is nobody left to pass to -- either you are the last player guessing, or you
+  // are eliminated and every further turn is for nothing -- the button means give up. It is
+  // relabelled and turns red rather than quietly changing meaning under a player who has been
+  // pressing Pass all game out of habit. A player still in contention keeps the grey Pass.
+  const giveUp = game.activePlayers.length === 1 || game.isEliminated(game.currentPlayerId);
   const guesserRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`turn:pass:${channelId}:${gameInstanceId}`)
-      .setLabel(alone ? 'Give up' : 'Pass')
-      .setEmoji(alone ? '🏳️' : '⏭️')
-      .setStyle(alone ? ButtonStyle.Danger : ButtonStyle.Secondary),
+      .setLabel(giveUp ? 'Give up' : 'Pass')
+      .setEmoji(giveUp ? '🏳️' : '⏭️')
+      .setStyle(giveUp ? ButtonStyle.Danger : ButtonStyle.Secondary),
     // Spectating was only ever offered on the lobby board, which loses its buttons the moment
     // the game starts and is buried up the channel by turn three -- so anyone who wandered in
     // late had to know `/lobby spectate` existed. It lives here because this is the one
@@ -163,14 +170,31 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
 
   embed.addFields(standingsField(game));
 
-  // Being the last one still guessing means the whole channel is watching one person who has
-  // no idea where they stand or how long anyone expects them to keep going. Saying it turns
-  // that into a decision, and is the only place the repurposed button gets explained.
-  const solo =
-    game.activePlayers.length === 1
-      ? `\n🏳️ You're the last one guessing — everyone else was done by turn ${game.bestTurnCount}. ` +
-        'Keep going, or **Give up** to end it.'
-      : '';
+  // A player whose next turn cannot change the result has no idea they are in that spot, and
+  // the whole channel is watching them play it out. Saying so turns the epilogue into a
+  // decision, and is the only place the repurposed Give up button gets explained. Two shapes:
+  //
+  //   - Last one guessing: nobody left to pass to, so the whole game hangs on them.
+  //   - Eliminated but not last: they can't catch the leader, but their OWN character is still
+  //     there to get (for placement), and others are still playing -- so this is a softer note.
+  //
+  // Mutually exclusive by construction: the eliminated note is gated on NOT being alone, so
+  // the two never fire together or contradict each other.
+  const alone = game.activePlayers.length === 1;
+  const eliminated = !alone && game.isEliminated(game.currentPlayerId);
+  let context = '';
+  if (alone) {
+    context =
+      `\n🏳️ You're the last one guessing — everyone else was done by turn ${game.bestTurnCount}. ` +
+      'Keep going, or **Give up** to end it.';
+  } else if (eliminated) {
+    const best = game.bestTurnCount;
+    const leaderId = [...game.finishedBy.entries()].find(([, t]) => t === best)?.[0];
+    const leader = leaderId ? `<@${leaderId}>` : 'The leader';
+    context =
+      `\n🏳️ ${leader} finished on turn ${best} — you can't catch them now, but you can still ` +
+      'get your own character. Or **Give up** to bow out.';
+  }
 
   // Discord does NOT notify on a mention inside an embed, only on one in message content. So
   // the description's mention is layout and this one is the actual "you're up" ping -- without
@@ -182,8 +206,8 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
       .setColor(COLOR_PAUSED)
       .setDescription(
         `${whoseTurn}\n⏰ **Time's up — last chance!**\n${roles}\n` +
-          // The solo note already spells out the alternative, so it isn't offered twice.
-          `One more guess${solo ? '.' : ', or pass to hand it over.'}${solo}`
+          // The context note already spells out the alternative, so it isn't offered twice.
+          `One more guess${context ? '.' : ', or pass to hand it over.'}${context}`
       );
     return { content, embeds: [embed], components: buildButtons(game, channelId) };
   }
@@ -196,7 +220,7 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
       `${whoseTurn}\n` +
         `⏳ \`${timerBar(remainingMs, totalMs)}\` **${Math.ceil(remainingMs / 1000)}s**\n` +
         `${roles}\n` +
-        `A wrong guess does *not* end the turn.${solo}`
+        `A wrong guess does *not* end the turn.${context}`
     );
 
   return { content, embeds: [embed], components: buildButtons(game, channelId) };

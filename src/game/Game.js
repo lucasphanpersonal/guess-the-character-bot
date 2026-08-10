@@ -66,9 +66,17 @@ class Game {
     // playerId -> the turn they got their character on. Presence means they are out of the
     // rotation, and is what `active` is defined against.
     this.finishedBy = new Map();
-    // Whoever gave up rather than finishing. Only reachable once you are the last player
-    // still guessing, so there can be at most one -- see engine.submitPass.
+    // Everyone who left the rotation without finishing, by any of four routes: a lone
+    // survivor pressing Give Up, an eliminated player bowing out of an epilogue they can't
+    // win (both engine.submitPass), a mid-game `/lobby leave` (engine.submitForfeit), or an
+    // AFK player auto-forfeited after the last-chance grace period (engine.checkAutoSurrender).
+    // Membership is what `active` is defined against, so all of them belong here regardless of
+    // intent -- and there can be several.
     this.surrendered = new Set();
+    // The involuntary subset of `surrendered`: players removed for going AFK, who made no
+    // choice to stop. Kept apart so standings() can score them as a plain loss rather than a
+    // `gave_up` -- see the note there and in engine.checkAutoSurrender.
+    this.autoForfeited = new Set();
     // "<playerId>:<turnNumber>" for every turn that has already been resolved, so no turn can
     // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
     // isn't guessing, so simultaneous presses are routine rather than exotic.
@@ -174,6 +182,33 @@ class Game {
   }
 
   /**
+   * A player who can no longer match the leader's turn count -- so every turn they take from
+   * here changes nothing about who wins (see docs/multiplayer-design.md, "the loser now plays
+   * an epilogue"). They haven't finished and haven't given up: those are separate outcomes.
+   * There is simply a finish already on the board that they cannot equal.
+   *
+   * The doc's definition is "eliminated once min(finished turn counts) < your next turn
+   * number". The subtlety is what "your next turn number" is at the moment we ask. It is the
+   * earliest turn they could still finish on:
+   *
+   *   - For the player currently guessing, that is the turn in hand. `engine.startTurn` has
+   *     already incremented their `turnsTaken` for it, so `turnsFor` IS that turn's number,
+   *     and they can still TIE by getting it now whenever that number <= bestTurnCount.
+   *   - For anyone waiting, their earliest chance is their NEXT turn, `turnsFor + 1`.
+   *
+   * Hence the +1 for everyone but the current player. Without it, a guesser on turn k whose
+   * leader also finished on k -- who can still tie by getting it this very turn -- would be
+   * told they were out a turn too early.
+   */
+  isEliminated(playerId) {
+    const best = this.bestTurnCount;
+    if (best == null) return false;
+    if (this.finishedBy.has(playerId) || this.surrendered.has(playerId)) return false;
+    const earliestFinish = this.turnsFor(playerId) + (playerId === this.currentPlayerId ? 0 : 1);
+    return earliestFinish > best;
+  }
+
+  /**
    * Every player's result, best first, for the reveal and for the database.
    *
    * A tie is simply more than one 'won' row -- there is no tiebreaker, deliberately. The
@@ -191,9 +226,12 @@ class Game {
         const turns = this.finishedBy.get(playerId) ?? null;
         let outcome;
         // Never got their character. `gave_up` only when they actually chose to stop -- a
-        // player the host cut off mid-game did no such thing, and recording it as a surrender
-        // would put a decision in their mouth.
-        if (turns === null) outcome = this.surrendered.has(playerId) ? 'gave_up' : 'lost';
+        // player the host cut off mid-game, or one auto-forfeited for going AFK, did no such
+        // thing, and recording it as a surrender would put a decision in their mouth.
+        if (turns === null) {
+          outcome =
+            this.surrendered.has(playerId) && !this.autoForfeited.has(playerId) ? 'gave_up' : 'lost';
+        }
         else if (turns === best) outcome = 'won';
         else outcome = 'lost';
         return { playerId, turnsTaken: turns, outcome, characterId: this.headByPlayer[playerId].id };

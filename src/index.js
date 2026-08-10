@@ -49,6 +49,19 @@ client.once('clientReady', async () => {
   if (found) console.log(`Retired ${retired}/${found} board(s) left over from the last run.`);
 
   timerWatchdog.start(client);
+
+  // Finished lobbies linger in memory (each holding a full Game object) so /rematch can read
+  // their settings; without this they'd only ever be freed by a new /lobby create or
+  // /lobby end in that channel. Sweep them on their TTL so a long-running bot across many
+  // channels doesn't grow without bound. unref() so this never keeps the process alive.
+  staleLobbyInterval = setInterval(() => {
+    try {
+      GameManager.evictStaleLobbies();
+    } catch (err) {
+      console.error('[evictStaleLobbies]', err);
+    }
+  }, STALE_LOBBY_SWEEP_MS);
+  staleLobbyInterval.unref?.();
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -100,12 +113,15 @@ client.on('interactionCreate', async (interaction) => {
 // otherwise buttons are left hanging in the channel, the bot can hang on exit holding a
 // voice socket, and the WAL grows unbounded because it's never checkpointed.
 const BOARD_SWEEP_TIMEOUT_MS = 5000;
+const STALE_LOBBY_SWEEP_MS = 60 * 60 * 1000; // hourly
+let staleLobbyInterval = null;
 let shuttingDown = false;
 async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`\nReceived ${signal}, shutting down...`);
   timerWatchdog.stop();
+  if (staleLobbyInterval) clearInterval(staleLobbyInterval);
 
   // Best-effort: retire the live boards now rather than leaving them clickable until the
   // next startup sweep. Bounded, because a slow Discord API shouldn't hold up the exit --
