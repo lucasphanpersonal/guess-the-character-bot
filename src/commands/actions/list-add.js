@@ -56,7 +56,8 @@ module.exports = {
     if (focused.name === 'character') {
       const listName = interaction.options.getString('list');
       if (!listName) return interaction.respond([]);
-      const matches = searchCharactersInLists(interaction.guildId, focused.value, [listName]);
+      const list = getListByName(interaction.guildId, listName);
+      const matches = list ? searchCharactersInLists([list.id], focused.value) : [];
       return interaction.respond(matches.map((name) => ({ name, value: name })));
     }
   }
