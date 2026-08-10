@@ -108,6 +108,30 @@ function createFakeClient(recorder) {
   };
 }
 
+// Wraps a fake client so that `channel.send` rejects for the FIRST payload whose flattened
+// text matches `predicate`, and behaves normally otherwise. Used to simulate a transient
+// Discord send failure on one specific message (e.g. the completion announcement) without
+// disturbing any other send. Mutates the client in place and returns it.
+function failNextChannelSend(client, predicate) {
+  const fetchChannel = client.channels.fetch;
+  let fired = false;
+  client.channels.fetch = async (channelId) => {
+    const channel = await fetchChannel(channelId);
+    const realSend = channel.send;
+    channel.send = async (payload) => {
+      if (!fired && predicate(payloadText(payload))) {
+        fired = true;
+        const err = new Error('Service Unavailable');
+        err.code = 500;
+        throw err;
+      }
+      return realSend(payload);
+    };
+    return channel;
+  };
+  return client;
+}
+
 function createSlashInteraction({ client, userId, guildId, channelId, options = {}, recorder, canManageGuild = false }) {
   return {
     client,
@@ -194,6 +218,7 @@ module.exports = {
   assert,
   createRecorder,
   createFakeClient,
+  failNextChannelSend,
   createSlashInteraction,
   createButtonInteraction,
   createModalInteraction,

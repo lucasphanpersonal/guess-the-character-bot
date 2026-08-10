@@ -2,6 +2,7 @@ const {
   assert,
   createRecorder,
   createFakeClient,
+  failNextChannelSend,
   createButtonInteraction,
   createSlashInteraction,
   attachFakeVoice,
@@ -302,6 +303,28 @@ module.exports = {
     // Publicly revealed the moment they got it: everyone else could already see it, and
     // they have just worked it out themselves.
     assert.match(channelText(ctx), /got it in \*\*1\*\* turn!/);
+    cleanup(ctx);
+  },
+
+  // A transient channel.send failure on the completion announcement must not wedge the game:
+  // the turn is already recorded resolved, so if the throw escaped endTurn the rotation would
+  // never advance and no new board would post -- leaving the game frozen with only /lobby end
+  // as an exit. The announcement is cosmetic, so its failure is swallowed and play continues.
+  async 'a failed completion announcement still hands the turn to the next player'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+
+    // Fail only the completion announcement ("... got it in N turn(s)!"), not the board edits.
+    failNextChannelSend(ctx.client, (text) => /got it in \*\*\d+\*\* turn/.test(text));
+
+    await guess(ctx, 'p1', true); // ruled correct by p2; announcement send throws
+
+    // The turn still resolved and rotation still advanced despite the failed side-effect.
+    assert.equal(game.finishedBy.get('p1'), 1, 'p1 still recorded as finished on turn 1');
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'game is not wedged');
+    assert.equal(game.currentPlayerId, 'p2', 'the turn advanced to p2');
+    assert.equal(game.turnsFor('p2'), 1, 'p2 actually got a fresh turn board');
     cleanup(ctx);
   },
 
