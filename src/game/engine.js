@@ -440,12 +440,19 @@ async function submitJudgement(client, lobby, judgeId, correct) {
 }
 
 /**
- * Pass hands the turn on -- except when you are the last player still guessing, where there
- * is nobody to hand it to and a press would only cycle straight back to you. There it means
- * give up, and the board says so (see turnBoard.buildButtons).
+ * Pass hands the turn on -- except when there is no longer any point handing it on, where it
+ * means give up and the board says so (see turnBoard.buildButtons). That happens two ways:
  *
- * Because players otherwise leave the rotation only by finishing, this is reachable exactly
- * once per game: everyone else has already got theirs.
+ *   - You are the last player still guessing: nobody to hand it to, and a press would only
+ *     cycle straight back to you.
+ *   - You are eliminated but not last: you can no longer catch the leader, so continuing to
+ *     take full turns is an epilogue you never chose (see Game.isEliminated). Giving up here
+ *     is a labelled, red-button decision -- a player still in contention keeps the grey Pass
+ *     that just hands the turn over.
+ *
+ * Surrendering as a non-last player must NOT end the game: endTurn's nextActiveIndex still
+ * finds the other active players and play continues for them, exactly as submitForfeit does
+ * for someone who leaves mid-game. Only the last-survivor case empties the table.
  */
 async function submitPass(client, lobby, playerId) {
   const game = lobby.game;
@@ -455,10 +462,11 @@ async function submitPass(client, lobby, playerId) {
   if (playerId !== game.currentPlayerId) {
     return { ok: false, error: "It's not your turn." };
   }
-  const gaveUp = game.activePlayers.length === 1;
+  const gaveUp = game.activePlayers.length === 1 || game.isEliminated(playerId);
   if (gaveUp) game.surrendered.add(playerId);
   await endTurn(client, lobby, { correct: false, gaveUp });
-  return { ok: true, gaveUp };
+  // game.finished is set only when the table emptied -- i.e. the last survivor gave up.
+  return { ok: true, gaveUp, gameOver: game.finished };
 }
 
 async function handlePass(interaction, lobby) {
@@ -466,10 +474,11 @@ async function handlePass(interaction, lobby) {
   if (!result.ok) {
     return interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
   }
-  return interaction.reply({
-    content: result.gaveUp ? 'You gave up -- that ends the game.' : 'Turn passed.',
-    flags: MessageFlags.Ephemeral,
-  });
+  let content;
+  if (!result.gaveUp) content = 'Turn passed.';
+  else if (result.gameOver) content = 'You gave up -- that ends the game.';
+  else content = 'You gave up -- everyone else plays on.';
+  return interaction.reply({ content, flags: MessageFlags.Ephemeral });
 }
 
 /**

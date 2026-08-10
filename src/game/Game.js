@@ -66,10 +66,12 @@ class Game {
     // playerId -> the turn they got their character on. Presence means they are out of the
     // rotation, and is what `active` is defined against.
     this.finishedBy = new Map();
-    // Everyone who left the rotation without finishing: a lone survivor pressing Give Up
-    // (engine.submitPass), a mid-game `/lobby leave` (engine.submitForfeit), or an AFK player
-    // auto-forfeited after the last-chance grace period (engine.checkAutoSurrender). Membership
-    // is what `active` is defined against, so all three belong here regardless of intent.
+    // Everyone who left the rotation without finishing, by any of four routes: a lone
+    // survivor pressing Give Up, an eliminated player bowing out of an epilogue they can't
+    // win (both engine.submitPass), a mid-game `/lobby leave` (engine.submitForfeit), or an
+    // AFK player auto-forfeited after the last-chance grace period (engine.checkAutoSurrender).
+    // Membership is what `active` is defined against, so all of them belong here regardless of
+    // intent -- and there can be several.
     this.surrendered = new Set();
     // The involuntary subset of `surrendered`: players removed for going AFK, who made no
     // choice to stop. Kept apart so standings() can score them as a plain loss rather than a
@@ -177,6 +179,33 @@ class Game {
   get bestTurnCount() {
     const counts = [...this.finishedBy.values()];
     return counts.length ? Math.min(...counts) : null;
+  }
+
+  /**
+   * A player who can no longer match the leader's turn count -- so every turn they take from
+   * here changes nothing about who wins (see docs/multiplayer-design.md, "the loser now plays
+   * an epilogue"). They haven't finished and haven't given up: those are separate outcomes.
+   * There is simply a finish already on the board that they cannot equal.
+   *
+   * The doc's definition is "eliminated once min(finished turn counts) < your next turn
+   * number". The subtlety is what "your next turn number" is at the moment we ask. It is the
+   * earliest turn they could still finish on:
+   *
+   *   - For the player currently guessing, that is the turn in hand. `engine.startTurn` has
+   *     already incremented their `turnsTaken` for it, so `turnsFor` IS that turn's number,
+   *     and they can still TIE by getting it now whenever that number <= bestTurnCount.
+   *   - For anyone waiting, their earliest chance is their NEXT turn, `turnsFor + 1`.
+   *
+   * Hence the +1 for everyone but the current player. Without it, a guesser on turn k whose
+   * leader also finished on k -- who can still tie by getting it this very turn -- would be
+   * told they were out a turn too early.
+   */
+  isEliminated(playerId) {
+    const best = this.bestTurnCount;
+    if (best == null) return false;
+    if (this.finishedBy.has(playerId) || this.surrendered.has(playerId)) return false;
+    const earliestFinish = this.turnsFor(playerId) + (playerId === this.currentPlayerId ? 0 : 1);
+    return earliestFinish > best;
   }
 
   /**

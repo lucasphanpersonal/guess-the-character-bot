@@ -516,6 +516,57 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // A mid-pack player who can no longer catch the leader used to keep taking full turns for
+  // nothing, with give-up reachable only from `/lobby leave`. Now their Pass becomes a labelled
+  // Give up -- and using it must NOT end the game, because others are still guessing.
+  async 'an eliminated player who is not last can give up, and the others play on'() {
+    const ctx = await startedGame(3);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await judge(ctx, 'p1', true); // p1 finishes on turn 1 -> best = 1
+    // Round one: p2 and p3 are each on turn 1, so getting it now would tie -- not eliminated.
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p3');
+
+    // Round two: p2 is up on turn 2 and can no longer match a turn-1 finish.
+    assert.equal(game.currentPlayerId, 'p2');
+    assert.equal(game.turnsFor('p2'), 2);
+    assert.equal(game.isEliminated('p2'), true);
+
+    const result = await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    assert.equal(result.gaveUp, true, 'an eliminated pass is a give up');
+    assert.equal(result.gameOver, false, 'but it does not end the game');
+    assert.ok(game.surrendered.has('p2'));
+    assert.equal(game.finished, false, 'still running');
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+    assert.equal(game.currentPlayerId, 'p3', 'p3 plays on');
+
+    // p3 finishing then wraps it up normally, and p2 is on the record as having given up.
+    await judge(ctx, 'p3', true);
+    const byId = Object.fromEntries(game.standings().map((s) => [s.playerId, s]));
+    assert.equal(byId.p2.outcome, 'gave_up');
+    assert.equal(byId.p2.turnsTaken, null);
+    cleanup(ctx);
+  },
+
+  // The boundary in the other direction: a player who could still tie must NOT be treated as
+  // eliminated, so their grey Pass stays a plain pass rather than silently giving up.
+  async 'a player still in contention just passes rather than giving up'() {
+    const ctx = await startedGame(3);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await judge(ctx, 'p1', true); // p1 finishes on turn 1 -> best = 1
+    // p2 is on turn 1: getting it now would tie, so they are still in it.
+    assert.equal(game.isEliminated('p2'), false);
+    const result = await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    assert.equal(result.gaveUp, false, 'a plain pass, not a surrender');
+    assert.ok(!game.surrendered.has('p2'), 'and they stay in the game');
+    assert.equal(game.currentPlayerId, 'p3', 'the turn simply moved on');
+    cleanup(ctx);
+  },
+
   async 'players drop out as they finish and the rotation skips them'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
