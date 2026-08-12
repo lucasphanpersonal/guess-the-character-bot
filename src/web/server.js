@@ -10,6 +10,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { Server } = require('socket.io');
 
 // --- Shared core: the exact same modules the Discord bot uses -----------------------------
@@ -91,10 +92,28 @@ const server = http.createServer((req, res) => {
 const io = new Server(server); // same-origin; serves its browser client at /socket.io/socket.io.js
 attachSockets(io, registry);
 
+// Every non-internal IPv4 address, so the startup log can print a URL a phone on the same
+// Wi-Fi can actually reach -- localhost is only reachable from this machine.
+function lanUrls() {
+  const urls = [];
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const a of addrs || []) {
+      if (a.family === 'IPv4' && !a.internal) urls.push(`http://${a.address}:${PORT}`);
+    }
+  }
+  return urls;
+}
+
 if (require.main === module) {
-  server.listen(PORT, () => {
-    console.log(`[web] Guess the Character on http://localhost:${PORT}`);
-    console.log(`[web] Sharing core with the Discord bot. Scope: ${WEB_SCOPE}`);
+  // Bind to 0.0.0.0 explicitly so other devices on the LAN (phones) can connect, not just
+  // this machine. Node defaults to this, but stating it makes the intent obvious.
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[web] Guess the Character (sharing core with the Discord bot). Scope: ${WEB_SCOPE}`);
+    console.log(`[web]   on this machine:  http://localhost:${PORT}`);
+    for (const url of lanUrls()) {
+      console.log(`[web]   on your phone:    ${url}   (same Wi-Fi)`);
+    }
+    console.log('[web] If a phone can\'t connect, allow Node.js through Windows Firewall on Private networks.');
   });
 }
 
