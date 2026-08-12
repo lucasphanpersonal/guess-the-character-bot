@@ -31,21 +31,29 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 ## Run it
 
 ```bash
-npm run web        # then open http://localhost:4180
+npm run web              # then open http://localhost:4180
+npm run check:web-socket # end-to-end socket check (create/join/reconnect/host handoff)
 ```
 
-Dependency-free skeleton (Node's built-in `http`, no socket.io yet). It serves a placeholder
-page and two endpoints that prove the core is reachable from this frontend:
+Open the page on two phones (or two browser tabs): one taps **Create a room**, the other
+enters the 4-letter code (or opens `/?room=CODE`). The roster updates live, offline players
+show a grey dot, and closing/reopening a tab reclaims the same seat.
+
+Endpoints that prove the shared core is reachable from this frontend:
 
 - `GET /api/health` — live room count + which round modes are wired.
 - `GET /api/categories` — categories from the shared content DB (scoped by `WEB_SCOPE`,
   default `web`; empty until lists are curated under that scope).
 
-## Not done yet (next stages, in order)
+## Stage status
 
-1. WebSocket rooms, join by code/QR, nickname identity.
-2. Setup flow: list/difficulty picking, confirm/reroll screen.
-3. Turn loop ported behind `roundMode.js` (tap-to-confirm placeholder for tilt).
-4. Forehead mode + tilt gestures + iOS motion permission.
-5. Reconnection (session tokens, wall-clock-anchored timers).
-6. Polish: audio/haptic cues, standings, rematch, optional scoreboard view.
+- **1. Rooms + membership — done.** `rooms.js` (transport-agnostic, unit-tested in
+  `test/web-rooms.test.js`) + `socket.js` (socket.io wiring) + a mobile lobby client in
+  `public/`. Create/join by code, live roster, nickname identity, and seats keyed by a
+  persistent client `playerId` so a dropped connection reclaims its seat. Codes are 4 chars
+  from an unambiguous alphabet (no O/0, I/1).
+- **2. Setup flow** — list/difficulty picking, confirm/reroll screen. _next_
+- **3. Turn loop** ported behind `core/game/roundMode.js` (tap-to-confirm placeholder for tilt).
+- **4. Forehead mode** + tilt gestures + iOS motion permission.
+- **5. Reconnection hardening** — wall-clock-anchored turn timers, resume mid-turn.
+- **6. Polish** — audio/haptic cues, standings, rematch, optional scoreboard view, QR codes.

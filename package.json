@@ -10,6 +10,7 @@
     "start": "node src/discord/index.js",
     "web": "node src/web/server.js",
     "test": "node test/run.js",
+    "check:web-socket": "node scripts/check-web-socket.js",
     "deploy-commands": "node src/discord/deploy-commands.js",
     "seed:pokemon": "node scripts/seed-pokemon-list.js",
     "seed:lol": "node scripts/seed-league-of-legends.js",
@@ -36,6 +37,10 @@
     "discord.js": "^14.15.3",
     "dotenv": "^16.4.5",
     "ffmpeg-static": "^5.2.0",
-    "opusscript": "^0.1.1"
+    "opusscript": "^0.1.1",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
   }
 }

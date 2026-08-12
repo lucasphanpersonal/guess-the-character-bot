@@ -1,51 +1,63 @@
-// Guess the Character -- web app server (skeleton).
+// Guess the Character -- web app server.
 //
-// This is the second frontend, alongside the Discord bot (src/discord). Both import their
-// game state and content from the SAME shared core (src/core) -- see the boundary note in
-// docs/mobile-app-plan.md#architecture and #whats-reusable-from-the-current-codebase.
+// The second frontend, alongside the Discord bot (src/discord). Both import their game state
+// and content from the SAME shared core (src/core) -- see docs/mobile-app-plan.md#architecture.
 //
-// STATUS: scaffold only. It proves the core/discord/web split works end to end -- the server
-// reuses the core DB layer and the core game state with no Discord dependency in sight -- and
-// gives `npm run web` something runnable. The real transport (WebSocket rooms, the turn loop
-// ported behind core/game/roundMode.js, forehead-mode tilt gestures) is the next stage; see
-// the build order in the plan. Dependency-free on purpose for now: Node's built-in http, no
-// socket.io yet, so nothing new is installed just to stand up the skeleton.
+// Stage 1 (current): socket.io rooms. Phones create/join a room by code, see a live roster,
+// and reclaim their seat on reconnect. No character dealing or turn loop yet -- those are
+// later stages that will build a core `Game` from a room's roster.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const { Server } = require('socket.io');
 
 // --- Shared core: the exact same modules the Discord bot uses -----------------------------
-// If either of these requires resolved into src/discord, the split would be leaking. They
-// don't -- the core knows nothing about either frontend.
 const GameManager = require('../core/game/GameManager');
 const { listCategoriesWithCounts } = require('../core/db/characterLists');
 const { TurnRotationMode } = require('../core/game/roundMode');
 
+// --- Web-only: transport + room membership ------------------------------------------------
+const { RoomRegistry } = require('./rooms');
+const { attachSockets } = require('./socket');
+
 const PORT = process.env.WEB_PORT || 4180;
-
 // The core's content queries are scoped by an id (a Discord guild id, historically). A web
-// party has no guild, so it needs its own scope for list selection/curation. A single shared
-// scope is fine for the skeleton; per-room or per-account scoping is a real decision flagged
-// under "Identity and leaderboard scope" in the plan.
+// party has no guild, so it needs its own scope. Per-room/account scoping is a later decision
+// (see "Identity and leaderboard scope" in the plan).
 const WEB_SCOPE = process.env.WEB_SCOPE || 'web';
-
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+const registry = new RoomRegistry();
+
+const CONTENT_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+};
+
 function sendJson(res, status, body) {
-  const payload = JSON.stringify(body, null, 2);
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-  res.end(payload);
+  res.end(JSON.stringify(body, null, 2));
 }
 
-function sendFile(res, file, contentType) {
-  fs.readFile(file, (err, data) => {
+// Serves a file from PUBLIC_DIR, guarding against path traversal outside it.
+function serveStatic(res, urlPath) {
+  const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
+  const filePath = path.join(PUBLIC_DIR, rel);
+  if (!filePath.startsWith(PUBLIC_DIR)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    return res.end('Forbidden');
+  }
+  fs.readFile(filePath, (err, data) => {
     if (err) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
-      res.end('Not found');
-      return;
+      return res.end('Not found');
     }
-    res.writeHead(200, { 'Content-Type': contentType });
+    res.writeHead(200, { 'Content-Type': CONTENT_TYPES[path.extname(filePath)] || 'application/octet-stream' });
     res.end(data);
   });
 }
@@ -53,44 +65,37 @@ function sendFile(res, file, contentType) {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  if (url.pathname === '/' ) {
-    return sendFile(res, path.join(PUBLIC_DIR, 'index.html'), 'text/html; charset=utf-8');
-  }
-
-  // Proves the core content pipeline is reachable from the web frontend, read-only. Empty for
-  // a fresh WEB_SCOPE until the list-curation UI (or a seed under this scope) exists -- the
-  // point here is that the query PATH works, reusing characterLists.js verbatim.
+  // Proves the core content pipeline is reachable, read-only. Empty for a fresh WEB_SCOPE
+  // until list curation exists under it -- the point is that the query PATH works.
   if (url.pathname === '/api/categories') {
     try {
-      return sendJson(res, 200, {
-        scope: WEB_SCOPE,
-        categories: listCategoriesWithCounts(WEB_SCOPE),
-      });
+      return sendJson(res, 200, { scope: WEB_SCOPE, categories: listCategoriesWithCounts(WEB_SCOPE) });
     } catch (err) {
       return sendJson(res, 500, { error: err.message });
     }
   }
 
-  // Proves the shared game-state layer is reachable too: how many rooms (lobbies) are live.
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,
-      rooms: GameManager.allLobbies().length,
-      roundModes: ['turn-rotation'], // simultaneous mode is planned; the seam is in place
+      rooms: registry.rooms.size,
+      lobbies: GameManager.allLobbies().length,
+      roundModes: ['turn-rotation'],
       turnRotationWired: typeof TurnRotationMode === 'function',
     });
   }
 
-  res.writeHead(404, { 'Content-Type': 'text/plain' });
-  res.end('Not found');
+  return serveStatic(res, url.pathname);
 });
 
-// Guard so this file can be require()d by a test without binding a port.
+const io = new Server(server); // same-origin; serves its browser client at /socket.io/socket.io.js
+attachSockets(io, registry);
+
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`[web] Guess the Character web skeleton on http://localhost:${PORT}`);
+    console.log(`[web] Guess the Character on http://localhost:${PORT}`);
     console.log(`[web] Sharing core with the Discord bot. Scope: ${WEB_SCOPE}`);
   });
 }
 
-module.exports = { server };
+module.exports = { server, io, registry };

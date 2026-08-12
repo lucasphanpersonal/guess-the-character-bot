@@ -3,45 +3,92 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#12131a" />
   <title>Guess the Character — party mode</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
   <style>
-    :root { color-scheme: light dark; }
-    body {
-      margin: 0; min-height: 100vh; display: grid; place-items: center;
-      font: 16px/1.5 system-ui, sans-serif; text-align: center; padding: 24px;
-      background: #12131a; color: #f4f4f6;
-    }
-    .card { max-width: 34rem; }
-    h1 { font-size: 1.6rem; margin: 0 0 .5rem; }
-    .tag { display: inline-block; padding: .2rem .6rem; border-radius: 999px;
-           background: #3a3f55; font-size: .8rem; letter-spacing: .04em; text-transform: uppercase; }
-    code { background: #23263a; padding: .1rem .35rem; border-radius: .3rem; }
-    .status { margin-top: 1.5rem; font-size: .9rem; opacity: .8; }
-    ol { text-align: left; opacity: .85; }
+    :root { color-scheme: dark; --bg:#12131a; --card:#1b1d29; --edge:#2c3048; --fg:#f4f4f6; --muted:#a0a3b8; --accent:#6f7bff; --accent2:#3a3f55; --ok:#49d17d; --off:#6b7086; --danger:#e5544b; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; min-height:100dvh; font:16px/1.5 system-ui,-apple-system,sans-serif;
+           background:var(--bg); color:var(--fg); display:flex; flex-direction:column; align-items:center; }
+    main { width:100%; max-width:32rem; padding:24px 20px 40px; flex:1; display:flex; flex-direction:column; }
+    h1 { font-size:1.5rem; margin:.2rem 0 1.2rem; }
+    .tag { display:inline-block; padding:.15rem .55rem; border-radius:999px; background:var(--accent2);
+           font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    .screen { display:none; flex-direction:column; gap:16px; }
+    .screen.active { display:flex; }
+    .card { background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:18px; }
+    label { display:block; font-size:.82rem; color:var(--muted); margin:0 0 6px; }
+    input { width:100%; padding:13px 14px; font-size:1.05rem; border-radius:12px; border:1px solid var(--edge);
+            background:#0f1017; color:var(--fg); }
+    input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+    #codeInput { text-transform:uppercase; letter-spacing:.35em; font-weight:700; text-align:center; }
+    button { width:100%; padding:14px; font-size:1.05rem; font-weight:600; border:none; border-radius:12px;
+             background:var(--accent); color:#fff; cursor:pointer; }
+    button.ghost { background:transparent; border:1px solid var(--edge); color:var(--fg); font-weight:500; }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:.8rem; }
+    .divider::before,.divider::after { content:""; height:1px; flex:1; background:var(--edge); }
+    .err { color:var(--danger); font-size:.9rem; min-height:1.2em; }
+    .roomcode { font-size:2.6rem; font-weight:800; letter-spacing:.4rem; text-align:center; margin:.2rem 0; }
+    .share { text-align:center; color:var(--muted); font-size:.85rem; word-break:break-all; }
+    .roster { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+    .seat { display:flex; align-items:center; gap:10px; padding:11px 12px; background:#0f1017;
+            border:1px solid var(--edge); border-radius:12px; }
+    .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); flex:none; }
+    .dot.off { background:var(--off); }
+    .seat .name { font-weight:600; }
+    .seat .you { color:var(--muted); font-weight:400; font-size:.82rem; }
+    .crown { margin-left:auto; font-size:.95rem; }
+    .count { color:var(--muted); font-size:.85rem; }
+    .hint { color:var(--muted); font-size:.85rem; text-align:center; }
+    .row { display:flex; gap:10px; }
+    .row > * { flex:1; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <span class="tag">Skeleton</span>
-    <h1>Guess the Character — party mode</h1>
-    <p>The phone-in-hand, Heads&nbsp;Up–style version of the game. This page is a placeholder
-       served by <code>src/web/server.js</code>, which shares its game core with the Discord bot.</p>
-    <p>Next stages (see <code>docs/mobile-app-plan.md</code>):</p>
-    <ol>
-      <li>WebSocket rooms + join by code/QR</li>
-      <li>Setup: pick lists, confirm/reroll characters</li>
-      <li>Turn loop ported behind <code>core/game/roundMode.js</code></li>
-      <li>Forehead mode + tilt-to-win gestures</li>
-    </ol>
-    <div class="status" id="status">checking core wiring…</div>
-  </div>
-  <script>
-    fetch('/api/health').then(r => r.json()).then(h => {
-      document.getElementById('status').textContent =
-        `core wired ✓ · live rooms: ${h.rooms} · round modes: ${h.roundModes.join(', ')}`;
-    }).catch(() => {
-      document.getElementById('status').textContent = 'could not reach /api/health';
-    });
-  </script>
+  <main>
+    <span class="tag">Party mode · stage 1</span>
+    <h1>Guess the Character 🎭</h1>
+
+    <!-- Landing -->
+    <section id="landing" class="screen active">
+      <div class="card">
+        <label for="nickInput">Your name</label>
+        <input id="nickInput" maxlength="20" placeholder="e.g. Alex" autocomplete="off" />
+      </div>
+      <div class="card">
+        <button id="createBtn">Create a room</button>
+      </div>
+      <div class="divider">or join one</div>
+      <div class="card">
+        <label for="codeInput">Room code</label>
+        <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" inputmode="latin" />
+        <div style="height:12px"></div>
+        <button id="joinBtn" class="ghost">Join room</button>
+      </div>
+      <p class="err" id="landingErr"></p>
+    </section>
+
+    <!-- Lobby -->
+    <section id="lobby" class="screen">
+      <div class="card">
+        <div class="hint">Room code — read it out or share the link</div>
+        <div class="roomcode" id="lobbyCode">····</div>
+        <div class="share" id="shareUrl"></div>
+      </div>
+      <div class="card">
+        <div class="count" id="playerCount">Players</div>
+        <div style="height:10px"></div>
+        <ul class="roster" id="roster"></ul>
+      </div>
+      <button id="startBtn" disabled>Start game — coming in stage 3</button>
+      <button id="leaveBtn" class="ghost">Leave room</button>
+      <p class="hint" id="connState"></p>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
 </body>
 </html>
