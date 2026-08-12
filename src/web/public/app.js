@@ -175,6 +175,11 @@ function bannerText(view, remaining) {
 
 function renderPlaying(view) {
   lastPlayView = view;
+  // With a motion sensor we play the real thing: full-screen forehead card + tilt to answer.
+  // Without one (e.g. plain HTTP, no permission), fall back to the tap model below.
+  if (motionEnabled) return renderForehead(view);
+  hideForehead();
+  renderMotionPrompt($('motionBanner'));
   const area = $('playArea');
   if (view.isMyTurn) {
     area.innerHTML = (view.outOfContentionNote ? `<p class="hint center">${escapeHtml(view.outOfContentionNote)}</p>` : '')
@@ -216,6 +221,7 @@ function logReveal(html) {
 
 function renderOver(result) {
   clearInterval(countdown);
+  hideForehead();
   const names = result.winners.map((w) => w.name);
   $('overEmoji').textContent = result.winners.length > 1 ? '🤝' : (result.winners.length ? '🏆' : '🛑');
   $('overResult').innerHTML = result.winners.length > 1
@@ -251,6 +257,123 @@ function addBtn(parent, label, cls, onClick) {
   parent.appendChild(b);
 }
 
+// --- motion / tilt / forehead mode --------------------------------------------------------
+let motionEnabled = false;
+const motionSupported = typeof window.DeviceOrientationEvent !== 'undefined';
+const needsMotionPermission = () => typeof DeviceOrientationEvent?.requestPermission === 'function'; // iOS
+// Tilt state: baseline captured at the start of each of MY turns; a gesture must be held past a
+// threshold for ~600ms and the phone must return near neutral before another can fire.
+const tilt = { baseline: null, armed: true, dir: null, since: 0, lastFire: 0 };
+const TILT_THRESHOLD = 32; // degrees from neutral
+const TILT_HOLD_MS = 550;
+
+async function enableMotion() {
+  if (!motionSupported) return;
+  try {
+    if (needsMotionPermission()) {
+      const res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') { motionNote = 'Motion blocked — using tap buttons.'; if (lastPlayView) renderPlaying(lastPlayView); return; }
+    }
+    window.addEventListener('deviceorientation', onOrientation);
+    motionEnabled = true;
+    motionNote = '';
+    if (lastPlayView) renderPlaying(lastPlayView); // upgrade the current screen into forehead mode
+  } catch {
+    motionNote = 'Could not start motion — using tap buttons.';
+  }
+}
+
+function onOrientation(e) {
+  const v = lastPlayView;
+  if (!v || v.phase !== 'playing' || !v.isMyTurn || e.beta == null) { tilt.dir = null; return; }
+  if (tilt.baseline == null) tilt.baseline = e.beta;
+  const delta = e.beta - tilt.baseline;
+  const now = Date.now();
+  const dir = delta > TILT_THRESHOLD ? 'gotit' : delta < -TILT_THRESHOLD ? 'pass' : null;
+  if (!dir) { tilt.armed = true; tilt.dir = null; return; } // returned near neutral -> re-arm
+  if (dir !== tilt.dir) { tilt.dir = dir; tilt.since = now; return; }
+  if (tilt.armed && now - tilt.since > TILT_HOLD_MS && now - tilt.lastFire > 1200) {
+    tilt.armed = false;
+    tilt.lastFire = now;
+    fireGesture(dir);
+  }
+}
+
+function fireGesture(dir) {
+  navigator.vibrate?.(60);
+  if (dir === 'gotit') socket.emit('game:gotit', {}, () => {});
+  else if (dir === 'pass' && lastPlayView?.buttons?.pass) socket.emit('game:pass', {}, () => {});
+}
+
+let motionNote = '';
+let foreheadMyTurn = false;
+function renderForehead(view) {
+  const el = $('forehead');
+  el.classList.add('active');
+  el.classList.toggle('mine', view.isMyTurn);
+  el.classList.toggle('watch', !view.isMyTurn);
+  $('foreheadTurn').innerHTML = view.isMyTurn
+    ? `🫵 Your turn${view.turnRemaining != null ? ` · ⏱ ${view.turnRemaining}s` : ''}`
+    : `🎯 ${escapeHtml(view.current.name)}'s turn — turn ${view.current.turnNumber}`;
+  const ch = view.myCharacter;
+  $('foreheadName').textContent = ch ? ch.name : '…';
+  $('foreheadSrc').textContent = ch && ch.source ? ch.source : '';
+  const img = $('foreheadImg');
+  if (ch && ch.imageUrl) { img.src = ch.imageUrl; img.style.display = ''; img.onerror = () => (img.style.display = 'none'); }
+  else img.style.display = 'none';
+  $('foreheadHint').textContent = view.isMyTurn
+    ? 'Tilt forward = Got it · tilt back = Pass'
+    : 'Hold it on your forehead — help them by answering.';
+  $('foreheadGiveUp').style.display = view.isMyTurn && view.buttons?.giveUp ? '' : 'none';
+  // New turn for me: reset the tilt baseline and buzz so I know I'm up without looking.
+  if (view.isMyTurn && !foreheadMyTurn) { tilt.baseline = null; tilt.armed = true; navigator.vibrate?.([120, 60, 120]); }
+  foreheadMyTurn = view.isMyTurn;
+  show('playing');
+}
+
+function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; }
+
+function renderMotionPrompt(container) {
+  container.innerHTML = '';
+  if (!motionSupported || motionEnabled) { if (motionNote) container.innerHTML = `<p class="hint center">${escapeHtml(motionNote)}</p>`; return; }
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `<p class="hint center">Playing on a phone? Enable tilt to hold it on your forehead like Heads Up.</p>`;
+  const b = document.createElement('button');
+  b.className = 'enable-motion';
+  b.textContent = '📱 Enable tilt controls';
+  b.addEventListener('click', enableMotion);
+  card.appendChild(b);
+  if (motionNote) { const p = document.createElement('p'); p.className = 'hint center'; p.textContent = motionNote; card.appendChild(p); }
+  container.appendChild(card);
+}
+
+function startCountdown(seconds) {
+  hideForehead();
+  clearInterval(countdown);
+  let n = Math.max(0, seconds);
+  $('countNum').textContent = n || '0';
+  // Offer motion-enable right here — the countdown is a natural "tap, then raise your phone" beat.
+  const cnum = $('countNum');
+  if (motionSupported && !motionEnabled && !document.getElementById('countEnable')) {
+    const b = document.createElement('button');
+    b.id = 'countEnable';
+    b.className = 'enable-motion';
+    b.style.marginTop = '14px';
+    b.textContent = '📱 Enable tilt controls';
+    b.addEventListener('click', enableMotion);
+    cnum.parentElement.appendChild(b);
+  }
+  navigator.vibrate?.(80);
+  show('countdown');
+  countdown = setInterval(() => {
+    n -= 1;
+    if (n <= 0) { clearInterval(countdown); $('countNum').textContent = '0'; return; }
+    $('countNum').textContent = n;
+    navigator.vibrate?.(40);
+  }, 1000);
+}
+
 // --- helpers ------------------------------------------------------------------------------
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function readNick() { nickname = $('nickInput').value.trim(); if (nickname) store.set('gtc_nick', nickname); return nickname; }
@@ -279,7 +402,7 @@ function joinRoom() {
 }
 function leaveRoom() {
   socket.emit('room:leave', {}, () => {});
-  currentRoom = null; lastState = null; store.del('gtc_lastRoom'); show('landing');
+  currentRoom = null; lastState = null; store.del('gtc_lastRoom'); hideForehead(); show('landing');
 }
 
 // --- routing --------------------------------------------------------------------------------
@@ -302,6 +425,7 @@ socket.on('room:state', (state) => {
 
 socket.on('setup:state', (view) => renderSetup(view));
 
+socket.on('game:countdown', ({ seconds }) => startCountdown(seconds));
 socket.on('game:state', (view) => renderPlaying(view));
 socket.on('game:reveal', (r) => {
   const html = r.kind === 'got'
@@ -345,6 +469,7 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
   else if (!res?.ok) $('rerollNote').textContent = res?.error || '';
   else $('rerollNote').textContent = '';
 }));
+$('foreheadGiveUp').addEventListener('click', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
 $('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, () => {}));
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
 $('codeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));

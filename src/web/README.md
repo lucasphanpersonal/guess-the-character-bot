@@ -31,9 +31,16 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 ## Run it
 
 ```bash
-npm run web              # then open http://localhost:4180
-npm run check:web-socket # end-to-end socket check (create/join/reconnect/host handoff)
+npm run web              # HTTP on :4180 — tap fallback (tilt sensors need HTTPS)
+npm run web:secure       # HTTPS on :4180 (self-signed) — required for tilt-to-win on phones
+npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game)
 ```
+
+**Testing tilt on a phone:** mobile browsers only expose motion sensors over a secure context,
+so plain `http://<LAN-ip>` can't do tilt. Run `npm run web:secure`, open the printed
+`https://<LAN-ip>:4180` on the phone, accept the one-time self-signed-cert warning, tap
+**Enable tilt controls**, and (on iOS) grant motion access. Without any of that the game still
+plays fully via on-screen buttons (the tap fallback).
 
 Open the page on two phones (or two browser tabs): one taps **Create a room**, the other
 enters the 4-letter code (or opens `/?room=CODE`). The roster updates live, offline players
@@ -58,8 +65,14 @@ Endpoints that prove the shared core is reachable from this frontend:
   reference — never their own. `gameSetup.js` is pure and unit-tested in
   `test/web-setup.test.js`; content is injected so it needs no DB. `WEB_SCOPE` auto-resolves to
   the richest seeded scope so a phone test deals real characters immediately.
-- **3. Turn loop** ported behind `core/game/roundMode.js` (tap-to-confirm placeholder for tilt).
-  _next_
-- **4. Forehead mode** + tilt gestures + iOS motion permission.
-- **5. Reconnection hardening** — wall-clock-anchored turn timers, resume mid-turn.
-- **6. Polish** — audio/haptic cues, standings, rematch, optional scoreboard view, QR codes.
+- **3. Turn loop — done.** `turnLoop.js` ports the engine.js rules (rotation, fewest-turns
+  scoring, pass/give-up, resolve-once, out-of-contention) over the core Game. Server-authoritative
+  turn clock; per-player views; reveal/over broadcasts; leaving mid-game forfeits.
+- **4. Forehead mode — done.** A synchronized grace countdown ("phone on your forehead!"), then
+  each phone shows its wearer's character full-screen for the room. Tilt forward = Got it, tilt
+  back = Pass (held ~550ms, debounced); Give up is a button. Falls back to the stage-3 tap model
+  when no motion sensor is available. iOS motion permission handled via an Enable-tilt tap.
+  `npm run web:secure` serves the HTTPS the sensors require. Tilt thresholds still want in-person
+  playtest tuning (see TILT_THRESHOLD / TILT_HOLD_MS in `public/app.js`).
+- **5. Reconnection hardening** — wall-clock-anchored turn timers, resume mid-turn. _next_
+- **6. Polish** — richer audio/haptic cues, rematch with same settings, scoreboard view, QR codes.

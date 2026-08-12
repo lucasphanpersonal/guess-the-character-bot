@@ -57,6 +57,20 @@
     .checkowner { text-align:center; font-weight:700; font-size:1.05rem; }
     .badge { display:inline-block; padding:.1rem .5rem; border-radius:999px; background:var(--accent2); font-size:.75rem; }
     .big-emoji { font-size:3rem; text-align:center; }
+    /* Grace countdown + forehead mode */
+    .countnum { font-size:6rem; font-weight:900; text-align:center; line-height:1.1; }
+    #forehead { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
+                text-align:center; padding:20px; z-index:50; }
+    #forehead.active { display:flex; }
+    #forehead.mine { background:#0b1f3a; }        /* it's my turn */
+    #forehead.watch { background:#12131a; }
+    #foreheadName { font-size:12vw; font-weight:900; line-height:1.05; word-break:break-word; }
+    #foreheadSrc { color:var(--muted); font-size:1rem; margin-top:8px; }
+    #foreheadImg { max-height:34vh; max-width:80%; border-radius:16px; margin:14px auto; }
+    #foreheadTurn { position:fixed; top:16px; left:0; right:0; text-align:center; font-weight:700; font-size:1.1rem; }
+    #foreheadHint { position:fixed; bottom:74px; left:0; right:0; text-align:center; color:var(--muted); font-size:.95rem; padding:0 16px; }
+    #foreheadGiveUp { position:fixed; bottom:16px; left:16px; right:16px; width:auto; }
+    .enable-motion { background:var(--warn); color:#231a03; }
   </style>
 </head>
 <body>
@@ -134,9 +148,19 @@
       <p class="hint center" id="waitingNote"></p>
     </section>
 
+    <!-- Grace countdown before the reveal -->
+    <section id="countdown" class="screen">
+      <div class="card">
+        <div class="hint center">Put your phone on your forehead so everyone can see it!</div>
+        <div class="countnum" id="countNum">5</div>
+        <div class="hint center">Your character appears when this hits zero. Don't peek 🙈</div>
+      </div>
+    </section>
+
     <!-- Playing (turn loop) -->
     <section id="playing" class="screen">
       <div class="card" id="turnBanner"></div>
+      <div id="motionBanner"></div>
       <div class="card" id="playArea"></div>
       <div class="card">
         <div class="hint">Standings</div>
@@ -146,6 +170,16 @@
       <div id="revealLog"></div>
       <button id="playLeaveBtn" class="ghost">Leave game</button>
     </section>
+
+    <!-- Forehead mode overlay (motion enabled): shows YOUR character for the room -->
+    <div id="forehead">
+      <div id="foreheadTurn"></div>
+      <div id="foreheadName"></div>
+      <img id="foreheadImg" alt="" style="display:none" />
+      <div id="foreheadSrc"></div>
+      <div id="foreheadHint"></div>
+      <button id="foreheadGiveUp" class="ghost" style="display:none">🏳️ Give up</button>
+    </div>
 
     <!-- Game over -->
     <section id="over" class="screen">

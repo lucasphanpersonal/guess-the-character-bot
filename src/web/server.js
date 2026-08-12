@@ -8,6 +8,7 @@
 // later stages that will build a core `Game` from a room's roster.
 
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -144,7 +145,7 @@ function serveStatic(res, urlPath) {
   });
 }
 
-const server = http.createServer((req, res) => {
+function requestHandler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   // Proves the core content pipeline is reachable, read-only. Empty for a fresh WEB_SCOPE
@@ -168,32 +169,66 @@ const server = http.createServer((req, res) => {
   }
 
   return serveStatic(res, url.pathname);
-});
+}
+
+// Mobile browsers only expose motion/orientation sensors (the tilt-to-win gestures) over a
+// secure context. Plain http://<LAN-ip> is NOT one, so set WEB_HTTPS=1 (npm run web:secure) to
+// serve over a self-signed cert instead -- phones show a one-time "not private" warning to
+// accept, after which tilt works. HTTP stays the default for the tap-fallback flow.
+const USE_HTTPS = process.env.WEB_HTTPS === '1' || process.env.WEB_HTTPS === 'true';
+
+function lanIPv4s() {
+  const ips = [];
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const a of addrs || []) if (a.family === 'IPv4' && !a.internal) ips.push(a.address);
+  }
+  return ips;
+}
+
+// A cached self-signed cert for localhost + every LAN IPv4, so the same cert works whether a
+// phone hits the machine by IP or the machine hits itself by localhost.
+function devTlsOptions() {
+  const dir = path.join(__dirname, '..', '..', 'data');
+  const keyPath = path.join(dir, 'dev-tls.key');
+  const certPath = path.join(dir, 'dev-tls.cert');
+  try {
+    if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+      return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+    }
+  } catch {
+    /* regenerate below */
+  }
+  const selfsigned = require('selfsigned');
+  const altNames = [
+    { type: 2, value: 'localhost' },
+    { type: 7, ip: '127.0.0.1' },
+    ...lanIPv4s().map((ip) => ({ type: 7, ip })),
+  ];
+  const pems = selfsigned.generate([{ name: 'commonName', value: 'gtc-dev' }], { days: 3650, keySize: 2048, altNames });
+  try {
+    fs.writeFileSync(keyPath, pems.private);
+    fs.writeFileSync(certPath, pems.cert);
+  } catch {
+    /* non-fatal: run with an in-memory cert */
+  }
+  return { key: pems.private, cert: pems.cert };
+}
+
+const server = USE_HTTPS ? https.createServer(devTlsOptions(), requestHandler) : http.createServer(requestHandler);
 
 const io = new Server(server); // same-origin; serves its browser client at /socket.io/socket.io.js
 attachSockets(io, { registry, setup });
 
-// Every non-internal IPv4 address, so the startup log can print a URL a phone on the same
-// Wi-Fi can actually reach -- localhost is only reachable from this machine.
-function lanUrls() {
-  const urls = [];
-  for (const addrs of Object.values(os.networkInterfaces())) {
-    for (const a of addrs || []) {
-      if (a.family === 'IPv4' && !a.internal) urls.push(`http://${a.address}:${PORT}`);
-    }
-  }
-  return urls;
-}
-
 if (require.main === module) {
+  const scheme = USE_HTTPS ? 'https' : 'http';
   // Bind to 0.0.0.0 explicitly so other devices on the LAN (phones) can connect, not just
   // this machine. Node defaults to this, but stating it makes the intent obvious.
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[web] Guess the Character (sharing core with the Discord bot). Scope: ${WEB_SCOPE}`);
-    console.log(`[web]   on this machine:  http://localhost:${PORT}`);
-    for (const url of lanUrls()) {
-      console.log(`[web]   on your phone:    ${url}   (same Wi-Fi)`);
-    }
+    console.log(`[web]   on this machine:  ${scheme}://localhost:${PORT}`);
+    for (const ip of lanIPv4s()) console.log(`[web]   on your phone:    ${scheme}://${ip}:${PORT}   (same Wi-Fi)`);
+    if (USE_HTTPS) console.log('[web] Self-signed cert: accept the one-time browser warning. Tilt/motion needs this HTTPS.');
+    else console.log('[web] HTTP mode: tap fallback only. For tilt-to-win on phones, use `npm run web:secure`.');
     console.log('[web] If a phone can\'t connect, allow Node.js through Windows Firewall on Private networks.');
   });
 }

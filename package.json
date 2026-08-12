@@ -9,6 +9,7 @@
   "scripts": {
     "start": "node src/discord/index.js",
     "web": "node src/web/server.js",
+    "web:secure": "cross-env WEB_HTTPS=1 node src/web/server.js",
     "test": "node test/run.js",
     "check:web-socket": "node scripts/check-web-socket.js",
     "deploy-commands": "node src/discord/deploy-commands.js",
@@ -41,6 +42,8 @@
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
+    "selfsigned": "^2.4.1",
     "socket.io-client": "^4.8.3"
   }
 }

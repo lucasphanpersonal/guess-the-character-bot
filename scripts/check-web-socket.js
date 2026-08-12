@@ -12,6 +12,7 @@ const path = require('path');
 
 process.env.WEB_PORT = process.env.WEB_PORT || '4199';
 process.env.WEB_SCOPE = process.env.WEB_SCOPE || 'gtc-check-scope';
+process.env.WEB_GRACE_SECONDS = process.env.WEB_GRACE_SECONDS || '1'; // short grace so the check stays quick
 process.env.BOT_DB_PATH = process.env.BOT_DB_PATH || path.join(os.tmpdir(), 'gtc-ws-check.sqlite');
 
 // Seed a tiny content scope BEFORE requiring the server (which resolves WEB_SCOPE at load).
@@ -96,14 +97,18 @@ const connect = (playerId) => {
   check(res.ok, 'C rerolls the character they check');
   check((await cReroll).rerollsLeft === -1, 'rerolls are unlimited (budget stays -1)');
 
-  // ---- Stage 3: the turn loop ----------------------------------------------------------
-  console.log('\n# stage 3 — turn loop');
+  // ---- Stage 3 + 4: countdown, then the turn loop --------------------------------------
+  console.log('\n# stage 3/4 — grace countdown + turn loop');
+  const cCountdown = nextEvent(C, 'game:countdown');
   const cPlay = nextEvent(C, 'game:state');
   await C.emitWithAck('setup:confirm', {});
   await D.emitWithAck('setup:confirm', {});
+  const cd = await cCountdown;
+  check(cd.seconds >= 1, 'a grace countdown fires before the reveal (forehead moment)');
   const firstView = await cPlay;
-  check(firstView.phase === 'playing' && firstView.isMyTurn === true, 'both confirm -> game starts, host is up first');
-  check(firstView.wearing === null, 'the guesser is not shown their own character');
+  check(firstView.phase === 'playing' && firstView.isMyTurn === true, 'after the countdown, game starts, host up first');
+  check(firstView.wearing === null, 'the guesser is not shown the guesser-card (tap fallback)');
+  check(firstView.myCharacter && !!firstView.myCharacter.name, 'forehead mode gets the viewer\'s own character');
   check(firstView.turnRemaining > 0, 'a turn clock is running');
 
   const over = nextEvent(C, 'game:over');

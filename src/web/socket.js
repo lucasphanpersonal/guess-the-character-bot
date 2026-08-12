@@ -35,7 +35,11 @@ function attachSockets(io, { registry, setup }) {
   // so setup reverts to the lobby and the host re-deals. Only for explicit leaves; a mere
   // disconnect keeps the seat.
   const abortSetupToLobby = (room, reason) => {
-    if (room && (room.status === 'setup' || room.status === 'ready')) {
+    if (room && (room.status === 'setup' || room.status === 'ready' || room.status === 'countdown')) {
+      if (room.countdownTimer) {
+        clearTimeout(room.countdownTimer);
+        room.countdownTimer = null;
+      }
       room.status = 'lobby';
       room.game = null;
       io.to(room.code).emit('setup:aborted', { reason });
@@ -94,12 +98,34 @@ function attachSockets(io, { registry, setup }) {
     }
   }
 
-  const startPlaying = (room) => {
+  // Grace period: after everyone locks in, a synchronized countdown so players can raise their
+  // phones to their foreheads before their character appears -- the moment the whole format is
+  // built around. Configurable (WEB_GRACE_SECONDS); 0 skips straight to play (used by tests).
+  const GRACE_SECONDS = Number(process.env.WEB_GRACE_SECONDS ?? 5);
+
+  const beginGame = (room) => {
+    room.countdownTimer = null;
     room.status = 'playing';
     loop.startTurn(room.game); // first player's turn 1
     scheduleTurn(room);
     broadcastRoom(room);
     emitGame(room);
+  };
+
+  const startPlaying = (room) => {
+    if (GRACE_SECONDS <= 0) return beginGame(room);
+    room.status = 'countdown';
+    room.countdownEndsAt = Date.now() + GRACE_SECONDS * 1000;
+    broadcastRoom(room);
+    io.to(room.code).emit('game:countdown', { seconds: GRACE_SECONDS });
+    room.countdownTimer = setTimeout(() => beginGame(room), GRACE_SECONDS * 1000);
+  };
+
+  const clearCountdown = (room) => {
+    if (room?.countdownTimer) {
+      clearTimeout(room.countdownTimer);
+      room.countdownTimer = null;
+    }
   };
 
   io.on('connection', (socket) => {
@@ -136,6 +162,9 @@ function attachSockets(io, { registry, setup }) {
       const g = res.room.game;
       if ((res.room.status === 'setup' || res.room.status === 'ready') && g?.confirmState[playerId]) {
         socket.emit('setup:state', setup.view(g, playerId, namesOf(res.room)));
+      } else if (res.room.status === 'countdown') {
+        const remaining = Math.max(0, Math.round(((res.room.countdownEndsAt ?? Date.now()) - Date.now()) / 1000));
+        socket.emit('game:countdown', { seconds: remaining });
       } else if (res.room.status === 'playing' && g?.turnOrder.includes(playerId)) {
         socket.emit('game:state', loop.buildGameView(g, playerId, namesOf(res.room), Date.now()));
       } else if (res.room.status === 'finished' && g) {
@@ -210,6 +239,7 @@ function attachSockets(io, { registry, setup }) {
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can restart.' });
       clearTurnTimer(r);
+      clearCountdown(r);
       r.game = null;
       r.status = 'lobby';
       ack?.({ ok: true });
