@@ -295,18 +295,59 @@ module.exports = {
     assert.equal(buttons.pass.style, 2, 'still grey (Secondary)');
   },
 
-  async 'the Give up button, shown only to the last player, ends the game'() {
+  async 'the Give up button asks first, then ends the game for the last player'() {
     const ctx = await runningGame();
     await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', true); // p1 finishes; p2 now alone
+    const game = ctx.lobby.game;
 
     // The board's guesser control is now a give-up action, not a pass.
-    const payload = buildTurnBoardPayload(ctx.lobby.game, ctx.channelId);
+    const payload = buildTurnBoardPayload(game, ctx.channelId);
     const buttons = buttonsOf(payload);
     assert.ok(buttons.giveup, 'the lone survivor gets a give-up button');
     assert.equal(buttons.pass, undefined, 'and no pass -- nobody to pass to');
 
+    // Clicking Give up only opens an ephemeral confirmation -- like ✅ and /lobby leave, it does
+    // NOT surrender on a single tap.
     await clickButton(ctx, 'p2', 'giveup');
-    assert.equal(ctx.lobby.status, 'FINISHED', 'giving up when alone ends the game');
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'the button only asks first');
+    const confirm = ctx.recorder.lastMatching('reply:p2');
+    assert.match(confirm.content, /Give up\?/, 'it asks before doing anything');
+    const confirmBtn = confirm.payload.components[0].toJSON().components[0];
+    assert.match(confirmBtn.custom_id, /^turn:giveupyes:/, 'and carries the confirm button');
+
+    // Confirming it ends the game.
+    await handleComponentInteraction(
+      createButtonInteraction({
+        client: ctx.client,
+        userId: 'p2',
+        customId: `turn:giveupyes:${ctx.channelId}:p2:${game.turnsFor('p2')}:${game.gameInstanceId}`,
+        recorder: ctx.recorder,
+      })
+    );
+    assert.equal(ctx.lobby.status, 'FINISHED', 'confirming ends the game');
+    cleanup(ctx);
+  },
+
+  // A confirmation raised on one turn but pressed after the turn has moved on must not surrender
+  // whoever is up now -- it answers "too late" and records nothing.
+  async 'a stale give-up confirmation is refused rather than surrendering the wrong turn'() {
+    const ctx = await runningGame(); // p1 and p2, p1 up on turn 1
+    const game = ctx.lobby.game;
+    // Build a confirm as if raised for p1 on turn 1, but press it after p1 has passed.
+    await clickButton(ctx, 'p1', 'pass'); // now p2 is up; p1's turn is over
+    assert.equal(game.currentPlayerId, 'p2');
+
+    await handleComponentInteraction(
+      createButtonInteraction({
+        client: ctx.client,
+        userId: 'p1',
+        customId: `turn:giveupyes:${ctx.channelId}:p1:1:${game.gameInstanceId}`,
+        recorder: ctx.recorder,
+      })
+    );
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'nothing was ended');
+    assert.ok(!game.surrendered.has('p1'), 'and nobody was surrendered');
+    assert.match(ctx.recorder.allText(), /Too late/);
     cleanup(ctx);
   },
 

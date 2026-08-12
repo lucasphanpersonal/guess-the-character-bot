@@ -480,6 +480,15 @@ async function submitGiveUp(client, lobby, playerId) {
   if (playerId !== game.currentPlayerId) {
     return { ok: false, error: "It's not your turn." };
   }
+  // Guards a double-press. The character reveal below runs BEFORE endTurn (whose resolvedTurns
+  // lock protects the rotation), so without this a second give-up racing the first -- arriving
+  // while the reveal's channel.send is still awaiting, before endTurn has advanced
+  // currentPlayerId -- would post the reveal a second time. `surrendered.add` is synchronous and
+  // happens before that first await, so the loser of the race sees isActive === false here and
+  // bails. Same guard submitForfeit uses.
+  if (!game.isActive(playerId)) {
+    return { ok: false, error: "You're already out of this game." };
+  }
   game.surrendered.add(playerId);
   // activePlayers now excludes them, so this counts only the OTHERS still guessing. If any
   // remain the game plays on, so reveal their character right away and mark it revealed so the

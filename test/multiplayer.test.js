@@ -646,6 +646,35 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // The give-up reveal is sent BEFORE endTurn's resolvedTurns lock, so a double-press could
+  // post it twice without the isActive guard in submitGiveUp. Racing two presses proves the
+  // guard holds: one surrender, one reveal, one advance.
+  async 'double-tapping Give up surrenders and reveals only once'() {
+    const ctx = await startedGame(3);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+    const p2Head = `**${game.headByPlayer.p2.name}**`;
+
+    await judge(ctx, 'p1', true); // p1 done, best = 1
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p3');
+    assert.equal(game.currentPlayerId, 'p2', 'p2 is up, out of contention, others still active');
+
+    const [a, b] = await Promise.all([
+      engine.submitGiveUp(ctx.client, ctx.lobby, 'p2'),
+      engine.submitGiveUp(ctx.client, ctx.lobby, 'p2'),
+    ]);
+    assert.ok(a.ok !== b.ok, 'exactly one press took effect; the other was refused');
+    assert.equal(game.currentPlayerId, 'p3', 'the rotation advanced only once');
+
+    const shown = ctx.recorder.sent
+      .filter((m) => m.target === `channel:${ctx.channelId}`)
+      .flatMap((m) => m.payload?.embeds ?? [])
+      .filter((e) => (e.data.description ?? '').includes(p2Head));
+    assert.equal(shown.length, 1, 'the reveal was posted exactly once');
+    cleanup(ctx);
+  },
+
   async 'players drop out as they finish and the rotation skips them'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
