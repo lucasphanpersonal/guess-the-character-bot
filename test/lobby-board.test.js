@@ -6,12 +6,12 @@ const {
   createSlashInteraction,
 } = require('./harness');
 
-const { buildLobbyBoardPayload } = require('../src/game/lobbyBoard');
-const { handleComponentInteraction } = require('../src/components/router');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const { buildLobbyBoardPayload } = require('../src/discord/game/lobbyBoard');
+const { handleComponentInteraction } = require('../src/discord/components/router');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 
@@ -212,7 +212,7 @@ module.exports = {
     assert.ok(recorder.sent.some((m) => m.target === 'dm:p1'), 'p1 was DMed a character');
     assert.ok(recorder.sent.some((m) => m.target === 'dm:p2'), 'p2 was DMed a character');
 
-    if (lobby.game) require('../src/game/engine').clearTimers(lobby.game);
+    if (lobby.game) require('../src/discord/game/engine').clearTimers(lobby.game);
     GameManager.endLobby(channelId);
   },
 
@@ -225,7 +225,7 @@ module.exports = {
     const client = createFakeClient(recorder);
     lobby.boardMessage = recorder.record(`channel:${channelId}`, buildLobbyBoardPayload(lobby), channelId);
 
-    await require('../src/commands/actions/lobby-leave').execute(
+    await require('../src/discord/commands/actions/lobby-leave').execute(
       createSlashInteraction({ client, userId: 'host', guildId, channelId, recorder })
     );
 
@@ -243,7 +243,7 @@ module.exports = {
     const client = createFakeClient(recorder);
     lobby.boardMessage = recorder.record(`channel:${channelId}`, buildLobbyBoardPayload(lobby), channelId);
 
-    await require('../src/commands/actions/lobby-end').execute(
+    await require('../src/discord/commands/actions/lobby-end').execute(
       createSlashInteraction({ client, userId: 'host', guildId, channelId, recorder })
     );
 

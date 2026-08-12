@@ -7,8 +7,8 @@
 //
 //   node scripts/clean-character-images.js <guildId> [--dry-run]
 
-const db = require('../src/db/connection');
-const { imageIsTrustworthy } = require('../src/util/characterImages');
+const db = require('../src/core/db/connection');
+const { imageIsTrustworthy } = require('../src/core/util/characterImages');
 
 function main() {
   const args = process.argv.slice(2);

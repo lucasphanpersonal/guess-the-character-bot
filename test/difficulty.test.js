@@ -4,8 +4,8 @@
 // list -- which list-level curation cannot reach.
 
 const { assert } = require('./harness');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 function freshGuild() {

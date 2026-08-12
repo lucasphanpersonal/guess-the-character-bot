@@ -581,43 +581,64 @@ Add `--group <key>` to sweep one source group, or `--list-groups` to see them.
 
 ## Project layout
 
+The repo holds **two frontends over one shared core**. `core/` is Discord-agnostic and
+frontend-agnostic; `discord/` is this bot; `web/` is the party-mode web app
+([docs/mobile-app-plan.md](docs/mobile-app-plan.md)). The rule that keeps them untangled:
+**`core/` never imports from `discord/` or `web/`** — both frontends depend on the core, the
+core depends on neither.
+
 ```
 src/
-  index.js              Client bootstrap, interaction routing, graceful shutdown
-  deploy-commands.js    Registers slash commands (run manually)
-  commands/             One file per slash command; each exports { data, execute, autocomplete? }
-    lists/              Character-list management commands
-  components/
-    router.js           Routes button/select/modal events by customId namespace
-    lobbyButtons.js     Lobby board button handlers + the settings modal
-    turnControls.js     Turn board buttons + the guess modal
-    voteControls.js     Audience ballot + host close button
-    gameOverControls.js Rematch / Leaderboard buttons on the reveal
-    listBrowser.js      Paginated category/list/character browsing for /list show
-    listFilter.js       Checkbox page for the server's playable list selection
-  game/
-    GameManager.js      Map<channelId, Lobby> — one lobby per channel
-    Lobby.js            Pre-game state: host, players, spectators, settings
-    lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
-    Game.js             Active-game state: turn counts, who has finished, standings
-    engine.js           Turn loop, DMs, confirm/reroll, completion and final scoring
-    lobbyBoard.js       Renders the self-updating lobby message
-    turnBoard.js        Renders the self-updating turn message
-    audienceVote.js     Audience-vote state, ballots, tallying (spoiler-safe board)
-    rematch.js          Builds a rematch lobby from a finished one
-    turnTimer.js        Turn countdown wrapper
-    timerWatchdog.js    Wall-clock backstop for turn/vote deadlines (sleep-safe)
-    boards.js           Tracks live button messages and retires them after a restart
-    voice.js            Voice-channel join + sound playback (all best-effort)
-  util/
-    characterImages.js  Which image sources can be believed to depict the character
-  db/
-    connection.js       SQLite setup + lightweight column migrations
-    schema.sql          character_lists, characters, game_results, active_boards
-    activeBoards.js     Which board messages are live right now
-    characterLists.js   List/character queries, random selection, search
-    stats.js            Win/loss records and leaderboard
-  util/text.js          Shared accent/case normalization
+  core/                 Shared, frontend-agnostic. Imports nothing from discord/ or web/.
+    db/
+      connection.js       SQLite setup + lightweight column migrations
+      schema.sql          character_lists, characters, games, game_players, active_boards
+      activeBoards.js     Which board messages are live right now
+      characterLists.js   List/character queries, random selection, search
+      stats.js            Win/loss records and leaderboard
+    game/
+      GameManager.js      Map<roomKey, Lobby> — one lobby per channel (Discord) / room (web)
+      Lobby.js            Pre-game state: host, players, spectators, settings
+      lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
+      Game.js             Active-game state: turn counts, who has finished, standings
+      roundMode.js        The who-may-act / how-to-advance seam (TurnRotationMode today)
+    util/
+      text.js             Shared accent/case normalization
+      characterImages.js  Which image sources can be believed to depict the character
+
+  discord/              The Discord bot. Imports from core/.
+    index.js              Client bootstrap, interaction routing, graceful shutdown
+    deploy-commands.js    Registers slash commands (run manually)
+    commands/             One file per slash command; each exports { data, execute, autocomplete? }
+      actions/            Subcommand implementations for /list and /lobby
+    components/
+      router.js           Routes button/select/modal events by customId namespace
+      lobbyButtons.js     Lobby board button handlers + the settings modal
+      turnControls.js     Turn board buttons + the guess modal
+      voteControls.js     Audience ballot + host close button
+      gameOverControls.js Rematch / Leaderboard buttons on the reveal
+      listBrowser.js      Paginated category/list/character browsing for /list show
+      listFilter.js       Checkbox page for the server's playable list selection
+    game/
+      engine.js           Turn loop, DMs, confirm/reroll, completion and final scoring
+      confirmPhase.js     Confirm/reroll DM flow
+      characterDM.js      Composes every message that shows a character
+      lobbyBoard.js       Renders the self-updating lobby message
+      turnBoard.js        Renders the self-updating turn message
+      audienceVote.js     Audience-vote state, ballots, tallying (spoiler-safe board)
+      lobbyPool.js        Resolves the `from:` pool selection
+      rematch.js          Builds a rematch lobby from a finished one
+      turnTimer.js        Turn countdown wrapper
+      timerWatchdog.js    Wall-clock backstop for turn/vote deadlines (sleep-safe)
+      boards.js           Tracks live button messages and retires them after a restart
+      voice.js            Voice-channel join + sound playback (all best-effort)
+    util/
+      permissions.js      Manage-Server permission checks
+
+  web/                 Party-mode web app (skeleton). Imports from core/. See web/README.md.
+    server.js             Dependency-free http server; reuses core db + game state
+    public/index.html     Placeholder client
+
 scripts/                Seed and sound-generation scripts, plus the character browser
 test/                   Test suite (npm test)
 data/

@@ -11,9 +11,9 @@ const tmpDb = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gtc-test-')), 'te
 process.env.BOT_DB_PATH = tmpDb;
 
 // Required after BOT_DB_PATH is set, so the DB layer still opens the throwaway file.
-const GameManager = require('../src/game/GameManager');
-const engine = require('../src/game/engine');
-const { clearVoteTimer } = require('../src/game/audienceVote');
+const GameManager = require('../src/core/game/GameManager');
+const engine = require('../src/discord/game/engine');
+const { clearVoteTimer } = require('../src/discord/game/audienceVote');
 
 /**
  * Returns the shared world to empty between tests.

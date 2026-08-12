@@ -2,12 +2,12 @@
 // the enabled selection, naming a list outright sees everything.
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const { handleComponentInteraction } = require('../src/components/router');
-const listFilter = require('../src/components/listFilter');
-const createLobby = require('../src/commands/actions/lobby-create');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const { handleComponentInteraction } = require('../src/discord/components/router');
+const listFilter = require('../src/discord/components/listFilter');
+const createLobby = require('../src/discord/commands/actions/lobby-create');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 
@@ -344,7 +344,7 @@ module.exports = {
     }
     const recorder = createRecorder();
 
-    await require('../src/commands/actions/list-select').execute(
+    await require('../src/discord/commands/actions/list-select').execute(
       createSlashInteraction({
         client: createFakeClient(recorder),
         userId: 'curator',
@@ -366,7 +366,7 @@ module.exports = {
     const guildId = freshGuild();
     seed(guildId, 'Cowboy Bebop', 'Anime', { characters: 4 });
     const recorder = createRecorder();
-    const toggle = require('../src/commands/actions/list-toggle');
+    const toggle = require('../src/discord/commands/actions/list-toggle');
 
     const run = () =>
       toggle.execute(
@@ -397,7 +397,7 @@ module.exports = {
     lists.setListsEnabled([on], true);
     const recorder = createRecorder();
 
-    await require('../src/commands/actions/list-toggle').autocomplete(
+    await require('../src/discord/commands/actions/list-toggle').autocomplete(
       createSlashInteraction({
         client: createFakeClient(recorder),
         userId: 'curator',

@@ -10,7 +10,7 @@
 //   node scripts/backup-db.js [label]
 
 const path = require('path');
-const db = require('../src/db/connection');
+const db = require('../src/core/db/connection');
 
 function timestamp() {
   const d = new Date();

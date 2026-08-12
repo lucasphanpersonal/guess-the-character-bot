@@ -8,11 +8,11 @@
 // player with no character clears just that one back to random.
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const setChars = require('../src/commands/actions/lobby-set-characters');
-const GameManager = require('../src/game/GameManager');
-const Lobby = require('../src/game/Lobby');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const setChars = require('../src/discord/commands/actions/lobby-set-characters');
+const GameManager = require('../src/core/game/GameManager');
+const Lobby = require('../src/core/game/Lobby');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 

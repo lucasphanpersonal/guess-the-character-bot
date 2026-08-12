@@ -4,13 +4,13 @@
 
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 
-const timerWatchdog = require('../src/game/timerWatchdog');
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const timerWatchdog = require('../src/discord/game/timerWatchdog');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 
@@ -57,7 +57,7 @@ async function startedGame(options) {
 
 function cleanup({ lobby, channelId }) {
   if (lobby.game) engine.clearTimers(lobby.game);
-  require('../src/game/audienceVote').clearVoteTimer(lobby.vote);
+  require('../src/discord/game/audienceVote').clearVoteTimer(lobby.vote);
   GameManager.endLobby(channelId);
 }
 

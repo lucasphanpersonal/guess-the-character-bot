@@ -1,12 +1,12 @@
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const create = require('../src/commands/actions/list-create');
-const add = require('../src/commands/actions/list-add');
-const remove = require('../src/commands/actions/list-remove');
-const image = require('../src/commands/actions/list-image');
-const toggle = require('../src/commands/actions/list-toggle');
-const select = require('../src/commands/actions/list-select');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const create = require('../src/discord/commands/actions/list-create');
+const add = require('../src/discord/commands/actions/list-add');
+const remove = require('../src/discord/commands/actions/list-remove');
+const image = require('../src/discord/commands/actions/list-image');
+const toggle = require('../src/discord/commands/actions/list-toggle');
+const select = require('../src/discord/commands/actions/list-select');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 

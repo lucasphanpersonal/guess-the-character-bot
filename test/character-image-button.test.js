@@ -12,12 +12,12 @@ const {
   createButtonInteraction,
   createModalInteraction,
 } = require('./harness');
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 

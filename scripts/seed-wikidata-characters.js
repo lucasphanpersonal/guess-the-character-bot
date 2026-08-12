@@ -37,8 +37,8 @@ const {
   addCharacter,
   getCharacters,
   setCharacterImage,
-} = require('../src/db/characterLists');
-const { trustworthyImageOrNull } = require('../src/util/characterImages');
+} = require('../src/core/db/characterLists');
+const { trustworthyImageOrNull } = require('../src/core/util/characterImages');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'wikidata-characters.json');
 

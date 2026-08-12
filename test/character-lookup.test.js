@@ -5,10 +5,10 @@
 // burying Albert Einstein, because the word people search by is frequently not the first one.
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const command = require('../src/commands/character');
-const { searchCharactersInGuild, getCharacterById } = require('../src/db/characterLists');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const command = require('../src/discord/commands/character');
+const { searchCharactersInGuild, getCharacterById } = require('../src/core/db/characterLists');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 

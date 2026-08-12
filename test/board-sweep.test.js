@@ -3,18 +3,18 @@
 
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 
-const { trackBoard, sweepBoards } = require('../src/game/boards');
-const { allBoards } = require('../src/db/activeBoards');
-const { buildLobbyBoardPayload, refreshLobbyBoard } = require('../src/game/lobbyBoard');
-const { refreshTurnBoard } = require('../src/game/turnBoard');
-const { refreshVoteBoard, AudienceVote } = require('../src/game/audienceVote');
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
-const Game = require('../src/game/Game');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const { trackBoard, sweepBoards } = require('../src/discord/game/boards');
+const { allBoards } = require('../src/core/db/activeBoards');
+const { buildLobbyBoardPayload, refreshLobbyBoard } = require('../src/discord/game/lobbyBoard');
+const { refreshTurnBoard } = require('../src/discord/game/turnBoard');
+const { refreshVoteBoard, AudienceVote } = require('../src/discord/game/audienceVote');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
+const Game = require('../src/core/game/Game');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 

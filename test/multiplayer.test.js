@@ -5,15 +5,15 @@
 // and those refuse for themselves rather than shrinking the game to fit.
 
 const { assert, createRecorder, createFakeClient, createButtonInteraction, createSlashInteraction } = require('./harness');
-const { handleComponentInteraction } = require('../src/components/router');
-const { buildTurnBoardPayload } = require('../src/game/turnBoard');
-const { buildBallotPayload } = require('../src/game/audienceVote');
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const { handleComponentInteraction } = require('../src/discord/components/router');
+const { buildTurnBoardPayload } = require('../src/discord/game/turnBoard');
+const { buildBallotPayload } = require('../src/discord/game/audienceVote');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 
@@ -242,14 +242,14 @@ module.exports = {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
     const game = ctx.lobby.game;
-    const stats = require('../src/db/stats');
+    const stats = require('../src/core/db/stats');
 
     await judge(ctx, 'p1', true); // p1 done on turn 1
     await engine.submitPass(ctx.client, ctx.lobby, 'p2');
     await judge(ctx, 'p3', true); // p3 done on turn 1
     // ...and now p4 goes quiet. The host ends it.
 
-    const endCmd = require('../src/commands/actions/lobby-end');
+    const endCmd = require('../src/discord/commands/actions/lobby-end');
     await endCmd.execute(
       createSlashInteraction({
         client: ctx.client, userId: 'p1', guildId: ctx.lobby.guildId,
@@ -270,10 +270,10 @@ module.exports = {
   async 'ending a game nobody finished records nothing'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
-    const stats = require('../src/db/stats');
+    const stats = require('../src/core/db/stats');
     const guildId = ctx.lobby.guildId;
 
-    const endCmd = require('../src/commands/actions/lobby-end');
+    const endCmd = require('../src/discord/commands/actions/lobby-end');
     await endCmd.execute(
       createSlashInteraction({
         client: ctx.client, userId: 'p1', guildId, channelId: ctx.channelId, recorder: ctx.recorder,
@@ -452,7 +452,7 @@ module.exports = {
   // the second game moved the bot out of the first one's channel and then destroyed the shared
   // connection when it ended.
   async 'two games in one server do not fight over the voice connection'() {
-    const voice = require('../src/game/voice');
+    const voice = require('../src/discord/game/voice');
     const a = await startedGame(2);
     const b = await startedGame(2);
     // Same guild, which is what makes them contend. (makeLobby gives each its own by default.)
@@ -768,7 +768,7 @@ module.exports = {
   // Lobbies cap at eight, but keeping the renderer defensive protects an old or corrupted
   // in-memory roster from producing an invalid board.
   'the standings stay inside the field limit however many are playing'() {
-    const Game = require('../src/game/Game');
+    const Game = require('../src/core/game/Game');
     for (const count of [4, 28, 40, 80]) {
       const players = Array.from({ length: count }, (_, i) => `19231960009500${1000 + i}`);
       const game = new Game({

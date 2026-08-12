@@ -10,13 +10,13 @@ const {
   createModalInteraction,
 } = require('./harness');
 
-const { buildLobbyBoardPayload } = require('../src/game/lobbyBoard');
-const { handleComponentInteraction } = require('../src/components/router');
-const settings = require('../src/game/lobbySettings');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const { buildLobbyBoardPayload } = require('../src/discord/game/lobbyBoard');
+const { handleComponentInteraction } = require('../src/discord/components/router');
+const settings = require('../src/core/game/lobbySettings');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 

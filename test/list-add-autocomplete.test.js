@@ -6,9 +6,9 @@
 // autocomplete try/catch swallowed into an empty, silent field.
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const add = require('../src/commands/actions/list-add');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const add = require('../src/discord/commands/actions/list-add');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 function seed() {

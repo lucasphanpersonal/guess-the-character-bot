@@ -1,19 +1,19 @@
 const { assert, createRecorder, createFakeClient, createButtonInteraction } = require('./harness');
 
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
 const {
   AudienceVote,
   drawCandidates,
   buildVoteBoardPayload,
   buildBallotPayload,
   clearVoteTimer,
-} = require('../src/game/audienceVote');
-const { handleComponentInteraction } = require('../src/components/router');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+} = require('../src/discord/game/audienceVote');
+const { handleComponentInteraction } = require('../src/discord/components/router');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 const CHARACTERS = [
   'Mario', 'Luigi', 'Peach', 'Bowser', 'Yoshi',

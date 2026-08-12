@@ -13,7 +13,7 @@ const {
   addCharacter,
   setCharacterImage,
   getCharacters,
-} = require('../src/db/characterLists');
+} = require('../src/core/db/characterLists');
 
 // Same category seed:lol files itself under, so `/lobby create category:Video Games` and
 // random category roulette both reach the Pokédex. Left uncategorised it sat alone in

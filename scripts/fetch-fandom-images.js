@@ -16,9 +16,9 @@
 // Nothing is overwritten -- only characters with no image at all are touched -- and every
 // candidate still has to pass the trust rule before it is stored.
 
-const db = require('../src/db/connection');
-const { setCharacterImage } = require('../src/db/characterLists');
-const { imageIsTrustworthy } = require('../src/util/characterImages');
+const db = require('../src/core/db/connection');
+const { setCharacterImage } = require('../src/core/db/characterLists');
+const { imageIsTrustworthy } = require('../src/core/util/characterImages');
 
 const UA = 'guess-the-character-bot/1.0 (character artwork backfill; https://github.com/lucasphanpersonal/guess-the-character-bot)';
 const PAUSE_MS = 180; // polite serial pacing; Fandom is somebody else's server

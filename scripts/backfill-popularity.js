@@ -35,7 +35,7 @@ const {
   disableAllLists,
   listCategoriesWithEnabledCounts,
   setCharacterFame,
-} = require('../src/db/characterLists');
+} = require('../src/core/db/characterLists');
 
 // Ranking without acting on it leaves a server staring at 2,000 disabled lists, so the
 // script finishes the job: the best-known DEFAULT_TOP of each category go into the pool.

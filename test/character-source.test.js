@@ -6,8 +6,8 @@
 // disambiguate anything.
 
 const { assert } = require('./harness');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let guildCounter = 0;
 function freshGuild() {

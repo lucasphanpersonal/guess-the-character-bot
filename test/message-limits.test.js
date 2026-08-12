@@ -10,9 +10,9 @@
 // two other places format lobby.listNames directly and so bypassed that fix entirely.
 
 const { assert } = require('./harness');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
-const { rematchAnnouncement } = require('../src/game/rematch');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
+const { rematchAnnouncement } = require('../src/discord/game/rematch');
 
 const DISCORD_CONTENT_LIMIT = 2000;
 

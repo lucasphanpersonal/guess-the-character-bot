@@ -7,7 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { createList, getListByName, addCharacter, setCharacterImage, getCharacters } = require('../src/db/characterLists');
+const { createList, getListByName, addCharacter, setCharacterImage, getCharacters } = require('../src/core/db/characterLists');
 
 const SPLASH_BASE = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash';
 const imageUrlFor = (id) => `${SPLASH_BASE}/${id}_0.jpg`;

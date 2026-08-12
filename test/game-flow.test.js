@@ -8,13 +8,13 @@ const {
   attachFakeVoice,
 } = require('./harness');
 
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const stats = require('../src/db/stats');
-const db = require('../src/db/connection');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const stats = require('../src/core/db/stats');
+const db = require('../src/core/db/connection');
 
 const MARIO = { name: 'Mario', image_url: null };
 const LUIGI = { name: 'Luigi', image_url: null };
@@ -427,7 +427,7 @@ module.exports = {
 
     // p2 is now the only one left, so their control becomes the game-ending Give up button --
     // there is nobody left to pass to.
-    const { buildTurnBoardPayload } = require('../src/game/turnBoard');
+    const { buildTurnBoardPayload } = require('../src/discord/game/turnBoard');
     const guesserBtn = buildTurnBoardPayload(game, ctx.channelId)
       .components[1].toJSON().components[0];
     assert.equal(guesserBtn.label, 'Give up');
@@ -528,7 +528,7 @@ module.exports = {
     assert.equal(ctx.lobby.status, 'FINISHED');
     assert.equal(GameManager.getLobby(ctx.channelId), ctx.lobby, 'kept for /rematch');
 
-    const rematch = require('../src/commands/rematch');
+    const rematch = require('../src/discord/commands/rematch');
     await rematch.execute(
       createSlashInteraction({
         client: ctx.client,

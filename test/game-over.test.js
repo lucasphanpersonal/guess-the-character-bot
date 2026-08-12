@@ -1,12 +1,12 @@
 const { assert, createRecorder, createFakeClient, createButtonInteraction, createSlashInteraction } = require('./harness');
 
-const engine = require('../src/game/engine');
-const confirmPhase = require('../src/game/confirmPhase');
-const { handleComponentInteraction } = require('../src/components/router');
-const Lobby = require('../src/game/Lobby');
-const GameManager = require('../src/game/GameManager');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const engine = require('../src/discord/game/engine');
+const confirmPhase = require('../src/discord/game/confirmPhase');
+const { handleComponentInteraction } = require('../src/discord/components/router');
+const Lobby = require('../src/core/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 let counter = 0;
 
@@ -132,7 +132,7 @@ module.exports = {
 
   async '/rematch and the button produce the same result'() {
     const ctx = await finishedGame();
-    const rematchCmd = require('../src/commands/rematch');
+    const rematchCmd = require('../src/discord/commands/rematch');
     await rematchCmd.execute(
       createSlashInteraction({
         client: ctx.client,

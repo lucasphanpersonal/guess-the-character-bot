@@ -1,7 +1,7 @@
 // The image trust rule: which sources can be believed to depict the character.
 
 const { assert } = require('./harness');
-const { imageIsTrustworthy, isFandomImage } = require('../src/util/characterImages');
+const { imageIsTrustworthy, isFandomImage } = require('../src/core/util/characterImages');
 
 const ANILIST = 'https://s4.anilist.co/file/anilistcdn/character/large/b1-ChxaldmieFlQ.png';
 const COMMONS = (file) => `https://upload.wikimedia.org/wikipedia/commons/a/ab/${file}`;

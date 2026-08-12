@@ -42,8 +42,8 @@ const {
   getListByName,
   addCharacter,
   getCharacters,
-} = require('../src/db/characterLists');
-const { trustworthyImageOrNull } = require('../src/util/characterImages');
+} = require('../src/core/db/characterLists');
+const { trustworthyImageOrNull } = require('../src/core/util/characterImages');
 const { GROUPS } = require('./fetch-wikidata-people');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'wikidata-people.json');

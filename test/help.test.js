@@ -18,7 +18,7 @@ const FIELD_COUNT = 25;
 
 async function renderHelp() {
   let payload;
-  await require('../src/commands/help').execute({
+  await require('../src/discord/commands/help').execute({
     reply: async (p) => {
       payload = p;
     },
@@ -30,7 +30,7 @@ async function renderHelp() {
 // Every command the bot actually registers, including subcommands, as "/lobby create" etc.
 function registeredCommands() {
   const names = new Set();
-  const dir = path.join(__dirname, '..', 'src', 'commands');
+  const dir = path.join(__dirname, '..', 'src', 'discord', 'commands');
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
     const command = require(path.join(dir, entry.name));

@@ -1,6 +1,6 @@
 const { assert } = require('./harness');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
 
 // Each test gets its own guild id so suites can't interfere with each other.
 let guildCounter = 0;

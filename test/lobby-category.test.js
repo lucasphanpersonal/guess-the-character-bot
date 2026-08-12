@@ -6,10 +6,10 @@
 // blow past what Discord will render, so the label has to collapse.
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
-const createLobby = require('../src/commands/actions/lobby-create');
-const GameManager = require('../src/game/GameManager');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
+const createLobby = require('../src/discord/commands/actions/lobby-create');
+const GameManager = require('../src/core/game/GameManager');
 
 let guildCounter = 0;
 function freshGuild() {
@@ -112,7 +112,7 @@ module.exports = {
     seed(guildId, 'Zelda', 'Video Games', ['Link', 'Ganon']);
     seed(guildId, 'Naruto', 'Anime', ['Naruto Uzumaki', 'Sasuke']);
 
-    const { resolvePool } = require('../src/game/lobbyPool');
+    const { resolvePool } = require('../src/discord/game/lobbyPool');
     assert.equal(resolvePool(guildId, '::everything').lists.length, 2);
     assert.deepEqual(
       resolvePool(guildId, '::cat:Anime').lists.map((l) => l.name),

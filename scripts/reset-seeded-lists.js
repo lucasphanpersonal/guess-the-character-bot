@@ -20,7 +20,7 @@
 //   node scripts/reset-seeded-lists.js <guildId>            # dry run, shows what would go
 //   node scripts/reset-seeded-lists.js <guildId> --yes      # actually delete
 
-const db = require('../src/db/connection');
+const db = require('../src/core/db/connection');
 
 const SEED_AUTHOR = 'seed-script';
 

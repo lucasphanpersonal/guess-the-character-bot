@@ -3,9 +3,9 @@
 // seeded server has lists with hundreds of characters in them.
 
 const { assert } = require('./harness');
-const lists = require('../src/db/characterLists');
-const db = require('../src/db/connection');
-const browser = require('../src/components/listBrowser');
+const lists = require('../src/core/db/characterLists');
+const db = require('../src/core/db/connection');
+const browser = require('../src/discord/components/listBrowser');
 
 let guildCounter = 0;
 function freshGuild() {

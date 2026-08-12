@@ -60,7 +60,7 @@ const {
   addCharacter,
   getCharacters,
   setCharacterImage,
-} = require('../src/db/characterLists');
+} = require('../src/core/db/characterLists');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'anilist-characters.json');
 

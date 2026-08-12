@@ -4,8 +4,8 @@
 
 const { assert } = require('./harness');
 
-const GameManager = require('../src/game/GameManager');
-const Lobby = require('../src/game/Lobby');
+const GameManager = require('../src/core/game/GameManager');
+const Lobby = require('../src/core/game/Lobby');
 
 const TTL_MS = 24 * 60 * 60 * 1000; // must match finishedLobbyTTL in GameManager
 
