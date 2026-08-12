@@ -36,7 +36,6 @@ function makeLobby({ hostId = 'host', characters = 20, players = [], ...override
     listIds: [listId],
     listNames: ['Settings List'],
     turnSeconds: 90,
-    maxRerolls: 2,
     ...overrides,
   });
   for (const p of players) lobby.addPlayer(p);
@@ -77,15 +76,11 @@ module.exports = {
     assert.equal(settings.parseField('turnSeconds', 'ninety').ok, false, 'not a number');
     // Blank means "leave this one alone", not zero and not an error.
     assert.deepEqual(settings.parseField('turnSeconds', '  '), { ok: true, value: undefined });
-
-    // -1 is the slash command's convention for unlimited; a text box should take the word.
-    assert.deepEqual(settings.parseField('maxRerolls', 'unlimited'), { ok: true, value: -1 });
-    assert.deepEqual(settings.parseField('maxRerolls', '-1'), { ok: true, value: -1 });
-    assert.equal(settings.parseField('maxRerolls', '-2').ok, false);
   },
 
   'one bad field rejects the whole submission'() {
-    const { ok, errors, values } = settings.parseSettings({ turnSeconds: '120', maxRerolls: 'lots' });
+    // voteSeconds is a real second field to demonstrate the all-or-nothing behavior with.
+    const { ok, errors, values } = settings.parseSettings({ turnSeconds: '120', voteSeconds: 'lots' });
     assert.equal(ok, false);
     assert.equal(errors.length, 1);
     // values still holds the good field, but the caller is expected not to apply any of it.
@@ -110,7 +105,7 @@ module.exports = {
   },
 
   async 'the host opens a modal prefilled with the settings in force'() {
-    const { lobby, channelId } = makeLobby({ turnSeconds: 45, maxRerolls: -1 });
+    const { lobby, channelId } = makeLobby({ turnSeconds: 45 });
     const recorder = createRecorder();
     const client = createFakeClient(recorder);
 
@@ -118,8 +113,8 @@ module.exports = {
     const modal = recorder.lastMatching('modal:host');
     assert.ok(modal, 'a modal was shown');
     assert.match(modal.content, /"value":"45"/, 'turn seconds prefilled');
-    assert.match(modal.content, /"value":"unlimited"/, '-1 rerolls reads as unlimited');
-    // Classic mode has no vote to tune, so the modal does not ask about one.
+    // Classic mode has only turn length to tune -- no rerolls (always unlimited) and no vote.
+    assert.doesNotMatch(modal.content, /maxRerolls/);
     assert.doesNotMatch(modal.content, /voteSeconds/);
     GameManager.endLobby(channelId);
   },
@@ -143,36 +138,48 @@ module.exports = {
     const recorder = createRecorder();
     const client = createFakeClient(recorder);
 
-    await submit({ channelId, userId: 'host', fields: { turnSeconds: '150', maxRerolls: '5' }, recorder, client });
+    await submit({ channelId, userId: 'host', fields: { turnSeconds: '150' }, recorder, client });
     assert.equal(lobby.turnSeconds, 150);
-    assert.equal(lobby.maxRerolls, 5);
 
     const update = recorder.lastMatching('update:host');
     assert.ok(update, 'the board was updated rather than a new message posted');
     assert.match(update.content, /150s turns/);
-    assert.match(update.content, /5 rerolls/);
+    assert.match(update.content, /unlimited rerolls/, 'the board states rerolls are unlimited');
     GameManager.endLobby(channelId);
   },
 
   async 'a blank field leaves that setting alone'() {
-    const { lobby, channelId } = makeLobby({ turnSeconds: 60, maxRerolls: 3 });
+    // Vote mode has more than one field, so a blank one demonstrates selectivity.
+    const { lobby, channelId } = makeLobby({ mode: 'audience-vote', turnSeconds: 60, voteSeconds: 90 });
     const recorder = createRecorder();
     const client = createFakeClient(recorder);
 
-    await submit({ channelId, userId: 'host', fields: { turnSeconds: '', maxRerolls: '4' }, recorder, client });
-    assert.equal(lobby.turnSeconds, 60, 'untouched');
-    assert.equal(lobby.maxRerolls, 4);
+    await submit({
+      channelId,
+      userId: 'host',
+      fields: { turnSeconds: '', voteOptions: '', voteSeconds: '120' },
+      recorder,
+      client,
+    });
+    assert.equal(lobby.turnSeconds, 60, 'blank turn seconds untouched');
+    assert.equal(lobby.voteSeconds, 120, 'the field with a value was applied');
     GameManager.endLobby(channelId);
   },
 
   async 'an out-of-range value changes nothing at all, not just the bad field'() {
-    const { lobby, channelId } = makeLobby({ turnSeconds: 90, maxRerolls: 2 });
+    const { lobby, channelId } = makeLobby({ mode: 'audience-vote', turnSeconds: 90, voteSeconds: 90 });
     const recorder = createRecorder();
     const client = createFakeClient(recorder);
 
-    await submit({ channelId, userId: 'host', fields: { turnSeconds: '9000', maxRerolls: '7' }, recorder, client });
+    await submit({
+      channelId,
+      userId: 'host',
+      fields: { turnSeconds: '9000', voteOptions: '', voteSeconds: '120' },
+      recorder,
+      client,
+    });
     assert.equal(lobby.turnSeconds, 90);
-    assert.equal(lobby.maxRerolls, 2, 'the valid field was not applied either');
+    assert.equal(lobby.voteSeconds, 90, 'the valid field was not applied either');
     assert.match(recorder.allText(), /Nothing changed/);
     GameManager.endLobby(channelId);
   },

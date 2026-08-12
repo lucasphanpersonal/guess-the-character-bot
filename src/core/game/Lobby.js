@@ -8,7 +8,10 @@ class Lobby {
     listIds,
     listNames,
     turnSeconds,
-    maxRerolls = 2,
+    // Rerolls are always unlimited (-1); there is no UI to set a finite budget. The field and
+    // the enforcement in engine/gameSetup are kept so a value could be reintroduced, but nothing
+    // sets one. See the note in lobbySettings.js.
+    maxRerolls = -1,
     mode = 'classic',
     voteSeconds = 90,
     voteOptions = 5,

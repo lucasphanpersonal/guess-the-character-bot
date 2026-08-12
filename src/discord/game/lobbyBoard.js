@@ -122,7 +122,7 @@ function buildLobbyBoardPayload(lobby) {
           `${lobby.turnSeconds}s turns`,
           lobby.mode === 'audience-vote'
             ? `🗳️ audience vote (${lobby.voteOptions} options, ${lobby.voteSeconds}s)`
-            : `${lobby.maxRerolls === -1 ? 'unlimited' : lobby.maxRerolls} reroll${lobby.maxRerolls === 1 ? '' : 's'}`,
+            : 'unlimited rerolls',
         ].join(' · '),
         inline: true,
       },

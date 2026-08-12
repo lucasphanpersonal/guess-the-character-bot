@@ -35,7 +35,7 @@ function createSetupBuildsAGameWithConfirmState() {
   const { game } = setup3();
   assert.deepEqual(game.turnOrder, ['p1', 'p2', 'p3']);
   assert.equal(game.confirmState.p1.confirmed, false);
-  assert.equal(game.confirmState.p1.rerollsLeft, 3);
+  assert.equal(game.confirmState.p1.rerollsLeft, -1); // unlimited by default
   assert.equal(game.rerollAllowed, true);
 }
 
@@ -63,7 +63,7 @@ function rerollSwapsTheCheckTargetAndSpendsFromTheBudget() {
   const content = fakeContent([row(4, 'Zelda')]);
   const res = applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' });
   assert.equal(res.ok, true);
-  assert.equal(game.confirmState.p1.rerollsLeft, 2);
+  assert.equal(game.confirmState.p1.rerollsLeft, -1); // unlimited: no spend
   // p1 checks p2 -> p2's character is what changed.
   assert.equal(game.headByPlayer.p2.name, 'Zelda');
   assert.equal(buildView(game, 'p1', names).checking.character.name, 'Zelda');
@@ -124,7 +124,7 @@ module.exports = {
   "a view never contains the viewer's own character": aViewNeverContainsTheViewersOwnCharacter,
   'every character but your own is covered across checking + reference':
     everyCharacterButYourOwnIsCoveredAcrossCheckingPlusReference,
-  'reroll swaps the check target and spends from the budget': rerollSwapsTheCheckTargetAndSpendsFromTheBudget,
+  'reroll swaps the check target (unlimited by default)': rerollSwapsTheCheckTargetAndSpendsFromTheBudget,
   'reroll excludes every character already in play': rerollExcludesEveryCharacterAlreadyInPlay,
   'reroll is refused when the budget is spent': rerollIsRefusedWhenTheBudgetIsSpent,
   'reroll reports when a character gets demoted': rerollReportsWhenAcharacterGetsDemoted,

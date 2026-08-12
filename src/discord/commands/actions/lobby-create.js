@@ -38,7 +38,6 @@ module.exports = {
     }
 
     const turnSeconds = interaction.options.getInteger('turn-seconds') ?? DEFAULTS.turnSeconds;
-    const maxRerolls = interaction.options.getInteger('max-rerolls') ?? DEFAULTS.maxRerolls;
     const audienceVote = interaction.options.getBoolean('audience-vote') ?? false;
     const voteOptions = interaction.options.getInteger('vote-options') ?? DEFAULTS.voteOptions;
     const voteSeconds = interaction.options.getInteger('vote-seconds') ?? DEFAULTS.voteSeconds;
@@ -57,7 +56,6 @@ module.exports = {
       listIds,
       listNames: resolved.map((l) => l.name),
       turnSeconds,
-      maxRerolls,
       mode: audienceVote ? 'audience-vote' : 'classic',
       voteOptions,
       voteSeconds,

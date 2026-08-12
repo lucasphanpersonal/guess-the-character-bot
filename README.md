@@ -350,7 +350,7 @@ second bot application with its own token; one bot cannot be in two voice channe
 | `/list show` | anyone | Browse categories, lists in a category, or one list's characters |
 | `/list select` | Manage Server | Tick which lists the server plays with; `top:<n>` re-cuts to the N best-known |
 | `/list toggle` | Manage Server | Switch one named list in or out of the pool |
-| `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `max-rerolls`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board) |
+| `/lobby create` | anyone | Open a lobby + post the lobby board (`from` picks the pool; plus `difficulty`, `turn-seconds`, `audience-vote`, `vote-options`, `vote-seconds` — all editable afterwards from the board). Rerolls are always unlimited |
 | `/lobby join` / `/lobby leave` | anyone | Join or leave the lobby — two minimum, eight maximum. Mid-game, `leave` forfeits after a confirmation |
 | `/lobby spectate` | anyone | Opt in to a DM revealing every character (or the 👁 button on the lobby *or* turn board) |
 | `/lobby set-characters` | host | Hand-pick any number of players' characters, up to 5 — with autocomplete (the board's 🎭 button covers the same range without it) |

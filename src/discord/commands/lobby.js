@@ -50,12 +50,6 @@ module.exports = {
         .addIntegerOption((opt) =>
           opt.setName('turn-seconds').setDescription('Seconds per turn (default 90)').setMinValue(15).setMaxValue(600)
         )
-        .addIntegerOption((opt) =>
-          opt
-            .setName('max-rerolls')
-            .setDescription('Rerolls per player before confirming a character (default 2, -1 for unlimited)')
-            .setMinValue(-1)
-        )
         .addBooleanOption((opt) =>
           opt
             .setName('audience-vote')

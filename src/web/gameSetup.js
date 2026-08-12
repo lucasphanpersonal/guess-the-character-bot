@@ -17,7 +17,10 @@
 
 const Game = require('../core/game/Game');
 
-const DEFAULT_MAX_REROLLS = 3;
+// Rerolls are always unlimited (-1) in the web app too -- a reroll budget only added friction
+// to a party game. The budget machinery (rerollsLeft, the -1 sentinel) is kept so a finite
+// limit remains representable, but nothing sets one. See src/core/game/lobbySettings.js.
+const DEFAULT_MAX_REROLLS = -1;
 
 /**
  * Build a core Game for a web room and attach the confirm state.
