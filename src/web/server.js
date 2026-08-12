@@ -172,10 +172,12 @@ function requestHandler(req, res) {
 }
 
 // Mobile browsers only expose motion/orientation sensors (the tilt-to-win gestures) over a
-// secure context. Plain http://<LAN-ip> is NOT one, so set WEB_HTTPS=1 (npm run web:secure) to
-// serve over a self-signed cert instead -- phones show a one-time "not private" warning to
-// accept, after which tilt works. HTTP stays the default for the tap-fallback flow.
+// secure context. So with WEB_HTTPS=1 (npm run web:secure) we serve HTTPS on WEB_HTTPS_PORT
+// ALONGSIDE the plain HTTP server -- not instead of it. That way the familiar http://<ip>:4180
+// keeps working (game plays fully via the tap fallback) and https://<ip>:4443 is there when you
+// want tilt. Serving https-only on the main port made a mistyped http:// URL fail silently.
 const USE_HTTPS = process.env.WEB_HTTPS === '1' || process.env.WEB_HTTPS === 'true';
+const HTTPS_PORT = Number(process.env.WEB_HTTPS_PORT || 4443);
 
 function lanIPv4s() {
   const ips = [];
@@ -214,23 +216,32 @@ function devTlsOptions() {
   return { key: pems.private, cert: pems.cert };
 }
 
-const server = USE_HTTPS ? https.createServer(devTlsOptions(), requestHandler) : http.createServer(requestHandler);
-
-const io = new Server(server); // same-origin; serves its browser client at /socket.io/socket.io.js
+// Plain HTTP is always served (what phones have been using for stages 1-3). HTTPS is additive.
+const server = http.createServer(requestHandler);
+const io = new Server(server); // serves its browser client at /socket.io/socket.io.js
 attachSockets(io, { registry, setup });
 
+// The same io handles both servers, so players on http and https share rooms.
+const httpsServer = USE_HTTPS ? https.createServer(devTlsOptions(), requestHandler) : null;
+if (httpsServer) io.attach(httpsServer);
+
 if (require.main === module) {
-  const scheme = USE_HTTPS ? 'https' : 'http';
   // Bind to 0.0.0.0 explicitly so other devices on the LAN (phones) can connect, not just
   // this machine. Node defaults to this, but stating it makes the intent obvious.
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[web] Guess the Character (sharing core with the Discord bot). Scope: ${WEB_SCOPE}`);
-    console.log(`[web]   on this machine:  ${scheme}://localhost:${PORT}`);
-    for (const ip of lanIPv4s()) console.log(`[web]   on your phone:    ${scheme}://${ip}:${PORT}   (same Wi-Fi)`);
-    if (USE_HTTPS) console.log('[web] Self-signed cert: accept the one-time browser warning. Tilt/motion needs this HTTPS.');
-    else console.log('[web] HTTP mode: tap fallback only. For tilt-to-win on phones, use `npm run web:secure`.');
-    console.log('[web] If a phone can\'t connect, allow Node.js through Windows Firewall on Private networks.');
+    console.log(`[web]   HTTP  (game, tap fallback):`);
+    console.log(`[web]     on this machine:  http://localhost:${PORT}`);
+    for (const ip of lanIPv4s()) console.log(`[web]     on your phone:    http://${ip}:${PORT}   (same Wi-Fi)`);
+    if (!USE_HTTPS) console.log('[web] For tilt-to-win on phones, run `npm run web:secure` (adds HTTPS).');
   });
+  if (httpsServer) {
+    httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+      console.log(`[web]   HTTPS (needed for tilt/motion on phones):`);
+      for (const ip of lanIPv4s()) console.log(`[web]     on your phone:    https://${ip}:${HTTPS_PORT}   (accept the cert warning once)`);
+    });
+  }
+  console.log('[web] If a phone can\'t connect, allow Node.js through Windows Firewall on Private networks.');
 }
 
 module.exports = { server, io, registry };
