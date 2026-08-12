@@ -259,76 +259,128 @@ function addBtn(parent, label, cls, onClick) {
 
 // --- motion / tilt / forehead mode --------------------------------------------------------
 let motionEnabled = false;
-const motionSupported = typeof window.DeviceOrientationEvent !== 'undefined';
-const needsMotionPermission = () => typeof DeviceOrientationEvent?.requestPermission === 'function'; // iOS
-// Tilt state: baseline captured at the start of each of MY turns; a gesture must be held past a
-// threshold for ~600ms and the phone must return near neutral before another can fire.
+let motionNote = '';
+let audioCtx = null;
+const hasMotion = 'DeviceMotionEvent' in window;
+const hasOrient = 'DeviceOrientationEvent' in window;
+const motionSupported = hasMotion || hasOrient;
+
+// Live sensor readings. `z` is gravity along the axis perpendicular to the screen (m/s^2):
+// ~0 when the phone is held vertically on a forehead, swinging toward ±9.8 as you tilt it to
+// face the ceiling or the floor. That axis is what "tilt up/down" changes no matter whether
+// the phone is portrait or landscape -- which is why the old beta-based version never fired
+// when the phone was held horizontally.
+const sensor = { z: 0, beta: null, gamma: null, have: false };
+let tiltFlip = store.get('gtc_tilt_flip') === '1';
+const TILT_TH = 4.5;      // m/s^2 from neutral (~27 degrees)
+const TILT_HOLD_MS = 450; // hold past the threshold this long before firing in-game
 const tilt = { baseline: null, armed: true, dir: null, since: 0, lastFire: 0 };
-const TILT_THRESHOLD = 32; // degrees from neutral
-const TILT_HOLD_MS = 550;
+
+function ensureAudio() {
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+}
+function beep(freq = 880, ms = 180) {
+  if (!audioCtx) return;
+  try {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(audioCtx.destination);
+    const t = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
+    o.start(t); o.stop(t + ms / 1000);
+  } catch {}
+}
 
 async function enableMotion() {
-  if (!motionSupported) return;
+  if (!motionSupported) { motionNote = 'This device has no motion sensors.'; return; }
+  ensureAudio();
   try {
-    if (needsMotionPermission()) {
-      const res = await DeviceOrientationEvent.requestPermission();
-      if (res !== 'granted') { motionNote = 'Motion blocked — using tap buttons.'; if (lastPlayView) renderPlaying(lastPlayView); return; }
+    if (typeof DeviceMotionEvent?.requestPermission === 'function') {
+      const r = await DeviceMotionEvent.requestPermission();
+      if (r !== 'granted') { motionNote = 'Motion blocked — tap buttons still work.'; if (lastPlayView) renderPlaying(lastPlayView); return; }
     }
-    window.addEventListener('deviceorientation', onOrientation);
+    if (typeof DeviceOrientationEvent?.requestPermission === 'function') { try { await DeviceOrientationEvent.requestPermission(); } catch {} }
+    window.addEventListener('devicemotion', onMotion);
+    window.addEventListener('deviceorientation', onOrient);
     motionEnabled = true;
     motionNote = '';
-    if (lastPlayView) renderPlaying(lastPlayView); // upgrade the current screen into forehead mode
+    if (lastPlayView) renderPlaying(lastPlayView);
   } catch {
-    motionNote = 'Could not start motion — using tap buttons.';
+    motionNote = 'Could not start motion.';
   }
 }
 
-function onOrientation(e) {
+function onMotion(e) {
+  const g = e.accelerationIncludingGravity;
+  if (g && g.z != null) { sensor.z = g.z; sensor.have = true; }
+  handleGameTilt();
+  updateTiltTest();
+}
+function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltTest(); }
+
+// Current tilt as a gesture relative to a captured neutral: 'gotit', 'pass', or null. `tiltFlip`
+// swaps the two for phones that report the opposite sign (the tilt-test screen toggles it).
+function currentGesture(baseline) {
+  if (baseline == null || !sensor.have) return null;
+  const delta = sensor.z - baseline;
+  let up = delta < -TILT_TH;  // screen tipped toward the ceiling = tilt up = Got it
+  let down = delta > TILT_TH; // screen tipped toward the floor = tilt down = Pass
+  if (tiltFlip) { const t = up; up = down; down = t; }
+  return up ? 'gotit' : down ? 'pass' : null;
+}
+
+function handleGameTilt() {
   const v = lastPlayView;
-  if (!v || v.phase !== 'playing' || !v.isMyTurn || e.beta == null) { tilt.dir = null; return; }
-  if (tilt.baseline == null) tilt.baseline = e.beta;
-  const delta = e.beta - tilt.baseline;
+  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) { tilt.dir = null; return; }
+  if (tilt.baseline == null) tilt.baseline = sensor.z;
+  const g = currentGesture(tilt.baseline);
   const now = Date.now();
-  const dir = delta > TILT_THRESHOLD ? 'gotit' : delta < -TILT_THRESHOLD ? 'pass' : null;
-  if (!dir) { tilt.armed = true; tilt.dir = null; return; } // returned near neutral -> re-arm
-  if (dir !== tilt.dir) { tilt.dir = dir; tilt.since = now; return; }
+  if (!g) { tilt.armed = true; tilt.dir = null; return; }        // near neutral -> re-arm
+  if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; return; }
   if (tilt.armed && now - tilt.since > TILT_HOLD_MS && now - tilt.lastFire > 1200) {
-    tilt.armed = false;
-    tilt.lastFire = now;
-    fireGesture(dir);
+    tilt.armed = false; tilt.lastFire = now;
+    navigator.vibrate?.(60); beep(g === 'gotit' ? 1050 : 480, 130);
+    if (g === 'gotit') socket.emit('game:gotit', {}, () => {});
+    else if (v.buttons?.pass) socket.emit('game:pass', {}, () => {});
   }
 }
 
-function fireGesture(dir) {
-  navigator.vibrate?.(60);
-  if (dir === 'gotit') socket.emit('game:gotit', {}, () => {});
-  else if (dir === 'pass' && lastPlayView?.buttons?.pass) socket.emit('game:pass', {}, () => {});
-}
-
-let motionNote = '';
 let foreheadMyTurn = false;
 function renderForehead(view) {
   const el = $('forehead');
   el.classList.add('active');
   el.classList.toggle('mine', view.isMyTurn);
-  el.classList.toggle('watch', !view.isMyTurn);
-  $('foreheadTurn').innerHTML = view.isMyTurn
-    ? `🫵 Your turn${view.turnRemaining != null ? ` · ⏱ ${view.turnRemaining}s` : ''}`
-    : `🎯 ${escapeHtml(view.current.name)}'s turn — turn ${view.current.turnNumber}`;
   const ch = view.myCharacter;
-  $('foreheadName').textContent = ch ? ch.name : '…';
-  $('foreheadSrc').textContent = ch && ch.source ? ch.source : '';
-  const img = $('foreheadImg');
-  if (ch && ch.imageUrl) { img.src = ch.imageUrl; img.style.display = ''; img.onerror = () => (img.style.display = 'none'); }
-  else img.style.display = 'none';
-  $('foreheadHint').textContent = view.isMyTurn
-    ? 'Tilt forward = Got it · tilt back = Pass'
-    : 'Hold it on your forehead — help them by answering.';
-  $('foreheadGiveUp').style.display = view.isMyTurn && view.buttons?.giveUp ? '' : 'none';
-  // New turn for me: reset the tilt baseline and buzz so I know I'm up without looking.
-  if (view.isMyTurn && !foreheadMyTurn) { tilt.baseline = null; tilt.armed = true; navigator.vibrate?.([120, 60, 120]); }
+  const img = $('foreheadImg'), noimg = $('foreheadNoImg');
+  if (ch && ch.imageUrl) {
+    img.src = ch.imageUrl; img.style.display = ''; noimg.style.display = 'none';
+    img.onerror = () => { img.style.display = 'none'; noimg.style.display = ''; noimg.textContent = ch.name; };
+  } else {
+    img.style.display = 'none'; noimg.style.display = ''; noimg.textContent = ch ? ch.name : '…';
+  }
+  // Name + source sit at the bottom for the ROOM to read -- the wearer holds it out and doesn't look.
+  $('foreheadName').textContent = ch ? (ch.source ? `${ch.name} · ${ch.source}` : ch.name) : '';
+  $('foreheadTurn').innerHTML = view.isMyTurn
+    ? `🫵 YOUR TURN${view.turnRemaining != null ? ` · ⏱ ${view.turnRemaining}s` : ''} — tilt up if you got it`
+    : `🎯 ${escapeHtml(view.current.name)}'s turn${view.turnRemaining != null ? ` · ${view.turnRemaining}s` : ''}`;
+  updateForeheadDebug();
+  // My turn just started: reset the tilt baseline, buzz, and chime so I know without looking.
+  if (view.isMyTurn && !foreheadMyTurn) {
+    tilt.baseline = null; tilt.armed = true;
+    navigator.vibrate?.([140, 60, 140]);
+    beep(880, 200); setTimeout(() => beep(1250, 220), 150);
+  }
   foreheadMyTurn = view.isMyTurn;
   show('playing');
+}
+
+function updateForeheadDebug() {
+  const el = $('foreheadDebug');
+  if (!el) return;
+  el.textContent = foreheadMyTurn && sensor.have
+    ? `z ${sensor.z.toFixed(1)} Δ ${tilt.baseline != null ? (sensor.z - tilt.baseline).toFixed(1) : '—'}`
+    : '';
 }
 
 function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; }
@@ -338,7 +390,7 @@ function renderMotionPrompt(container) {
   if (!motionSupported || motionEnabled) { if (motionNote) container.innerHTML = `<p class="hint center">${escapeHtml(motionNote)}</p>`; return; }
   const card = document.createElement('div');
   card.className = 'card';
-  card.innerHTML = `<p class="hint center">Playing on a phone? Enable tilt to hold it on your forehead like Heads Up.</p>`;
+  card.innerHTML = `<p class="hint center">On a phone? Enable tilt to hold it on your forehead like Heads Up.</p>`;
   const b = document.createElement('button');
   b.className = 'enable-motion';
   b.textContent = '📱 Enable tilt controls';
@@ -353,7 +405,6 @@ function startCountdown(seconds) {
   clearInterval(countdown);
   let n = Math.max(0, seconds);
   $('countNum').textContent = n || '0';
-  // Offer motion-enable right here — the countdown is a natural "tap, then raise your phone" beat.
   const cnum = $('countNum');
   if (motionSupported && !motionEnabled && !document.getElementById('countEnable')) {
     const b = document.createElement('button');
@@ -372,6 +423,23 @@ function startCountdown(seconds) {
     $('countNum').textContent = n;
     navigator.vibrate?.(40);
   }, 1000);
+}
+
+// --- tilt test / calibration --------------------------------------------------------------
+let ttBaseline = null;
+function openTiltTest() { ttBaseline = null; $('ttEnable').style.display = motionEnabled ? 'none' : ''; updateTiltTest(); show('tilttest'); }
+function updateTiltTest() {
+  updateForeheadDebug();
+  if (!$('tilttest').classList.contains('active')) return;
+  if (ttBaseline == null && sensor.have) ttBaseline = sensor.z;
+  const g = currentGesture(ttBaseline);
+  const res = $('ttResult');
+  res.textContent = g === 'gotit' ? '⬆  UP = Got it' : g === 'pass' ? '⬇  DOWN = Pass' : (sensor.have ? '•  neutral' : 'enable motion');
+  res.style.color = g === 'gotit' ? 'var(--ok)' : g === 'pass' ? 'var(--warn)' : 'var(--fg)';
+  const f = (x) => (x == null ? '—' : x.toFixed(0));
+  $('ttVals').textContent = sensor.have
+    ? `z ${sensor.z.toFixed(1)}  Δ ${(ttBaseline != null ? sensor.z - ttBaseline : 0).toFixed(1)}  ·  β ${f(sensor.beta)} γ ${f(sensor.gamma)}  ·  flip ${tiltFlip ? 'ON' : 'off'}`
+    : (motionNote || 'waiting for sensor…');
 }
 
 // --- helpers ------------------------------------------------------------------------------
@@ -469,9 +537,15 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
   else if (!res?.ok) $('rerollNote').textContent = res?.error || '';
   else $('rerollNote').textContent = '';
 }));
-$('foreheadGiveUp').addEventListener('click', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
-$('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, () => {}));
+// "Good to go" is a user gesture, so use it to also turn motion on -- by reveal time the phone
+// is already listening, no separate step needed. Best-effort; the tap fallback covers refusal.
+$('goodBtn').addEventListener('click', () => { if (motionSupported && !motionEnabled) enableMotion(); socket.emit('setup:confirm', {}, () => {}); });
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
+// Tilt calibration screen
+$('tiltTestBtn').addEventListener('click', openTiltTest);
+$('ttEnable').addEventListener('click', () => { enableMotion().then(() => { ttBaseline = null; updateTiltTest(); }); });
+$('ttFlip').addEventListener('click', () => { tiltFlip = !tiltFlip; store.set('gtc_tilt_flip', tiltFlip ? '1' : '0'); updateTiltTest(); });
+$('ttBack').addEventListener('click', () => show('landing'));
 $('codeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));
 if (nickname) $('nickInput').value = nickname;
 

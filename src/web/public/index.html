@@ -59,18 +59,25 @@
     .big-emoji { font-size:3rem; text-align:center; }
     /* Grace countdown + forehead mode */
     .countnum { font-size:6rem; font-weight:900; text-align:center; line-height:1.1; }
-    #forehead { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
-                text-align:center; padding:20px; z-index:50; }
+    #forehead { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+                background:#000; z-index:50; overflow:hidden; }
     #forehead.active { display:flex; }
-    #forehead.mine { background:#0b1f3a; }        /* it's my turn */
-    #forehead.watch { background:#12131a; }
-    #foreheadName { font-size:12vw; font-weight:900; line-height:1.05; word-break:break-word; }
-    #foreheadSrc { color:var(--muted); font-size:1rem; margin-top:8px; }
-    #foreheadImg { max-height:34vh; max-width:80%; border-radius:16px; margin:14px auto; }
-    #foreheadTurn { position:fixed; top:16px; left:0; right:0; text-align:center; font-weight:700; font-size:1.1rem; }
-    #foreheadHint { position:fixed; bottom:74px; left:0; right:0; text-align:center; color:var(--muted); font-size:.95rem; padding:0 16px; }
-    #foreheadGiveUp { position:fixed; bottom:16px; left:16px; right:16px; width:auto; }
+    #foreheadImg { width:100%; height:100%; object-fit:contain; }
+    #foreheadNoImg { display:none; font-size:11vw; font-weight:900; line-height:1.05; text-align:center;
+                     padding:24px; word-break:break-word; }
+    #foreheadName { position:fixed; left:0; right:0; bottom:8px; text-align:center; padding:0 14px;
+                    font-size:min(6vw,2rem); font-weight:800; text-shadow:0 2px 10px #000, 0 0 5px #000; }
+    #foreheadTurn { position:fixed; left:0; right:0; top:8px; text-align:center;
+                    font-size:min(5vw,1.25rem); font-weight:800; text-shadow:0 2px 8px #000; }
+    #foreheadDebug { position:fixed; left:8px; bottom:8px; font:11px monospace; color:#7fe; opacity:.65; }
+    /* Bright pulsing border while it's YOUR turn */
+    #forehead.mine::after { content:''; position:fixed; inset:0; pointer-events:none;
+                            border:14px solid #ffd23f; animation:pulseBorder 1s ease-in-out infinite; }
+    @keyframes pulseBorder { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
     .enable-motion { background:var(--warn); color:#231a03; }
+    /* Tilt test */
+    .tiltbig { font-size:2.6rem; font-weight:900; text-align:center; min-height:3rem; }
+    .tiltvals { font:0.95rem monospace; text-align:center; color:var(--muted); }
   </style>
 </head>
 <body>
@@ -93,6 +100,21 @@
         <button id="joinBtn" class="ghost">Join room</button>
       </div>
       <p class="err" id="landingErr"></p>
+      <button id="tiltTestBtn" class="ghost" style="margin-top:4px">📱 Test tilt on this phone</button>
+    </section>
+
+    <!-- Tilt calibration / diagnostics -->
+    <section id="tilttest" class="screen">
+      <div class="card">
+        <div class="hint center">Hold the phone horizontally like you would on your forehead, then tilt it up and down.</div>
+        <div style="height:10px"></div>
+        <button id="ttEnable" class="enable-motion">📱 Enable motion</button>
+        <div style="height:14px"></div>
+        <div class="tiltbig" id="ttResult">—</div>
+        <div class="tiltvals" id="ttVals">enable motion to see values</div>
+      </div>
+      <button id="ttFlip" class="ghost">🔁 Up/down reversed? Flip them</button>
+      <button id="ttBack" class="ghost">Back</button>
     </section>
 
     <!-- Lobby -->
@@ -171,14 +193,13 @@
       <button id="playLeaveBtn" class="ghost">Leave game</button>
     </section>
 
-    <!-- Forehead mode overlay (motion enabled): shows YOUR character for the room -->
+    <!-- Forehead mode overlay (motion enabled): shows YOUR character full-screen for the room -->
     <div id="forehead">
+      <img id="foreheadImg" alt="" />
+      <div id="foreheadNoImg"></div>
       <div id="foreheadTurn"></div>
       <div id="foreheadName"></div>
-      <img id="foreheadImg" alt="" style="display:none" />
-      <div id="foreheadSrc"></div>
-      <div id="foreheadHint"></div>
-      <button id="foreheadGiveUp" class="ghost" style="display:none">🏳️ Give up</button>
+      <div id="foreheadDebug"></div>
     </div>
 
     <!-- Game over -->
