@@ -7,25 +7,26 @@
   <title>Guess the Character — party mode</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
   <style>
-    :root { color-scheme: dark; --bg:#12131a; --card:#1b1d29; --edge:#2c3048; --fg:#f4f4f6; --muted:#a0a3b8; --accent:#6f7bff; --accent2:#3a3f55; --ok:#49d17d; --off:#6b7086; --danger:#e5544b; }
+    :root { color-scheme: dark; --bg:#12131a; --card:#1b1d29; --edge:#2c3048; --fg:#f4f4f6; --muted:#a0a3b8; --accent:#6f7bff; --accent2:#3a3f55; --ok:#49d17d; --off:#6b7086; --danger:#e5544b; --warn:#e0a83a; }
     * { box-sizing: border-box; }
     body { margin:0; min-height:100vh; min-height:100dvh; font:16px/1.5 system-ui,-apple-system,sans-serif;
            background:var(--bg); color:var(--fg); display:flex; flex-direction:column; align-items:center; }
-    main { width:100%; max-width:32rem; padding:24px 20px 40px; flex:1; display:flex; flex-direction:column; }
-    h1 { font-size:1.5rem; margin:.2rem 0 1.2rem; }
+    main { width:100%; max-width:32rem; padding:22px 20px 40px; flex:1; display:flex; flex-direction:column; }
+    h1 { font-size:1.4rem; margin:.2rem 0 1rem; }
     .tag { display:inline-block; padding:.15rem .55rem; border-radius:999px; background:var(--accent2);
            font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
-    .screen { display:none; flex-direction:column; gap:16px; }
+    .screen { display:none; flex-direction:column; gap:14px; }
     .screen.active { display:flex; }
-    .card { background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:18px; }
+    .card { background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:16px; }
     label { display:block; font-size:.82rem; color:var(--muted); margin:0 0 6px; }
-    input { width:100%; padding:13px 14px; font-size:1.05rem; border-radius:12px; border:1px solid var(--edge);
+    input, select { width:100%; padding:13px 14px; font-size:1.05rem; border-radius:12px; border:1px solid var(--edge);
             background:#0f1017; color:var(--fg); }
-    input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+    input:focus, select:focus { outline:2px solid var(--accent); outline-offset:1px; }
     #codeInput { text-transform:uppercase; letter-spacing:.35em; font-weight:700; text-align:center; }
     button { width:100%; padding:14px; font-size:1.05rem; font-weight:600; border:none; border-radius:12px;
              background:var(--accent); color:#fff; cursor:pointer; }
     button.ghost { background:transparent; border:1px solid var(--edge); color:var(--fg); font-weight:500; }
+    button.good { background:var(--ok); color:#06210f; }
     button:disabled { opacity:.5; cursor:not-allowed; }
     .divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:.8rem; }
     .divider::before,.divider::after { content:""; height:1px; flex:1; background:var(--edge); }
@@ -40,15 +41,27 @@
     .seat .name { font-weight:600; }
     .seat .you { color:var(--muted); font-weight:400; font-size:.82rem; }
     .crown { margin-left:auto; font-size:.95rem; }
-    .count { color:var(--muted); font-size:.85rem; }
-    .hint { color:var(--muted); font-size:.85rem; text-align:center; }
+    .count, .hint { color:var(--muted); font-size:.85rem; }
+    .hint.center { text-align:center; }
     .row { display:flex; gap:10px; }
     .row > * { flex:1; }
+    .choice { display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--edge);
+              border-radius:12px; background:#0f1017; margin-bottom:8px; cursor:pointer; }
+    .choice input { width:auto; }
+    .choice .sub { color:var(--muted); font-size:.8rem; }
+    .charcard { text-align:center; padding:8px 0; }
+    .charcard img { max-width:100%; max-height:230px; border-radius:12px; margin:6px auto; display:block; }
+    .charcard .noimg { color:var(--muted); font-size:.85rem; padding:24px; border:1px dashed var(--edge); border-radius:12px; }
+    .charname { font-size:1.5rem; font-weight:800; }
+    .charsrc { color:var(--muted); font-size:.9rem; }
+    .checkowner { text-align:center; font-weight:700; font-size:1.05rem; }
+    .badge { display:inline-block; padding:.1rem .5rem; border-radius:999px; background:var(--accent2); font-size:.75rem; }
+    .big-emoji { font-size:3rem; text-align:center; }
   </style>
 </head>
 <body>
   <main>
-    <span class="tag">Party mode · stage 1</span>
+    <span class="tag">Party mode</span>
     <h1>Guess the Character 🎭</h1>
 
     <!-- Landing -->
@@ -57,13 +70,11 @@
         <label for="nickInput">Your name</label>
         <input id="nickInput" maxlength="20" placeholder="e.g. Alex" autocomplete="off" />
       </div>
-      <div class="card">
-        <button id="createBtn">Create a room</button>
-      </div>
+      <div class="card"><button id="createBtn">Create a room</button></div>
       <div class="divider">or join one</div>
       <div class="card">
         <label for="codeInput">Room code</label>
-        <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" inputmode="latin" />
+        <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" />
         <div style="height:12px"></div>
         <button id="joinBtn" class="ghost">Join room</button>
       </div>
@@ -73,7 +84,7 @@
     <!-- Lobby -->
     <section id="lobby" class="screen">
       <div class="card">
-        <div class="hint">Room code — read it out or share the link</div>
+        <div class="hint center">Room code — read it out or share the link</div>
         <div class="roomcode" id="lobbyCode">····</div>
         <div class="share" id="shareUrl"></div>
       </div>
@@ -82,9 +93,55 @@
         <div style="height:10px"></div>
         <ul class="roster" id="roster"></ul>
       </div>
-      <button id="startBtn" disabled>Start game — coming in stage 3</button>
+      <button id="setupBtn">Set up game →</button>
+      <p class="hint center" id="lobbyHint"></p>
       <button id="leaveBtn" class="ghost">Leave room</button>
-      <p class="hint" id="connState"></p>
+      <p class="hint center" id="connState"></p>
+    </section>
+
+    <!-- Config (host) -->
+    <section id="config" class="screen">
+      <div class="card">
+        <label>Draw characters from</label>
+        <div id="poolChoices"></div>
+        <select id="categorySelect" style="display:none; margin-top:6px"></select>
+      </div>
+      <div class="card">
+        <label>Difficulty</label>
+        <div id="diffChoices"></div>
+      </div>
+      <button id="dealBtn">Deal characters</button>
+      <button id="cfgBackBtn" class="ghost">Back</button>
+      <p class="err" id="configErr"></p>
+    </section>
+
+    <!-- Setup / confirm -->
+    <section id="setup" class="screen">
+      <div class="card">
+        <div class="hint center">Check this character — is it fair? <br>Reroll if nobody in the room would know them.</div>
+        <div class="checkowner" id="checkOwner"></div>
+        <div class="charcard" id="checkCard"></div>
+        <button id="rerollBtn" class="ghost">🎲 Reroll (<span id="rerollLeft">0</span> left)</button>
+        <p class="hint center" id="rerollNote"></p>
+      </div>
+      <div class="card">
+        <div class="hint">Everyone else — you'll answer questions about these</div>
+        <div style="height:8px"></div>
+        <ul class="roster" id="refList"></ul>
+      </div>
+      <button id="goodBtn" class="good">✅ Good to go</button>
+      <button id="unlockBtn" class="ghost" style="display:none">↩︎ Unlock</button>
+      <p class="hint center" id="waitingNote"></p>
+    </section>
+
+    <!-- Ready (end of stage 2) -->
+    <section id="ready" class="screen">
+      <div class="card">
+        <div class="big-emoji">🙌</div>
+        <p class="hint center">Everyone's locked in! In a real game your character would now appear
+          for you to hold on your forehead. <br><br><span class="badge">Turn loop &amp; tilt-to-win: stage 3–4</span></p>
+      </div>
+      <button id="readyLeaveBtn" class="ghost">Leave room</button>
     </section>
   </main>
 

@@ -52,8 +52,14 @@ Endpoints that prove the shared core is reachable from this frontend:
   `public/`. Create/join by code, live roster, nickname identity, and seats keyed by a
   persistent client `playerId` so a dropped connection reclaims its seat. Codes are 4 chars
   from an unambiguous alphabet (no O/0, I/1).
-- **2. Setup flow** — list/difficulty picking, confirm/reroll screen. _next_
+- **2. Setup flow — done.** Host picks a pool (random category / everything / a category) and
+  difficulty; the server deals via the shared core, then each player gets a confirm/reroll
+  screen showing the one character they check (reroll budget, demotion) plus everyone else's as
+  reference — never their own. `gameSetup.js` is pure and unit-tested in
+  `test/web-setup.test.js`; content is injected so it needs no DB. `WEB_SCOPE` auto-resolves to
+  the richest seeded scope so a phone test deals real characters immediately.
 - **3. Turn loop** ported behind `core/game/roundMode.js` (tap-to-confirm placeholder for tilt).
+  _next_
 - **4. Forehead mode** + tilt gestures + iOS motion permission.
 - **5. Reconnection hardening** — wall-clock-anchored turn timers, resume mid-turn.
 - **6. Polish** — audio/haptic cues, standings, rematch, optional scoreboard view, QR codes.

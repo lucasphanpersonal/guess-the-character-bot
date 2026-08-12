@@ -15,21 +15,102 @@ const { Server } = require('socket.io');
 
 // --- Shared core: the exact same modules the Discord bot uses -----------------------------
 const GameManager = require('../core/game/GameManager');
-const { listCategoriesWithCounts } = require('../core/db/characterLists');
+const characterLists = require('../core/db/characterLists');
 const { TurnRotationMode } = require('../core/game/roundMode');
 
-// --- Web-only: transport + room membership ------------------------------------------------
+// --- Web-only: transport + room membership + setup ----------------------------------------
 const { RoomRegistry } = require('./rooms');
 const { attachSockets } = require('./socket');
+const gameSetup = require('./gameSetup');
 
 const PORT = process.env.WEB_PORT || 4180;
 // The core's content queries are scoped by an id (a Discord guild id, historically). A web
-// party has no guild, so it needs its own scope. Per-room/account scoping is a later decision
-// (see "Identity and leaderboard scope" in the plan).
-const WEB_SCOPE = process.env.WEB_SCOPE || 'web';
+// party has no guild. If WEB_SCOPE isn't set, auto-pick the richest existing scope so a phone
+// test can deal real characters straight away rather than from an empty 'web' scope. Per-room
+// or per-account scoping is a later decision (see "Identity and leaderboard scope" in the plan).
+function resolveScope() {
+  if (process.env.WEB_SCOPE) return process.env.WEB_SCOPE;
+  try {
+    const top = characterLists.guildsRankedByContent()[0];
+    if (top && top.enabledLists > 0) return top.guildId;
+  } catch {
+    /* fall through to the empty default */
+  }
+  return 'web';
+}
+const WEB_SCOPE = resolveScope();
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const registry = new RoomRegistry();
+
+// --- Setup service: resolves a pool, deals, and drives confirm/reroll via the core ---------
+// Injected into the socket layer so socket.js stays transport-only (no DB access there).
+const content = {
+  demoteThreshold: characterLists.REROLL_DEMOTE_THRESHOLD,
+  rerollOne: (listIds, excludeNames, difficulty) =>
+    characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty),
+  recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),
+};
+
+function resolvePool({ poolType, category }) {
+  if (poolType === 'category' && category) {
+    return { listIds: characterLists.getEnabledListsByCategory(WEB_SCOPE, category).map((l) => l.id), label: category };
+  }
+  if (poolType === 'random') {
+    const cat = characterLists.getRandomCategory(WEB_SCOPE);
+    if (!cat) return { listIds: [], label: 'nothing enabled' };
+    return { listIds: characterLists.getEnabledListsByCategory(WEB_SCOPE, cat).map((l) => l.id), label: `🎲 ${cat}` };
+  }
+  // Default: everything enabled in this scope.
+  return { listIds: characterLists.getEnabledLists(WEB_SCOPE).map((l) => l.id), label: 'Everything' };
+}
+
+const setup = {
+  options() {
+    const categories = characterLists
+      .listCategoriesWithEnabledCounts(WEB_SCOPE)
+      .filter((c) => c.enabled > 0)
+      .map((c) => ({ category: c.category, enabled: c.enabled }));
+    const difficulties = Object.entries(characterLists.DIFFICULTIES).map(([key, d]) => ({
+      key,
+      label: d.label,
+      blurb: d.blurb,
+    }));
+    return { categories, difficulties, defaultDifficulty: characterLists.DEFAULT_DIFFICULTY };
+  },
+
+  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY } = {}) {
+    const { listIds, label } = resolvePool({ poolType, category });
+    if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
+    const n = room.players.size;
+    const available = characterLists.countDistinctCharacters(listIds, difficulty);
+    if (available < n) {
+      return { ok: false, error: `${label} has only ${available} characters at this difficulty; need ${n}.` };
+    }
+    const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty);
+    if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
+
+    room.game = gameSetup.createSetup({
+      order: [...room.order],
+      guildId: WEB_SCOPE,
+      listIds,
+      difficulty,
+      characters,
+    });
+    room.poolLabel = label;
+    return { ok: true, label };
+  },
+
+  view: (game, viewerId, names) => gameSetup.buildView(game, viewerId, names),
+  reroll: (game, viewerId) =>
+    gameSetup.applyReroll(game, viewerId, {
+      content,
+      listIds: game.lobby.listIds,
+      difficulty: game.lobby.difficulty,
+    }),
+  confirm: (game, viewerId) => gameSetup.applyConfirm(game, viewerId),
+  unlock: (game, viewerId) => gameSetup.applyUnlock(game, viewerId),
+};
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -70,7 +151,7 @@ const server = http.createServer((req, res) => {
   // until list curation exists under it -- the point is that the query PATH works.
   if (url.pathname === '/api/categories') {
     try {
-      return sendJson(res, 200, { scope: WEB_SCOPE, categories: listCategoriesWithCounts(WEB_SCOPE) });
+      return sendJson(res, 200, { scope: WEB_SCOPE, categories: characterLists.listCategoriesWithCounts(WEB_SCOPE) });
     } catch (err) {
       return sendJson(res, 500, { error: err.message });
     }
@@ -90,7 +171,7 @@ const server = http.createServer((req, res) => {
 });
 
 const io = new Server(server); // same-origin; serves its browser client at /socket.io/socket.io.js
-attachSockets(io, registry);
+attachSockets(io, { registry, setup });
 
 // Every non-internal IPv4 address, so the startup log can print a URL a phone on the same
 // Wi-Fi can actually reach -- localhost is only reachable from this machine.

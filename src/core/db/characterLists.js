@@ -335,6 +335,23 @@ function searchListNames(guildId, query, limit = 25) {
   return [...direct, ...extra].slice(0, limit);
 }
 
+// Scopes (guild ids, historically) ranked by how much playable content they hold. The web
+// frontend has no guild, so it uses this to auto-pick the richest existing scope to play from
+// when WEB_SCOPE isn't set explicitly -- otherwise a fresh install would deal from nothing.
+function guildsRankedByContent() {
+  return db
+    .prepare(
+      `SELECT cl.guild_id AS guildId,
+              SUM(CASE WHEN cl.enabled = 1 THEN 1 ELSE 0 END) AS enabledLists,
+              COUNT(DISTINCT c.id) AS characters
+         FROM character_lists cl
+         LEFT JOIN characters c ON c.list_id = cl.id
+        GROUP BY cl.guild_id
+        ORDER BY enabledLists DESC, characters DESC`
+    )
+    .all();
+}
+
 function listCategoriesWithCounts(guildId) {
   return db
     .prepare(
@@ -613,6 +630,7 @@ module.exports = {
   setCharacterFame,
   REROLL_DEMOTE_THRESHOLD,
   searchListNames,
+  guildsRankedByContent,
   listCategoriesWithCounts,
   listNamesInCategory,
   getListsByCategory,

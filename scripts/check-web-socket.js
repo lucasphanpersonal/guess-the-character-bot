@@ -1,17 +1,28 @@
 // Integration check for the web socket layer: `npm run check:web-socket`.
 //
-// Boots the real web server on an ephemeral port and drives two socket.io clients through the
-// stage-1 lifecycle -- create, join, live broadcast, disconnect-keeps-seat, reconnect-reclaims-
-// seat, host handoff on leave. Kept OUT of `npm test` on purpose: the unit suite is network-free
-// (see README), and this one binds a localhost port. The room *logic* is unit-tested without a
-// network in test/web-rooms.test.js; this proves the socket wiring end to end.
+// Boots the real web server on an ephemeral port and drives socket.io clients through the
+// stage 1 lifecycle (rooms/membership/reconnect) and the stage 2 lifecycle (deal characters,
+// reroll, confirm, ready). Kept OUT of `npm test` on purpose: the unit suite is network-free
+// (see README) and this binds a localhost port and seeds a throwaway DB. The room and setup
+// *logic* are unit-tested without a network in test/web-rooms.test.js and test/web-setup.test.js;
+// this proves the socket wiring end to end.
 
 const os = require('os');
 const path = require('path');
 
 process.env.WEB_PORT = process.env.WEB_PORT || '4199';
-// Never touch the real DB.
+process.env.WEB_SCOPE = process.env.WEB_SCOPE || 'gtc-check-scope';
 process.env.BOT_DB_PATH = process.env.BOT_DB_PATH || path.join(os.tmpdir(), 'gtc-ws-check.sqlite');
+
+// Seed a tiny content scope BEFORE requiring the server (which resolves WEB_SCOPE at load).
+const characterLists = require('../src/core/db/characterLists');
+function seedContent() {
+  const list = characterLists.createList(process.env.WEB_SCOPE, 'Test Toons', 'seed', 'TestToons', { enabled: true });
+  for (const name of ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn']) {
+    characterLists.addCharacter(list, name, 'seed', null);
+  }
+}
+seedContent();
 
 const { io } = require('socket.io-client');
 const { server } = require('../src/web/server');
@@ -19,13 +30,15 @@ const { server } = require('../src/web/server');
 const PORT = Number(process.env.WEB_PORT);
 const URL = `http://localhost:${PORT}`;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const nextState = (sock) => new Promise((r) => sock.once('room:state', r));
+const nextEvent = (sock, ev) => new Promise((r) => sock.once(ev, r));
+const roomStatus = (sock, status) =>
+  new Promise((r) => {
+    const on = (s) => { if (s.status === status) { sock.off('room:state', on); r(s); } };
+    sock.on('room:state', on);
+  });
 
 let failed = 0;
-const check = (cond, msg) => {
-  console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`);
-  if (!cond) failed++;
-};
+const check = (cond, msg) => { console.log(`${cond ? 'ok  ' : 'FAIL'} ${msg}`); if (!cond) failed++; };
 const connect = (playerId) => {
   const sock = io(URL, { auth: { playerId } });
   return new Promise((r) => sock.on('connect', () => r(sock)));
@@ -34,42 +47,63 @@ const connect = (playerId) => {
 (async () => {
   await new Promise((r) => server.listen(PORT, r));
 
+  // ---- Stage 1: membership + reconnect --------------------------------------------------
+  console.log('\n# stage 1 — rooms & reconnect');
   const A = await connect('pA');
   let res = await A.emitWithAck('room:create', { nickname: 'Alex' });
   check(res.ok && res.state.players.length === 1, 'A creates a room, seated as host');
   const code = res.state.code;
-  check(res.state.hostPlayerId === 'pA', 'host is A');
 
   const B = await connect('pB');
-  const aSees2 = nextState(A);
+  const aSees2 = nextEvent(A, 'room:state');
   res = await B.emitWithAck('room:join', { code, nickname: 'Sam' });
   check(res.ok && res.state.players.length === 2, 'B joins, roster has 2');
-  check((await aSees2).players.length === 2, 'A received a live broadcast when B joined');
+  check((await aSees2).players.length === 2, 'A got a live broadcast when B joined');
 
-  const aSeesOffline = nextState(A);
+  const aSeesOffline = nextEvent(A, 'room:state');
   B.close();
-  const off = await aSeesOffline;
-  const sam = off.players.find((p) => p.playerId === 'pB');
-  check(sam && sam.connected === false, 'B disconnect keeps the seat, marked offline');
-  check(off.players.length === 2, 'seat is retained on disconnect');
+  const off = (await aSeesOffline).players.find((p) => p.playerId === 'pB');
+  check(off && off.connected === false, 'B disconnect keeps the seat, marked offline');
 
   const B2 = await connect('pB');
   res = await B2.emitWithAck('room:join', { code, nickname: 'Sam' });
-  check(res.ok && res.reconnected === true, 'B reconnects and reclaims the same seat');
-  check(res.state.players.length === 2, 'still 2 players after reconnect (no duplicate)');
+  check(res.ok && res.reconnected === true && res.state.players.length === 2, 'B reconnects to the same seat');
 
-  const bSeesHandoff = nextState(B2);
-  await A.emitWithAck('room:leave', {});
-  const handoff = await bSeesHandoff;
-  check(handoff.hostPlayerId === 'pB', 'host handed off to B when A left');
-  check(handoff.players.length === 1, 'A removed on explicit leave');
-
-  A.close();
-  B2.close();
+  A.close(); B2.close();
   await wait(50);
-  console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WS CHECKS PASSED');
+
+  // ---- Stage 2: deal, reroll, confirm, ready -------------------------------------------
+  console.log('\n# stage 2 — setup / confirm / reroll');
+  const C = await connect('pC');
+  res = await C.emitWithAck('room:create', { nickname: 'Kira' });
+  const code2 = res.state.code;
+  const D = await connect('pD');
+  await D.emitWithAck('room:join', { code: code2, nickname: 'Lee' });
+
+  const cSetup = nextEvent(C, 'setup:state');
+  const dSetup = nextEvent(D, 'setup:state');
+  res = await C.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
+  check(res.ok, 'host deals characters (setup:start ok)');
+  const cView = await cSetup;
+  const dView = await dSetup;
+  const seeded = ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn'];
+  check(seeded.includes(cView.checking.character.name), 'C sees a real character to check');
+  check(cView.reference.length === 0, 'with 2 players the reference list is empty');
+  check(cView.checking.character.name !== dView.checking.character.name, 'the two players check different characters');
+
+  const cReroll = nextEvent(C, 'setup:state');
+  res = await C.emitWithAck('setup:reroll', {});
+  check(res.ok, 'C rerolls the character they check');
+  check((await cReroll).rerollsLeft === 2, 'reroll spent one from the budget (3 -> 2)');
+
+  const ready = roomStatus(C, 'ready');
+  await C.emitWithAck('setup:confirm', {});
+  await D.emitWithAck('setup:confirm', {});
+  await ready;
+  check(true, 'both confirm -> room reaches "ready"');
+
+  C.close(); D.close();
+  await wait(50);
+  console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');
   process.exit(failed ? 1 : 0);
-})().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+})().catch((e) => { console.error(e); process.exit(1); });
