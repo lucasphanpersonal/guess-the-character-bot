@@ -232,7 +232,7 @@ module.exports = {
     await press(ctx, 'p1', 'pass'); // p1 into turn 2 without getting it
     await press(ctx, 'p2', 'pass');
     await rule(ctx, 'p2', true); // p1 gets it on turn 2
-    await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // alone, gives up
+    await engine.submitGiveUp(ctx.client, ctx.lobby, 'p2'); // alone, gives up
 
     const revealed = ctx.recorder.textMatching(`channel:${ctx.channelId}`);
     assert.match(revealed, /got it in \*\*2\*\* turns/, 'wrong guesses cost nothing, the clock does');

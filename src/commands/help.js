@@ -93,7 +93,7 @@ module.exports = {
             'resolves -- you never stop talking to log a guess. ✅ asks to confirm first, ' +
             'because it reveals your character and cannot be taken back; ❌ costs nothing, so ' +
             'it does not.\n' +
-            '⏭️ **Pass** is your only button -- there is no guess box, because the judge ' +
+            '⏭️ **Pass** hands your turn on -- there is no guess box, because the judge ' +
             'already decides whether you got it.\n' +
             "Guessing wrong costs you nothing and isn't counted, so guess early and often. " +
             "Only **Pass**, or running out of time, hands the turn over (once time's up the " +
@@ -105,8 +105,10 @@ module.exports = {
             'Getting your character ends **your** part, not the game: it is revealed there and ' +
             'then, you drop out, and everyone else keeps playing until they get theirs. ' +
             'Whoever needed the fewest turns wins, and the same number of turns is a tie.\n' +
-            'Once you are the last one still guessing there is nobody to pass to, so ⏭️ Pass ' +
-            'becomes 🏳️ **Give up** -- the only way to end a game early.',
+            'Passing never removes you -- even once you can no longer win, you keep playing for ' +
+            'your placement. A 🏳️ **Give up** button appears beside Pass once you are out of ' +
+            'contention, to bow out if you would rather; when you are the last one still ' +
+            'guessing it is your only button, and it ends the game.',
         },
         {
           name: '✍️ What counts as a correct guess',

@@ -66,13 +66,18 @@ class Game {
     // playerId -> the turn they got their character on. Presence means they are out of the
     // rotation, and is what `active` is defined against.
     this.finishedBy = new Map();
-    // Everyone who left the rotation without finishing -- always a deliberate act: a lone
-    // survivor pressing Give Up, an eliminated player bowing out of an epilogue they can't win
-    // (both engine.submitPass), or a mid-game `/lobby leave` (engine.submitForfeit). Nobody is
-    // ever added here for merely going quiet -- a timed-out turn just passes (see
-    // engine.checkLastChanceTimeout). Membership is what `active` is defined against, and there
-    // can be several.
+    // Everyone who left the rotation without finishing -- always a deliberate act: pressing
+    // 🏳️ Give up (engine.submitGiveUp), or leaving mid-game via `/lobby leave`
+    // (engine.submitForfeit). Passing never adds anyone here -- it only ever hands the turn on
+    // -- and nobody is ever added for merely going quiet, since a timed-out turn just passes
+    // (see engine.checkLastChanceTimeout). Membership is what `active` is defined against, and
+    // there can be several.
     this.surrendered = new Set();
+    // Players whose character has already been shown publicly BEFORE the final reveal -- today
+    // that means someone who left mid-game (engine.submitForfeit reveals what they were wearing
+    // the moment they go). finalizeGame skips these so the end-of-game reveal doesn't show the
+    // same character twice. Finishers aren't tracked here: finishedBy already excludes them.
+    this.revealed = new Set();
     // "<playerId>:<turnNumber>" for every turn that has already been resolved, so no turn can
     // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
     // isn't guessing, so simultaneous presses are routine rather than exotic.
@@ -179,14 +184,20 @@ class Game {
   }
 
   /**
-   * A player who can no longer match the leader's turn count -- so every turn they take from
-   * here changes nothing about who wins (see docs/multiplayer-design.md, "the loser now plays
-   * an epilogue"). They haven't finished and haven't given up: those are separate outcomes.
-   * There is simply a finish already on the board that they cannot equal.
+   * Whether this player is out of contention FOR THE WIN -- they can no longer finish in few
+   * enough turns to match the best result already on the board, so their own best-possible
+   * score can't equal or beat it.
    *
-   * The doc's definition is "eliminated once min(finished turn counts) < your next turn
-   * number". The subtlety is what "your next turn number" is at the moment we ask. It is the
-   * earliest turn they could still finish on:
+   * This is NOT elimination. Nobody is ever removed from the game: the only score is turns
+   * taken, compared at the very end (see `standings`), and a player out of contention keeps
+   * playing, keeps being handed turns, and still gets a real placement for however many turns
+   * they take. All this decides is one informational note on the board -- "you can't catch the
+   * leader now, but you can still get your own character" -- so nobody is left silently playing
+   * a turn that can no longer change who wins without being told. It has no mechanical effect:
+   * it does not change the buttons, the rotation, or scoring.
+   *
+   * The condition is `min(finished turn counts) < your earliest possible finish`. The subtlety
+   * is what "your earliest possible finish" is at the moment we ask:
    *
    *   - For the player currently guessing, that is the turn in hand. `engine.startTurn` has
    *     already incremented their `turnsTaken` for it, so `turnsFor` IS that turn's number,
@@ -195,9 +206,9 @@ class Game {
    *
    * Hence the +1 for everyone but the current player. Without it, a guesser on turn k whose
    * leader also finished on k -- who can still tie by getting it this very turn -- would be
-   * told they were out a turn too early.
+   * told they were out of contention a turn too early.
    */
-  isEliminated(playerId) {
+  isOutOfContention(playerId) {
     const best = this.bestTurnCount;
     if (best == null) return false;
     if (this.finishedBy.has(playerId) || this.surrendered.has(playerId)) return false;

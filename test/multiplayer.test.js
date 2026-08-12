@@ -311,7 +311,7 @@ module.exports = {
     await judge(ctx, 'p1', true);
     await judge(ctx, 'p2', true);
     await judge(ctx, 'p3', true);
-    await engine.submitPass(ctx.client, ctx.lobby, 'p4'); // alone -> gives up, ending the game
+    await engine.submitGiveUp(ctx.client, ctx.lobby, 'p4'); // alone -> gives up, ending the game
 
     const rows = db
       .prepare(
@@ -401,6 +401,38 @@ module.exports = {
     assert.equal(byId.p4.outcome, 'gave_up');
     assert.equal(byId.p4.turnsTaken, null);
     assert.equal(byId.p1.outcome, 'won');
+    cleanup(ctx);
+  },
+
+  // Bug: giving up used to leave the player never knowing who they were. Leaving mid-game now
+  // reveals their character right then -- it spoils nobody, since everyone else was DM'd it at
+  // the start -- and the end-of-game reveal doesn't then show it a second time.
+  async 'leaving mid-game reveals the character you never got to guess, exactly once'() {
+    const ctx = await startedGame(3);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+    const p3Head = `**${game.headByPlayer.p3.name}**`;
+
+    await engine.submitForfeit(ctx.client, ctx.lobby, 'p3'); // p1 is up; p3 leaves off-turn
+
+    // Their own "left the game" post -- matched on content, since the turn board edits share
+    // the channel target.
+    const leaveMsg = ctx.recorder.sent
+      .filter((m) => m.target === `channel:${ctx.channelId}` && /has left the game/.test(m.content ?? ''))
+      .at(-1);
+    assert.ok(leaveMsg, 'a "left the game" message was posted');
+    assert.equal(leaveMsg.payload.embeds.length, 1, 'their character rode along with the message');
+    assert.ok(leaveMsg.payload.embeds[0].data.description.includes(p3Head), 'and it names them');
+    assert.ok(game.revealed.has('p3'), 'marked revealed so the end reveal skips it');
+
+    // Finish the game; the end-of-game reveal must not repeat p3's character.
+    await judge(ctx, 'p1', true);
+    await judge(ctx, 'p2', true);
+    const shownAfterLeave = ctx.recorder.sent
+      .filter((m) => m.target === `channel:${ctx.channelId}`)
+      .flatMap((m) => m.payload?.embeds ?? [])
+      .filter((e) => (e.data.description ?? '').includes(p3Head));
+    assert.equal(shownAfterLeave.length, 1, "p3's character is shown exactly once, when they left");
     cleanup(ctx);
   },
 
@@ -515,33 +547,61 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // A mid-pack player who can no longer catch the leader used to keep taking full turns for
-  // nothing, with give-up reachable only from `/lobby leave`. Now their Pass becomes a labelled
-  // Give up -- and using it must NOT end the game, because others are still guessing.
-  async 'an eliminated player who is not last can give up, and the others play on'() {
+  // A mid-pack player who can no longer win keeps their seat: passing NEVER removes anyone now,
+  // so they can play on for placement (or simply wait the game out) and leave only by their own
+  // choice via `/lobby leave`. Their control stays a plain Pass. Out of contention is a note,
+  // not a removal -- nobody is "eliminated".
+  async 'a player out of contention who is not last just passes and stays in the game'() {
     const ctx = await startedGame(3);
     await confirmAll(ctx);
     const game = ctx.lobby.game;
 
     await judge(ctx, 'p1', true); // p1 finishes on turn 1 -> best = 1
-    // Round one: p2 and p3 are each on turn 1, so getting it now would tie -- not eliminated.
+    // Round one: p2 and p3 are each on turn 1, so getting it now would tie -- still in it.
     await engine.submitPass(ctx.client, ctx.lobby, 'p2');
     await engine.submitPass(ctx.client, ctx.lobby, 'p3');
 
     // Round two: p2 is up on turn 2 and can no longer match a turn-1 finish.
     assert.equal(game.currentPlayerId, 'p2');
     assert.equal(game.turnsFor('p2'), 2);
-    assert.equal(game.isEliminated('p2'), true);
+    assert.equal(game.isOutOfContention('p2'), true);
 
     const result = await engine.submitPass(ctx.client, ctx.lobby, 'p2');
-    assert.equal(result.gaveUp, true, 'an eliminated pass is a give up');
-    assert.equal(result.gameOver, false, 'but it does not end the game');
-    assert.ok(game.surrendered.has('p2'));
+    assert.equal(result.ok, true);
+    assert.ok(!game.surrendered.has('p2'), 'passing did not remove the out-of-contention player');
     assert.equal(game.finished, false, 'still running');
     assert.equal(ctx.lobby.status, 'IN_PROGRESS');
     assert.equal(game.currentPlayerId, 'p3', 'p3 plays on');
+    assert.ok(game.isActive('p2'), 'and p2 stays in, to be handed another turn');
 
-    // p3 finishing then wraps it up normally, and p2 is on the record as having given up.
+    // The board offers a plain Pass, not a Give up -- others are still guessing.
+    game.currentTurnIndex = game.turnOrder.indexOf('p2');
+    const guesserBtn = buildTurnBoardPayload(game, ctx.channelId).components[1].toJSON().components[0];
+    assert.equal(guesserBtn.label, 'Pass');
+    assert.match(guesserBtn.custom_id, /^turn:pass:/);
+    cleanup(ctx);
+  },
+
+  // The way out for a not-last player is /lobby leave, and using it must NOT end the game --
+  // the others are still guessing.
+  async 'a player out of contention can leave via forfeit, and the others play on'() {
+    const ctx = await startedGame(3);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    await judge(ctx, 'p1', true); // p1 finishes on turn 1 -> best = 1
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p3');
+    assert.equal(game.currentPlayerId, 'p2');
+    assert.equal(game.isOutOfContention('p2'), true);
+
+    await engine.submitForfeit(ctx.client, ctx.lobby, 'p2'); // p2's turn -> hands it on
+    assert.ok(game.surrendered.has('p2'));
+    assert.equal(game.finished, false, 'others still guessing, so not over');
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+    assert.equal(game.currentPlayerId, 'p3', 'p3 plays on');
+
+    // p3 finishing wraps it up, and p2 is on the record as having given up.
     await judge(ctx, 'p3', true);
     const byId = Object.fromEntries(game.standings().map((s) => [s.playerId, s]));
     assert.equal(byId.p2.outcome, 'gave_up');
@@ -549,20 +609,40 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // The boundary in the other direction: a player who could still tie must NOT be treated as
-  // eliminated, so their grey Pass stays a plain pass rather than silently giving up.
-  async 'a player still in contention just passes rather than giving up'() {
+  // The Give up button, offered alongside Pass once you're out of contention, bows the player
+  // out WITHOUT ending the game, and reveals their character right then rather than at the end.
+  async 'the Give up button lets an out-of-contention player bow out mid-game, character shown'() {
     const ctx = await startedGame(3);
     await confirmAll(ctx);
     const game = ctx.lobby.game;
+    const p2Head = `**${game.headByPlayer.p2.name}**`;
 
     await judge(ctx, 'p1', true); // p1 finishes on turn 1 -> best = 1
-    // p2 is on turn 1: getting it now would tie, so they are still in it.
-    assert.equal(game.isEliminated('p2'), false);
-    const result = await engine.submitPass(ctx.client, ctx.lobby, 'p2');
-    assert.equal(result.gaveUp, false, 'a plain pass, not a surrender');
-    assert.ok(!game.surrendered.has('p2'), 'and they stay in the game');
-    assert.equal(game.currentPlayerId, 'p3', 'the turn simply moved on');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2');
+    await engine.submitPass(ctx.client, ctx.lobby, 'p3');
+    assert.equal(game.currentPlayerId, 'p2');
+    assert.equal(game.isOutOfContention('p2'), true);
+
+    const result = await engine.submitGiveUp(ctx.client, ctx.lobby, 'p2');
+    assert.equal(result.ok, true);
+    assert.equal(result.gameOver, false, 'others still guessing, so giving up does not end it');
+    assert.ok(game.surrendered.has('p2'));
+    assert.equal(game.currentPlayerId, 'p3', 'p3 plays on');
+
+    // Their character was revealed on the way out, exactly once.
+    const shown = ctx.recorder.sent
+      .filter((m) => m.target === `channel:${ctx.channelId}`)
+      .flatMap((m) => m.payload?.embeds ?? [])
+      .filter((e) => (e.data.description ?? '').includes(p2Head));
+    assert.equal(shown.length, 1, "p2's character shown once, when they gave up");
+    assert.ok(game.revealed.has('p2'));
+
+    await judge(ctx, 'p3', true); // finish it off
+    const stillOnce = ctx.recorder.sent
+      .filter((m) => m.target === `channel:${ctx.channelId}`)
+      .flatMap((m) => m.payload?.embeds ?? [])
+      .filter((e) => (e.data.description ?? '').includes(p2Head));
+    assert.equal(stillOnce.length, 1, 'and not repeated in the end-of-game reveal');
     cleanup(ctx);
   },
 
@@ -592,7 +672,7 @@ module.exports = {
     await judge(ctx, 'p1', true); // turn 1
     await judge(ctx, 'p2', true); // turn 1
     await judge(ctx, 'p3', true); // turn 1
-    await engine.submitPass(ctx.client, ctx.lobby, 'p4'); // alone -> gives up
+    await engine.submitGiveUp(ctx.client, ctx.lobby, 'p4'); // alone -> gives up
 
     const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`).content;
     assert.match(reveal, /1= <@p1> — 1 turn/);

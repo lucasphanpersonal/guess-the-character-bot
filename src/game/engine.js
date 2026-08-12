@@ -435,19 +435,18 @@ async function submitJudgement(client, lobby, judgeId, correct) {
 }
 
 /**
- * Pass hands the turn on -- except when there is no longer any point handing it on, where it
- * means give up and the board says so (see turnBoard.buildButtons). That happens two ways:
+ * Pass hands the turn on, and only ever that -- it NEVER removes anyone.
  *
- *   - You are the last player still guessing: nobody to hand it to, and a press would only
- *     cycle straight back to you.
- *   - You are eliminated but not last: you can no longer catch the leader, so continuing to
- *     take full turns is an epilogue you never chose (see Game.isEliminated). Giving up here
- *     is a labelled, red-button decision -- a player still in contention keeps the grey Pass
- *     that just hands the turn over.
+ * The board only offers Pass while other players are still guessing (turnBoard.buildButtons),
+ * so there is always somebody to hand the turn to: endTurn's nextActiveIndex advances the
+ * rotation and the passing player keeps their seat, even once they can no longer win. Leaving
+ * is a separate, deliberate act -- 🏳️ Give up (submitGiveUp) or `/lobby leave` (submitForfeit)
+ * -- and keeping those off Pass is what stops a pass ever surrendering a player who only meant
+ * to hand the turn over.
  *
- * Surrendering as a non-last player must NOT end the game: endTurn's nextActiveIndex still
- * finds the other active players and play continues for them, exactly as submitForfeit does
- * for someone who leaves mid-game. Only the last-survivor case empties the table.
+ * If Pass is somehow reached with nobody else active (e.g. the `/pass` command run by a lone
+ * survivor), nextActiveIndex simply loops back and deals them another turn -- harmless, and
+ * still never a surrender.
  */
 async function submitPass(client, lobby, playerId) {
   const game = lobby.game;
@@ -457,11 +456,48 @@ async function submitPass(client, lobby, playerId) {
   if (playerId !== game.currentPlayerId) {
     return { ok: false, error: "It's not your turn." };
   }
-  const gaveUp = game.activePlayers.length === 1 || game.isEliminated(playerId);
-  if (gaveUp) game.surrendered.add(playerId);
-  await endTurn(client, lobby, { correct: false, gaveUp });
+  await endTurn(client, lobby, { correct: false, gaveUp: false });
+  return { ok: true };
+}
+
+/**
+ * Give up surrenders the current player: they drop out of the rotation (recorded as gave-up)
+ * and the turn advances like a pass. The board offers it in two spots (turnBoard.buildButtons):
+ * to a player out of contention who would rather bow out than play the epilogue, and to the
+ * last player left, for whom it is the only move and ends the game.
+ *
+ * Either way it reveals what they were wearing -- they never got to work it out (bug: a give-up
+ * used to leave the player never told). While others are still guessing that reveal is its own
+ * message, posted now rather than made them wait for the end. When they were the LAST one, the
+ * game ends here and finalizeGame shows the character in the result message instead, so it
+ * isn't posted twice.
+ */
+async function submitGiveUp(client, lobby, playerId) {
+  const game = lobby.game;
+  if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
+    return { ok: false, error: 'No game in progress.' };
+  }
+  if (playerId !== game.currentPlayerId) {
+    return { ok: false, error: "It's not your turn." };
+  }
+  game.surrendered.add(playerId);
+  // activePlayers now excludes them, so this counts only the OTHERS still guessing. If any
+  // remain the game plays on, so reveal their character right away and mark it revealed so the
+  // end-of-game reveal doesn't repeat it. If none remain, finalizeGame does the reveal.
+  const stillGuessing = game.activePlayers.length;
+  if (stillGuessing > 0) {
+    game.revealed.add(playerId);
+    const channel = await getChannel(client, lobby);
+    await channel.send(
+      characterMessage(
+        `🏳️ <@${playerId}> gave up. ${stillGuessing} still guessing.`,
+        [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
+      )
+    );
+  }
+  await endTurn(client, lobby, { correct: false, gaveUp: true });
   // game.finished is set only when the table emptied -- i.e. the last survivor gave up.
-  return { ok: true, gaveUp, gameOver: game.finished };
+  return { ok: true, gameOver: game.finished };
 }
 
 async function handlePass(interaction, lobby) {
@@ -469,11 +505,7 @@ async function handlePass(interaction, lobby) {
   if (!result.ok) {
     return interaction.reply({ content: result.error, flags: MessageFlags.Ephemeral });
   }
-  let content;
-  if (!result.gaveUp) content = 'Turn passed.';
-  else if (result.gameOver) content = 'You gave up -- that ends the game.';
-  else content = 'You gave up -- everyone else plays on.';
-  return interaction.reply({ content, flags: MessageFlags.Ephemeral });
+  return interaction.reply({ content: 'Turn passed.', flags: MessageFlags.Ephemeral });
 }
 
 /**
@@ -587,9 +619,18 @@ async function submitForfeit(client, lobby, playerId) {
   }
 
   game.surrendered.add(playerId);
+  // Reveal what they were wearing at the moment they leave, not only if they stay to the end:
+  // they never got to work it out, and it spoils nobody -- everyone else was DM'd it at the
+  // start. Marked revealed so the end-of-game reveal (finalizeGame) doesn't show it again.
+  game.revealed.add(playerId);
   const channel = await getChannel(client, lobby);
   const left = game.activePlayers.length;
-  await channel.send(`🏳️ <@${playerId}> has left the game.` + (left ? ` ${left} still guessing.` : ''));
+  await channel.send(
+    characterMessage(
+      `🏳️ <@${playerId}> has left the game.` + (left ? ` ${left} still guessing.` : ''),
+      [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
+    )
+  );
 
   if (playerId === game.currentPlayerId) {
     await endTurn(client, lobby, { correct: false, gaveUp: true });
@@ -709,8 +750,9 @@ async function finalizeGame(client, lobby) {
   // moment, so repeating it here put the same name and artwork in the channel twice in a row
   // -- and in a game where everybody finished, the whole reveal was a duplicate of the two
   // messages above it. What is left is the one genuinely unanswered question: what the player
-  // who gave up was wearing.
-  const unrevealed = game.turnOrder.filter((id) => !game.finishedBy.has(id));
+  // who gave up was wearing -- unless they left mid-game, in which case submitForfeit already
+  // showed it and marked them revealed, so it isn't repeated here.
+  const unrevealed = game.turnOrder.filter((id) => !game.finishedBy.has(id) && !game.revealed.has(id));
   const names = await Promise.all(unrevealed.map((id) => displayName(client, id)));
   const reveal = await channel.send({
     ...characterMessage(
@@ -746,6 +788,7 @@ module.exports = {
   closeAudienceVote,
   submitJudgement,
   submitPass,
+  submitGiveUp,
   submitForfeit,
   handlePass,
   handleTimeout,

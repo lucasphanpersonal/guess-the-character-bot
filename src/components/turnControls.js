@@ -4,7 +4,8 @@
 //   turn:right:<channelId>                        button -> judge starts to rule "correct"
 //   turn:yes:<channelId>:<playerId>:<turnNumber>  button -> and confirms it (ephemeral)
 //   turn:wrong:<channelId>                        button -> the judge rules it wrong
-//   turn:pass:<channelId>                         button -> the guesser ends their turn
+//   turn:pass:<channelId>                         button -> the guesser hands the turn on
+//   turn:giveup:<channelId>                       button -> the guesser surrenders (bows out)
 //   turn:spectate:<channelId>                     button -> a NON-player asks to see them all
 //
 // There is no "submit a guess" control here on purpose. Guesses are said out loud and ruled
@@ -145,11 +146,17 @@ async function handle(interaction) {
     return interaction.reply(ephemeral(`It's <@${game.currentPlayerId}>'s turn, not yours.`));
   }
 
-  if (action === 'pass') {
+  // Pass and Give up are deliberately different actions: pass hands the turn on and can never
+  // remove anyone, give up surrenders the player (and ends the game when they were the last one
+  // guessing). Which show depends on where the player stands (turnBoard.buildButtons); both
+  // belong to the current player, checked just above.
+  if (action === 'pass' || action === 'giveup') {
     await interaction.deferUpdate();
-    const result = await engine.submitPass(interaction.client, lobby, interaction.user.id).catch((err) => {
+    const submit = action === 'giveup' ? engine.submitGiveUp : engine.submitPass;
+    const failure = action === 'giveup' ? 'giving up' : 'passing the turn';
+    const result = await submit(interaction.client, lobby, interaction.user.id).catch((err) => {
       console.error(err);
-      return { ok: false, error: 'Something went wrong passing the turn.' };
+      return { ok: false, error: `Something went wrong ${failure}.` };
     });
     if (!result.ok) return interaction.followUp(ephemeral(result.error));
     return undefined;

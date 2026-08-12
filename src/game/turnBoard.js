@@ -89,35 +89,57 @@ function buildButtons(game, channelId) {
       .setStyle(ButtonStyle.Danger)
   );
 
-  // Pass is the guesser's only control. There is deliberately no "submit a guess" button
-  // beside it: the judge's ✅ already answers "was that right?", and a second way to answer
-  // it would mean two authorities on the same question -- a human who can see the character,
-  // and Levenshtein distance. One is better.
+  // The guesser's controls. There is deliberately no "submit a guess" button among them: the
+  // judge's ✅ already answers "was that right?", and a second way to answer it would mean two
+  // authorities on the same question -- a human who can see the character, and Levenshtein
+  // distance. One is better.
   //
-  // Once there is nobody left to pass to -- either you are the last player guessing, or you
-  // are eliminated and every further turn is for nothing -- the button means give up. It is
-  // relabelled and turns red rather than quietly changing meaning under a player who has been
-  // pressing Pass all game out of habit. A player still in contention keeps the grey Pass.
-  const giveUp = game.activePlayers.length === 1 || game.isEliminated(game.currentPlayerId);
-  const guesserRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`turn:pass:${channelId}:${gameInstanceId}`)
-      .setLabel(giveUp ? 'Give up' : 'Pass')
-      .setEmoji(giveUp ? '🏳️' : '⏭️')
-      .setStyle(giveUp ? ButtonStyle.Danger : ButtonStyle.Secondary),
-    // Spectating was only ever offered on the lobby board, which loses its buttons the moment
-    // the game starts and is buried up the channel by turn three -- so anyone who wandered in
-    // late had to know `/lobby spectate` existed. It lives here because this is the one
-    // message that is always at the bottom of the channel.
-    //
-    // It shares the row with Pass, whose audience is exactly complementary: the player whose
-    // turn it is cannot spectate, and a spectator has no turn to pass.
-    new ButtonBuilder()
-      .setCustomId(`turn:spectate:${channelId}:${gameInstanceId}`)
-      .setLabel('Spectate')
-      .setEmoji('👁')
-      .setStyle(ButtonStyle.Secondary)
-  );
+  // ⏭️ Pass always just hands the turn on and NEVER removes anyone -- so a player who can no
+  // longer win keeps their seat and their shot at their own character (for placement) instead
+  // of being pushed out. 🏳️ Give up is a separate red button that surrenders: it advances the
+  // rotation like a pass, but drops the player out (recorded as gave-up) and reveals what they
+  // were wearing. They are different buttons on purpose -- a pass can never surrender you.
+  //
+  // Which controls show depends on where the player stands:
+  //
+  //   - Still in contention: just Pass. Nothing to give up on yet; if they truly must leave,
+  //     `/lobby leave` is always there.
+  //   - Out of contention but others still playing: Pass AND Give up. They can play on for
+  //     placement, or bow out -- both are one tap, and the context note explains the choice.
+  //   - Last one guessing: Give up only. There is nobody to pass to (a press would cycle
+  //     straight back), so giving up -- which here ends the game -- is the only move left.
+  const passButton = new ButtonBuilder()
+    .setCustomId(`turn:pass:${channelId}:${gameInstanceId}`)
+    .setLabel('Pass')
+    .setEmoji('⏭️')
+    .setStyle(ButtonStyle.Secondary);
+  const giveUpButton = new ButtonBuilder()
+    .setCustomId(`turn:giveup:${channelId}:${gameInstanceId}`)
+    .setLabel('Give up')
+    .setEmoji('🏳️')
+    .setStyle(ButtonStyle.Danger);
+  // Spectating was only ever offered on the lobby board, which loses its buttons the moment
+  // the game starts and is buried up the channel by turn three -- so anyone who wandered in
+  // late had to know `/lobby spectate` existed. It lives here because this is the one message
+  // that is always at the bottom of the channel, and its audience is exactly complementary to
+  // the guesser's: the player whose turn it is cannot spectate, and a spectator has no turn.
+  const spectateButton = new ButtonBuilder()
+    .setCustomId(`turn:spectate:${channelId}:${gameInstanceId}`)
+    .setLabel('Spectate')
+    .setEmoji('👁')
+    .setStyle(ButtonStyle.Secondary);
+
+  const alone = game.activePlayers.length === 1;
+  const outOfContention = !alone && game.isOutOfContention(game.currentPlayerId);
+  const guesserControls = [];
+  if (alone) {
+    guesserControls.push(giveUpButton);
+  } else {
+    guesserControls.push(passButton);
+    if (outOfContention) guesserControls.push(giveUpButton);
+  }
+  guesserControls.push(spectateButton);
+  const guesserRow = new ActionRowBuilder().addComponents(...guesserControls);
 
   return [judgeRow, guesserRow];
 }
@@ -165,30 +187,34 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
 
   embed.addFields(standingsField(game));
 
-  // A player whose next turn cannot change the result has no idea they are in that spot, and
-  // the whole channel is watching them play it out. Saying so turns the epilogue into a
-  // decision, and is the only place the repurposed Give up button gets explained. Two shapes:
+  // A player who can no longer win has no idea they are in that spot, and the whole channel is
+  // watching them play it out. Saying so turns a turn that can't change who wins into an
+  // informed choice -- keep playing for your own placement, or step out. Nobody is removed
+  // either way; the score is turns taken, compared at the end. Two shapes:
   //
-  //   - Last one guessing: nobody left to pass to, so the whole game hangs on them.
-  //   - Eliminated but not last: they can't catch the leader, but their OWN character is still
-  //     there to get (for placement), and others are still playing -- so this is a softer note.
+  //   - Last one guessing: nobody left to pass to, so the whole game hangs on them, and their
+  //     control is the game-ending Give up.
+  //   - Out of contention but not last: they can't match the best finish for the win, but their
+  //     OWN character is still there to get (for placement), and others are still playing -- so
+  //     this is a softer note, and their control stays a plain Pass.
   //
-  // Mutually exclusive by construction: the eliminated note is gated on NOT being alone, so
-  // the two never fire together or contradict each other.
+  // Mutually exclusive by construction: the out-of-contention note is gated on NOT being alone,
+  // so the two never fire together or contradict each other.
   const alone = game.activePlayers.length === 1;
-  const eliminated = !alone && game.isEliminated(game.currentPlayerId);
+  const outOfContention = !alone && game.isOutOfContention(game.currentPlayerId);
   let context = '';
   if (alone) {
     context =
       `\n🏳️ You're the last one guessing — everyone else was done by turn ${game.bestTurnCount}. ` +
       'Keep going, or **Give up** to end it.';
-  } else if (eliminated) {
+  } else if (outOfContention) {
     const best = game.bestTurnCount;
     const leaderId = [...game.finishedBy.entries()].find(([, t]) => t === best)?.[0];
     const leader = leaderId ? `<@${leaderId}>` : 'The leader';
     context =
-      `\n🏳️ ${leader} finished on turn ${best} — you can't catch them now, but you can still ` +
-      'get your own character. Or **Give up** to bow out.';
+      `\n🏳️ ${leader} finished on turn ${best}, so you can't win it now — but your turns still ` +
+      'count for where you place, so getting your own character is worth it. **Pass** to play ' +
+      'on, or **Give up** to bow out.';
   }
 
   // Discord does NOT notify on a mention inside an embed, only on one in message content. So

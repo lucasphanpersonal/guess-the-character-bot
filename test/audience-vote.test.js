@@ -539,9 +539,9 @@ module.exports = {
     // so the game needs both halves before a reveal exists.
     const first = game.currentPlayerId;
     await engine.submitJudgement(ctx.client, ctx.lobby, game.judgeId, true);
-    // A wrong guess deliberately does NOT end a turn, so the rebuttal is closed by passing.
+    // The other player is now alone and can no longer win, so they give up to end the game.
     const second = game.turnOrder.find((id) => id !== first);
-    await engine.submitPass(ctx.client, ctx.lobby, second);
+    await engine.submitGiveUp(ctx.client, ctx.lobby, second);
 
     const revealed = ctx.recorder.textMatching(`channel:${ctx.channelId}`);
     assert.match(revealed, /How the audience voted/);

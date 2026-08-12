@@ -32,7 +32,8 @@ function fakeGame() {
 
 // Three players with p1 already finished, so p2 -- who is up -- may or may not still be in
 // contention depending on the turn counts. `p2Turns` past the leader's count means p2 can no
-// longer match it, and p3 is still active so p2 is eliminated-but-not-last.
+// longer match it (out of contention for the win), and p3 is still active so p2 is out-of-
+// contention-but-not-last.
 function threeWayGame({ leaderTurn = 1, p2Turns = 2, p3Turns = 1 } = {}) {
   const game = new Game({
     lobby: { guildId: 'board-guild', players: ['p1', 'p2', 'p3'] },
@@ -210,7 +211,7 @@ module.exports = {
   async 'no turn board outlives the game'() {
     const ctx = await runningGame();
     await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', true); // p1 finishes
-    await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // alone, gives up -> game over
+    await engine.submitGiveUp(ctx.client, ctx.lobby, 'p2'); // alone, gives up -> game over
 
     const posted = ctx.recorder.sent.filter(
       (m) => m.target === `channel:${ctx.channelId}` && m.payload?.components?.length
@@ -254,37 +255,59 @@ module.exports = {
     assert.match(standings, /<@p2> — not started yet/);
   },
 
-  // Eliminated (can't catch the leader) but not the last one guessing -- the board owes them
-  // the promised context line and turns their Pass into a labelled, red Give up.
-  'an eliminated but not-last player is told they can no longer catch the leader'() {
+  // Out of contention for the win (can't match the best finish) but not the last one guessing
+  // -- the board owes them the context note, and gives them BOTH controls: a plain Pass to play
+  // on for placement (passing never removes anyone), and a Give up to bow out. Being out of
+  // contention is a note, not a removal -- nobody is "eliminated".
+  'an out-of-contention but not-last player gets both Pass and Give up, and is told they cannot win'() {
     const game = threeWayGame({ leaderTurn: 1, p2Turns: 2, p3Turns: 1 });
-    assert.equal(game.isEliminated('p2'), true, 'p2 is on turn 2 with the leader done on turn 1');
+    assert.equal(game.isOutOfContention('p2'), true, 'p2 is on turn 2 with the leader done on turn 1');
 
     const payload = buildTurnBoardPayload(game, 'chan');
     const desc = payload.embeds[0].toJSON().description;
     assert.match(desc, /<@p1> finished on turn 1/, 'names the leader and their count');
-    assert.match(desc, /can't catch them/);
-    assert.match(desc, /still get your own character/, 'and says their own is still worth getting');
+    assert.match(desc, /can't win it now/);
+    assert.match(desc, /turns still count for where you place/, 'their turns still matter for placement');
+    assert.match(desc, /getting your own character/, 'and their own is still worth getting');
+    assert.match(desc, /\*\*Give up\*\*/, 'and points to the Give up button as the way out');
+    assert.ok(!/lobby leave/.test(desc), 'the note refers to buttons, not typed commands');
     assert.ok(!/last one guessing/.test(desc), 'not the lone-survivor note -- others are still in');
 
     const buttons = buttonsOf(payload);
-    assert.equal(buttons.pass.label, 'Give up', 'Pass is repurposed');
-    assert.equal(buttons.pass.style, 4, 'and turns red (Danger)');
+    assert.equal(buttons.pass.label, 'Pass', 'a plain Pass -- passing plays on, it does not surrender');
+    assert.equal(buttons.pass.style, 2, 'grey (Secondary)');
+    assert.equal(buttons.giveup.label, 'Give up', 'and a Give up button beside it');
+    assert.equal(buttons.giveup.style, 4, 'red (Danger)');
   },
 
   // The boundary: the leader finished on the same turn number p2 is on now, so p2 can still
-  // TIE by getting it this very turn. They are not eliminated, and nothing is repurposed.
-  'a player who can still tie keeps the grey Pass and gets no eliminated note'() {
+  // TIE by getting it this very turn. They are still in contention, and get no note.
+  'a player who can still tie keeps the grey Pass and gets no out-of-contention note'() {
     const game = threeWayGame({ leaderTurn: 2, p2Turns: 2, p3Turns: 1 });
-    assert.equal(game.isEliminated('p2'), false, 'getting it on this turn would tie the leader');
+    assert.equal(game.isOutOfContention('p2'), false, 'getting it on this turn would tie the leader');
 
     const payload = buildTurnBoardPayload(game, 'chan');
     const desc = payload.embeds[0].toJSON().description;
-    assert.ok(!/can't catch/.test(desc), 'no eliminated note while still in contention');
+    assert.ok(!/can't win it now/.test(desc), 'no out-of-contention note while still in contention');
 
     const buttons = buttonsOf(payload);
     assert.equal(buttons.pass.label, 'Pass', 'still a plain Pass');
     assert.equal(buttons.pass.style, 2, 'still grey (Secondary)');
+  },
+
+  async 'the Give up button, shown only to the last player, ends the game'() {
+    const ctx = await runningGame();
+    await engine.submitJudgement(ctx.client, ctx.lobby, 'p2', true); // p1 finishes; p2 now alone
+
+    // The board's guesser control is now a give-up action, not a pass.
+    const payload = buildTurnBoardPayload(ctx.lobby.game, ctx.channelId);
+    const buttons = buttonsOf(payload);
+    assert.ok(buttons.giveup, 'the lone survivor gets a give-up button');
+    assert.equal(buttons.pass, undefined, 'and no pass -- nobody to pass to');
+
+    await clickButton(ctx, 'p2', 'giveup');
+    assert.equal(ctx.lobby.status, 'FINISHED', 'giving up when alone ends the game');
+    cleanup(ctx);
   },
 
   async 'turn controls on a finished game fail gracefully'() {

@@ -75,6 +75,12 @@ function pass({ client, recorder, lobby }, userId) {
   );
 }
 
+// Give up is a distinct action from Pass now, offered only to the last player left. Pass can
+// no longer end a game, so tests that used it to mean "the lone survivor bows out" call this.
+function giveUp({ client, lobby }, userId) {
+  return engine.submitGiveUp(client, lobby, userId);
+}
+
 function cleanup(ctx) {
   if (ctx.lobby.game) engine.clearTimers(ctx.lobby.game);
   GameManager.endLobby(ctx.channelId);
@@ -405,7 +411,7 @@ module.exports = {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await guess(ctx, 'p1', true);
-    await pass(ctx, 'p2'); // gives up -- Luigi was never revealed
+    await giveUp(ctx, 'p2'); // gives up -- Luigi was never revealed
 
     const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`);
     assert.equal(reveal.payload.embeds.length, 1, 'only the one still unanswered');
@@ -413,20 +419,22 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'the last player still guessing can give up, and Pass says so'() {
+  async 'the last player still guessing gets a Give up button that ends the game'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
     await guess(ctx, 'p1', true);
     const game = ctx.lobby.game;
 
-    // p2 is now the only one left, so their control is relabelled before it changes meaning.
+    // p2 is now the only one left, so their control becomes the game-ending Give up button --
+    // there is nobody left to pass to.
     const { buildTurnBoardPayload } = require('../src/game/turnBoard');
-    const passBtn = buildTurnBoardPayload(game, ctx.channelId)
+    const guesserBtn = buildTurnBoardPayload(game, ctx.channelId)
       .components[1].toJSON().components[0];
-    assert.equal(passBtn.label, 'Give up');
+    assert.equal(guesserBtn.label, 'Give up');
+    assert.match(guesserBtn.custom_id, /^turn:giveup:/, 'a give-up action, not a pass');
     assert.match(channelText(ctx), /You're the last one guessing/);
 
-    await pass(ctx, 'p2');
+    await giveUp(ctx, 'p2');
     assert.equal(ctx.lobby.status, 'FINISHED');
     assert.match(lastChannelMessage(ctx), /<@p2> gave up/);
     assert.equal(stats.getPlayerStats(ctx.guildId, 'p2').losses, 1);
@@ -442,7 +450,7 @@ module.exports = {
     assert.equal(played.length, 1, 'wrong-guess sound');
     await guess(ctx, 'p1', true);
     assert.equal(played.length, 2, 'correct-guess sound');
-    await pass(ctx, 'p2'); // ends the game -> win sting
+    await giveUp(ctx, 'p2'); // ends the game -> win sting
     assert.equal(played.length, 3, 'win sound');
     cleanup(ctx);
   },
@@ -516,7 +524,7 @@ module.exports = {
     await confirmBoth(ctx);
     await pass(ctx, 'p1');
     await guess(ctx, 'p2', true);
-    await pass(ctx, 'p1'); // p1 alone, gives up -- that's what ends it
+    await giveUp(ctx, 'p1'); // p1 alone, gives up -- that's what ends it
     assert.equal(ctx.lobby.status, 'FINISHED');
     assert.equal(GameManager.getLobby(ctx.channelId), ctx.lobby, 'kept for /rematch');
 

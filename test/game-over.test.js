@@ -49,7 +49,7 @@ async function finishedGame() {
   // the game now that nobody is cut off by somebody else finishing.
   await engine.submitPass(client, lobby, 'p1');
   await engine.submitJudgement(client, lobby, 'p1', true);
-  await engine.submitPass(client, lobby, 'p1');
+  await engine.submitGiveUp(client, lobby, 'p1');
 
   return { lobby, client, recorder, channelId, guildId };
 }

@@ -380,28 +380,71 @@ The third row is the one that changes visibly, and it is the most common way a g
 assertion becomes false — the game is still running, with P1 alone. The test should be rewritten
 to assert the eventual winner, not the immediate stop.
 
-### The loser now plays an epilogue, and it's dead time unless framed
+### A player out of contention plays an epilogue, and it's dead time unless framed
 
 Follow the third row through. P2 finished on turn k; P1 used turn k and failed it, so P1's next
-turn is k+1 and **P1 can no longer tie**. They are mathematically out the moment P2 finishes,
-and every turn after that changes nothing about the result.
+turn is k+1 and **P1 can no longer tie**. Their best possible score can no longer match P2's,
+and every turn after that changes nothing about **who wins**.
 
-This generalises: you are eliminated once `min(finished turn counts) < your next turn number`.
-Being alone and being eliminated are different conditions — in a five-way game the last player
-alive may still be playing for second place — but **in 1v1 they coincide exactly**, so the most
-common game in the bot is also the one where the epilogue is most obviously pointless.
+This generalises: you are **out of contention for the win** once `min(finished turn counts) <
+your earliest possible finish`. Note the words — *out of contention*, never *eliminated*.
+Nobody is removed from anything. The only score is turns taken, compared at the very end; a
+player out of contention keeps playing, keeps being handed turns, and still earns a real
+placement for however many turns they take. All the condition decides is whether the board
+shows them one honest note ("you can't win it now, but your turns still count for where you
+place"), so nobody plays out a turn that can't change the winner without knowing it. It changes
+no button, no rotation, no scoring.
+
+Being alone and being out of contention are different conditions — in a five-way game the last
+player still guessing may itself still be racing for second place — but **in 1v1 they coincide
+exactly**, so the most common game in the bot is also the one where the epilogue is most
+obviously pointless.
 
 Two ways to read that, and it should be a deliberate choice rather than a side effect:
 
 - **As a feature.** You still get to find out who you were by working it out, rather than being
-  told. `🏳️ Give up` is right there when you'd rather not. The board should say which it is:
-  "Sam finished on turn 3 — you can't catch them, but you can still get yours."
+  told, and your turns still set your placement. The board should say so: "Sam finished on turn
+  3, so you can't win it now — but getting yours still counts for where you place."
 - **As a wart.** The game used to end crisply on the winning guess, and now it trails off.
 
 The first is cheap and needs only the context line already specified in
 [multiplayer-ux.md](multiplayer-ux.md#smaller-items). Worth trying before adding any rule to
 end the game early, which would reintroduce a special case of exactly the kind this design
 deleted.
+
+### Correction: Pass and Give up are separate buttons
+
+The first implementation took "`🏳️ Give up` is right there" literally and made an
+out-of-contention player's Pass *become* Give up, the same relabel used for the lone survivor.
+Played in a real game, that was two bugs at once: the player had no way to simply pass (the
+button now surrendered them), and it read as "give up" while others were plainly still in the
+round. It also contradicts the sentence right before it — "you can still get yours" — which you
+cannot do if your only button removes you. And "eliminated" was the wrong idea all along: the
+player was never out, only out of contention for the win.
+
+So the two are separate controls, never one relabelled — a pass can never surrender you — and
+which of them shows depends on where the player stands:
+
+- **Still in contention:** just **`⏭️ Pass`**. It only ever hands the turn on. Nothing to give
+  up on yet; a player who genuinely must go uses `/lobby leave`.
+- **Out of contention but others still playing:** both **`⏭️ Pass`** and **`🏳️ Give up`**.
+  They can play the epilogue for their own placement, or bow out — both one tap, and the
+  context note explains the choice. Giving up here does **not** end the game; the others play
+  on, exactly as with `/lobby leave`.
+- **Last one guessing:** just **`🏳️ Give up`**. There is nobody to pass to (a press would
+  cycle back), so bowing out is the only move, and here it ends the game.
+
+An early cut of this correction offered *only* Pass off-turn and pushed give-up out to
+`/lobby leave` — but that mixed a button ("Pass to play on") with a typed command ("`/lobby
+leave` to bow out") in the same one-line note, which reads as an inconsistency. Both halves of
+the choice are now buttons.
+
+The concept behind "out of contention" is `Game.isOutOfContention` (renamed from the misleading
+`isEliminated`), and it is purely informational: it decides that one note and whether Give up
+joins Pass, and touches nothing else — no rotation, no scoring. The only score is turns taken,
+compared at the end. And a give-up now reveals the player's own character the moment they quit —
+its own message while others play on (`submitGiveUp` / `submitForfeit`), or the end-of-game
+reveal for the last survivor — rather than leaving them never told who they were.
 
 ---
 

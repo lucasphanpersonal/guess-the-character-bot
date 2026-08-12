@@ -141,18 +141,24 @@ happen live between humans in voice.
    and an equal count is a tie with no tiebreaker.
 
    The end-of-game message carries **Rematch** and **Leaderboard** buttons, and shows only the
-   characters *nobody* saw — in practice the one belonging to a player who gave up. Everyone
-   who finished had theirs revealed at the time, and printing them again put the same name and
-   artwork in the channel three times running.
+   characters *nobody* saw yet — in practice the one belonging to the last player, who gave up
+   rather than being told. Everyone who finished, and anyone who left mid-game, had theirs
+   revealed at the time, and printing them again put the same name and artwork in the channel
+   twice running.
 
-   Once you're the last player still guessing there's nobody to pass to, so **⏭️ Pass**
-   becomes **🏳️ Give up** — relabelled and red, rather than quietly changing meaning under
-   someone who's been passing all game out of habit.
+   **⏭️ Pass** always just hands the turn on, and never removes you — even once you can no
+   longer win, so you can play on for placement (or wait the game out) instead of being pushed
+   out. **🏳️ Give up** is a separate red button that bows you out: it drops you from the
+   rotation and reveals what you were wearing right then, since you never got to work it out. It
+   shows up once bowing out is a sensible option — when you're **out of contention for the win**
+   (you get both Pass and Give up then), or when you're the **last** player still guessing (just
+   Give up, since there's nobody to pass to, and here it ends the game).
 
-   **`/lobby leave` also works mid-game**, and forfeits: no turn count, recorded as having
-   given up, no way back in. It asks first, since it can't be undone. Everyone else plays on —
-   one person having to go shouldn't end a six-player game, and until now the host cancelling
-   it for everybody was the only way out.
+   **`/lobby leave` also works mid-game**, and is the way out for anyone still in contention who
+   nonetheless has to go: same result as Give up — no turn count, recorded as having given up,
+   character revealed as you go — but reachable off-turn too. It asks first, since it can't be
+   undone. Everyone else plays on — one person having to go shouldn't end a six-player game, and
+   until now the host cancelling it for everybody was the only way out.
 
    #### Why turns, and not guesses
 
