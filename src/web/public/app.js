@@ -147,6 +147,110 @@ function renderSetup(view) {
   show('setup');
 }
 
+// --- playing ------------------------------------------------------------------------------
+let countdown = null;          // local 1s ticker
+let lastPlayView = null;
+
+const STATUS_ICON = { finished: '✅', guessing: '🎯', waiting: '⏳', gave_up: '🏳️' };
+
+function renderStandings(el, rows) {
+  el.innerHTML = '';
+  for (const s of rows) {
+    const li = document.createElement('li');
+    li.className = 'seat';
+    const tail = s.status === 'finished' ? ` — turn ${s.turns}`
+      : s.status === 'guessing' ? ` — turn ${s.turns} (guessing)`
+      : s.status === 'gave_up' ? ' — gave up' : ' — waiting';
+    li.innerHTML = `<span>${STATUS_ICON[s.status] || '•'}</span><span class="name">${escapeHtml(s.name)}</span><span class="you">${tail}</span>`;
+    el.appendChild(li);
+  }
+}
+
+function bannerText(view, remaining) {
+  const t = remaining == null ? '' : ` · ⏱ ${remaining}s`;
+  return view.isMyTurn
+    ? `🫵 <b>Your turn</b> — turn ${view.current.turnNumber}${t}`
+    : `🎯 <b>${escapeHtml(view.current.name)}</b> is guessing — turn ${view.current.turnNumber}${t}`;
+}
+
+function renderPlaying(view) {
+  lastPlayView = view;
+  const area = $('playArea');
+  if (view.isMyTurn) {
+    area.innerHTML = (view.outOfContentionNote ? `<p class="hint center">${escapeHtml(view.outOfContentionNote)}</p>` : '')
+      + '<div id="turnBtns"></div>';
+    const btns = area.querySelector('#turnBtns');
+    if (view.buttons.gotIt) addBtn(btns, '✅ Got it!', 'good', () => socket.emit('game:gotit', {}, () => {}));
+    if (view.buttons.pass) addBtn(btns, '⏭️ Pass', 'ghost', () => socket.emit('game:pass', {}, () => {}));
+    if (view.buttons.giveUp) addBtn(btns, '🏳️ Give up', 'ghost', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
+  } else if (view.wearing) {
+    area.innerHTML = `<div class="hint center">They're wearing — help them by answering questions</div>${charCardHtml(view.wearing)}`;
+  } else {
+    area.innerHTML = `<p class="hint center">Waiting for the next turn…</p>`;
+  }
+  renderStandings($('standings'), view.standings);
+
+  // Local countdown, resynced on every state push (avoids cross-device clock skew).
+  clearInterval(countdown);
+  let remaining = view.turnRemaining;
+  $('turnBanner').innerHTML = bannerText(view, remaining);
+  if (remaining != null) {
+    countdown = setInterval(() => {
+      remaining = Math.max(0, remaining - 1);
+      $('turnBanner').innerHTML = bannerText(view, remaining);
+      if (remaining === 0) clearInterval(countdown);
+    }, 1000);
+  }
+  show('playing');
+}
+
+function logReveal(html) {
+  const log = $('revealLog');
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.style.marginTop = '10px';
+  div.innerHTML = html;
+  log.prepend(div);
+  while (log.children.length > 4) log.lastChild.remove();
+}
+
+function renderOver(result) {
+  clearInterval(countdown);
+  const names = result.winners.map((w) => w.name);
+  $('overEmoji').textContent = result.winners.length > 1 ? '🤝' : (result.winners.length ? '🏆' : '🛑');
+  $('overResult').innerHTML = result.winners.length > 1
+    ? `It's a tie — ${names.map(escapeHtml).join(' & ')} both got it in ${result.bestTurnCount} turns!`
+    : result.winners.length
+      ? `${escapeHtml(names[0])} wins — got it in ${result.bestTurnCount} turns!`
+      : 'Nobody got their character.';
+  const ul = $('finalStandings');
+  ul.innerHTML = '';
+  const finishers = result.standings.filter((s) => s.turns !== null);
+  for (const s of result.standings) {
+    const li = document.createElement('li');
+    li.className = 'seat';
+    let place;
+    if (s.turns === null) place = s.outcome === 'gave_up' ? 'gave up' : 'did not finish';
+    else {
+      const rank = finishers.filter((o) => o.turns < s.turns).length + 1;
+      place = `#${rank} — ${s.turns} turn${s.turns === 1 ? '' : 's'}`;
+    }
+    li.innerHTML = `<span class="name">${escapeHtml(s.name)}</span><span class="you"> ${place}</span>`;
+    ul.appendChild(li);
+  }
+  $('againBtn').style.display = amHost() ? '' : 'none';
+  show('over');
+}
+
+function addBtn(parent, label, cls, onClick) {
+  const b = document.createElement('button');
+  b.className = cls === 'good' ? 'good' : cls;
+  b.style.marginTop = '8px';
+  b.innerHTML = label;
+  b.addEventListener('click', onClick);
+  parent.appendChild(b);
+}
+
 // --- helpers ------------------------------------------------------------------------------
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function readNick() { nickname = $('nickInput').value.trim(); if (nickname) store.set('gtc_nick', nickname); return nickname; }
@@ -182,8 +286,8 @@ function leaveRoom() {
 function routeByStatus(state) {
   if (!state) return;
   if (state.status === 'lobby') { renderLobby(state); show('lobby'); }
-  else if (state.status === 'ready') show('ready');
-  // 'setup' is shown by the setup:state handler (it carries the per-player payload).
+  // 'setup' -> setup:state handler; 'playing' -> game:state handler; 'finished' -> game:over.
+  // Those carry the per-player payloads, so status alone doesn't switch to them here.
 }
 
 // --- socket lifecycle -----------------------------------------------------------------------
@@ -197,6 +301,18 @@ socket.on('room:state', (state) => {
 });
 
 socket.on('setup:state', (view) => renderSetup(view));
+
+socket.on('game:state', (view) => renderPlaying(view));
+socket.on('game:reveal', (r) => {
+  const html = r.kind === 'got'
+    ? `✅ <b>${escapeHtml(r.name)}</b> got it in <b>${r.turns}</b> turn${r.turns === 1 ? '' : 's'}! — they were <b>${escapeHtml(r.character.name)}</b>`
+    : r.kind === 'gaveup'
+      ? `🏳️ <b>${escapeHtml(r.name)}</b> gave up — they were <b>${escapeHtml(r.character.name)}</b>`
+      : `🚪 <b>${escapeHtml(r.name)}</b> left — they were <b>${escapeHtml(r.character.name)}</b>`;
+  logReveal(html);
+});
+socket.on('game:timeout', (t) => logReveal(`⏱ <b>${escapeHtml(t.name)}</b> ran out of time — turn passes.`));
+socket.on('game:over', (result) => renderOver(result));
 
 socket.on('setup:aborted', ({ reason }) => {
   if ($('setup').classList.contains('active') || $('config').classList.contains('active')) {
@@ -218,7 +334,9 @@ socket.on('disconnect', () => { if (currentRoom) $('connState').textContent = 'R
 $('createBtn').addEventListener('click', createRoom);
 $('joinBtn').addEventListener('click', joinRoom);
 $('leaveBtn').addEventListener('click', leaveRoom);
-$('readyLeaveBtn').addEventListener('click', leaveRoom);
+$('playLeaveBtn').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
+$('overLeaveBtn').addEventListener('click', leaveRoom);
+$('againBtn').addEventListener('click', () => socket.emit('game:again', {}, () => {}));
 $('setupBtn').addEventListener('click', openConfig);
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);

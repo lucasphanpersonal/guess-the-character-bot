@@ -94,13 +94,29 @@ const connect = (playerId) => {
   const cReroll = nextEvent(C, 'setup:state');
   res = await C.emitWithAck('setup:reroll', {});
   check(res.ok, 'C rerolls the character they check');
-  check((await cReroll).rerollsLeft === 2, 'reroll spent one from the budget (3 -> 2)');
+  check((await cReroll).rerollsLeft === -1, 'rerolls are unlimited (budget stays -1)');
 
-  const ready = roomStatus(C, 'ready');
+  // ---- Stage 3: the turn loop ----------------------------------------------------------
+  console.log('\n# stage 3 — turn loop');
+  const cPlay = nextEvent(C, 'game:state');
   await C.emitWithAck('setup:confirm', {});
   await D.emitWithAck('setup:confirm', {});
-  await ready;
-  check(true, 'both confirm -> room reaches "ready"');
+  const firstView = await cPlay;
+  check(firstView.phase === 'playing' && firstView.isMyTurn === true, 'both confirm -> game starts, host is up first');
+  check(firstView.wearing === null, 'the guesser is not shown their own character');
+  check(firstView.turnRemaining > 0, 'a turn clock is running');
+
+  const over = nextEvent(C, 'game:over');
+  const dReveal = nextEvent(D, 'game:reveal');
+  res = await C.emitWithAck('game:gotit', {}); // host finishes on turn 1
+  check(res.ok && res.reveal.turns === 1, 'host declares "got it" on turn 1');
+  const rev = await dReveal;
+  check(rev.kind === 'got' && rev.turns === 1, 'the reveal reaches the other player');
+  await wait(30);
+  await D.emitWithAck('game:gotit', {}); // other player finishes -> game over
+  const result = await over;
+  check(result.winners.length >= 1, 'game reaches game:over with a result');
+  check(result.standings.length === 2, 'final standings cover both players');
 
   C.close(); D.close();
   await wait(50);

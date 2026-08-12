@@ -134,14 +134,32 @@
       <p class="hint center" id="waitingNote"></p>
     </section>
 
-    <!-- Ready (end of stage 2) -->
-    <section id="ready" class="screen">
+    <!-- Playing (turn loop) -->
+    <section id="playing" class="screen">
+      <div class="card" id="turnBanner"></div>
+      <div class="card" id="playArea"></div>
       <div class="card">
-        <div class="big-emoji">🙌</div>
-        <p class="hint center">Everyone's locked in! In a real game your character would now appear
-          for you to hold on your forehead. <br><br><span class="badge">Turn loop &amp; tilt-to-win: stage 3–4</span></p>
+        <div class="hint">Standings</div>
+        <div style="height:8px"></div>
+        <ul class="roster" id="standings"></ul>
       </div>
-      <button id="readyLeaveBtn" class="ghost">Leave room</button>
+      <div id="revealLog"></div>
+      <button id="playLeaveBtn" class="ghost">Leave game</button>
+    </section>
+
+    <!-- Game over -->
+    <section id="over" class="screen">
+      <div class="card">
+        <div class="big-emoji" id="overEmoji">🏆</div>
+        <div class="hint center" id="overResult"></div>
+      </div>
+      <div class="card">
+        <div class="hint">Final standings</div>
+        <div style="height:8px"></div>
+        <ul class="roster" id="finalStandings"></ul>
+      </div>
+      <button id="againBtn">Play again</button>
+      <button id="overLeaveBtn" class="ghost">Leave room</button>
     </section>
   </main>
 
