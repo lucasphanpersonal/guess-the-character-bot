@@ -185,7 +185,52 @@ function charCardHtml(ch) {
   // full natural size on the finished/tap screens and blew out the layout.
   return `<div class="charcard"><div class="charname">${escapeHtml(ch.name)}</div>${ch.source ? `<div class="charsrc">${escapeHtml(ch.source)}</div>` : ''}${img}</div>`;
 }
+
+// --- keeping the screen awake -------------------------------------------------------------
+//
+// Once the reveal happens nobody touches their phone -- it is on a forehead being read by the
+// room -- so the auto-lock timer runs out and the screen dies mid-turn, taking that player's
+// character off the table.
+//
+// The Screen Wake Lock API is the supported fix. Two things make it fiddly, and both are
+// handled below:
+//   - the browser releases the lock whenever the page is hidden (a call, a notification, an
+//     app switch), and does NOT restore it on return, so it has to be re-acquired on
+//     visibilitychange rather than requested once;
+//   - it needs a secure context, so it works over the HTTPS tunnel or a real cert but not over
+//     plain http://<LAN-ip>. There is no reliable fallback -- the old silent-video trick just
+//     burns battery -- so where it is unavailable it stays unavailable, silently.
+let wakeLock = null;
+let wantWake = false;
+
+async function keepAwake() {
+  wantWake = true;
+  if (!('wakeLock' in navigator) || wakeLock) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+    // Fires on the browser's own release (page hidden), not just ours -- clear the handle so
+    // the visibilitychange path below can take a fresh one.
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch {
+    wakeLock = null; // unsupported, insecure context, or refused: play on without it
+  }
+}
+
+function allowSleep() {
+  wantWake = false;
+  try { wakeLock?.release(); } catch {}
+  wakeLock = null;
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (wantWake && document.visibilityState === 'visible') keepAwake();
+});
+
 function renderSetup(view) {
+  keepAwake();
+  // Only shown where the browser cannot hold the screen on, since then it is the player's job.
+  // Said here rather than at the reveal: this is the last screen anyone is still looking at.
+  $('wakeNote').textContent = 'wakeLock' in navigator ? '' : "Your phone may lock mid-game — set auto-lock to Never first.";
   $('checkOwner').textContent = `${view.checking.ownerName}'s character`;
   $('checkCard').innerHTML = charCardHtml(view.checking.character);
   $('rerollBtn').style.display = view.rerollAllowed ? '' : 'none';
@@ -236,6 +281,7 @@ function bannerText(view, remaining) {
 }
 
 function renderPlaying(view) {
+  keepAwake();
   lastPlayView = view;
   // You've got yours: drop out of forehead mode into a "you got it" screen with your reveal.
   if (view.me?.finished) { hideForehead(); return renderFinished(view); }
@@ -315,6 +361,7 @@ function logReveal(html) {
 }
 
 function renderOver(result) {
+  allowSleep();
   clearInterval(countdown);
   clearInterval(turnTicker);
   hideForehead();
@@ -612,6 +659,7 @@ function renderMotionPrompt(container) {
 }
 
 function startCountdown(seconds) {
+  keepAwake();
   clearInterval(countdown);
   let n = Math.max(0, seconds);
   // With motion on, run the countdown INSIDE the landscape forehead frame so players orient the
@@ -688,6 +736,7 @@ function joinRoom() {
   });
 }
 function leaveRoom() {
+  allowSleep();
   socket.emit('room:leave', {}, () => {});
   currentRoom = null; lastState = null; store.del('gtc_lastRoom'); hideForehead(); show('landing');
 }

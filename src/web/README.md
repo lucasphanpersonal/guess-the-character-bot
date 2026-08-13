@@ -42,6 +42,10 @@ npm run web:secure       # HTTP on :4180 AND HTTPS on :4443 (self-signed) — HT
 npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game)
 ```
 
+**HTTPS also keeps the screen on.** The Screen Wake Lock API needs a secure context too, and
+without it a phone auto-locks mid-game — nobody is touching it once it's on a forehead. Over
+plain HTTP the game warns the player to set auto-lock to Never instead.
+
 **Why HTTPS for tilt:** browsers only expose the motion/orientation sensors (`DeviceMotion` /
 `DeviceOrientation`, and iOS's `requestPermission`) in a *secure context* — HTTPS or localhost.
 A phone hitting `http://<LAN-ip>` is not a secure context, so the sensors are simply unavailable
