@@ -45,7 +45,10 @@ class Room {
   }
 
   addSeat(playerId, nickname) {
-    this.players.set(playerId, { playerId, nickname, connected: true, joinedAt: Date.now() });
+    // `conns` is the set of live socket ids for this seat. A seat is "connected" while any
+    // socket holds it -- so a second tab, or a reconnect whose new socket arrives before the old
+    // one's disconnect, never flips the player to offline. See attach/detachConnection.
+    this.players.set(playerId, { playerId, nickname, joinedAt: Date.now(), conns: new Set() });
     this.order.push(playerId);
   }
 
@@ -65,7 +68,7 @@ class Room {
         return {
           playerId: p.playerId,
           nickname: p.nickname,
-          connected: p.connected,
+          connected: p.conns.size > 0,
           isHost: p.playerId === this.hostPlayerId,
         };
       }),
@@ -80,6 +83,11 @@ class RoomRegistry {
 
   getRoom(code) {
     return this.rooms.get(String(code ?? '').toUpperCase()) || null;
+  }
+
+  /** Every live room, for the timer watchdog to sweep. */
+  allRooms() {
+    return [...this.rooms.values()];
   }
 
   createRoom({ hostPlayerId, nickname }) {
@@ -120,8 +128,8 @@ class RoomRegistry {
 
     const existing = room.players.get(playerId);
     if (existing) {
-      // Reconnect / rename: reclaim the same seat.
-      existing.connected = true;
+      // Reconnect / rename: reclaim the same seat. The connection itself is registered by the
+      // socket layer via attachConnection, so nothing about "connected" is set here.
       if (nick) existing.nickname = nick;
       return { ok: true, room, reconnected: true };
     }
@@ -136,14 +144,33 @@ class RoomRegistry {
     return { ok: true, room, reconnected: false };
   }
 
-  /** Mark a seat connected/disconnected without giving it up (the reconnect-friendly path). */
-  setConnected(code, playerId, connected) {
+  /** Register a live socket for a seat. Returns the room, or null if seat/room is gone. */
+  attachConnection(code, playerId, connId) {
     const room = this.getRoom(code);
-    if (!room) return null;
-    const seat = room.players.get(playerId);
+    const seat = room?.players.get(playerId);
     if (!seat) return null;
-    seat.connected = connected;
+    seat.conns.add(connId);
     return room;
+  }
+
+  /**
+   * Drop a socket from a seat (a disconnect). The seat is kept either way -- only an explicit
+   * leave gives it up. `nowOffline` is true when this was the seat's LAST live socket, which is
+   * the moment the roster dot goes grey and (for the current player) the turn clock should pause.
+   *
+   * @returns {{room: Room|null, nowOffline: boolean}}
+   */
+  detachConnection(code, playerId, connId) {
+    const room = this.getRoom(code);
+    const seat = room?.players.get(playerId);
+    if (!seat) return { room: null, nowOffline: false };
+    const had = seat.conns.delete(connId);
+    return { room, nowOffline: had && seat.conns.size === 0 };
+  }
+
+  /** Whether a seat currently has any live socket. */
+  isConnected(code, playerId) {
+    return (this.getRoom(code)?.players.get(playerId)?.conns.size ?? 0) > 0;
   }
 
   /**

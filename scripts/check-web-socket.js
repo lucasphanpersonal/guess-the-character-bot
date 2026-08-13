@@ -32,6 +32,8 @@ const PORT = Number(process.env.WEB_PORT);
 const URL = `http://localhost:${PORT}`;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const nextEvent = (sock, ev) => new Promise((r) => sock.once(ev, r));
+const nextMatching = (sock, ev, pred) =>
+  new Promise((r) => { const on = (x) => { if (pred(x)) { sock.off(ev, on); r(x); } }; sock.on(ev, on); });
 const roomStatus = (sock, status) =>
   new Promise((r) => {
     const on = (s) => { if (s.status === status) { sock.off('room:state', on); r(s); } };
@@ -111,11 +113,22 @@ const connect = (playerId) => {
   check(firstView.myCharacter && !!firstView.myCharacter.name, 'forehead mode gets the viewer\'s own character');
   check(firstView.turnRemaining > 0, 'a turn clock is running');
 
-  const over = nextEvent(C, 'game:over');
+  // ---- Stage 5: pause on the current player's disconnect, resume on reconnect ----------
+  console.log('\n# stage 5 — reconnect resilience');
+  const dSeesPaused = nextMatching(D, 'game:state', (s) => s.paused === true);
+  C.close(); // the current player drops mid-turn
+  check((await dSeesPaused).paused === true, 'current player dropping pauses the turn');
+  const C2 = await connect('pC'); // same playerId reconnects on a fresh socket
+  const dSeesResumed = nextMatching(D, 'game:state', (s) => s.paused === false);
+  await C2.emitWithAck('room:join', { code: code2, nickname: 'Kira' });
+  check((await dSeesResumed).paused === false, 'their reconnect resumes the turn');
+
+  // ---- finish the game on the reconnected socket ----
+  const over = nextEvent(C2, 'game:over');
   const dReveal = nextEvent(D, 'game:reveal');
-  const cFinished = nextEvent(C, 'game:state');
-  res = await C.emitWithAck('game:gotit', {}); // host finishes on turn 1
-  check(res.ok && res.reveal.turns === 1, 'host declares "got it" on turn 1');
+  const cFinished = nextMatching(C2, 'game:state', (s) => s.me && s.me.finished === true);
+  res = await C2.emitWithAck('game:gotit', {}); // host finishes on turn 1
+  check(res.ok && res.reveal.turns === 1, 'host declares "got it" on turn 1 after reconnect');
   const cf = await cFinished;
   check(cf.me.finished === true && !!cf.me.character, 'the finisher gets a "you got it" state with their reveal');
   const rev = await dReveal;
@@ -127,7 +140,7 @@ const connect = (playerId) => {
   check(result.standings.length === 2, 'final standings cover both players');
   check(result.standings.every((s) => s.character && s.character.name), 'final standings reveal each character');
 
-  C.close(); D.close();
+  C2.close(); D.close();
   await wait(50);
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');
   process.exit(failed ? 1 : 0);

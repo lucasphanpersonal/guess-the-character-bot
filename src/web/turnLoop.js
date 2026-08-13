@@ -134,11 +134,20 @@ function standingsView(game, names) {
 function buildGameView(game, viewerId, names, now = Date.now()) {
   const currentId = game.currentPlayerId;
   const isMyTurn = viewerId === currentId && game.isActive(viewerId) && !game.finished;
-  const turnRemaining =
-    game.turnEndsAt && !game.finished ? Math.max(0, Math.round((game.turnEndsAt - now) / 1000)) : null;
+  // When paused (the current player dropped), the clock is frozen at the remaining time rather
+  // than counting down against them.
+  const turnRemaining = game.finished
+    ? null
+    : game.pausedForDisconnect
+      ? Math.max(0, Math.round((game.pausedRemaining ?? 0) / 1000))
+      : game.turnEndsAt
+        ? Math.max(0, Math.round((game.turnEndsAt - now) / 1000))
+        : null;
 
   return {
     phase: game.finished ? 'over' : 'playing',
+    // True while the current player is disconnected -- their clock is held and everyone waits.
+    paused: !!game.pausedForDisconnect,
     current: {
       playerId: currentId,
       name: names[currentId] ?? 'Player',

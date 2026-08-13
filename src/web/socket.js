@@ -57,15 +57,45 @@ function attachSockets(io, { registry, setup }) {
   // A server-authoritative turn clock. The deadline lives on the server (game.turnEndsAt) and
   // the per-player view carries seconds-remaining, so clients count down locally without
   // trusting cross-device wall clocks. When it fires the turn simply passes -- nobody is removed.
-  const scheduleTurn = (room) => {
+  const scheduleTurn = (room, ms) => {
     clearTurnTimer(room);
     const game = room.game;
-    game.turnEndsAt = Date.now() + game.turnSeconds * 1000;
+    const duration = ms ?? game.turnSeconds * 1000;
+    game.turnEndsAt = Date.now() + duration;
     room.turnTimer = setTimeout(() => {
       const r = loop.timeout(game, game.currentPlayerId);
       if (r.ok) handleTurnResult(room, r, null);
-    }, game.turnSeconds * 1000);
+    }, duration);
     room.turnTimer.unref?.();
+  };
+
+  // A dropped Wi-Fi shouldn't cost the current player their turn, so when THEY go offline the
+  // turn clock pauses and resumes when they come back. Bounded, so a player who never returns
+  // doesn't freeze the game: after PAUSE_MAX_MS the clock resumes on its own and will, on
+  // timeout, simply pass the turn (nobody is ever removed).
+  const PAUSE_MAX_MS = 30000;
+  const pauseTurn = (room) => {
+    const game = room?.game;
+    if (!game || game.finished || game.pausedForDisconnect) return;
+    clearTurnTimer(room);
+    game.pausedRemaining = Math.max(0, (game.turnEndsAt ?? Date.now()) - Date.now());
+    game.turnEndsAt = null;
+    game.pausedForDisconnect = true;
+    room.pauseGuard = setTimeout(() => resumeTurn(room), PAUSE_MAX_MS);
+    room.pauseGuard.unref?.();
+    broadcastRoom(room);
+    emitGame(room);
+  };
+  const resumeTurn = (room) => {
+    const game = room?.game;
+    if (!game || game.finished || !game.pausedForDisconnect) return;
+    if (room.pauseGuard) { clearTimeout(room.pauseGuard); room.pauseGuard = null; }
+    game.pausedForDisconnect = false;
+    const remaining = game.pausedRemaining ?? game.turnSeconds * 1000;
+    game.pausedRemaining = null;
+    scheduleTurn(room, remaining);
+    broadcastRoom(room);
+    emitGame(room);
   };
 
   const emitGame = async (room) => {
@@ -128,6 +158,28 @@ function attachSockets(io, { registry, setup }) {
     }
   };
 
+  // Wall-clock backstop (mirrors the Discord bot's timerWatchdog): the setTimeouts above are the
+  // primary path, but if the process is suspended (a laptop sleeping) they fire late. This
+  // re-checks every deadline against the real clock so a turn that expired while asleep ends on
+  // wake instead of hanging. It never double-fires: the resolve-once guard in the turn loop and
+  // the countdown clearing its own timer make a redundant pass a no-op.
+  const WATCHDOG_MS = 3000;
+  const watchdog = setInterval(() => {
+    const now = Date.now();
+    for (const room of registry.allRooms()) {
+      if (room.status === 'countdown' && room.countdownEndsAt && room.countdownEndsAt <= now) {
+        beginGame(room);
+      } else if (
+        room.status === 'playing' && room.game && !room.game.pausedForDisconnect &&
+        room.game.turnEndsAt && room.game.turnEndsAt <= now
+      ) {
+        const r = loop.timeout(room.game, room.game.currentPlayerId);
+        if (r.ok) handleTurnResult(room, r, null);
+      }
+    }
+  }, WATCHDOG_MS);
+  watchdog.unref?.();
+
   io.on('connection', (socket) => {
     const playerId = socket.handshake.auth?.playerId;
     if (!playerId) {
@@ -146,6 +198,7 @@ function attachSockets(io, { registry, setup }) {
       if (!res.ok) return ack?.({ ok: false, error: res.error });
       socket.data.code = res.room.code;
       socket.join(res.room.code);
+      registry.attachConnection(res.room.code, playerId, socket.id);
       ack?.({ ok: true, state: res.room.publicState() });
       broadcastRoom(res.room);
     });
@@ -155,8 +208,13 @@ function attachSockets(io, { registry, setup }) {
       if (!res.ok) return ack?.({ ok: false, error: res.error });
       socket.data.code = res.room.code;
       socket.join(res.room.code);
+      registry.attachConnection(res.room.code, playerId, socket.id);
       ack?.({ ok: true, state: res.room.publicState(), reconnected: res.reconnected });
       broadcastRoom(res.room);
+      // If the current player was paused because they'd dropped, their return resumes the clock.
+      if (res.room.status === 'playing' && res.room.game?.currentPlayerId === playerId) {
+        resumeTurn(res.room);
+      }
       // Rejoining mid-flow: hand this socket the view for wherever the room is, so a reconnect
       // resumes exactly where it left off rather than dropping to the lobby roster.
       const g = res.room.game;
@@ -274,10 +332,17 @@ function attachSockets(io, { registry, setup }) {
     socket.on('disconnect', () => {
       const code = socket.data.code;
       if (!code) return;
-      // A dropped connection keeps the seat (reconnect-friendly); only an explicit leave gives
-      // it up. Mark offline so the roster shows it.
-      const r = registry.setConnected(code, playerId, false);
+      // A dropped connection keeps the seat (reconnect-friendly); only an explicit leave gives it
+      // up. `nowOffline` is false if another socket (another tab, or a reconnect that already
+      // landed) still holds the seat, so we don't flip a still-present player to offline.
+      const { room: r, nowOffline } = registry.detachConnection(code, playerId, socket.id);
+      if (!nowOffline) return;
       broadcastRoom(r);
+      // If the player who just went offline is the one whose turn it is, pause their clock so a
+      // Wi-Fi blip doesn't burn their turn.
+      if (r?.status === 'playing' && r.game?.currentPlayerId === playerId && r.game.isActive(playerId)) {
+        pauseTurn(r);
+      }
     });
   });
 }

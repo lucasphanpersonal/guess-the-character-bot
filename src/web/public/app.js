@@ -209,17 +209,18 @@ let turnTicker = null;
 function startTurnTicker(view) {
   clearInterval(turnTicker);
   let remaining = view.turnRemaining;
+  const pausedMsg = `⏸ Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
   const paint = () => {
     if (motionEnabled && $('forehead').classList.contains('active')) {
-      $('foreheadTurn').innerHTML = view.isMyTurn
-        ? `🫵 YOUR TURN${remaining != null ? ` · ⏱ ${remaining}s` : ''} — tilt up if you got it`
+      $('foreheadTurn').innerHTML = view.paused ? pausedMsg
+        : view.isMyTurn ? `🫵 YOUR TURN${remaining != null ? ` · ⏱ ${remaining}s` : ''} — tilt up if you got it`
         : `🎯 ${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`;
     } else {
-      $('turnBanner').innerHTML = bannerText(view, remaining);
+      $('turnBanner').innerHTML = view.paused ? pausedMsg : bannerText(view, remaining);
     }
   };
   paint();
-  if (remaining == null) return;
+  if (view.paused || remaining == null) return; // frozen while the current player is away
   turnTicker = setInterval(() => {
     remaining = Math.max(0, remaining - 1);
     paint();

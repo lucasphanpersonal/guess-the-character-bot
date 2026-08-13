@@ -343,10 +343,14 @@ recorded below, since the deviations are the useful part of a status update.
      covers refusal / no sensor.
    - **Rerolls are unlimited** in both frontends (the budget was pure friction); the reroll
      button shows no count.
-5. **Reconnection hardening — next.** Session tokens, and making the last-chance/grace timers
-   wall-clock-anchored the way the turn timer already is; resume-mid-turn. The turn view is
-   already re-sent on reconnect, and a dropped socket keeps its seat — this stage hardens the
-   timer edges.
+5. **Reconnection hardening — done.** Seats now track a *set* of live socket ids (not a single
+   flag), so multi-tab and reconnect-ordering never wrongly mark a player offline. The current
+   player dropping **pauses** their turn clock and reconnecting **resumes** it (bounded at 30s so
+   a no-show doesn't freeze the game). A 3s wall-clock **watchdog** sweeps turn/countdown
+   deadlines so a suspended process doesn't hang a turn — the same role as the Discord bot's
+   `timerWatchdog`. Session tokens were deemed unnecessary for a LAN party: the client `playerId`
+   is the identity, and seat-hijacking isn't a realistic threat here. Server-restart persistence
+   stays out of scope, the same call the Discord side made.
 6. **Polish — later.** Richer audio/haptic cues, rematch with the same settings, an optional
    read-only scoreboard device, QR-code joins, and preferring characters that have artwork.
 

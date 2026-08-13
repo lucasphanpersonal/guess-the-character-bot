@@ -14,7 +14,8 @@ function creatingARoomSeatsTheHostAndReturnsACode() {
   assert.equal(state.players.length, 1);
   assert.equal(state.players[0].nickname, 'Alex');
   assert.equal(state.players[0].isHost, true);
-  assert.equal(state.players[0].connected, true);
+  // A fresh seat has no live socket yet -- the socket layer attaches one on connect.
+  assert.equal(state.players[0].connected, false);
 }
 
 function creatingARoomNeedsANickname() {
@@ -52,16 +53,43 @@ function aKnownPlayerIdReconnectsToTheSameSeat() {
   const reg = new RoomRegistry();
   const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
   reg.joinRoom(room.code, { playerId: 'p2', nickname: 'Sam' });
-  reg.setConnected(room.code, 'p2', false);
+  reg.attachConnection(room.code, 'p2', 'sock-A');
+  reg.detachConnection(room.code, 'p2', 'sock-A'); // dropped
 
-  // Same playerId comes back -- no new seat, connection restored, and a rename is honoured.
+  // Same playerId comes back -- no new seat, rename honoured, and a fresh socket reconnects it.
   const res = reg.joinRoom(room.code, { playerId: 'p2', nickname: 'Sammy' });
   assert.equal(res.ok, true);
   assert.equal(res.reconnected, true);
   assert.equal(room.players.size, 2);
-  const seat = room.players.get('p2');
-  assert.equal(seat.connected, true);
-  assert.equal(seat.nickname, 'Sammy');
+  reg.attachConnection(room.code, 'p2', 'sock-B');
+  assert.equal(reg.isConnected(room.code, 'p2'), true);
+  assert.equal(room.players.get('p2').nickname, 'Sammy');
+}
+
+function connectionsAreCountedPerSeat() {
+  const reg = new RoomRegistry();
+  const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  // Two tabs / sockets on one seat.
+  reg.attachConnection(room.code, 'p1', 's1');
+  reg.attachConnection(room.code, 'p1', 's2');
+  assert.equal(reg.isConnected(room.code, 'p1'), true);
+  // Dropping one is not "offline" while the other holds it.
+  assert.equal(reg.detachConnection(room.code, 'p1', 's1').nowOffline, false);
+  assert.equal(reg.isConnected(room.code, 'p1'), true);
+  // Dropping the last one is.
+  assert.equal(reg.detachConnection(room.code, 'p1', 's2').nowOffline, true);
+  assert.equal(reg.isConnected(room.code, 'p1'), false);
+}
+
+function aLateDisconnectAfterReconnectDoesNotFlipOffline() {
+  // Reconnect ordering: the new socket connects before the old one's disconnect arrives.
+  const reg = new RoomRegistry();
+  const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  reg.attachConnection(room.code, 'p1', 'old');
+  reg.attachConnection(room.code, 'p1', 'new'); // reconnected before old dropped
+  const { nowOffline } = reg.detachConnection(room.code, 'p1', 'old'); // stale disconnect lands
+  assert.equal(nowOffline, false);
+  assert.equal(reg.isConnected(room.code, 'p1'), true);
 }
 
 function joiningIsCappedAtMaxPlayers() {
@@ -94,7 +122,9 @@ function disconnectingKeepsTheSeatAndShowsInState() {
   const reg = new RoomRegistry();
   const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
   reg.joinRoom(room.code, { playerId: 'p2', nickname: 'Sam' });
-  reg.setConnected(room.code, 'p2', false);
+  reg.attachConnection(room.code, 'p2', 's2');
+  const { nowOffline } = reg.detachConnection(room.code, 'p2', 's2');
+  assert.equal(nowOffline, true);
   assert.equal(room.players.size, 2);
   const sam = room.publicState().players.find((p) => p.playerId === 'p2');
   assert.equal(sam.connected, false);
@@ -135,6 +165,8 @@ module.exports = {
   'joining is case-insensitive on the code': joiningIsCaseInsensitiveOnTheCode,
   'joining an unknown code fails': joiningAnUnknownCodeFails,
   'a known playerId reconnects to the same seat': aKnownPlayerIdReconnectsToTheSameSeat,
+  'connections are counted per seat': connectionsAreCountedPerSeat,
+  'a late disconnect after reconnect does not flip offline': aLateDisconnectAfterReconnectDoesNotFlipOffline,
   'joining is capped at MAX_PLAYERS': joiningIsCappedAtMaxPlayers,
   'a started room refuses new players but lets known ones reconnect':
     aStartedRoomRefusesNewPlayersButLetsKnownOnesReconnect,

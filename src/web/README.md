@@ -95,6 +95,12 @@ Endpoints that prove the shared core is reachable from this frontend:
   - **Always on:** motion is requested on the first gesture; there's no opt-in button. Falls
     back to on-screen tap buttons when motion is unavailable.
   - **End screen** reveals every player's character alongside the final standings.
-- **5. Reconnection hardening** — wall-clock-anchored turn timers, resume mid-turn. _next_
+- **5. Reconnection hardening — done.** Seats track a *set* of live sockets, so a second tab or
+  a reconnect whose new socket arrives before the old one's disconnect never flips a player
+  offline. If the **current** player drops, their turn clock **pauses** (everyone sees "waiting
+  for X to reconnect") and **resumes** when they return — bounded, so a player who never comes
+  back doesn't freeze the game (after 30s the clock resumes and the turn eventually passes). A
+  wall-clock **watchdog** re-checks turn/countdown deadlines every 3s so a suspended server
+  doesn't hang a turn on wake (mirrors the Discord bot's `timerWatchdog`).
 - **6. Polish** — richer audio/haptic cues, rematch with same settings, scoreboard view, QR
   codes, preferring characters that have artwork.
