@@ -48,10 +48,10 @@ const DEFAULT_MAX_REROLLS = -1;
  * @param {number} [args.turnSeconds]
  * @param {number} [args.maxRerolls]   -1 for unlimited
  */
-function createSetup({ order, guildId, listIds, difficulty, characters, turnSeconds = 60, maxRerolls = DEFAULT_MAX_REROLLS }) {
+function createSetup({ order, guildId, listIds, difficulty, characters, turnSeconds = 60, maxRerolls = DEFAULT_MAX_REROLLS, preferImages = false }) {
   // A lobby-shaped object is all Game needs: its players (turn order) and the fields Game.head
   // reads for the source label. No Discord lobby, no board, no settings surface.
-  const pseudoLobby = { guildId, listIds, difficulty, players: [...order] };
+  const pseudoLobby = { guildId, listIds, difficulty, preferImages, players: [...order] };
   const game = new Game({ lobby: pseudoLobby, characters, turnSeconds });
   game.rerollAllowed = true;
   game.confirmState = Object.fromEntries(
@@ -106,7 +106,7 @@ function buildView(game, viewerId, names) {
  *
  * @returns {{ok:boolean, error?:string, demotedName?:string, rejectedBy?:number}}
  */
-function applyReroll(game, viewerId, { content, listIds, difficulty }) {
+function applyReroll(game, viewerId, { content, listIds, difficulty, preferImages = false }) {
   const state = game.confirmState[viewerId];
   if (!state) return { ok: false, error: 'Not in this game.' };
   if (!game.rerollAllowed) return { ok: false, error: "This character can't be rerolled." };
@@ -120,7 +120,7 @@ function applyReroll(game, viewerId, { content, listIds, difficulty }) {
     ...game.turnOrder.map((id) => game.headByPlayer[id].name),
     ...state.rejectedNames,
   ]);
-  const replacement = content.rerollOne(listIds, excludeNames, difficulty);
+  const replacement = content.rerollOne(listIds, excludeNames, difficulty, { preferImages });
   if (!replacement) return { ok: false, error: 'No other characters left to reroll to.' };
 
   const rejectedBy = content.recordReject(current.id, viewerId);

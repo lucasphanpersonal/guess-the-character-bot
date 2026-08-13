@@ -46,11 +46,10 @@ const registry = new RoomRegistry();
 
 // --- Setup service: resolves a pool, deals, and drives confirm/reroll via the core ---------
 // Injected into the socket layer so socket.js stays transport-only (no DB access there).
-// The web reveal is a full-screen picture, so prefer characters that actually have artwork.
 const content = {
   demoteThreshold: characterLists.REROLL_DEMOTE_THRESHOLD,
-  rerollOne: (listIds, excludeNames, difficulty) =>
-    characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty, { preferImages: true }),
+  rerollOne: (listIds, excludeNames, difficulty, opts) =>
+    characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty, opts),
   recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),
 };
 
@@ -61,7 +60,7 @@ function resolvePool({ poolType, category }) {
   if (poolType === 'random') {
     const cat = characterLists.getRandomCategory(WEB_SCOPE);
     if (!cat) return { listIds: [], label: 'nothing enabled' };
-    return { listIds: characterLists.getEnabledListsByCategory(WEB_SCOPE, cat).map((l) => l.id), label: `🎲 ${cat}` };
+    return { listIds: characterLists.getEnabledListsByCategory(WEB_SCOPE, cat).map((l) => l.id), label: `Random: ${cat}` };
   }
   // Default: everything enabled in this scope.
   return { listIds: characterLists.getEnabledLists(WEB_SCOPE).map((l) => l.id), label: 'Everything' };
@@ -81,7 +80,10 @@ const setup = {
     return { categories, difficulties, defaultDifficulty: characterLists.DEFAULT_DIFFICULTY };
   },
 
-  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds } = {}) {
+  // preferImages is OFF unless the host asks for it: restricting the draw to characters that
+  // happen to have artwork silently shrinks the pool and biases it toward the better-documented
+  // franchises, which is a real change to what the game deals. It is the host's call, not a default.
+  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds, preferImages = false } = {}) {
     const { listIds, label } = resolvePool({ poolType, category });
     if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
     const n = room.players.size;
@@ -89,7 +91,7 @@ const setup = {
     if (available < n) {
       return { ok: false, error: `${label} has only ${available} characters at this difficulty; need ${n}.` };
     }
-    const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: true });
+    const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: !!preferImages });
     if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
 
     const clampedTurnSeconds = gameSetup.clampTurnSeconds(turnSeconds);
@@ -99,11 +101,12 @@ const setup = {
       listIds,
       difficulty,
       characters,
+      preferImages: !!preferImages,
       ...(clampedTurnSeconds !== undefined ? { turnSeconds: clampedTurnSeconds } : {}),
     });
     room.poolLabel = label;
     // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring.
-    room.lastSetup = { poolType, category, difficulty, turnSeconds: room.game.turnSeconds };
+    room.lastSetup = { poolType, category, difficulty, turnSeconds: room.game.turnSeconds, preferImages: !!preferImages };
     return { ok: true, label };
   },
 
@@ -133,6 +136,7 @@ const setup = {
       content,
       listIds: game.lobby.listIds,
       difficulty: game.lobby.difficulty,
+      preferImages: game.lobby.preferImages,
     }),
   confirm: (game, viewerId) => gameSetup.applyConfirm(game, viewerId),
   unlock: (game, viewerId) => gameSetup.applyUnlock(game, viewerId),

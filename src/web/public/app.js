@@ -169,7 +169,8 @@ function deal() {
   const difficulty = $('diffChoices').querySelector('input[name=diff]:checked')?.value;
   const turnSeconds = Number($('turnSecondsSelect').value) || 60;
   $('configErr').textContent = 'Dealing…';
-  socket.emit('setup:start', { poolType, category, difficulty, turnSeconds }, (res) => {
+  const preferImages = $('preferImagesInput').checked;
+  socket.emit('setup:start', { poolType, category, difficulty, turnSeconds, preferImages }, (res) => {
     $('configErr').textContent = res?.ok ? '' : (res?.error || 'Could not start.');
     // On success the server broadcasts status + setup:state, which switches the screen.
   });

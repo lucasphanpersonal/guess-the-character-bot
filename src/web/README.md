@@ -51,7 +51,7 @@ self-signed cert (covering localhost + LAN IPs, gitignored under `data/dev-tls.*
 **Testing tilt on a phone:** run `npm run web:secure`, open the printed `https://<LAN-ip>:4443`
 on the phone, and accept the one-time self-signed-cert warning. Tilt is **always on** — the
 first tap (create/join) requests motion access, so on iOS you just grant it when asked; there's
-no separate enable step. The landing screen has a **📱 Test tilt** button to calibrate direction
+no separate enable step. The landing screen has a **Test tilt** button to calibrate direction
 (a "flip" toggle) and sensitivity. Without motion (plain HTTP, or permission refused) the game
 still plays fully via on-screen buttons.
 
@@ -104,8 +104,9 @@ Endpoints that prove the shared core is reachable from this frontend:
   doesn't hang a turn on wake (mirrors the Discord bot's `timerWatchdog`).
 - **6. Polish — in progress.** Done: **rematch** with the same settings (redeal + straight back
   to confirm, no reconfiguring); **QR-code joins** (`GET /api/qr?text=` renders an SVG; the lobby
-  shows a scannable code for the join URL); **prefer characters with artwork** (the deal and
-  rerolls draw from image-having characters when the pool has enough, falling back otherwise, via
+  shows a scannable code for the join URL); an optional **prefer characters with artwork** toggle on the host's
+  config screen (OFF by default -- restricting to image-having characters shrinks the pool and
+  biases it toward better-documented franchises, so it is the host's call; via
   `getRandomCharacters(..., { preferImages })`); and light **audio cues** (turn-start chime,
   finish/give-up chime, win sting). Not yet: an optional read-only **scoreboard device**
   (spectator join) and any richer haptics.
