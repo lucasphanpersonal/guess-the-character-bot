@@ -17,14 +17,17 @@
       --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
       --ok:#26890c; --off:#b9b3c7; --danger:#e21b3c; --warn:#ffa602;
       --fg:var(--ink); --card:var(--paper);
+      --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
+                      'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
     }
     * { box-sizing: border-box; }
     body { margin:0; min-height:100vh; min-height:100dvh;
            font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
            background:var(--brand); color:#fff; display:flex; flex-direction:column; align-items:center; }
     main { width:100%; max-width:32rem; padding:22px 20px 40px; flex:1; display:flex; flex-direction:column; }
-    h1 { font-size:2rem; font-weight:900; letter-spacing:-.02em; margin:.2rem 0 1rem;
-         text-shadow:0 3px 0 rgba(0,0,0,.25); }
+    h1 { font-family:var(--font-display); font-size:2.3rem; font-weight:900; letter-spacing:-.01em;
+         margin:.2rem 0 1rem; text-shadow:0 3px 0 rgba(0,0,0,.28); }
+    .roomcode, .countnum, .charname, .big-emoji, #foreheadNoImg, #foreheadCount { font-family:var(--font-display); }
     .tag { display:inline-block; padding:.2rem .7rem; border-radius:999px; background:rgba(255,255,255,.18);
            font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#fff; }
     .screen { display:none; flex-direction:column; gap:14px; }
@@ -54,8 +57,12 @@
     .divider::before,.divider::after { content:""; height:2px; flex:1; background:rgba(255,255,255,.25); }
     .err { color:#ffd7dd; font-weight:700; font-size:.9rem; min-height:1.2em; }
     /* The room code is the hero of the lobby -- it's what the whole room reads off a screen. */
-    .roomcode { font-size:3.6rem; font-weight:900; letter-spacing:.3rem; text-align:center; margin:.1rem 0;
-                color:var(--ink); }
+    .roomcode { font-size:3.6rem; font-weight:900; text-align:center; margin:.3rem 0 .5rem; color:var(--ink); }
+    /* Each character sits at its own angle so the code reads as hand-set, not typed. */
+    .roomcode .ch { display:inline-block; margin:0 .06em; transform:rotate(var(--rot));
+                    transition:transform .2s ease; }
+    .roomcode .ch:nth-child(1) { color:var(--red); }  .roomcode .ch:nth-child(2) { color:var(--blue); }
+    .roomcode .ch:nth-child(3) { color:var(--amber-d); } .roomcode .ch:nth-child(4) { color:var(--green); }
     .share { text-align:center; color:var(--muted); font-size:.8rem; word-break:break-all; }
     .roster { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
     .seat { display:flex; align-items:center; gap:10px; padding:12px; background:#f6f4fa;
@@ -104,6 +111,19 @@
     .seat.rank2 { background:linear-gradient(#e8e8ef,#cfcfdb); }
     .seat.rank3 { background:linear-gradient(#f0c08a,#dda15e); }
     .seat.rank1 .you, .seat.rank2 .you, .seat.rank3 .you { color:rgba(0,0,0,.6); }
+    /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
+       and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
+    .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+    .bg i { position:absolute; bottom:-12vh; font-style:normal; color:#fff; opacity:0;
+            animation:drift linear infinite; }
+    @keyframes drift {
+      0%   { transform:translateY(0) rotate(0deg);      opacity:0 }
+      18%  { opacity:.13 }
+      82%  { opacity:.13 }
+      100% { transform:translateY(-118vh) rotate(240deg); opacity:0 }
+    }
+    @media (prefers-reduced-motion: reduce) { .bg { display:none; } }
+    main { position:relative; z-index:1; }
     /* Grace countdown + forehead mode */
     .countnum { font-size:7rem; font-weight:900; text-align:center; line-height:1.05; color:var(--ink); }
     #forehead { position:fixed; inset:0; display:none; background:#000; z-index:50; overflow:hidden; }
@@ -154,6 +174,16 @@
   </style>
 </head>
 <body>
+  <div class="bg" aria-hidden="true">
+    <i style="left:6%;font-size:2.6rem;animation-duration:23s;animation-delay:0s">▲</i>
+    <i style="left:18%;font-size:1.7rem;animation-duration:31s;animation-delay:-6s">◆</i>
+    <i style="left:31%;font-size:2.1rem;animation-duration:27s;animation-delay:-13s">●</i>
+    <i style="left:46%;font-size:1.5rem;animation-duration:35s;animation-delay:-3s">■</i>
+    <i style="left:61%;font-size:1.9rem;animation-duration:29s;animation-delay:-18s">▲</i>
+    <i style="left:74%;font-size:2.4rem;animation-duration:25s;animation-delay:-9s">◆</i>
+    <i style="left:86%;font-size:1.6rem;animation-duration:33s;animation-delay:-21s">●</i>
+    <i style="left:94%;font-size:2.2rem;animation-duration:28s;animation-delay:-15s">■</i>
+  </div>
   <main>
     <span class="tag">Party mode</span>
     <h1>Guess the Character</h1>

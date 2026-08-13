@@ -31,7 +31,17 @@ const amHost = () => lastState && lastState.hostPlayerId === playerId;
 
 // --- lobby rendering ----------------------------------------------------------------------
 function renderLobby(state) {
-  $('lobbyCode').textContent = state.code;
+  // Rendered per character so each can carry its own angle (see .roomcode .ch).
+  const codeEl = $('lobbyCode');
+  codeEl.innerHTML = '';
+  const angles = ['-7deg', '5deg', '-4deg', '8deg'];
+  [...state.code].forEach((c, i) => {
+    const sp = document.createElement('span');
+    sp.className = 'ch';
+    sp.textContent = c;
+    sp.style.setProperty('--rot', angles[i % angles.length]);
+    codeEl.appendChild(sp);
+  });
   const joinUrl = `${location.origin}/?room=${state.code}`;
   $('shareUrl').textContent = joinUrl;
   const qr = $('qrImg');
