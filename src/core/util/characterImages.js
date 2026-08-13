@@ -37,9 +37,16 @@ const isAniListImage = (url) => /(^|\.)anilist\.co\//.test(url) || url.includes(
 // answers "a picture of this character", which is the question actually being asked.
 const isFandomImage = (url) => /(^|\.)(fandom\.com|wikia\.nocookie\.net|wikia\.com)\//.test(url);
 
+// wiki.gg is the same thing under a different landlord: a per-franchise MediaWiki where a
+// character page's image is filed against that character. Many game wikis have migrated there
+// from Fandom (Slay the Spire among them, and its wiki.gg copy is the one that covers the
+// sequel), so excluding it would reject the better source for exactly the category -- Video
+// Games -- with the worst artwork coverage. The reasoning is the source's SHAPE, not its brand.
+const isGameWikiImage = (url) => /(^|\.)wiki\.gg\//.test(url);
+
 function imageIsTrustworthy(category, imageUrl) {
   if (!imageUrl) return false;
-  if (isAniListImage(imageUrl) || isFandomImage(imageUrl)) return true;
+  if (isAniListImage(imageUrl) || isFandomImage(imageUrl) || isGameWikiImage(imageUrl)) return true;
   return !DRAWN_MEDIA.has(category);
 }
 
@@ -52,5 +59,6 @@ module.exports = {
   trustworthyImageOrNull,
   isAniListImage,
   isFandomImage,
+  isGameWikiImage,
   DRAWN_MEDIA,
 };

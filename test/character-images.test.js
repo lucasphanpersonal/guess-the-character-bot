@@ -1,7 +1,7 @@
 // The image trust rule: which sources can be believed to depict the character.
 
 const { assert } = require('./harness');
-const { imageIsTrustworthy, isFandomImage } = require('../src/core/util/characterImages');
+const { imageIsTrustworthy, isFandomImage, isGameWikiImage } = require('../src/core/util/characterImages');
 
 const ANILIST = 'https://s4.anilist.co/file/anilistcdn/character/large/b1-ChxaldmieFlQ.png';
 const COMMONS = (file) => `https://upload.wikimedia.org/wikipedia/commons/a/ab/${file}`;
@@ -47,6 +47,21 @@ module.exports = {
     assert.equal(isFandomImage('https://notfandom.com.evil.example/x.png'), false);
     assert.equal(isFandomImage('https://example.com/fandom.com/x.png'), false);
     assert.equal(imageIsTrustworthy('Cartoon', 'https://example.com/fandom.com/x.png'), false);
+  },
+
+  // wiki.gg hosts the same shape of source as Fandom -- a per-franchise wiki whose character
+  // page carries that character's image -- and is where several game wikis now live.
+  'wiki.gg clears the same bar as Fandom'() {
+    const GG = 'https://slaythespire.wiki.gg/images/9/9a/Ironclad.png';
+    assert.equal(isGameWikiImage(GG), true);
+    assert.equal(imageIsTrustworthy('Video Games', GG), true, 'drawn media still accepts a franchise wiki');
+    assert.equal(imageIsTrustworthy('Cartoon', GG), true);
+  },
+
+  'a lookalike domain is not wiki.gg'() {
+    assert.equal(isGameWikiImage('https://notwiki.gg.evil.example/x.png'), false);
+    assert.equal(isGameWikiImage('https://example.com/wiki.gg/x.png'), false);
+    assert.equal(imageIsTrustworthy('Video Games', 'https://example.com/wiki.gg/x.png'), false);
   },
 
   'a missing image is never trustworthy'() {
