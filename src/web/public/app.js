@@ -394,10 +394,16 @@ const tilt = { armed: false, dir: null, since: 0, lastFire: 0 };
 const isUpright = () => sensor.have && Math.abs(sensor.z) < NEUTRAL_MAX;
 
 function ensureAudio() {
-  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch {}
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    // iOS starts the context suspended and keeps re-suspending it; without this the cue beeps
+    // are silently dropped, which is what made the give-up hold feel like it wasn't counting.
+    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+  } catch {}
 }
 function beep(freq = 880, ms = 180) {
   if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(audioCtx.destination);
@@ -457,12 +463,33 @@ function currentGesture() {
 // lowering their phone to look at it, and a give-up is irreversible and public. So the hold runs
 // long, ticks audibly while it counts (the room hears it too), and raising back to neutral
 // aborts it -- the re-arm path below clears it for free.
-const GIVEUP_HOLD_MS = 1800;
+const GIVEUP_HOLD_MS = 1400;  // deliberate, but achievable while holding a phone steady
+const GIVEUP_GAP_MS = 300;    // brief dips below the threshold don't restart the hold
 let giveUpTicked = 0;
+let giveUpStart = 0;
+let giveUpLastSeen = 0;
+
+// Tilting down gives up only when there is nobody to pass to -- otherwise down means pass.
+const canGiveUpByTilt = (v) => !!v.buttons && !v.buttons.pass && !!v.buttons.giveUp;
+
+function resetGiveUpHold() {
+  giveUpStart = 0; giveUpTicked = 0;
+  showGiveUpProgress(0);
+}
+
+// Visible feedback for the hold. The wearer may not be looking, but the room is -- and if they
+// lowered the phone to give up, they are looking too. Either way it beats silent audio-only ticks.
+function showGiveUpProgress(fraction) {
+  const el = $('foreheadGiveUpBar');
+  if (!el) return;
+  if (fraction <= 0) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.firstElementChild.style.width = `${Math.round(fraction * 100)}%`;
+}
 
 function handleGameTilt() {
   const v = lastPlayView;
-  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) { tilt.dir = null; return; }
+  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) { tilt.dir = null; if (giveUpStart) resetGiveUpHold(); return; }
   const now = Date.now();
   // Arming requires actually seeing the phone upright. Until then no gesture can fire, however
   // the phone happens to be lying -- and the player is nudged to raise it (see renderForehead).
@@ -471,25 +498,45 @@ function handleGameTilt() {
     else { tilt.dir = null; giveUpTicked = 0; return; }
   }
   const g = currentGesture();
-  if (!g) { tilt.dir = null; giveUpTicked = 0; return; } // back near upright -> ready for the next
-  if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; giveUpTicked = 0; return; }
+
+  // Give-up hold, tracked SEPARATELY from the strict gesture path above.
+  //
+  // It used to ride on tilt.since, which resets the instant currentGesture() returns anything
+  // else -- and holding a phone past a threshold for nearly two seconds produces plenty of
+  // momentary dips below it. Every dip restarted the clock, so the hold could never complete and
+  // tilting down as the last player appeared to do nothing at all. This tracker tolerates gaps
+  // of up to GIVEUP_GAP_MS, and reports progress on screen so the hold is visibly counting
+  // rather than relying on audio that iOS may have suspended.
+  if (canGiveUpByTilt(v)) {
+    if (g === 'pass') {
+      if (!giveUpStart) giveUpStart = now;
+      giveUpLastSeen = now;
+    } else if (giveUpStart && now - giveUpLastSeen > GIVEUP_GAP_MS) {
+      resetGiveUpHold(); // genuinely let go -> abort
+    }
+    if (giveUpStart) {
+      const heldDown = now - giveUpStart;
+      const ticks = Math.floor(heldDown / 450);
+      if (ticks > giveUpTicked) { giveUpTicked = ticks; beep(300, 90); navigator.vibrate?.(45); }
+      showGiveUpProgress(Math.min(1, heldDown / GIVEUP_HOLD_MS));
+      if (heldDown >= GIVEUP_HOLD_MS) {
+        resetGiveUpHold();
+        tilt.armed = false; tilt.lastFire = now;
+        navigator.vibrate?.([200, 80, 200]); beep(220, 320);
+        socket.emit('game:giveup', {}, () => {});
+        return;
+      }
+      if (g === 'pass') return; // the hold owns the gesture while it's counting
+    }
+  } else if (giveUpStart) {
+    resetGiveUpHold();
+  }
+
+  if (!g) { tilt.dir = null; return; } // back near upright -> ready for the next
+  if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; return; }
   if (now - tilt.lastFire < 1200) return;
 
   const held = now - tilt.since;
-  // Down with nobody to pass to -> the give-up hold, with an audible countdown.
-  if (g === 'pass' && !v.buttons?.pass && v.buttons?.giveUp) {
-    const ticks = Math.floor(held / 600);
-    if (ticks > giveUpTicked && held < GIVEUP_HOLD_MS) {
-      giveUpTicked = ticks;
-      beep(300, 90); navigator.vibrate?.(40);
-    }
-    if (held > GIVEUP_HOLD_MS) {
-      tilt.armed = false; tilt.lastFire = now; giveUpTicked = 0;
-      navigator.vibrate?.([200, 80, 200]); beep(220, 320);
-      socket.emit('game:giveup', {}, () => {});
-    }
-    return;
-  }
 
   if (held > TILT_HOLD_MS) {
     tilt.armed = false; tilt.lastFire = now;
@@ -525,7 +572,7 @@ function renderForehead(view) {
   if (view.isMyTurn && !foreheadMyTurn) {
     // Disarmed until the phone is seen upright, so a turn that starts with the phone flat on a
     // table can't instantly fire a gesture.
-    tilt.armed = false; tilt.dir = null;
+    tilt.armed = false; tilt.dir = null; resetGiveUpHold();
     navigator.vibrate?.([140, 60, 140]);
     beep(880, 200); setTimeout(() => beep(1250, 220), 150);
   }

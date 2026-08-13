@@ -139,6 +139,10 @@
                       font-size:.8rem; opacity:.45; background:#000; color:#fff; border:1px solid #555;
                       border-radius:8px; }
     #foreheadLeave:active { opacity:.9; }
+    /* Give-up hold progress: visible proof the hold is counting, since audio can be suspended. */
+    #foreheadGiveUpBar { display:none; position:fixed; left:6%; right:6%; bottom:14%; height:16px; z-index:6;
+                         background:rgba(255,255,255,.22); border-radius:999px; overflow:hidden; }
+    #foreheadGiveUpBar > div { width:0%; height:100%; background:#e21b3c; transition:width .08s linear; }
     /* Bright pulsing border while it's YOUR turn */
     #forehead.mine #foreheadRot::after { content:''; position:absolute; inset:0; pointer-events:none;
                             border:14px solid #ffd23f; animation:pulseBorder 1s ease-in-out infinite; }
@@ -290,6 +294,7 @@
         <div id="foreheadTurn"></div>
         <div id="foreheadName"></div>
         <div id="foreheadDebug"></div>
+        <div id="foreheadGiveUpBar"><div></div></div>
         <button id="foreheadLeave">✕ leave</button>
       </div>
     </div>
