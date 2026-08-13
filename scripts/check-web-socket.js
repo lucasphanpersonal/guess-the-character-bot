@@ -125,6 +125,7 @@ const connect = (playerId) => {
   const result = await over;
   check(result.winners.length >= 1, 'game reaches game:over with a result');
   check(result.standings.length === 2, 'final standings cover both players');
+  check(result.standings.every((s) => s.character && s.character.name), 'final standings reveal each character');
 
   C.close(); D.close();
   await wait(50);

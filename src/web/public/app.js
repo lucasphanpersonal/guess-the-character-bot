@@ -272,7 +272,14 @@ function renderOver(result) {
       const rank = finishers.filter((o) => o.turns < s.turns).length + 1;
       place = `#${rank} — ${s.turns} turn${s.turns === 1 ? '' : 's'}`;
     }
-    li.innerHTML = `<span class="name">${escapeHtml(s.name)}</span><span class="you"> ${place}</span>`;
+    const ch = s.character;
+    const thumb = ch && ch.imageUrl
+      ? `<img src="${ch.imageUrl}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:7px;flex:none">`
+      : '';
+    // Reveal who everyone was.
+    li.style.alignItems = 'center';
+    li.innerHTML = `${thumb}<span style="flex:1"><span class="name">${escapeHtml(s.name)}</span>`
+      + `<span class="you"> ${place}</span><br><span class="you">was ${ch ? escapeHtml(ch.name) : '—'}</span></span>`;
     ul.appendChild(li);
   }
   $('againBtn').style.display = amHost() ? '' : 'none';
@@ -344,26 +351,9 @@ async function enableMotion() {
 
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
-  if (g && g.z != null) { sensor.x = g.x ?? sensor.x; sensor.y = g.y ?? sensor.y; sensor.z = g.z; sensor.have = true; }
+  if (g && g.z != null) { sensor.z = g.z; sensor.have = true; }
   handleGameTilt();
-  updateForeheadRotation();
   updateTiltTest();
-}
-
-// iOS won't let a web page unlock orientation, so we rotate the forehead card ourselves. The
-// in-screen-plane gravity (x axis) tells us which way the phone is rolled; we snap to whichever
-// landscape keeps the card upright for the room, with a dead zone so it doesn't flip-flop near
-// vertical. If it comes out upside-down for a given hold, the sign of ROLL_SIGN is the one knob.
-let fhRot = 90;
-const ROLL_SIGN = 1;
-function updateForeheadRotation() {
-  const el = document.getElementById('foreheadRot');
-  if (!el || !$('forehead').classList.contains('active') || !sensor.have) return;
-  const gx = sensor.x * ROLL_SIGN;
-  let target = fhRot;
-  if (gx > 2.5) target = 90;
-  else if (gx < -2.5) target = 270;
-  if (target !== fhRot) { fhRot = target; el.style.setProperty('--fh-rot', `${fhRot}deg`); }
 }
 function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltTest(); }
 
@@ -399,6 +389,7 @@ function renderForehead(view) {
   const el = $('forehead');
   el.classList.add('active');
   el.classList.toggle('mine', view.isMyTurn);
+  $('foreheadCount').style.display = 'none'; // countdown is over; show the character
   const ch = view.myCharacter;
   const img = $('foreheadImg'), noimg = $('foreheadNoImg');
   if (ch && ch.imageUrl) {
@@ -412,7 +403,6 @@ function renderForehead(view) {
     $('foreheadName').textContent = ch && ch.source ? ch.source : '';
   }
   startTurnTicker(view); // paints the turn banner and keeps its countdown ticking
-  updateForeheadRotation();
   updateForeheadDebug();
   // My turn just started: reset the tilt baseline, buzz, and chime so I know without looking.
   if (view.isMyTurn && !foreheadMyTurn) {
@@ -450,26 +440,40 @@ function renderMotionPrompt(container) {
 }
 
 function startCountdown(seconds) {
-  hideForehead();
   clearInterval(countdown);
   let n = Math.max(0, seconds);
-  $('countNum').textContent = n || '0';
-  const cnum = $('countNum');
-  if (motionSupported && !motionEnabled && !document.getElementById('countEnable')) {
-    const b = document.createElement('button');
-    b.id = 'countEnable';
-    b.className = 'enable-motion';
-    b.style.marginTop = '14px';
-    b.textContent = '📱 Enable tilt controls';
-    b.addEventListener('click', enableMotion);
-    cnum.parentElement.appendChild(b);
+  // With motion on, run the countdown INSIDE the landscape forehead frame so players orient the
+  // phone (▲ TOP up) and see the number the right way round before their character replaces it.
+  const inForehead = motionEnabled;
+  if (inForehead) {
+    const el = $('forehead');
+    el.classList.remove('mine');
+    el.classList.add('active');
+    $('foreheadImg').style.display = 'none';
+    $('foreheadNoImg').style.display = 'none';
+    $('foreheadCount').style.display = 'flex';
+    $('foreheadTurn').innerHTML = 'Get ready…';
+    $('foreheadName').textContent = 'Hold sideways with ▲ TOP up, then on your forehead';
+    $('foreheadDebug').textContent = '';
+  } else {
+    hideForehead();
+    const cnum = $('countNum');
+    if (motionSupported && !motionEnabled && !document.getElementById('countEnable')) {
+      const b = document.createElement('button');
+      b.id = 'countEnable'; b.className = 'enable-motion'; b.style.marginTop = '14px';
+      b.textContent = '📱 Enable tilt controls';
+      b.addEventListener('click', enableMotion);
+      cnum.parentElement.appendChild(b);
+    }
+    show('countdown');
   }
+  const paint = () => { (inForehead ? $('foreheadCount') : $('countNum')).textContent = n <= 0 ? '0' : String(n); };
+  paint();
   navigator.vibrate?.(80);
-  show('countdown');
   countdown = setInterval(() => {
     n -= 1;
-    if (n <= 0) { clearInterval(countdown); $('countNum').textContent = '0'; return; }
-    $('countNum').textContent = n;
+    paint();
+    if (n <= 0) { clearInterval(countdown); return; }
     navigator.vibrate?.(40);
   }, 1000);
 }

@@ -182,6 +182,8 @@ function resultView(game, names) {
       name: names[s.playerId] ?? 'Player',
       outcome: s.outcome,
       turns: s.turnsTaken,
+      // Safe to reveal everyone's character now the game is over.
+      character: publicCharacter(game.headByPlayer[s.playerId]),
     })),
     bestTurnCount: game.bestTurnCount,
   };
