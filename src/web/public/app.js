@@ -228,6 +228,10 @@ document.addEventListener('visibilitychange', () => {
 
 function renderSetup(view) {
   keepAwake();
+  // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
+  // finished game's view lying around made a tilt during the NEXT game's reroll stage look like
+  // a live "got it" -- so every screen that is not the playing screen clears it.
+  lastPlayView = null;
   // Only shown where the browser cannot hold the screen on, since then it is the player's job.
   // Said here rather than at the reveal: this is the last screen anyone is still looking at.
   $('wakeNote').textContent = 'wakeLock' in navigator ? '' : "Your phone may lock mid-game — set auto-lock to Never first.";
@@ -365,6 +369,7 @@ function logReveal(html) {
 
 function renderOver(result) {
   allowSleep();
+  lastPlayView = null;
   clearInterval(countdown);
   clearInterval(turnTicker);
   hideForehead();
@@ -673,6 +678,7 @@ function renderMotionPrompt(container) {
 
 function startCountdown(seconds) {
   keepAwake();
+  lastPlayView = null; // the reveal has not happened yet; no gesture should resolve anything
   clearInterval(countdown);
   let n = Math.max(0, seconds);
   // With motion on, run the countdown INSIDE the landscape forehead frame so players orient the
@@ -750,6 +756,7 @@ function joinRoom() {
 }
 function leaveRoom() {
   allowSleep();
+  lastPlayView = null;
   socket.emit('room:leave', {}, () => {});
   currentRoom = null; lastState = null; store.del('gtc_lastRoom'); hideForehead(); show('landing');
 }
@@ -757,7 +764,7 @@ function leaveRoom() {
 // --- routing --------------------------------------------------------------------------------
 function routeByStatus(state) {
   if (!state) return;
-  if (state.status === 'lobby') { renderLobby(state); show('lobby'); }
+  if (state.status === 'lobby') { lastPlayView = null; renderLobby(state); show('lobby'); }
   // 'setup' -> setup:state handler; 'playing' -> game:state handler; 'finished' -> game:over.
   // Those carry the per-player payloads, so status alone doesn't switch to them here.
 }

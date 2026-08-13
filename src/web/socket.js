@@ -318,9 +318,17 @@ function attachSockets(io, { registry, setup }) {
     });
 
     // --- playing-phase actions (current player only; the loop enforces it) ----------------
+    //
+    // `r.game` existing is NOT the same as a game being underway: setup.start builds the Game
+    // during the confirm/reroll phase, and its currentTurnIndex is already 0, so whoever sits
+    // first in the turn order is `currentPlayerId` before a single turn has begun. Without a
+    // status check a stray game:gotit in that window was accepted and finished that player with
+    // ZERO turns -- which is exactly what a phone tilting during the reroll stage produced.
+    const playing = (r) => r && r.status === 'playing' && r.game;
+
     socket.on('game:gotit', (_p, ack) => {
       const r = room();
-      if (!r?.game) return ack?.({ ok: false, error: 'No game running.' });
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = loop.gotIt(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, res.reveal);
@@ -328,7 +336,7 @@ function attachSockets(io, { registry, setup }) {
 
     socket.on('game:pass', (_p, ack) => {
       const r = room();
-      if (!r?.game) return ack?.({ ok: false, error: 'No game running.' });
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = loop.pass(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, null);
@@ -336,7 +344,7 @@ function attachSockets(io, { registry, setup }) {
 
     socket.on('game:giveup', (_p, ack) => {
       const r = room();
-      if (!r?.game) return ack?.({ ok: false, error: 'No game running.' });
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = loop.giveUp(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, res.reveal);

@@ -127,6 +127,17 @@ const connect = (playerId) => {
   check(undone.checking.character.name === beforeReroll, 'undo restores the previous character');
   check(undone.canUndo === false, 'undo is unavailable again with an empty history');
 
+  // ---- a game action fired during SETUP must not resolve anything ----------------------
+  // The Game object already exists in this phase and its currentTurnIndex is 0, so the first
+  // player in the order is "current" before any turn has started. This once let a stray tilt
+  // finish that player with zero turns and end the game from the reroll screen.
+  const strayGotIt = await C.emitWithAck('game:gotit', {});
+  check(strayGotIt.ok === false, 'game:gotit during setup is refused');
+  const strayPass = await C.emitWithAck('game:pass', {});
+  check(strayPass.ok === false, 'game:pass during setup is refused');
+  const strayGiveUp = await C.emitWithAck('game:giveup', {});
+  check(strayGiveUp.ok === false, 'game:giveup during setup is refused');
+
   // ---- Stage 3 + 4: countdown, then the turn loop --------------------------------------
   console.log('\n# stage 3/4 — grace countdown + turn loop');
   const cCountdown = nextEvent(C, 'game:countdown');
