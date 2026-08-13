@@ -131,7 +131,7 @@ function attachSockets(io, { registry, setup }) {
   // Grace period: after everyone locks in, a synchronized countdown so players can raise their
   // phones to their foreheads before their character appears -- the moment the whole format is
   // built around. Configurable (WEB_GRACE_SECONDS); 0 skips straight to play (used by tests).
-  const GRACE_SECONDS = Number(process.env.WEB_GRACE_SECONDS ?? 5);
+  const GRACE_SECONDS = Number(process.env.WEB_GRACE_SECONDS ?? 10);
 
   const beginGame = (room) => {
     room.countdownTimer = null;

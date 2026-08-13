@@ -52,7 +52,7 @@ function renderLobby(state) {
     name.textContent = p.nickname + (p.playerId === playerId ? '' : '');
     if (p.playerId === playerId) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
     li.append(dot, name);
-    if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = '👑'; li.appendChild(c); }
+    if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
     roster.appendChild(li);
   }
   const host = amHost();
@@ -203,7 +203,7 @@ function renderSetup(view) {
 let countdown = null;          // local 1s ticker
 let lastPlayView = null;
 
-const STATUS_ICON = { finished: '✅', guessing: '🎯', waiting: '⏳', gave_up: '🏳️' };
+const STATUS_ICON = { finished: '✓', guessing: '▶', waiting: '·', gave_up: '✗' };
 
 function renderStandings(el, rows) {
   el.innerHTML = '';
@@ -219,10 +219,10 @@ function renderStandings(el, rows) {
 }
 
 function bannerText(view, remaining) {
-  const t = remaining == null ? '' : ` · ⏱ ${remaining}s`;
+  const t = remaining == null ? '' : ` · ${remaining}s`;
   return view.isMyTurn
-    ? `🫵 <b>Your turn</b> — turn ${view.current.turnNumber}${t}`
-    : `🎯 <b>${escapeHtml(view.current.name)}</b> is guessing — turn ${view.current.turnNumber}${t}`;
+    ? `<b>Your turn</b> — turn ${view.current.turnNumber}${t}`
+    : `<b>${escapeHtml(view.current.name)}</b> is guessing — turn ${view.current.turnNumber}${t}`;
 }
 
 function renderPlaying(view) {
@@ -239,9 +239,9 @@ function renderPlaying(view) {
     area.innerHTML = (view.outOfContentionNote ? `<p class="hint center">${escapeHtml(view.outOfContentionNote)}</p>` : '')
       + '<div id="turnBtns"></div>';
     const btns = area.querySelector('#turnBtns');
-    if (view.buttons.gotIt) addBtn(btns, '✅ Got it!', 'good', () => socket.emit('game:gotit', {}, () => {}));
-    if (view.buttons.pass) addBtn(btns, '⏭️ Pass', 'ghost', () => socket.emit('game:pass', {}, () => {}));
-    if (view.buttons.giveUp) addBtn(btns, '🏳️ Give up', 'ghost', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
+    if (view.buttons.gotIt) addBtn(btns, 'Got it!', 'good', () => socket.emit('game:gotit', {}, () => {}));
+    if (view.buttons.pass) addBtn(btns, '⏭ Pass', 'ghost', () => socket.emit('game:pass', {}, () => {}));
+    if (view.buttons.giveUp) addBtn(btns, 'Give up', 'ghost', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
   } else if (view.wearing) {
     area.innerHTML = `<div class="hint center">They're wearing — help them by answering questions</div>${charCardHtml(view.wearing)}`;
   } else {
@@ -259,7 +259,7 @@ let turnTicker = null;
 function startTurnTicker(view) {
   clearInterval(turnTicker);
   let remaining = view.turnRemaining;
-  const pausedMsg = `⏸ Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
+  const pausedMsg = `Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
   const paint = () => {
     if (motionEnabled && $('forehead').classList.contains('active')) {
       // The last player has nobody to pass to, so down = give up (held long). Say so.
@@ -286,7 +286,7 @@ function renderFinished(view) {
   clearInterval(turnTicker);
   renderMotionPrompt($('motionBanner'));
   const ch = view.me.character;
-  $('turnBanner').innerHTML = `✅ <b>You got it in ${view.me.turns} turn${view.me.turns === 1 ? '' : 's'}!</b>`;
+  $('turnBanner').innerHTML = `<b>You got it in ${view.me.turns} turn${view.me.turns === 1 ? '' : 's'}!</b>`;
   $('playArea').innerHTML =
     (ch ? charCardHtml(ch) : '') +
     `<p class="hint center">That's you${ch ? ` — <b>${escapeHtml(ch.name)}</b>` : ''}. Sit tight while the others finish.</p>`;
@@ -309,7 +309,7 @@ function renderOver(result) {
   clearInterval(turnTicker);
   hideForehead();
   const names = result.winners.map((w) => w.name);
-  $('overEmoji').textContent = result.winners.length > 1 ? '🤝' : (result.winners.length ? '🏆' : '🛑');
+  $('overEmoji').textContent = result.winners.length > 1 ? 'TIE' : (result.winners.length ? 'WINNER' : 'GAME OVER');
   $('overResult').innerHTML = result.winners.length > 1
     ? `It's a tie — ${names.map(escapeHtml).join(' & ')} both got it in ${result.bestTurnCount} turns!`
     : result.winners.length
@@ -334,9 +334,8 @@ function renderOver(result) {
     // Podium colouring for the top three finishers; everyone else is a plain row.
     const rank = s.turns === null ? 0 : finishers.filter((o) => o.turns < s.turns).length + 1;
     if (rank >= 1 && rank <= 3) li.classList.add(`rank${rank}`);
-    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
     li.style.alignItems = 'center';
-    li.innerHTML = `${medal ? `<span style="font-size:1.5rem">${medal}</span>` : ''}${thumb}`
+    li.innerHTML = `${rank ? `<span style="font-weight:900;font-size:1.2rem;min-width:1.4em">${rank}</span>` : ''}${thumb}`
       + `<span style="flex:1"><span class="name">${escapeHtml(s.name)}</span>`
       + `<span class="you"> ${place}</span><br><span class="you">was ${ch ? escapeHtml(ch.name) : '—'}</span></span>`;
     ul.appendChild(li);
@@ -373,9 +372,26 @@ const motionSupported = hasMotion || hasOrient;
 // when the phone was held horizontally.
 const sensor = { x: 0, y: 0, z: 0, beta: null, gamma: null, have: false };
 let tiltFlip = store.get('gtc_tilt_flip') === '1';
-const TILT_TH = 4.5;      // m/s^2 from neutral (~27 degrees)
-const TILT_HOLD_MS = 450; // hold past the threshold this long before firing in-game
-const tilt = { baseline: null, armed: true, dir: null, since: 0, lastFire: 0 };
+// ABSOLUTE thresholds, not relative to a captured baseline.
+//
+// This used to snapshot a "neutral" z at the start of each turn. That is fragile in exactly the
+// way that matters: if the phone wasn't actually on a forehead at that instant (still flat on the
+// table, still being raised), the baseline was garbage -- and since a flat phone reads ~9.8 while
+// an upright one reads ~0, every later sample sat a full 9.8 past the threshold and the gesture
+// fired immediately and repeatedly. A player who mis-oriented their phone could burn their whole
+// turn, or blow through several turns, without touching anything.
+//
+// Held upright against a forehead, gravity's screen-normal component is ~0 regardless of how the
+// phone is rotated in its own plane, so absolute values need no calibration and cannot be poisoned
+// by a bad starting position.
+const NEUTRAL_MAX = 3.5; // |z| below this = upright, i.e. plausibly on a forehead
+const TILT_TH = 5.5;     // |z| past this = a deliberate tilt (~35 degrees off upright)
+const TILT_HOLD_MS = 450;
+// `armed` starts FALSE every turn and only becomes true once the phone has actually been seen
+// upright. That is the whole safety property: a phone that never reaches a sane orientation never
+// fires a gesture, instead of firing one instantly.
+const tilt = { armed: false, dir: null, since: 0, lastFire: 0 };
+const isUpright = () => sensor.have && Math.abs(sensor.z) < NEUTRAL_MAX;
 
 function ensureAudio() {
   try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); } catch {}
@@ -424,13 +440,12 @@ function onMotion(e) {
 }
 function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltTest(); }
 
-// Current tilt as a gesture relative to a captured neutral: 'gotit', 'pass', or null. `tiltFlip`
-// swaps the two for phones that report the opposite sign (the tilt-test screen toggles it).
-function currentGesture(baseline) {
-  if (baseline == null || !sensor.have) return null;
-  const delta = sensor.z - baseline;
-  let up = delta < -TILT_TH;  // screen tipped toward the ceiling = tilt up = Got it
-  let down = delta > TILT_TH; // screen tipped toward the floor = tilt down = Pass
+// Current tilt as a gesture: 'gotit', 'pass', or null. Absolute, so it needs no calibration.
+// `tiltFlip` swaps the two for phones that report the opposite sign (the tilt-test screen toggles it).
+function currentGesture() {
+  if (!sensor.have) return null;
+  let up = sensor.z < -TILT_TH;  // screen tipped toward the ceiling = tilt up = Got it
+  let down = sensor.z > TILT_TH; // screen tipped toward the floor = tilt down = Pass
   if (tiltFlip) { const t = up; up = down; down = t; }
   return up ? 'gotit' : down ? 'pass' : null;
 }
@@ -448,12 +463,17 @@ let giveUpTicked = 0;
 function handleGameTilt() {
   const v = lastPlayView;
   if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) { tilt.dir = null; return; }
-  if (tilt.baseline == null) tilt.baseline = sensor.z;
-  const g = currentGesture(tilt.baseline);
   const now = Date.now();
-  if (!g) { tilt.armed = true; tilt.dir = null; giveUpTicked = 0; return; } // neutral -> re-arm/abort
+  // Arming requires actually seeing the phone upright. Until then no gesture can fire, however
+  // the phone happens to be lying -- and the player is nudged to raise it (see renderForehead).
+  if (!tilt.armed) {
+    if (isUpright()) tilt.armed = true;
+    else { tilt.dir = null; giveUpTicked = 0; return; }
+  }
+  const g = currentGesture();
+  if (!g) { tilt.dir = null; giveUpTicked = 0; return; } // back near upright -> ready for the next
   if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; giveUpTicked = 0; return; }
-  if (!tilt.armed || now - tilt.lastFire < 1200) return;
+  if (now - tilt.lastFire < 1200) return;
 
   const held = now - tilt.since;
   // Down with nobody to pass to -> the give-up hold, with an audible countdown.
@@ -503,7 +523,9 @@ function renderForehead(view) {
   updateForeheadDebug();
   // My turn just started: reset the tilt baseline, buzz, and chime so I know without looking.
   if (view.isMyTurn && !foreheadMyTurn) {
-    tilt.baseline = null; tilt.armed = true;
+    // Disarmed until the phone is seen upright, so a turn that starts with the phone flat on a
+    // table can't instantly fire a gesture.
+    tilt.armed = false; tilt.dir = null;
     navigator.vibrate?.([140, 60, 140]);
     beep(880, 200); setTimeout(() => beep(1250, 220), 150);
   }
@@ -515,7 +537,7 @@ function updateForeheadDebug() {
   const el = $('foreheadDebug');
   if (!el) return;
   el.textContent = foreheadMyTurn && sensor.have
-    ? `z ${sensor.z.toFixed(1)} Δ ${tilt.baseline != null ? (sensor.z - tilt.baseline).toFixed(1) : '—'}`
+    ? `z ${sensor.z.toFixed(1)}${tilt.armed ? '' : ' · hold phone upright'}`
     : '';
 }
 
@@ -562,19 +584,17 @@ function startCountdown(seconds) {
 }
 
 // --- tilt test / calibration --------------------------------------------------------------
-let ttBaseline = null;
-function openTiltTest() { primeMotion(); ttBaseline = null; $('ttEnable').style.display = motionEnabled ? 'none' : ''; updateTiltTest(); show('tilttest'); }
+function openTiltTest() { primeMotion(); $('ttEnable').style.display = motionEnabled ? 'none' : ''; updateTiltTest(); show('tilttest'); }
 function updateTiltTest() {
   updateForeheadDebug();
   if (!$('tilttest').classList.contains('active')) return;
-  if (ttBaseline == null && sensor.have) ttBaseline = sensor.z;
-  const g = currentGesture(ttBaseline);
+  const g = currentGesture();
   const res = $('ttResult');
-  res.textContent = g === 'gotit' ? '⬆  UP = Got it' : g === 'pass' ? '⬇  DOWN = Pass' : (sensor.have ? '•  neutral' : 'enable motion');
-  res.style.color = g === 'gotit' ? 'var(--ok)' : g === 'pass' ? 'var(--warn)' : 'var(--fg)';
-  const f = (x) => (x == null ? '—' : x.toFixed(0));
+  res.textContent = g === 'gotit' ? 'UP = Got it' : g === 'pass' ? 'DOWN = Pass'
+    : sensor.have ? (isUpright() ? 'upright — ready' : 'hold the phone upright') : 'enable motion';
+  res.style.color = g === 'gotit' ? 'var(--green)' : g === 'pass' ? 'var(--amber)' : 'var(--ink)';
   $('ttVals').textContent = sensor.have
-    ? `z ${sensor.z.toFixed(1)}  Δ ${(ttBaseline != null ? sensor.z - ttBaseline : 0).toFixed(1)}  ·  β ${f(sensor.beta)} γ ${f(sensor.gamma)}  ·  flip ${tiltFlip ? 'ON' : 'off'}`
+    ? `z ${sensor.z.toFixed(1)}  ·  upright ${isUpright() ? 'yes' : 'no'}  ·  flip ${tiltFlip ? 'ON' : 'off'}`
     : (motionNote || 'waiting for sensor…');
 }
 
@@ -636,13 +656,13 @@ socket.on('game:state', (view) => renderPlaying(view));
 socket.on('game:reveal', (r) => {
   beep(r.kind === 'got' ? 760 : 380, 160); // a chime when someone finishes / bows out
   const html = r.kind === 'got'
-    ? `✅ <b>${escapeHtml(r.name)}</b> got it in <b>${r.turns}</b> turn${r.turns === 1 ? '' : 's'}! — they were <b>${escapeHtml(r.character.name)}</b>`
+    ? `<b>${escapeHtml(r.name)}</b> got it in <b>${r.turns}</b> turn${r.turns === 1 ? '' : 's'} — they were <b>${escapeHtml(r.character.name)}</b>`
     : r.kind === 'gaveup'
-      ? `🏳️ <b>${escapeHtml(r.name)}</b> gave up — they were <b>${escapeHtml(r.character.name)}</b>`
-      : `🚪 <b>${escapeHtml(r.name)}</b> left — they were <b>${escapeHtml(r.character.name)}</b>`;
+      ? `<b>${escapeHtml(r.name)}</b> gave up — they were <b>${escapeHtml(r.character.name)}</b>`
+      : `<b>${escapeHtml(r.name)}</b> left — they were <b>${escapeHtml(r.character.name)}</b>`;
   logReveal(html);
 });
-socket.on('game:timeout', (t) => logReveal(`⏱ <b>${escapeHtml(t.name)}</b> ran out of time — turn passes.`));
+socket.on('game:timeout', (t) => logReveal(`<b>${escapeHtml(t.name)}</b> ran out of time — turn passes.`));
 socket.on('game:over', (result) => renderOver(result));
 
 socket.on('setup:aborted', ({ reason }) => {
@@ -676,7 +696,7 @@ $('setupBtn').addEventListener('click', openConfig);
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);
 $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (res) => {
-  if (res?.demotedName) $('rerollNote').textContent = `🚮 ${res.demotedName} has been rerolled by enough people to retire.`;
+  if (res?.demotedName) $('rerollNote').textContent = `${res.demotedName} has been rerolled by enough people to retire.`;
   else if (!res?.ok) $('rerollNote').textContent = res?.error || '';
   else $('rerollNote').textContent = '';
 }));
@@ -690,6 +710,14 @@ $('ttEnable').addEventListener('click', () => { enableMotion().then(() => { ttBa
 $('ttFlip').addEventListener('click', () => { tiltFlip = !tiltFlip; store.set('gtc_tilt_flip', tiltFlip ? '1' : '0'); updateTiltTest(); });
 $('ttBack').addEventListener('click', () => show('landing'));
 $('codeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));
+// Tapping a partly-filled code box should continue the code, not drop the caret mid-string.
+// A deferred setSelectionRange, because the browser positions the caret after the tap resolves.
+for (const ev of ['focus', 'click']) {
+  $('codeInput').addEventListener(ev, (e) => {
+    const end = e.target.value.length;
+    setTimeout(() => e.target.setSelectionRange(end, end), 0);
+  });
+}
 if (nickname) $('nickInput').value = nickname;
 
 const deepRoom = new URLSearchParams(location.search).get('room');

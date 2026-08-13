@@ -45,6 +45,8 @@
     button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
     button.ghost { background:#fff; color:var(--brand); box-shadow:0 6px 0 rgba(0,0,0,.22); }
     button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
+    button.alt { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); }
+    button.alt:active { box-shadow:0 2px 0 var(--amber-d); }
     button.good { background:var(--green); color:#fff; box-shadow:0 6px 0 var(--green-d); }
     button.good:active { box-shadow:0 2px 0 var(--green-d); }
     button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
@@ -68,7 +70,8 @@
     .seat .name { font-weight:800; }
     .seat .you { color:var(--muted); font-weight:600; font-size:.82rem; }
     #roster .seat .you { color:rgba(0,0,0,.55); }
-    .crown { margin-left:auto; font-size:.95rem; }
+    .crown { margin-left:auto; font-size:.62rem; font-weight:900; letter-spacing:.1em;
+             background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; border-radius:999px; }
     .count { color:var(--muted); font-size:.85rem; font-weight:700; }
     .hint { color:var(--muted); font-size:.88rem; }
     .card .hint { color:var(--muted); }
@@ -95,7 +98,7 @@
     .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
     .badge { display:inline-block; padding:.15rem .6rem; border-radius:999px; background:var(--brand);
              color:#fff; font-size:.75rem; font-weight:800; }
-    .big-emoji { font-size:3.4rem; text-align:center; }
+    .big-emoji { font-size:1.6rem; font-weight:900; letter-spacing:.12em; text-align:center; color:var(--brand); }
     /* Podium colouring for the top three on the results screen. */
     .seat.rank1 { background:linear-gradient(#ffd75e,#ffc107); }
     .seat.rank2 { background:linear-gradient(#e8e8ef,#cfcfdb); }
@@ -149,7 +152,7 @@
 <body>
   <main>
     <span class="tag">Party mode</span>
-    <h1>Guess the Character 🎭</h1>
+    <h1>Guess the Character</h1>
 
     <!-- Landing -->
     <section id="landing" class="screen active">
@@ -163,10 +166,10 @@
         <label for="codeInput">Room code</label>
         <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" />
         <div style="height:12px"></div>
-        <button id="joinBtn" class="ghost">Join room</button>
+        <button id="joinBtn" class="alt">Join room</button>
       </div>
       <p class="err" id="landingErr"></p>
-      <button id="tiltTestBtn" class="ghost" style="margin-top:4px">📱 Test tilt on this phone</button>
+      <button id="tiltTestBtn" class="ghost" style="margin-top:4px">Test tilt on this phone</button>
     </section>
 
     <!-- Tilt calibration / diagnostics -->
@@ -174,12 +177,12 @@
       <div class="card">
         <div class="hint center">Hold the phone horizontally like you would on your forehead, then tilt it up and down.</div>
         <div style="height:10px"></div>
-        <button id="ttEnable" class="enable-motion">📱 Enable motion</button>
+        <button id="ttEnable" class="enable-motion">Enable motion</button>
         <div style="height:14px"></div>
         <div class="tiltbig" id="ttResult">—</div>
         <div class="tiltvals" id="ttVals">enable motion to see values</div>
       </div>
-      <button id="ttFlip" class="ghost">🔁 Up/down reversed? Flip them</button>
+      <button id="ttFlip" class="ghost">Up/down reversed? Flip them</button>
       <button id="ttBack" class="ghost">Back</button>
     </section>
 
@@ -240,7 +243,7 @@
         <div class="hint center">Check this character — is it fair? <br>Reroll if nobody in the room would know them.</div>
         <div class="checkowner" id="checkOwner"></div>
         <div class="charcard" id="checkCard"></div>
-        <button id="rerollBtn" class="ghost">🎲 Reroll</button>
+        <button id="rerollBtn" class="ghost">Reroll</button>
         <p class="hint center" id="rerollNote"></p>
       </div>
       <div class="card">
@@ -248,8 +251,8 @@
         <div style="height:8px"></div>
         <ul class="roster" id="refList"></ul>
       </div>
-      <button id="goodBtn" class="good">✅ Good to go</button>
-      <button id="unlockBtn" class="ghost" style="display:none">↩︎ Unlock</button>
+      <button id="goodBtn" class="good">Good to go</button>
+      <button id="unlockBtn" class="ghost" style="display:none">Unlock</button>
       <p class="hint center" id="waitingNote"></p>
     </section>
 
@@ -258,7 +261,7 @@
       <div class="card">
         <div class="hint center">Put your phone on your forehead so everyone can see it!</div>
         <div class="countnum" id="countNum">5</div>
-        <div class="hint center">Your character appears when this hits zero. Don't peek 🙈</div>
+        <div class="hint center">Your character appears when this hits zero. Don't peek.</div>
       </div>
     </section>
 
@@ -294,7 +297,7 @@
     <!-- Game over -->
     <section id="over" class="screen">
       <div class="card">
-        <div class="big-emoji" id="overEmoji">🏆</div>
+        <div class="big-emoji" id="overEmoji">WINNER</div>
         <div class="hint center" id="overResult"></div>
       </div>
       <div class="card">
@@ -302,8 +305,8 @@
         <div style="height:8px"></div>
         <ul class="roster" id="finalStandings"></ul>
       </div>
-      <button id="rematchBtn">🔁 Rematch (same settings)</button>
-      <button id="changeBtn" class="ghost">⚙️ Change settings</button>
+      <button id="rematchBtn">Rematch (same settings)</button>
+      <button id="changeBtn" class="ghost">Change settings</button>
       <button id="overLeaveBtn" class="ghost">Leave room</button>
     </section>
   </main>
