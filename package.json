@@ -28,7 +28,9 @@
     "generate:sounds": "node scripts/generate-chime.js && node scripts/generate-sound-effects.js",
     "postinstall": "npm run generate:sounds",
     "fetch:tmdb": "node scripts/fetch-tmdb-images.js",
-    "fetch:fandom": "node scripts/fetch-fandom-images.js"
+    "fetch:fandom": "node scripts/fetch-fandom-images.js",
+    "backfill:fame": "node scripts/backfill-fame-from-order.js",
+    "check:images": "node scripts/check-image-urls.js"
   },
   "engines": {
     "node": ">=18.0.0"

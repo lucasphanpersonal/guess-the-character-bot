@@ -17,11 +17,18 @@
 //     ("Monsters" inside Category:Monsters), and those are navigation, not characters.
 //   - Pages with no usable image are still added, because a name-only character is a supported
 //     reveal -- but they are reported separately so the result can be judged.
+//
+// Characters are ranked by which category they came from, so pass --categories in descending
+// importance ("Character,Bosses,Elites,Monsters,NPC"). Without a fame score a list bypasses
+// difficulty entirely and is dealt in full on Easy (see backfill-fame-from-order.js); and unlike
+// the bulk seeders this one cannot lean on insertion order, because it inserts alphabetically.
+// The source category is the honest ranking available here: a playable class is better known
+// than a boss, which is better known than a random monster.
 
 require('dotenv').config();
 
 const db = require('../src/core/db/connection');
-const { createList, getListByName, addCharacter, setCharacterImage, getCharacters } = require('../src/core/db/characterLists');
+const { createList, getListByName, addCharacter, setCharacterImage, setCharacterFame, getCharacters } = require('../src/core/db/characterLists');
 const { imageIsTrustworthy } = require('../src/core/util/characterImages');
 
 const UA = 'guess-the-character-bot/1.0 (character list build; contact via repo)';
@@ -148,13 +155,21 @@ async function main() {
   // Gather, dropping the navigation pages a category carries alongside its real members.
   const indexTitles = new Set(wikiCategories.map((c) => c.toLowerCase()));
   const titles = new Set();
-  for (const cat of wikiCategories) {
+  // title -> its best (earliest) source category, which becomes its rank tier.
+  const tierOf = new Map();
+  for (const [tier, cat] of wikiCategories.entries()) {
     const members = await categoryMembers(cat);
     const kept = members.filter((t) => !indexTitles.has(t.toLowerCase()));
     console.log(`  ${cat}: ${members.length} page(s), ${kept.length} after dropping index pages`);
-    for (const t of kept) titles.add(t);
+    for (const t of kept) {
+      titles.add(t);
+      if (!tierOf.has(t)) tierOf.set(t, tier);
+    }
   }
   const all = [...titles].sort();
+  // Higher tier value = better known. Within a tier the order is arbitrary, which is honest:
+  // the category is all this source actually tells us.
+  const fameFor = (title) => wikiCategories.length - (tierOf.get(title) ?? wikiCategories.length - 1);
   console.log(`\n${all.length} distinct character page(s) from ${wiki}\n`);
 
   let images = await imagesFor(all);
@@ -184,7 +199,7 @@ async function main() {
   }
 
   const existing = new Map((list ? getCharacters(list.id) : []).map((c) => [c.name.toLowerCase(), c]));
-  const stats = { added: 0, withImage: 0, noImage: 0, backfilled: 0, alreadyThere: 0, rejected: 0 };
+  const stats = { added: 0, withImage: 0, noImage: 0, backfilled: 0, ranked: 0, alreadyThere: 0, rejected: 0 };
 
   for (const title of all) {
     const image = images.get(title) || null;
@@ -200,6 +215,10 @@ async function main() {
         if (!dryRun) setCharacterImage(list.id, have.name, trusted);
         if (verbose) console.log(`  ~ ${title} — image backfilled`);
       }
+      if (have.fame == null) {
+        stats.ranked++;
+        if (!dryRun) setCharacterFame(list.id, have.name, fameFor(title));
+      }
       continue;
     }
 
@@ -207,12 +226,15 @@ async function main() {
     if (trusted) stats.withImage++;
     else stats.noImage++;
     if (verbose || !trusted) console.log(`  + ${title}${trusted ? '' : '  (no image)'}`);
-    if (!dryRun && list) addCharacter(list.id, title, 'wiki-seed', trusted);
+    if (!dryRun && list) {
+      addCharacter(list.id, title, 'wiki-seed', trusted);
+      setCharacterFame(list.id, title, fameFor(title));
+    }
   }
 
   console.log('\n--- summary ---');
   console.log(`  pages considered:  ${all.length}`);
-  console.log(`  already in list:   ${stats.alreadyThere}  (of which ${stats.backfilled} had artwork backfilled)`);
+  console.log(`  already in list:   ${stats.alreadyThere}  (${stats.backfilled} artwork backfilled, ${stats.ranked} ranked)`);
   console.log(`  added:             ${stats.added}  (${stats.withImage} with artwork, ${stats.noImage} name-only)`);
   console.log(`  images rejected:   ${stats.rejected}  (failed the trust rule)`);
   if (dryRun) console.log('  written:           0  (dry run)');
