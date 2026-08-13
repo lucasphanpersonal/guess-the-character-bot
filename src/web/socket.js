@@ -304,6 +304,24 @@ function attachSockets(io, { registry, setup }) {
       broadcastRoom(r);
     });
 
+    // Rematch: re-deal with the same pool/difficulty and the same roster, straight back into the
+    // confirm phase, without the host reconfiguring.
+    socket.on('game:rematch', async (_p, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can rematch.' });
+      if (r.status !== 'finished') return ack?.({ ok: false, error: 'No finished game to rematch.' });
+      if (r.players.size < 2) return ack?.({ ok: false, error: 'Need at least 2 players.' });
+      clearTurnTimer(r);
+      clearCountdown(r);
+      const res = setup.start(r, r.lastSetup || {});
+      if (!res.ok) return ack?.({ ok: false, error: res.error });
+      r.status = 'setup';
+      ack?.({ ok: true, label: res.label });
+      broadcastRoom(r);
+      await emitSetup(r);
+    });
+
     socket.on('setup:unlock', async (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });

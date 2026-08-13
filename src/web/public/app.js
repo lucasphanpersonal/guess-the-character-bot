@@ -32,7 +32,11 @@ const amHost = () => lastState && lastState.hostPlayerId === playerId;
 // --- lobby rendering ----------------------------------------------------------------------
 function renderLobby(state) {
   $('lobbyCode').textContent = state.code;
-  $('shareUrl').textContent = `${location.origin}/?room=${state.code}`;
+  const joinUrl = `${location.origin}/?room=${state.code}`;
+  $('shareUrl').textContent = joinUrl;
+  const qr = $('qrImg');
+  qr.src = `/api/qr?text=${encodeURIComponent(joinUrl)}`;
+  qr.style.display = '';
   $('playerCount').textContent = `Players (${state.players.length}/8)`;
   const roster = $('roster');
   roster.innerHTML = '';
@@ -285,7 +289,11 @@ function renderOver(result) {
       + `<span class="you"> ${place}</span><br><span class="you">was ${ch ? escapeHtml(ch.name) : '—'}</span></span>`;
     ul.appendChild(li);
   }
-  $('againBtn').style.display = amHost() ? '' : 'none';
+  const host = amHost();
+  $('rematchBtn').style.display = host ? '' : 'none';
+  $('changeBtn').style.display = host ? '' : 'none';
+  // a little win sting
+  beep(880, 160); setTimeout(() => beep(1320, 260), 170);
   show('over');
 }
 
@@ -544,6 +552,7 @@ socket.on('setup:state', (view) => renderSetup(view));
 socket.on('game:countdown', ({ seconds }) => startCountdown(seconds));
 socket.on('game:state', (view) => renderPlaying(view));
 socket.on('game:reveal', (r) => {
+  beep(r.kind === 'got' ? 760 : 380, 160); // a chime when someone finishes / bows out
   const html = r.kind === 'got'
     ? `✅ <b>${escapeHtml(r.name)}</b> got it in <b>${r.turns}</b> turn${r.turns === 1 ? '' : 's'}! — they were <b>${escapeHtml(r.character.name)}</b>`
     : r.kind === 'gaveup'
@@ -576,7 +585,8 @@ $('joinBtn').addEventListener('click', joinRoom);
 $('leaveBtn').addEventListener('click', leaveRoom);
 $('playLeaveBtn').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
 $('overLeaveBtn').addEventListener('click', leaveRoom);
-$('againBtn').addEventListener('click', () => socket.emit('game:again', {}, () => {}));
+$('rematchBtn').addEventListener('click', () => { primeMotion(); $('rematchBtn').disabled = true; socket.emit('game:rematch', {}, (res) => { $('rematchBtn').disabled = false; }); });
+$('changeBtn').addEventListener('click', () => socket.emit('game:again', {}, () => {}));
 $('setupBtn').addEventListener('click', openConfig);
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);

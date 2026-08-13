@@ -102,5 +102,10 @@ Endpoints that prove the shared core is reachable from this frontend:
   back doesn't freeze the game (after 30s the clock resumes and the turn eventually passes). A
   wall-clock **watchdog** re-checks turn/countdown deadlines every 3s so a suspended server
   doesn't hang a turn on wake (mirrors the Discord bot's `timerWatchdog`).
-- **6. Polish** — richer audio/haptic cues, rematch with same settings, scoreboard view, QR
-  codes, preferring characters that have artwork.
+- **6. Polish — in progress.** Done: **rematch** with the same settings (redeal + straight back
+  to confirm, no reconfiguring); **QR-code joins** (`GET /api/qr?text=` renders an SVG; the lobby
+  shows a scannable code for the join URL); **prefer characters with artwork** (the deal and
+  rerolls draw from image-having characters when the pool has enough, falling back otherwise, via
+  `getRandomCharacters(..., { preferImages })`); and light **audio cues** (turn-start chime,
+  finish/give-up chime, win sting). Not yet: an optional read-only **scoreboard device**
+  (spectator join) and any richer haptics.

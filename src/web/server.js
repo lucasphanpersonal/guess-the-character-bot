@@ -46,10 +46,11 @@ const registry = new RoomRegistry();
 
 // --- Setup service: resolves a pool, deals, and drives confirm/reroll via the core ---------
 // Injected into the socket layer so socket.js stays transport-only (no DB access there).
+// The web reveal is a full-screen picture, so prefer characters that actually have artwork.
 const content = {
   demoteThreshold: characterLists.REROLL_DEMOTE_THRESHOLD,
   rerollOne: (listIds, excludeNames, difficulty) =>
-    characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty),
+    characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty, { preferImages: true }),
   recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),
 };
 
@@ -88,7 +89,7 @@ const setup = {
     if (available < n) {
       return { ok: false, error: `${label} has only ${available} characters at this difficulty; need ${n}.` };
     }
-    const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty);
+    const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: true });
     if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
 
     room.game = gameSetup.createSetup({
@@ -99,6 +100,8 @@ const setup = {
       characters,
     });
     room.poolLabel = label;
+    // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring.
+    room.lastSetup = { poolType, category, difficulty };
     return { ok: true, label };
   },
 
@@ -156,6 +159,26 @@ function requestHandler(req, res) {
     } catch (err) {
       return sendJson(res, 500, { error: err.message });
     }
+  }
+
+  // QR of a join URL, so a phone can scan instead of typing the room code. Returns SVG so it
+  // scales crisply; the lobby points an <img> straight at it.
+  if (url.pathname === '/api/qr') {
+    const text = url.searchParams.get('text') || '';
+    if (!text || text.length > 512) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      return res.end('Bad qr text');
+    }
+    return require('qrcode')
+      .toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+      .then((svg) => {
+        res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'no-store' });
+        res.end(svg);
+      })
+      .catch(() => {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end('qr failed');
+      });
   }
 
   if (url.pathname === '/api/health') {

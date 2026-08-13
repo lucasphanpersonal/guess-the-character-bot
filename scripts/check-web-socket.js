@@ -140,6 +140,14 @@ const connect = (playerId) => {
   check(result.standings.length === 2, 'final standings cover both players');
   check(result.standings.every((s) => s.character && s.character.name), 'final standings reveal each character');
 
+  // ---- Stage 6: rematch with the same settings ----------------------------------------
+  console.log('\n# stage 6 — rematch');
+  const c2Setup = nextEvent(C2, 'setup:state');
+  res = await C2.emitWithAck('game:rematch', {});
+  check(res.ok, 'host rematches with the same settings');
+  const rematchView = await c2Setup;
+  check(rematchView.checking && !!rematchView.checking.character.name, 'rematch re-deals a fresh confirm phase');
+
   C2.close(); D.close();
   await wait(50);
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');

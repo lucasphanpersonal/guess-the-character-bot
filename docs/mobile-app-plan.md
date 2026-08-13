@@ -351,8 +351,13 @@ recorded below, since the deviations are the useful part of a status update.
    `timerWatchdog`. Session tokens were deemed unnecessary for a LAN party: the client `playerId`
    is the identity, and seat-hijacking isn't a realistic threat here. Server-restart persistence
    stays out of scope, the same call the Discord side made.
-6. **Polish — later.** Richer audio/haptic cues, rematch with the same settings, an optional
-   read-only scoreboard device, QR-code joins, and preferring characters that have artwork.
+6. **Polish — mostly done.** Shipped: **rematch** with the same settings (redeal to the same
+   roster, straight back to the confirm phase); **QR-code joins** (an `/api/qr` SVG endpoint, a
+   scannable code on the lobby); **preferring characters with artwork** (`preferImages` on the
+   core draw/reroll, on by default for the web app since its reveal is a full-screen picture,
+   with a graceful fallback when the pool is image-poor); and light **audio cues** (turn-start /
+   finish / win). Still open: an optional read-only **scoreboard device** (a spectator join that
+   shows live standings for a propped-up tablet or a cast TV) and richer haptics.
 
 `RoundMode` (`src/core/game/roundMode.js`) exists as planned even though only `TurnRotationMode`
 ships, so a simultaneous mode stays additive.

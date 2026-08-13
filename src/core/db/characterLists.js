@@ -302,9 +302,17 @@ function countDistinctCharacters(listIds, difficulty = 'everything') {
 
 // Up to `count` distinct characters drawn from the merged, de-duplicated pool. Returns
 // fewer than requested only when the pool itself is too small.
-function getRandomCharacters(listIds, count, excludeNames = [], difficulty = DEFAULT_DIFFICULTY) {
+//
+// `preferImages` (used by the web app, where the reveal is a full-screen picture) restricts the
+// draw to characters that have artwork -- but only when there are enough of them to fill the
+// request, so a small or image-poor pool still deals rather than failing.
+function getRandomCharacters(listIds, count, excludeNames = [], difficulty = DEFAULT_DIFFICULTY, { preferImages = false } = {}) {
   const excludeLower = new Set([...excludeNames].map((n) => n.toLowerCase()));
-  const pool = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  let pool = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  if (preferImages) {
+    const withImage = pool.filter((c) => c.image_url);
+    if (withImage.length >= count) pool = withImage;
+  }
   // Partial Fisher-Yates: only shuffle as far as we need to.
   const take = Math.min(count, pool.length);
   for (let i = 0; i < take; i++) {
@@ -511,9 +519,13 @@ function getRandomCategory(guildId) {
   return categories[Math.floor(Math.random() * categories.length)];
 }
 
-function getRandomCharacterExcluding(listIds, excludeNames, difficulty = DEFAULT_DIFFICULTY) {
+function getRandomCharacterExcluding(listIds, excludeNames, difficulty = DEFAULT_DIFFICULTY, { preferImages = false } = {}) {
   const excludeLower = new Set([...excludeNames].map((n) => n.toLowerCase()));
-  const candidates = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  let candidates = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  if (preferImages) {
+    const withImage = candidates.filter((c) => c.image_url);
+    if (withImage.length) candidates = withImage; // a reroll only needs one, so any is enough
+  }
   if (!candidates.length) return null;
   return candidates[Math.floor(Math.random() * candidates.length)];
 }

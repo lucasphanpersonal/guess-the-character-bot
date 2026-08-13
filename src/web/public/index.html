@@ -135,8 +135,9 @@
     <!-- Lobby -->
     <section id="lobby" class="screen">
       <div class="card">
-        <div class="hint center">Room code — read it out or share the link</div>
+        <div class="hint center">Room code — read it out, share the link, or scan the QR</div>
         <div class="roomcode" id="lobbyCode">····</div>
+        <img id="qrImg" alt="Join QR" style="display:none; width:160px; height:160px; margin:6px auto; background:#fff; border-radius:10px; padding:6px" />
         <div class="share" id="shareUrl"></div>
       </div>
       <div class="card">
@@ -233,7 +234,8 @@
         <div style="height:8px"></div>
         <ul class="roster" id="finalStandings"></ul>
       </div>
-      <button id="againBtn">Play again</button>
+      <button id="rematchBtn">🔁 Rematch (same settings)</button>
+      <button id="changeBtn" class="ghost">⚙️ Change settings</button>
       <button id="overLeaveBtn" class="ghost">Leave room</button>
     </section>
   </main>
