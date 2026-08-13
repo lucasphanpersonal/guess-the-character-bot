@@ -21,6 +21,9 @@ let currentRoom = null;          // { code }
 let lastState = null;            // last room:state
 let nickname = store.get('gtc_nick') || '';
 let options = null;              // setup options (categories/difficulties), fetched for host
+// Why setup ended, held rather than written straight to the lobby hint: the room:state that
+// follows re-renders the lobby and would wipe it. renderLobby consumes it once.
+let abortNote = '';
 
 const socket = io({ auth: { playerId } });
 
@@ -69,9 +72,10 @@ function renderLobby(state) {
   const enough = state.players.length >= 2;
   $('setupBtn').style.display = host ? '' : 'none';
   $('setupBtn').disabled = !enough;
-  $('lobbyHint').textContent = host
-    ? (enough ? '' : 'Grab one more person!')
-    : 'Hang tight — the host is picking characters.';
+  $('lobbyHint').textContent =
+    abortNote ||
+    (host ? (enough ? '' : 'Grab one more person!') : 'Hang tight — the host is picking characters.');
+  abortNote = ''; // one-shot: it explains the jump back here, then gets out of the way
 }
 
 // --- config (host) ------------------------------------------------------------------------
@@ -253,6 +257,8 @@ function renderSetup(view) {
     ref.appendChild(li);
   }
 
+  // Only the host can call off a deal; anyone can leave.
+  $('setupCancelBtn').style.display = amHost() ? '' : 'none';
   $('goodBtn').style.display = view.confirmed ? 'none' : '';
   $('unlockBtn').style.display = view.confirmed ? '' : 'none';
   $('waitingNote').textContent = view.confirmed
@@ -795,11 +801,7 @@ socket.on('game:reveal', (r) => {
 socket.on('game:timeout', (t) => logReveal(`<b>${escapeHtml(t.name)}</b> ran out of time — turn passes.`));
 socket.on('game:over', (result) => renderOver(result));
 
-socket.on('setup:aborted', ({ reason }) => {
-  if ($('setup').classList.contains('active') || $('config').classList.contains('active')) {
-    $('lobbyHint').textContent = `Setup stopped — ${reason}.`;
-  }
-});
+socket.on('setup:aborted', ({ reason }) => { abortNote = `Setup stopped — ${reason}.`; });
 
 socket.on('connect', () => {
   if (currentRoom && nickname) {
@@ -848,6 +850,12 @@ syncHowto();
 $('setupBtn').addEventListener('click', openConfig);
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);
+$('setupCancelBtn').addEventListener('click', () => {
+  if (confirm('Cancel this deal and send everyone back to the lobby?')) socket.emit('setup:cancel', {}, () => {});
+});
+$('setupLeaveBtn').addEventListener('click', () => {
+  if (confirm('Leave the room?')) leaveRoom();
+});
 $('undoBtn').addEventListener('click', () => socket.emit('setup:undo', {}, (res) => {
   $('rerollNote').textContent = res?.ok ? `Put ${res.restored} back.` : res?.error || '';
 }));

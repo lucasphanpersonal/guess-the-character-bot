@@ -300,6 +300,22 @@ function attachSockets(io, { registry, setup }) {
       if (res.ok) await emitSetup(r); // fan out: everyone else's reference view changed too
     });
 
+    // The host calling off a deal. Until now the confirm/reroll phase had no exit at all: a bad
+    // spread, or someone needing a minute, left the room stuck there until a player quit the
+    // room outright and aborted it as a side effect. This is the same abort, asked for on
+    // purpose. Everyone keeps their seat -- only the deal is thrown away.
+    socket.on('setup:cancel', (_p, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can cancel.' });
+      if (!['setup', 'ready', 'countdown'].includes(r.status)) {
+        return ack?.({ ok: false, error: 'Nothing to cancel.' });
+      }
+      abortSetupToLobby(r, 'the host cancelled it');
+      ack?.({ ok: true });
+      broadcastRoom(r);
+    });
+
     socket.on('setup:undo', async (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });

@@ -91,7 +91,7 @@ const connect = (playerId) => {
   const dSetup = nextEvent(D, 'setup:state');
   res = await C.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
   check(res.ok, 'host deals characters (setup:start ok)');
-  const cView = await cSetup;
+  let cView = await cSetup;
   const dView = await dSetup;
   const seeded = ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn'];
   check(seeded.includes(cView.checking.character.name), 'C sees a real character to check');
@@ -111,6 +111,21 @@ const connect = (playerId) => {
   const stillEnabled = characterLists.getEnabledLists(process.env.WEB_SCOPE).some((l) => l.id === listId);
   check(stillEnabled, 'the shared pool is NOT modified by a room-level exclusion');
   await C.emitWithAck('setup:toggleList', { listId }); // restore for the deal below
+
+  // Host can call off a deal from the reroll phase; a non-host cannot.
+  const notHostCancel = await D.emitWithAck('setup:cancel', {});
+  check(notHostCancel.ok === false, 'a non-host cannot cancel setup');
+  const backToLobby = roomStatus(D, 'lobby');
+  check((await C.emitWithAck('setup:cancel', {})).ok === true, 'host cancels the deal');
+  const lobbyState = await backToLobby;
+  check(lobbyState.players.length === 2, 'everyone keeps their seat after a cancel');
+  check((await C.emitWithAck('setup:cancel', {})).ok === false, 'cancelling twice is refused');
+
+  // Re-deal so the rest of the walkthrough has a game to play.
+  const cSetup2 = nextEvent(C, 'setup:state');
+  check((await C.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' })).ok,
+    'host re-deals after cancelling');
+  cView = await cSetup2;
 
   const beforeReroll = cView.checking.character.name;
   const cReroll = nextEvent(C, 'setup:state');
