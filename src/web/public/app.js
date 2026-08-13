@@ -120,14 +120,16 @@ function charCardHtml(ch) {
   const img = ch.imageUrl
     ? `<img src="${ch.imageUrl}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'(no image)'}))">`
     : `<div class="noimg">No image — reveal by name</div>`;
-  return `<div class="charname">${escapeHtml(ch.name)}</div>${ch.source ? `<div class="charsrc">${escapeHtml(ch.source)}</div>` : ''}${img}`;
+  // Wrapped in .charcard so the image size cap (.charcard img { max-height }) applies wherever
+  // this is inserted -- not just inside #checkCard. Without the wrapper the image rendered at
+  // full natural size on the finished/tap screens and blew out the layout.
+  return `<div class="charcard"><div class="charname">${escapeHtml(ch.name)}</div>${ch.source ? `<div class="charsrc">${escapeHtml(ch.source)}</div>` : ''}${img}</div>`;
 }
 function renderSetup(view) {
   $('checkOwner').textContent = `${view.checking.ownerName}'s character`;
   $('checkCard').innerHTML = charCardHtml(view.checking.character);
-  $('rerollLeft').textContent = view.rerollsLeft < 0 ? '∞' : view.rerollsLeft;
   $('rerollBtn').style.display = view.rerollAllowed ? '' : 'none';
-  $('rerollBtn').disabled = view.confirmed || (view.rerollsLeft === 0);
+  $('rerollBtn').disabled = view.confirmed; // rerolls are unlimited, so only lock it once confirmed
 
   const ref = $('refList');
   ref.innerHTML = '';
@@ -349,6 +351,10 @@ async function enableMotion() {
   }
 }
 
+// Turn tilt on at the first opportunity a user gesture allows (iOS needs the gesture to grant
+// the sensor). Safe to call repeatedly; it no-ops once enabled.
+function primeMotion() { if (motionSupported && !motionEnabled) enableMotion(); }
+
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
   if (g && g.z != null) { sensor.z = g.z; sensor.have = true; }
@@ -390,6 +396,7 @@ function renderForehead(view) {
   el.classList.add('active');
   el.classList.toggle('mine', view.isMyTurn);
   $('foreheadCount').style.display = 'none'; // countdown is over; show the character
+  $('foreheadTop').style.display = 'none';   // phone's on the forehead now — the TOP guide is done
   const ch = view.myCharacter;
   const img = $('foreheadImg'), noimg = $('foreheadNoImg');
   if (ch && ch.imageUrl) {
@@ -424,19 +431,11 @@ function updateForeheadDebug() {
 
 function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; }
 
+// Tilt is always on -- there is no opt-in button. Motion is requested on the first user gesture
+// (create/join, or the tilt-test screen), which is all iOS needs to grant the sensor. This just
+// surfaces a note if permission was refused; the tap fallback still lets the game be played.
 function renderMotionPrompt(container) {
-  container.innerHTML = '';
-  if (!motionSupported || motionEnabled) { if (motionNote) container.innerHTML = `<p class="hint center">${escapeHtml(motionNote)}</p>`; return; }
-  const card = document.createElement('div');
-  card.className = 'card';
-  card.innerHTML = `<p class="hint center">On a phone? Enable tilt to hold it on your forehead like Heads Up.</p>`;
-  const b = document.createElement('button');
-  b.className = 'enable-motion';
-  b.textContent = '📱 Enable tilt controls';
-  b.addEventListener('click', enableMotion);
-  card.appendChild(b);
-  if (motionNote) { const p = document.createElement('p'); p.className = 'hint center'; p.textContent = motionNote; card.appendChild(p); }
-  container.appendChild(card);
+  container.innerHTML = motionNote ? `<p class="hint center">${escapeHtml(motionNote)}</p>` : '';
 }
 
 function startCountdown(seconds) {
@@ -452,19 +451,12 @@ function startCountdown(seconds) {
     $('foreheadImg').style.display = 'none';
     $('foreheadNoImg').style.display = 'none';
     $('foreheadCount').style.display = 'flex';
+    $('foreheadTop').style.display = ''; // show the TOP guide only while positioning the phone
     $('foreheadTurn').innerHTML = 'Get ready…';
     $('foreheadName').textContent = 'Hold sideways with ▲ TOP up, then on your forehead';
     $('foreheadDebug').textContent = '';
   } else {
     hideForehead();
-    const cnum = $('countNum');
-    if (motionSupported && !motionEnabled && !document.getElementById('countEnable')) {
-      const b = document.createElement('button');
-      b.id = 'countEnable'; b.className = 'enable-motion'; b.style.marginTop = '14px';
-      b.textContent = '📱 Enable tilt controls';
-      b.addEventListener('click', enableMotion);
-      cnum.parentElement.appendChild(b);
-    }
     show('countdown');
   }
   const paint = () => { (inForehead ? $('foreheadCount') : $('countNum')).textContent = n <= 0 ? '0' : String(n); };
@@ -480,7 +472,7 @@ function startCountdown(seconds) {
 
 // --- tilt test / calibration --------------------------------------------------------------
 let ttBaseline = null;
-function openTiltTest() { ttBaseline = null; $('ttEnable').style.display = motionEnabled ? 'none' : ''; updateTiltTest(); show('tilttest'); }
+function openTiltTest() { primeMotion(); ttBaseline = null; $('ttEnable').style.display = motionEnabled ? 'none' : ''; updateTiltTest(); show('tilttest'); }
 function updateTiltTest() {
   updateForeheadDebug();
   if (!$('tilttest').classList.contains('active')) return;
@@ -505,6 +497,7 @@ function createRoom() {
   const nick = readNick();
   if (!nick) return ($('landingErr').textContent = 'Enter your name first.');
   $('landingErr').textContent = '';
+  primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
   socket.emit('room:create', { nickname: nick }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     lastState = res.state; enterRoom(res.state); routeByStatus(res.state);
@@ -516,6 +509,7 @@ function joinRoom() {
   if (!nick) return ($('landingErr').textContent = 'Enter your name first.');
   if (code.length !== 4) return ($('landingErr').textContent = 'Room codes are 4 letters.');
   $('landingErr').textContent = '';
+  primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
   socket.emit('room:join', { code, nickname: nick }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not join.');
     lastState = res.state; enterRoom(res.state); routeByStatus(res.state);
@@ -592,7 +586,7 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
 }));
 // "Good to go" is a user gesture, so use it to also turn motion on -- by reveal time the phone
 // is already listening, no separate step needed. Best-effort; the tap fallback covers refusal.
-$('goodBtn').addEventListener('click', () => { if (motionSupported && !motionEnabled) enableMotion(); socket.emit('setup:confirm', {}, () => {}); });
+$('goodBtn').addEventListener('click', () => { primeMotion(); socket.emit('setup:confirm', {}, () => {}); });
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
 // Tilt calibration screen
 $('tiltTestBtn').addEventListener('click', openTiltTest);
