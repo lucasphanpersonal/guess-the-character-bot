@@ -145,6 +145,7 @@ const setup = {
       difficulty: game.lobby.difficulty,
       preferImages: game.lobby.preferImages,
     }),
+  undo: (game, viewerId) => gameSetup.applyUndo(game, viewerId),
   confirm: (game, viewerId) => gameSetup.applyConfirm(game, viewerId),
   unlock: (game, viewerId) => gameSetup.applyUnlock(game, viewerId),
 };

@@ -112,10 +112,20 @@ const connect = (playerId) => {
   check(stillEnabled, 'the shared pool is NOT modified by a room-level exclusion');
   await C.emitWithAck('setup:toggleList', { listId }); // restore for the deal below
 
+  const beforeReroll = cView.checking.character.name;
   const cReroll = nextEvent(C, 'setup:state');
   res = await C.emitWithAck('setup:reroll', {});
   check(res.ok, 'C rerolls the character they check');
-  check((await cReroll).rerollsLeft === -1, 'rerolls are unlimited (budget stays -1)');
+  const rerolled = await cReroll;
+  check(rerolled.rerollsLeft === -1, 'rerolls are unlimited (budget stays -1)');
+  check(rerolled.canUndo === true, 'undo becomes available after a reroll');
+
+  const cUndo = nextEvent(C, 'setup:state');
+  res = await C.emitWithAck('setup:undo', {});
+  check(res.ok && res.restored === beforeReroll, 'undo reports the character it put back');
+  const undone = await cUndo;
+  check(undone.checking.character.name === beforeReroll, 'undo restores the previous character');
+  check(undone.canUndo === false, 'undo is unavailable again with an empty history');
 
   // ---- Stage 3 + 4: countdown, then the turn loop --------------------------------------
   console.log('\n# stage 3/4 — grace countdown + turn loop');

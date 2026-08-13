@@ -300,6 +300,14 @@ function attachSockets(io, { registry, setup }) {
       if (res.ok) await emitSetup(r); // fan out: everyone else's reference view changed too
     });
 
+    socket.on('setup:undo', async (_p, ack) => {
+      const r = room();
+      if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
+      const res = setup.undo(r.game, playerId);
+      ack?.(res);
+      if (res.ok) await emitSetup(r); // everyone else's reference card changed back too
+    });
+
     socket.on('setup:confirm', async (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });

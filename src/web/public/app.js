@@ -235,6 +235,9 @@ function renderSetup(view) {
   $('checkCard').innerHTML = charCardHtml(view.checking.character);
   $('rerollBtn').style.display = view.rerollAllowed ? '' : 'none';
   $('rerollBtn').disabled = view.confirmed; // rerolls are unlimited, so only lock it once confirmed
+  // Undo only appears once there is something to take back, so it never sits there dead.
+  $('undoBtn').style.display = view.rerollAllowed && view.canUndo ? '' : 'none';
+  $('undoBtn').disabled = view.confirmed;
 
   const ref = $('refList');
   ref.innerHTML = '';
@@ -838,6 +841,9 @@ syncHowto();
 $('setupBtn').addEventListener('click', openConfig);
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);
+$('undoBtn').addEventListener('click', () => socket.emit('setup:undo', {}, (res) => {
+  $('rerollNote').textContent = res?.ok ? `Put ${res.restored} back.` : res?.error || '';
+}));
 $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (res) => {
   if (res?.demotedName) $('rerollNote').textContent = `${res.demotedName} has been rerolled by enough people to retire.`;
   else if (!res?.ok) $('rerollNote').textContent = res?.error || '';

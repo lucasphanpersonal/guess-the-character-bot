@@ -55,7 +55,10 @@ function createSetup({ order, guildId, listIds, difficulty, characters, turnSeco
   const game = new Game({ lobby: pseudoLobby, characters, turnSeconds });
   game.rerollAllowed = true;
   game.confirmState = Object.fromEntries(
-    order.map((id) => [id, { confirmed: false, rerollsLeft: maxRerolls, rejectedNames: new Set() }])
+    // `history` is the stack of characters this checker has rolled away from, newest last, so a
+    // reroll can be taken back. Kept per checker rather than per character because it is the
+    // checker's decision being undone.
+    order.map((id) => [id, { confirmed: false, rerollsLeft: maxRerolls, rejectedNames: new Set(), history: [] }])
   );
   return game;
 }
@@ -102,6 +105,7 @@ function buildView(game, viewerId, names) {
     confirmed: state.confirmed,
     rerollsLeft: state.rerollsLeft,
     rerollAllowed: game.rerollAllowed,
+    canUndo: (state.history?.length ?? 0) > 0,
     waitingOn,
     allReady: waitingOn === 0,
   };
@@ -131,10 +135,39 @@ function applyReroll(game, viewerId, { content, listIds, difficulty, preferImage
 
   const rejectedBy = content.recordReject(current.id, viewerId);
   state.rejectedNames.add(current.name);
+  state.history.push(current); // so applyUndo can put it back
   if (!unlimited) state.rerollsLeft -= 1;
   game.headByPlayer[targetId] = Game.head(game.lobby, replacement);
 
   return { ok: true, rejectedBy, demotedName: rejectedBy >= content.demoteThreshold ? current.name : undefined };
+}
+
+/**
+ * Put back the character this checker most recently rolled away from.
+ *
+ * A reroll is a snap judgement made against a stranger's face, and "actually the last one was
+ * better" is the obvious second thought -- without this the previous character is simply gone,
+ * since a fresh roll cannot be steered back to it.
+ *
+ * The retraction is honest rather than cosmetic: the name comes back out of `rejectedNames`, so
+ * this checker is no longer recorded as having turned it down, and a finite reroll budget is
+ * refunded. The reroll-demotion tally (which needs three DIFFERENT people) is deliberately left
+ * alone -- it is a slow, shared signal about the pool, not part of this room's bookkeeping, and
+ * reaching into it from here would let one player edit a server-wide count by tapping twice.
+ */
+function applyUndo(game, viewerId) {
+  const state = game.confirmState[viewerId];
+  if (!state) return { ok: false, error: 'Not in this game.' };
+  if (!state.history?.length) return { ok: false, error: 'Nothing to undo.' };
+  if (state.confirmed) return { ok: false, error: 'Unlock first to change this.' };
+
+  const previous = state.history.pop();
+  const targetId = game.checkTargetOf(viewerId);
+  state.rejectedNames.delete(previous.name);
+  if (state.rerollsLeft !== -1) state.rerollsLeft += 1;
+  // Already a Game.head shape, so it goes straight back -- re-deriving it would need the row.
+  game.headByPlayer[targetId] = previous;
+  return { ok: true, restored: previous.name };
 }
 
 /** Mark a player good to go. @returns {{ok, allReady}} */
@@ -158,6 +191,7 @@ module.exports = {
   createSetup,
   buildView,
   applyReroll,
+  applyUndo,
   applyConfirm,
   applyUnlock,
   publicCharacter,

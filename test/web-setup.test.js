@@ -2,7 +2,7 @@
 // real core Game, with content access injected as fakes -- no socket.io, no seeded DB.
 
 const { assert } = require('./harness');
-const { createSetup, buildView, applyReroll, applyConfirm, applyUnlock, clampTurnSeconds } = require('../src/web/gameSetup');
+const { createSetup, buildView, applyReroll, applyUndo, applyConfirm, applyUnlock, clampTurnSeconds } = require('../src/web/gameSetup');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 
@@ -101,6 +101,72 @@ function rerollReportsWhenAcharacterGetsDemoted() {
   assert.equal(res.demotedName, 'Bulma');
 }
 
+// Undo: "actually the last one was better" is the obvious second thought after a snap reroll,
+// and a fresh roll cannot be steered back to a specific character.
+function undoPutsThePreviousCharacterBack() {
+  const { game, names } = setup3();
+  const content = fakeContent([row(4, 'Zelda')]);
+  applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' });
+  assert.equal(game.headByPlayer.p2.name, 'Zelda');
+
+  const res = applyUndo(game, 'p1');
+  assert.equal(res.ok, true);
+  assert.equal(res.restored, 'Bulma');
+  assert.equal(game.headByPlayer.p2.name, 'Bulma', 'the original is back on the target');
+  assert.equal(buildView(game, 'p1', names).checking.character.name, 'Bulma');
+}
+
+function undoRetractsTheRejectionSoItIsNotHeldAgainstTheCharacter() {
+  const { game } = setup3();
+  const content = fakeContent([row(4, 'Zelda')]);
+  applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' });
+  assert.equal(game.confirmState.p1.rejectedNames.has('Bulma'), true);
+  applyUndo(game, 'p1');
+  assert.equal(game.confirmState.p1.rejectedNames.has('Bulma'), false, 'no longer recorded as turned down');
+}
+
+function undoUnwindsRepeatedRerollsOneAtATime() {
+  const { game } = setup3();
+  const content = fakeContent([row(4, 'Zelda'), row(5, 'Yoshi')]);
+  applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' }); // Bulma -> Zelda
+  applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' }); // Zelda -> Yoshi
+  assert.equal(game.headByPlayer.p2.name, 'Yoshi');
+  assert.equal(applyUndo(game, 'p1').restored, 'Zelda');
+  assert.equal(game.headByPlayer.p2.name, 'Zelda');
+  assert.equal(applyUndo(game, 'p1').restored, 'Bulma');
+  assert.equal(game.headByPlayer.p2.name, 'Bulma');
+}
+
+function undoIsRefusedWithNothingToUndo() {
+  const { game, names } = setup3();
+  assert.equal(buildView(game, 'p1', names).canUndo, false);
+  const res = applyUndo(game, 'p1');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /nothing to undo/i);
+}
+
+function undoIsRefusedOnceConfirmed() {
+  const { game } = setup3();
+  const content = fakeContent([row(4, 'Zelda')]);
+  applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' });
+  applyConfirm(game, 'p1');
+  const res = applyUndo(game, 'p1');
+  assert.equal(res.ok, false);
+  assert.match(res.error, /unlock/i);
+  assert.equal(game.headByPlayer.p2.name, 'Zelda', 'nothing changed');
+}
+
+function undoRefundsAFiniteRerollBudget() {
+  const order = ['p1', 'p2'];
+  const game = createSetup({ order, guildId: 'web', listIds: [10], difficulty: 'normal',
+    characters: [row(1, 'Aang'), row(2, 'Bulma')], maxRerolls: 2 });
+  const content = fakeContent([row(3, 'Cloud')]);
+  applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' });
+  assert.equal(game.confirmState.p1.rerollsLeft, 1);
+  applyUndo(game, 'p1');
+  assert.equal(game.confirmState.p1.rerollsLeft, 2, 'the spent reroll comes back');
+}
+
 function confirmingGatesOnEveryPlayer() {
   const { game } = setup3();
   assert.equal(applyConfirm(game, 'p1').allReady, false);
@@ -153,6 +219,12 @@ module.exports = {
   'reroll excludes every character already in play': rerollExcludesEveryCharacterAlreadyInPlay,
   'reroll is refused when the budget is spent': rerollIsRefusedWhenTheBudgetIsSpent,
   'reroll reports when a character gets demoted': rerollReportsWhenAcharacterGetsDemoted,
+  'undo puts the previous character back': undoPutsThePreviousCharacterBack,
+  'undo retracts the rejection': undoRetractsTheRejectionSoItIsNotHeldAgainstTheCharacter,
+  'undo unwinds repeated rerolls one at a time': undoUnwindsRepeatedRerollsOneAtATime,
+  'undo is refused with nothing to undo': undoIsRefusedWithNothingToUndo,
+  'undo is refused once confirmed': undoIsRefusedOnceConfirmed,
+  'undo refunds a finite reroll budget': undoRefundsAFiniteRerollBudget,
   'confirming gates on every player': confirmingGatesOnEveryPlayer,
   'unlocking reopens a confirmation': unlockingReopensAConfirmation,
 };
