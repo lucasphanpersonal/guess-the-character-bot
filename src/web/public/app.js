@@ -301,7 +301,7 @@ const motionSupported = hasMotion || hasOrient;
 // face the ceiling or the floor. That axis is what "tilt up/down" changes no matter whether
 // the phone is portrait or landscape -- which is why the old beta-based version never fired
 // when the phone was held horizontally.
-const sensor = { z: 0, beta: null, gamma: null, have: false };
+const sensor = { x: 0, y: 0, z: 0, beta: null, gamma: null, have: false };
 let tiltFlip = store.get('gtc_tilt_flip') === '1';
 const TILT_TH = 4.5;      // m/s^2 from neutral (~27 degrees)
 const TILT_HOLD_MS = 450; // hold past the threshold this long before firing in-game
@@ -344,9 +344,26 @@ async function enableMotion() {
 
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
-  if (g && g.z != null) { sensor.z = g.z; sensor.have = true; }
+  if (g && g.z != null) { sensor.x = g.x ?? sensor.x; sensor.y = g.y ?? sensor.y; sensor.z = g.z; sensor.have = true; }
   handleGameTilt();
+  updateForeheadRotation();
   updateTiltTest();
+}
+
+// iOS won't let a web page unlock orientation, so we rotate the forehead card ourselves. The
+// in-screen-plane gravity (x axis) tells us which way the phone is rolled; we snap to whichever
+// landscape keeps the card upright for the room, with a dead zone so it doesn't flip-flop near
+// vertical. If it comes out upside-down for a given hold, the sign of ROLL_SIGN is the one knob.
+let fhRot = 90;
+const ROLL_SIGN = 1;
+function updateForeheadRotation() {
+  const el = document.getElementById('foreheadRot');
+  if (!el || !$('forehead').classList.contains('active') || !sensor.have) return;
+  const gx = sensor.x * ROLL_SIGN;
+  let target = fhRot;
+  if (gx > 2.5) target = 90;
+  else if (gx < -2.5) target = 270;
+  if (target !== fhRot) { fhRot = target; el.style.setProperty('--fh-rot', `${fhRot}deg`); }
 }
 function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltTest(); }
 
@@ -395,6 +412,7 @@ function renderForehead(view) {
     $('foreheadName').textContent = ch && ch.source ? ch.source : '';
   }
   startTurnTicker(view); // paints the turn banner and keeps its countdown ticking
+  updateForeheadRotation();
   updateForeheadDebug();
   // My turn just started: reset the tilt baseline, buzz, and chime so I know without looking.
   if (view.isMyTurn && !foreheadMyTurn) {
