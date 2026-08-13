@@ -53,17 +53,20 @@ const content = {
   recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),
 };
 
-function resolvePool({ poolType, category }) {
+// `excluded` is the room's own opt-outs, applied on top of the shared selection rather than
+// written back into it -- see the note on Room.excludedListIds.
+function resolvePool({ poolType, category, excluded = new Set() }) {
+  const keep = (lists) => lists.map((l) => l.id).filter((id) => !excluded.has(id));
   if (poolType === 'category' && category) {
-    return { listIds: characterLists.getEnabledListsByCategory(WEB_SCOPE, category).map((l) => l.id), label: category };
+    return { listIds: keep(characterLists.getEnabledListsByCategory(WEB_SCOPE, category)), label: category };
   }
   if (poolType === 'random') {
     const cat = characterLists.getRandomCategory(WEB_SCOPE);
     if (!cat) return { listIds: [], label: 'nothing enabled' };
-    return { listIds: characterLists.getEnabledListsByCategory(WEB_SCOPE, cat).map((l) => l.id), label: `Random: ${cat}` };
+    return { listIds: keep(characterLists.getEnabledListsByCategory(WEB_SCOPE, cat)), label: `Random: ${cat}` };
   }
   // Default: everything enabled in this scope.
-  return { listIds: characterLists.getEnabledLists(WEB_SCOPE).map((l) => l.id), label: 'Everything' };
+  return { listIds: keep(characterLists.getEnabledLists(WEB_SCOPE)), label: 'Everything' };
 }
 
 const setup = {
@@ -84,7 +87,7 @@ const setup = {
   // happen to have artwork silently shrinks the pool and biases it toward the better-documented
   // franchises, which is a real change to what the game deals. It is the host's call, not a default.
   start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds, preferImages = false } = {}) {
-    const { listIds, label } = resolvePool({ poolType, category });
+    const { listIds, label } = resolvePool({ poolType, category, excluded: room.excludedListIds });
     if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
     const n = room.players.size;
     const available = characterLists.countDistinctCharacters(listIds, difficulty);
@@ -110,24 +113,23 @@ const setup = {
     return { ok: true, label };
   },
 
-  // Curation the web app doesn't otherwise have: the host toggles which lists in a category are
-  // in the shared pool, same underlying `enabled` flag /list toggle flips on Discord. Only
-  // meaningful for the 'category' pool type, which is the one browsable, single-category choice.
-  listsInCategory(category) {
-    return characterLists.listsForFilter(WEB_SCOPE, category).map((l) => ({
-      id: l.id,
-      name: l.name,
-      enabled: l.enabled === 1,
-      count: l.character_count,
-    }));
+  // Curation for this room only. Shows the lists already in the shared playable selection and
+  // lets the host drop some for THIS game; it never writes to the shared `enabled` column, so a
+  // party can't reshape what the Discord server gets dealt.
+  listsInCategory(category, room) {
+    return characterLists
+      .listsForFilter(WEB_SCOPE, category)
+      .filter((l) => l.enabled === 1)
+      .map((l) => ({ id: l.id, name: l.name, count: l.character_count, playing: !room.excludedListIds.has(l.id) }));
   },
-  // The id arrives from a client, so it is NOT trusted to belong to this scope -- without this
-  // check a crafted id could toggle any list row in the database, including another guild's.
-  // (Same reasoning as getCharacterById being guild-scoped on the Discord side.)
-  toggleList(listId) {
+  // The id arrives from a client, so it is NOT trusted -- it must name a list that really is in
+  // this scope's playable selection before the room may act on it.
+  toggleList(listId, room) {
     const [list] = characterLists.getListsByIds([listId]);
-    if (!list || list.guild_id !== WEB_SCOPE) return { ok: false, error: 'Unknown list.' };
-    return { ok: true, enabled: characterLists.toggleListEnabled(listId) };
+    if (!list || list.guild_id !== WEB_SCOPE || list.enabled !== 1) return { ok: false, error: 'Unknown list.' };
+    if (room.excludedListIds.has(list.id)) room.excludedListIds.delete(list.id);
+    else room.excludedListIds.add(list.id);
+    return { ok: true, playing: !room.excludedListIds.has(list.id) };
   },
 
   view: (game, viewerId, names) => gameSetup.buildView(game, viewerId, names),

@@ -233,14 +233,14 @@ function attachSockets(io, { registry, setup }) {
     // Host asks for the pool/difficulty choices to render the config screen.
     socket.on('setup:options', (_p, ack) => ack?.(setup.options()));
 
-    // Host-only curation for the config screen's "pick a category" path: toggles the SAME shared
-    // pool /list toggle would on Discord, so it isn't scoped to this room and outlives it.
+    // Host-only curation for the config screen's "pick a category" path. Scoped to this room:
+    // it never touches the shared `enabled` column the Discord bot reads.
     socket.on('setup:categoryLists', (payload = {}, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can curate lists.' });
       if (!payload.category) return ack?.({ ok: false, error: 'No category given.' });
-      return ack?.({ ok: true, lists: setup.listsInCategory(payload.category) });
+      return ack?.({ ok: true, lists: setup.listsInCategory(payload.category, r) });
     });
 
     socket.on('setup:toggleList', (payload = {}, ack) => {
@@ -248,7 +248,7 @@ function attachSockets(io, { registry, setup }) {
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can curate lists.' });
       if (!payload.listId) return ack?.({ ok: false, error: 'No list given.' });
-      return ack?.(setup.toggleList(payload.listId));
+      return ack?.(setup.toggleList(payload.listId, r));
     });
 
     // Host deals characters and moves the room into the confirm phase.

@@ -96,13 +96,17 @@ const connect = (playerId) => {
 
   // ---- list curation (host-only config-screen addition) --------------------------------
   res = await C.emitWithAck('setup:categoryLists', { category: 'TestToons' });
-  check(res.ok && res.lists.length === 1 && res.lists[0].name === 'Test Toons' && res.lists[0].enabled === true,
-    'host can list a category\'s lists with enabled state');
+  check(res.ok && res.lists.length === 1 && res.lists[0].name === 'Test Toons' && res.lists[0].playing === true,
+    'host can list a category\'s lists with per-room playing state');
   const nonHost = await D.emitWithAck('setup:categoryLists', { category: 'TestToons' });
   check(nonHost.ok === false, 'a non-host cannot curate lists');
-  const toggled = await C.emitWithAck('setup:toggleList', { listId: res.lists[0].id });
-  check(toggled.ok && toggled.enabled === false, 'host toggles a list off');
-  await C.emitWithAck('setup:toggleList', { listId: res.lists[0].id }); // restore for the deal above
+  const listId = res.lists[0].id;
+  const toggled = await C.emitWithAck('setup:toggleList', { listId });
+  check(toggled.ok && toggled.playing === false, 'host drops a list for this room');
+  // The shared `enabled` column must be untouched -- that is the whole point of the change.
+  const stillEnabled = characterLists.getEnabledLists(process.env.WEB_SCOPE).some((l) => l.id === listId);
+  check(stillEnabled, 'the shared pool is NOT modified by a room-level exclusion');
+  await C.emitWithAck('setup:toggleList', { listId }); // restore for the deal below
 
   const cReroll = nextEvent(C, 'setup:state');
   res = await C.emitWithAck('setup:reroll', {});

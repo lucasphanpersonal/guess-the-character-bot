@@ -133,9 +133,8 @@ function renderConfig(opts) {
   });
 }
 
-// Lets the host switch lists on/off within the chosen category, without leaving Discord to do
-// it. Toggles the shared per-scope `enabled` flag (same thing /list toggle does), so it affects
-// future games too, not just this one.
+// Lets the host drop lists they don't want for THIS game. Scoped to the room -- it does not
+// change the shared pool the Discord bot plays from.
 function loadListCuration(category) {
   const ul = $('listCurationList');
   ul.innerHTML = '<li class="seat"><span class="you">loading…</span></li>';
@@ -148,14 +147,14 @@ function loadListCuration(category) {
     for (const l of res.lists) {
       const li = document.createElement('li');
       li.className = 'seat';
-      li.innerHTML = `<input type="checkbox" ${l.enabled ? 'checked' : ''} style="width:auto">` +
+      li.innerHTML = `<input type="checkbox" ${l.playing ? 'checked' : ''} style="width:auto">` +
         `<span class="name" style="flex:1">${escapeHtml(l.name)}</span><span class="you">${l.count}</span>`;
       const cb = li.querySelector('input');
       cb.addEventListener('change', () => {
         cb.disabled = true;
         socket.emit('setup:toggleList', { listId: l.id }, (r) => {
           cb.disabled = false;
-          if (r?.ok) cb.checked = r.enabled;
+          if (r?.ok) cb.checked = r.playing;
           else cb.checked = !cb.checked; // roll back a failed toggle
         });
       });
