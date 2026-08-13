@@ -175,6 +175,8 @@ function bannerText(view, remaining) {
 
 function renderPlaying(view) {
   lastPlayView = view;
+  // You've got yours: drop out of forehead mode into a "you got it" screen with your reveal.
+  if (view.me?.finished) { hideForehead(); return renderFinished(view); }
   // With a motion sensor we play the real thing: full-screen forehead card + tilt to answer.
   // Without one (e.g. plain HTTP, no permission), fall back to the tap model below.
   if (motionEnabled) return renderForehead(view);
@@ -194,18 +196,46 @@ function renderPlaying(view) {
     area.innerHTML = `<p class="hint center">Waiting for the next turn…</p>`;
   }
   renderStandings($('standings'), view.standings);
+  startTurnTicker(view);
+  show('playing');
+}
 
-  // Local countdown, resynced on every state push (avoids cross-device clock skew).
-  clearInterval(countdown);
+// The turn clock ticks locally each second and is re-synced on every server state push (so it
+// never trusts cross-device wall clocks). Paints whichever turn line is visible -- the forehead
+// banner in motion mode, or the card banner in the tap fallback.
+let turnTicker = null;
+function startTurnTicker(view) {
+  clearInterval(turnTicker);
   let remaining = view.turnRemaining;
-  $('turnBanner').innerHTML = bannerText(view, remaining);
-  if (remaining != null) {
-    countdown = setInterval(() => {
-      remaining = Math.max(0, remaining - 1);
+  const paint = () => {
+    if (motionEnabled && $('forehead').classList.contains('active')) {
+      $('foreheadTurn').innerHTML = view.isMyTurn
+        ? `🫵 YOUR TURN${remaining != null ? ` · ⏱ ${remaining}s` : ''} — tilt up if you got it`
+        : `🎯 ${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`;
+    } else {
       $('turnBanner').innerHTML = bannerText(view, remaining);
-      if (remaining === 0) clearInterval(countdown);
-    }, 1000);
-  }
+    }
+  };
+  paint();
+  if (remaining == null) return;
+  turnTicker = setInterval(() => {
+    remaining = Math.max(0, remaining - 1);
+    paint();
+    if (remaining === 0) clearInterval(turnTicker);
+  }, 1000);
+}
+
+// The screen a player sees once they've got their character: their reveal, turn count, and the
+// live standings while everyone else plays on.
+function renderFinished(view) {
+  clearInterval(turnTicker);
+  renderMotionPrompt($('motionBanner'));
+  const ch = view.me.character;
+  $('turnBanner').innerHTML = `✅ <b>You got it in ${view.me.turns} turn${view.me.turns === 1 ? '' : 's'}!</b>`;
+  $('playArea').innerHTML =
+    (ch ? charCardHtml(ch) : '') +
+    `<p class="hint center">That's you${ch ? ` — <b>${escapeHtml(ch.name)}</b>` : ''}. Sit tight while the others finish.</p>`;
+  renderStandings($('standings'), view.standings);
   show('playing');
 }
 
@@ -221,6 +251,7 @@ function logReveal(html) {
 
 function renderOver(result) {
   clearInterval(countdown);
+  clearInterval(turnTicker);
   hideForehead();
   const names = result.winners.map((w) => w.name);
   $('overEmoji').textContent = result.winners.length > 1 ? '🤝' : (result.winners.length ? '🏆' : '🛑');
@@ -354,16 +385,16 @@ function renderForehead(view) {
   const ch = view.myCharacter;
   const img = $('foreheadImg'), noimg = $('foreheadNoImg');
   if (ch && ch.imageUrl) {
-    img.src = ch.imageUrl; img.style.display = ''; noimg.style.display = 'none';
-    img.onerror = () => { img.style.display = 'none'; noimg.style.display = ''; noimg.textContent = ch.name; };
+    // Has art: full-screen image, name + source along the bottom for the room to read.
+    img.src = ch.imageUrl; img.style.display = 'block'; noimg.style.display = 'none';
+    img.onerror = () => { img.style.display = 'none'; noimg.style.display = 'block'; noimg.textContent = ch.name; };
+    $('foreheadName').textContent = ch.source ? `${ch.name} · ${ch.source}` : ch.name;
   } else {
-    img.style.display = 'none'; noimg.style.display = ''; noimg.textContent = ch ? ch.name : '…';
+    // No art: the NAME is the whole card -- big and centered (not a small line at the bottom).
+    img.style.display = 'none'; noimg.style.display = 'block'; noimg.textContent = ch ? ch.name : '…';
+    $('foreheadName').textContent = ch && ch.source ? ch.source : '';
   }
-  // Name + source sit at the bottom for the ROOM to read -- the wearer holds it out and doesn't look.
-  $('foreheadName').textContent = ch ? (ch.source ? `${ch.name} · ${ch.source}` : ch.name) : '';
-  $('foreheadTurn').innerHTML = view.isMyTurn
-    ? `🫵 YOUR TURN${view.turnRemaining != null ? ` · ⏱ ${view.turnRemaining}s` : ''} — tilt up if you got it`
-    : `🎯 ${escapeHtml(view.current.name)}'s turn${view.turnRemaining != null ? ` · ${view.turnRemaining}s` : ''}`;
+  startTurnTicker(view); // paints the turn banner and keeps its countdown ticking
   updateForeheadDebug();
   // My turn just started: reset the tilt baseline, buzz, and chime so I know without looking.
   if (view.isMyTurn && !foreheadMyTurn) {

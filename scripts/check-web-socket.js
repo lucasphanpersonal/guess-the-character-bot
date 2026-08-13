@@ -113,8 +113,11 @@ const connect = (playerId) => {
 
   const over = nextEvent(C, 'game:over');
   const dReveal = nextEvent(D, 'game:reveal');
+  const cFinished = nextEvent(C, 'game:state');
   res = await C.emitWithAck('game:gotit', {}); // host finishes on turn 1
   check(res.ok && res.reveal.turns === 1, 'host declares "got it" on turn 1');
+  const cf = await cFinished;
+  check(cf.me.finished === true && !!cf.me.character, 'the finisher gets a "you got it" state with their reveal');
   const rev = await dReveal;
   check(rev.kind === 'got' && rev.turns === 1, 'the reveal reaches the other player');
   await wait(30);

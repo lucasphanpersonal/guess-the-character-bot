@@ -162,7 +162,12 @@ function buildGameView(game, viewerId, names, now = Date.now()) {
     turnRemaining,
     turnSeconds: game.turnSeconds,
     standings: standingsView(game, names),
-    me: { finished: game.finishedBy.has(viewerId), turns: game.finishedBy.get(viewerId) ?? null },
+    me: {
+      finished: game.finishedBy.has(viewerId),
+      turns: game.finishedBy.get(viewerId) ?? null,
+      // Once you've got it, you've earned the reveal of what you were wearing.
+      character: game.finishedBy.has(viewerId) ? publicCharacter(game.headByPlayer[viewerId]) : null,
+    },
   };
 }
 
