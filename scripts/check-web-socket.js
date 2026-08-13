@@ -22,6 +22,10 @@ function seedContent() {
   for (const name of ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn']) {
     characterLists.addCharacter(list, name, 'seed', null);
   }
+  // One character carries an image so the /img route can be asserted POSITIVELY. A 404-only
+  // check would pass even if the route were deleted, since the static handler 404s too --
+  // which is exactly how a deleted /img route once slipped through green checks.
+  characterLists.addCharacter(list, 'Pictured', 'seed', 'https://example.invalid/pic.png');
 }
 seedContent();
 
@@ -161,6 +165,35 @@ const connect = (playerId) => {
   check(res.ok, 'host rematches with the same settings');
   const rematchView = await c2Setup;
   check(rematchView.checking && !!rematchView.checking.character.name, 'rematch re-deals a fresh confirm phase');
+
+  // ---- HTTP routes: not covered by the unit suite (network-free) or by the socket events
+  // above. A refactor once deleted the /img route outright and every check still passed, so
+  // the routes that serve actual bytes are asserted here.
+  console.log('\n# http routes');
+  const httpGet = async (path) => {
+    const r = await fetch(`${URL}${path}`, { redirect: 'manual' });
+    return { status: r.status, type: r.headers.get('content-type') || '' };
+  };
+  const seededChar = characterLists
+    .getCharactersForLists(characterLists.getEnabledLists(process.env.WEB_SCOPE).map((l) => l.id))
+    .find((c) => c.image_url);
+  const page = await httpGet('/');
+  check(page.status === 200 && page.type.includes('text/html'), 'GET / serves the client');
+  const app = await httpGet('/app.js');
+  check(app.status === 200 && app.type.includes('javascript'), 'GET /app.js serves the client script');
+  const health = await httpGet('/api/health');
+  check(health.status === 200, 'GET /api/health responds');
+  const qr = await httpGet('/api/qr?room=ABCD');
+  check(qr.status === 200 && qr.type.includes('svg'), 'GET /api/qr renders an SVG');
+  check((await httpGet('/api/qr?text=https://evil.example')).status === 400, 'GET /api/qr refuses arbitrary text');
+  if (seededChar) {
+    const img = await httpGet(`/img/${seededChar.id}`);
+    // 200 from cache, or 302 upstream when the fixture URL is not fetchable -- both mean the
+    // route exists and resolved the id. A 404 would mean it is gone.
+    check(img.status === 200 || img.status === 302, 'GET /img/<id> resolves a character image');
+  }
+  check((await httpGet('/img/999999999')).status === 404, 'GET /img/<unknown> is a clean 404');
+  check((await httpGet('/../.env')).status === 404, 'path traversal is refused');
 
   C2.close(); D.close();
   await wait(50);

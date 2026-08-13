@@ -220,6 +220,37 @@ function requestHandler(req, res) {
       });
   }
 
+  // Character artwork, served from the local cache. The id names a database row, so the URL
+  // actually fetched is always one we stored -- a client can never point this at an arbitrary
+  // host. A miss that cannot be filled redirects upstream, which is exactly the pre-cache
+  // behaviour, so the cache can degrade without breaking a game in progress.
+  if (url.pathname.startsWith('/img/')) {
+    const id = Number(url.pathname.slice(5));
+    if (!Number.isInteger(id) || id <= 0) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      return res.end('Bad image id');
+    }
+    const row = characterLists.getCharacterById(WEB_SCOPE, id);
+    if (!row?.image_url) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('No image');
+    }
+    return imageCache
+      .get(row.image_url)
+      .then((hit) => {
+        if (!hit) {
+          res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
+          return res.end();
+        }
+        res.writeHead(200, { 'Content-Type': hit.contentType, 'Cache-Control': 'public, max-age=604800, immutable' });
+        fs.createReadStream(hit.path).pipe(res);
+      })
+      .catch(() => {
+        res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
+        res.end();
+      });
+  }
+
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,
