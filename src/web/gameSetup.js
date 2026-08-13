@@ -16,6 +16,20 @@
 //     Play begins once every player has pressed it; a player may unlock until the last one is in.
 
 const Game = require('../core/game/Game');
+const { FIELDS: LOBBY_FIELDS } = require('../core/game/lobbySettings');
+
+/**
+ * Clamp a client-supplied turn length to the same bounds the Discord bot enforces, so the two
+ * frontends can't disagree about what's legal. Returns undefined for missing/garbage input, so
+ * the caller falls through to createSetup's own default rather than coercing to a number here --
+ * there is exactly one place turnSeconds defaults.
+ */
+function clampTurnSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  const { min, max } = LOBBY_FIELDS.turnSeconds;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
 
 // Rerolls are always unlimited (-1) in the web app too -- a reroll budget only added friction
 // to a party game. The budget machinery (rerollsLeft, the -1 sentinel) is kept so a finite
@@ -141,5 +155,6 @@ module.exports = {
   applyConfirm,
   applyUnlock,
   publicCharacter,
+  clampTurnSeconds,
   DEFAULT_MAX_REROLLS,
 };

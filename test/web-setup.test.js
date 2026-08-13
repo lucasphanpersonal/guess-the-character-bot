@@ -2,7 +2,7 @@
 // real core Game, with content access injected as fakes -- no socket.io, no seeded DB.
 
 const { assert } = require('./harness');
-const { createSetup, buildView, applyReroll, applyConfirm, applyUnlock } = require('../src/web/gameSetup');
+const { createSetup, buildView, applyReroll, applyConfirm, applyUnlock, clampTurnSeconds } = require('../src/web/gameSetup');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 
@@ -119,8 +119,33 @@ function unlockingReopensAConfirmation() {
   assert.equal(applyConfirm(game, 'p1').allReady, false);
 }
 
+// The web config screen lets the host pick a turn length; it must land inside the same bounds
+// the Discord bot enforces, and garbage must fall through to the single default rather than
+// being coerced into a number here.
+function turnSecondsIsClampedToTheSharedBounds() {
+  assert.equal(clampTurnSeconds(60), 60);
+  assert.equal(clampTurnSeconds(5), 15, 'below the minimum clamps up');
+  assert.equal(clampTurnSeconds(9999), 600, 'above the maximum clamps down');
+  assert.equal(clampTurnSeconds(undefined), undefined, 'missing falls through to the default');
+  assert.equal(clampTurnSeconds('abc'), undefined, 'garbage falls through to the default');
+}
+
+function aClampedTurnLengthReachesTheGame() {
+  const game = createSetup({
+    order: ['p1', 'p2'],
+    guildId: 'web',
+    listIds: [1],
+    difficulty: 'normal',
+    characters: [row(1, 'A'), row(2, 'B')],
+    turnSeconds: clampTurnSeconds(45),
+  });
+  assert.equal(game.turnSeconds, 45);
+}
+
 module.exports = {
   'createSetup builds a game with confirm state': createSetupBuildsAGameWithConfirmState,
+  'turn seconds is clamped to the shared bounds': turnSecondsIsClampedToTheSharedBounds,
+  'a clamped turn length reaches the game': aClampedTurnLengthReachesTheGame,
   "a view never contains the viewer's own character": aViewNeverContainsTheViewersOwnCharacter,
   'every character but your own is covered across checking + reference':
     everyCharacterButYourOwnIsCoveredAcrossCheckingPlusReference,

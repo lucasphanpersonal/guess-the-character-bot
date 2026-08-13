@@ -17,7 +17,6 @@ const { Server } = require('socket.io');
 // --- Shared core: the exact same modules the Discord bot uses -----------------------------
 const GameManager = require('../core/game/GameManager');
 const characterLists = require('../core/db/characterLists');
-const { FIELDS: LOBBY_FIELDS } = require('../core/game/lobbySettings');
 const { TurnRotationMode } = require('../core/game/roundMode');
 
 // --- Web-only: transport + room membership + setup ----------------------------------------
@@ -68,16 +67,6 @@ function resolvePool({ poolType, category }) {
   return { listIds: characterLists.getEnabledLists(WEB_SCOPE).map((l) => l.id), label: 'Everything' };
 }
 
-// Reuses the Discord bot's own bounds (15-600s) rather than inventing separate ones. Undefined
-// (or garbage) falls through to gameSetup.createSetup's own default instead of being coerced to
-// a number here -- there's exactly one place turnSeconds defaults, not two that could disagree.
-function clampTurnSeconds(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return undefined;
-  const { min, max } = LOBBY_FIELDS.turnSeconds;
-  return Math.min(max, Math.max(min, Math.round(n)));
-}
-
 const setup = {
   options() {
     const categories = characterLists
@@ -103,7 +92,7 @@ const setup = {
     const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: true });
     if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
 
-    const clampedTurnSeconds = clampTurnSeconds(turnSeconds);
+    const clampedTurnSeconds = gameSetup.clampTurnSeconds(turnSeconds);
     room.game = gameSetup.createSetup({
       order: [...room.order],
       guildId: WEB_SCOPE,
@@ -129,7 +118,12 @@ const setup = {
       count: l.character_count,
     }));
   },
+  // The id arrives from a client, so it is NOT trusted to belong to this scope -- without this
+  // check a crafted id could toggle any list row in the database, including another guild's.
+  // (Same reasoning as getCharacterById being guild-scoped on the Discord side.)
   toggleList(listId) {
+    const [list] = characterLists.getListsByIds([listId]);
+    if (!list || list.guild_id !== WEB_SCOPE) return { ok: false, error: 'Unknown list.' };
     return { ok: true, enabled: characterLists.toggleListEnabled(listId) };
   },
 

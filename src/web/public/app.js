@@ -60,8 +60,8 @@ function renderLobby(state) {
   $('setupBtn').style.display = host ? '' : 'none';
   $('setupBtn').disabled = !enough;
   $('lobbyHint').textContent = host
-    ? (enough ? '' : 'Need at least 2 players to start.')
-    : 'Waiting for the host to start the game…';
+    ? (enough ? '' : 'Grab one more person!')
+    : 'Hang tight — the host is picking characters.';
 }
 
 // --- config (host) ------------------------------------------------------------------------
@@ -75,18 +75,20 @@ function openConfig() {
 function renderConfig(opts) {
   const pool = $('poolChoices');
   pool.innerHTML = '';
+  // Shape + colour per choice, so they're told apart without relying on colour alone.
   const poolOpts = [
-    { v: 'random', label: '🎲 Surprise me', sub: 'a random category' },
-    { v: 'everything', label: '🌍 Everything', sub: 'all enabled lists' },
-    { v: 'category', label: '🗂️ Pick a category', sub: '' },
+    { v: 'random', label: 'Surprise me', sub: 'a random category', shape: '▲' },
+    { v: 'everything', label: 'Everything', sub: 'the whole pool', shape: '◆' },
+    { v: 'category', label: 'Pick a category', sub: 'choose your own', shape: '●' },
   ];
-  for (const o of poolOpts) {
+  poolOpts.forEach((o, i) => {
     const l = document.createElement('label');
-    l.className = 'choice';
+    l.className = `choice c${i}`;
     l.innerHTML = `<input type="radio" name="pool" value="${o.v}" ${o.v === 'random' ? 'checked' : ''}>
+      <span class="shape">${o.shape}</span>
       <span><div>${o.label}</div>${o.sub ? `<div class="sub">${o.sub}</div>` : ''}</span>`;
     pool.appendChild(l);
-  }
+  });
   const sel = $('categorySelect');
   sel.innerHTML = '';
   for (const c of opts.categories) {
@@ -110,13 +112,15 @@ function renderConfig(opts) {
 
   const diff = $('diffChoices');
   diff.innerHTML = '';
-  for (const d of opts.difficulties) {
+  const shapes = ['▲', '◆', '●', '■'];
+  opts.difficulties.forEach((d, i) => {
     const l = document.createElement('label');
-    l.className = 'choice';
+    l.className = `choice c${i}`;
     l.innerHTML = `<input type="radio" name="diff" value="${d.key}" ${d.key === opts.defaultDifficulty ? 'checked' : ''}>
+      <span class="shape">${shapes[i % 4]}</span>
       <span><div>${d.label}</div><div class="sub">${d.blurb}</div></span>`;
     diff.appendChild(l);
-  }
+  });
 }
 
 // Lets the host switch lists on/off within the chosen category, without leaving Discord to do
@@ -258,9 +262,11 @@ function startTurnTicker(view) {
   const pausedMsg = `⏸ Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
   const paint = () => {
     if (motionEnabled && $('forehead').classList.contains('active')) {
+      // The last player has nobody to pass to, so down = give up (held long). Say so.
+      const downHint = view.buttons?.pass ? 'tilt up = got it' : 'up = got it · hold down = give up';
       $('foreheadTurn').innerHTML = view.paused ? pausedMsg
-        : view.isMyTurn ? `🫵 YOUR TURN${remaining != null ? ` · ⏱ ${remaining}s` : ''} — tilt up if you got it`
-        : `🎯 ${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`;
+        : view.isMyTurn ? `YOUR TURN${remaining != null ? ` · ${remaining}s` : ''} — ${downHint}`
+        : `${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`;
     } else {
       $('turnBanner').innerHTML = view.paused ? pausedMsg : bannerText(view, remaining);
     }
@@ -323,11 +329,15 @@ function renderOver(result) {
     }
     const ch = s.character;
     const thumb = ch && ch.imageUrl
-      ? `<img src="${ch.imageUrl}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:7px;flex:none">`
+      ? `<img src="${ch.imageUrl}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:9px;flex:none">`
       : '';
-    // Reveal who everyone was.
+    // Podium colouring for the top three finishers; everyone else is a plain row.
+    const rank = s.turns === null ? 0 : finishers.filter((o) => o.turns < s.turns).length + 1;
+    if (rank >= 1 && rank <= 3) li.classList.add(`rank${rank}`);
+    const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
     li.style.alignItems = 'center';
-    li.innerHTML = `${thumb}<span style="flex:1"><span class="name">${escapeHtml(s.name)}</span>`
+    li.innerHTML = `${medal ? `<span style="font-size:1.5rem">${medal}</span>` : ''}${thumb}`
+      + `<span style="flex:1"><span class="name">${escapeHtml(s.name)}</span>`
       + `<span class="you"> ${place}</span><br><span class="you">was ${ch ? escapeHtml(ch.name) : '—'}</span></span>`;
     ul.appendChild(li);
   }
@@ -425,15 +435,43 @@ function currentGesture(baseline) {
   return up ? 'gotit' : down ? 'pass' : null;
 }
 
+// Tilting DOWN normally passes. When you're the last player still guessing there is nobody to
+// pass to (buttons.pass is false) -- so instead of the gesture doing nothing, it gives up and
+// ends the game. That needs a much longer hold than a pass, because tilting down is also the
+// natural motion of taking the phone OFF your forehead: an instant give-up would fire on anyone
+// lowering their phone to look at it, and a give-up is irreversible and public. So the hold runs
+// long, ticks audibly while it counts (the room hears it too), and raising back to neutral
+// aborts it -- the re-arm path below clears it for free.
+const GIVEUP_HOLD_MS = 1800;
+let giveUpTicked = 0;
+
 function handleGameTilt() {
   const v = lastPlayView;
   if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) { tilt.dir = null; return; }
   if (tilt.baseline == null) tilt.baseline = sensor.z;
   const g = currentGesture(tilt.baseline);
   const now = Date.now();
-  if (!g) { tilt.armed = true; tilt.dir = null; return; }        // near neutral -> re-arm
-  if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; return; }
-  if (tilt.armed && now - tilt.since > TILT_HOLD_MS && now - tilt.lastFire > 1200) {
+  if (!g) { tilt.armed = true; tilt.dir = null; giveUpTicked = 0; return; } // neutral -> re-arm/abort
+  if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; giveUpTicked = 0; return; }
+  if (!tilt.armed || now - tilt.lastFire < 1200) return;
+
+  const held = now - tilt.since;
+  // Down with nobody to pass to -> the give-up hold, with an audible countdown.
+  if (g === 'pass' && !v.buttons?.pass && v.buttons?.giveUp) {
+    const ticks = Math.floor(held / 600);
+    if (ticks > giveUpTicked && held < GIVEUP_HOLD_MS) {
+      giveUpTicked = ticks;
+      beep(300, 90); navigator.vibrate?.(40);
+    }
+    if (held > GIVEUP_HOLD_MS) {
+      tilt.armed = false; tilt.lastFire = now; giveUpTicked = 0;
+      navigator.vibrate?.([200, 80, 200]); beep(220, 320);
+      socket.emit('game:giveup', {}, () => {});
+    }
+    return;
+  }
+
+  if (held > TILT_HOLD_MS) {
     tilt.armed = false; tilt.lastFire = now;
     navigator.vibrate?.(60); beep(g === 'gotit' ? 1050 : 480, 130);
     if (g === 'gotit') socket.emit('game:gotit', {}, () => {});
@@ -448,6 +486,7 @@ function renderForehead(view) {
   el.classList.toggle('mine', view.isMyTurn);
   $('foreheadCount').style.display = 'none'; // countdown is over; show the character
   $('foreheadTop').style.display = 'none';   // phone's on the forehead now — the TOP guide is done
+  $('foreheadLeave').style.display = '';     // the only way out while the overlay covers everything
   const ch = view.myCharacter;
   const img = $('foreheadImg'), noimg = $('foreheadNoImg');
   if (ch && ch.imageUrl) {
@@ -503,6 +542,7 @@ function startCountdown(seconds) {
     $('foreheadNoImg').style.display = 'none';
     $('foreheadCount').style.display = 'flex';
     $('foreheadTop').style.display = ''; // show the TOP guide only while positioning the phone
+    $('foreheadLeave').style.display = 'none'; // nothing to leave yet; play hasn't started
     $('foreheadTurn').innerHTML = 'Get ready…';
     $('foreheadName').textContent = 'Hold sideways with ▲ TOP up, then on your forehead';
     $('foreheadDebug').textContent = '';

@@ -3,62 +3,106 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#12131a" />
+  <meta name="theme-color" content="#46178f" />
   <title>Guess the Character — party mode</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
   <style>
-    :root { color-scheme: dark; --bg:#12131a; --card:#1b1d29; --edge:#2c3048; --fg:#f4f4f6; --muted:#a0a3b8; --accent:#6f7bff; --accent2:#3a3f55; --ok:#49d17d; --off:#6b7086; --danger:#e5544b; --warn:#e0a83a; }
+    /* Game-show palette: saturated violet field, white slabs, four shape-paired choice colours.
+       Deliberately NOT applied to forehead mode below -- that overlay is a display surface read
+       across a dim room, so its high-contrast black/white stays as-is. */
+    :root {
+      --brand:#46178f; --brand-deep:#33106a; --ink:#1b1033; --paper:#fff;
+      --muted:#6b6480; --edge:#e6e2ef;
+      --red:#e21b3c; --red-d:#a81430; --blue:#1368ce; --blue-d:#0e4a95;
+      --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
+      --ok:#26890c; --off:#b9b3c7; --danger:#e21b3c; --warn:#ffa602;
+      --fg:var(--ink); --card:var(--paper);
+    }
     * { box-sizing: border-box; }
-    body { margin:0; min-height:100vh; min-height:100dvh; font:16px/1.5 system-ui,-apple-system,sans-serif;
-           background:var(--bg); color:var(--fg); display:flex; flex-direction:column; align-items:center; }
+    body { margin:0; min-height:100vh; min-height:100dvh;
+           font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
+           background:var(--brand); color:#fff; display:flex; flex-direction:column; align-items:center; }
     main { width:100%; max-width:32rem; padding:22px 20px 40px; flex:1; display:flex; flex-direction:column; }
-    h1 { font-size:1.4rem; margin:.2rem 0 1rem; }
-    .tag { display:inline-block; padding:.15rem .55rem; border-radius:999px; background:var(--accent2);
-           font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    h1 { font-size:2rem; font-weight:900; letter-spacing:-.02em; margin:.2rem 0 1rem;
+         text-shadow:0 3px 0 rgba(0,0,0,.25); }
+    .tag { display:inline-block; padding:.2rem .7rem; border-radius:999px; background:rgba(255,255,255,.18);
+           font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#fff; }
     .screen { display:none; flex-direction:column; gap:14px; }
     .screen.active { display:flex; }
-    .card { background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:16px; }
-    label { display:block; font-size:.82rem; color:var(--muted); margin:0 0 6px; }
-    input, select { width:100%; padding:13px 14px; font-size:1.05rem; border-radius:12px; border:1px solid var(--edge);
-            background:#0f1017; color:var(--fg); }
-    input:focus, select:focus { outline:2px solid var(--accent); outline-offset:1px; }
-    #codeInput { text-transform:uppercase; letter-spacing:.35em; font-weight:700; text-align:center; }
-    button { width:100%; padding:14px; font-size:1.05rem; font-weight:600; border:none; border-radius:12px;
-             background:var(--accent); color:#fff; cursor:pointer; }
-    button.ghost { background:transparent; border:1px solid var(--edge); color:var(--fg); font-weight:500; }
-    button.good { background:var(--ok); color:#06210f; }
-    button:disabled { opacity:.5; cursor:not-allowed; }
-    .divider { display:flex; align-items:center; gap:12px; color:var(--muted); font-size:.8rem; }
-    .divider::before,.divider::after { content:""; height:1px; flex:1; background:var(--edge); }
-    .err { color:var(--danger); font-size:.9rem; min-height:1.2em; }
-    .roomcode { font-size:2.6rem; font-weight:800; letter-spacing:.4rem; text-align:center; margin:.2rem 0; }
-    .share { text-align:center; color:var(--muted); font-size:.85rem; word-break:break-all; }
+    /* White slabs on the colour field, with a hard bottom edge instead of a border. */
+    .card { background:var(--card); color:var(--ink); border:none; border-radius:18px; padding:18px;
+            box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    label { display:block; font-size:.8rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+            color:var(--muted); margin:0 0 8px; }
+    input, select { width:100%; padding:14px; font-size:1.05rem; font-weight:600; border-radius:12px;
+            border:3px solid var(--edge); background:#fff; color:var(--ink); }
+    input:focus, select:focus { outline:none; border-color:var(--blue); }
+    #codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.4rem; }
+    /* Chunky tactile slabs: the hard bottom shadow + press-down is most of the feel. */
+    button { width:100%; padding:16px; font-size:1.05rem; font-weight:900; border:none; border-radius:14px;
+             background:var(--blue); color:#fff; cursor:pointer; box-shadow:0 6px 0 var(--blue-d);
+             transition:transform .05s, box-shadow .05s; }
+    button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
+    button.ghost { background:#fff; color:var(--brand); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
+    button.good { background:var(--green); color:#fff; box-shadow:0 6px 0 var(--green-d); }
+    button.good:active { box-shadow:0 2px 0 var(--green-d); }
+    button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    .divider { display:flex; align-items:center; gap:12px; color:rgba(255,255,255,.75); font-size:.8rem; font-weight:800; }
+    .divider::before,.divider::after { content:""; height:2px; flex:1; background:rgba(255,255,255,.25); }
+    .err { color:#ffd7dd; font-weight:700; font-size:.9rem; min-height:1.2em; }
+    /* The room code is the hero of the lobby -- it's what the whole room reads off a screen. */
+    .roomcode { font-size:3.6rem; font-weight:900; letter-spacing:.3rem; text-align:center; margin:.1rem 0;
+                color:var(--ink); }
+    .share { text-align:center; color:var(--muted); font-size:.8rem; word-break:break-all; }
     .roster { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-    .seat { display:flex; align-items:center; gap:10px; padding:11px 12px; background:#0f1017;
-            border:1px solid var(--edge); border-radius:12px; }
-    .dot { width:9px; height:9px; border-radius:50%; background:var(--ok); flex:none; }
+    .seat { display:flex; align-items:center; gap:10px; padding:12px; background:#f6f4fa;
+            border-radius:12px; color:var(--ink); }
+    /* Joined players read as pills that pop in, not as list rows. */
+    #roster { flex-direction:row; flex-wrap:wrap; gap:8px; }
+    #roster .seat { width:auto; background:var(--amber); color:#2b1c00; border-radius:999px;
+                    padding:9px 15px; font-weight:900; animation:pop .25s ease-out; }
+    @keyframes pop { from { transform:scale(.6); opacity:0 } to { transform:scale(1); opacity:1 } }
+    .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); flex:none; }
     .dot.off { background:var(--off); }
-    .seat .name { font-weight:600; }
-    .seat .you { color:var(--muted); font-weight:400; font-size:.82rem; }
+    .seat .name { font-weight:800; }
+    .seat .you { color:var(--muted); font-weight:600; font-size:.82rem; }
+    #roster .seat .you { color:rgba(0,0,0,.55); }
     .crown { margin-left:auto; font-size:.95rem; }
-    .count, .hint { color:var(--muted); font-size:.85rem; }
+    .count { color:var(--muted); font-size:.85rem; font-weight:700; }
+    .hint { color:var(--muted); font-size:.88rem; }
+    .card .hint { color:var(--muted); }
     .hint.center { text-align:center; }
+    p.hint.center { color:rgba(255,255,255,.85); }
+    .card p.hint.center, .card .hint.center { color:var(--muted); }
     .row { display:flex; gap:10px; }
     .row > * { flex:1; }
-    .choice { display:flex; align-items:center; gap:10px; padding:12px; border:1px solid var(--edge);
-              border-radius:12px; background:#0f1017; margin-bottom:8px; cursor:pointer; }
-    .choice input { width:auto; }
-    .choice .sub { color:var(--muted); font-size:.8rem; }
+    /* Choice slabs: colour + shape, so they're told apart without relying on colour alone. */
+    .choice { display:flex; align-items:center; gap:12px; padding:14px; border:none; border-radius:14px;
+              background:var(--blue); color:#fff; font-weight:800; margin-bottom:10px; cursor:pointer;
+              box-shadow:0 5px 0 rgba(0,0,0,.25); }
+    .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); }
+    .choice.c2 { background:var(--amber); color:#2b1c00; } .choice.c3 { background:var(--green); }
+    .choice input { width:auto; accent-color:#fff; }
+    .choice .shape { font-size:1.15rem; }
+    .choice .sub { color:rgba(255,255,255,.85); font-size:.78rem; font-weight:600; }
+    .choice.c2 .sub { color:rgba(0,0,0,.6); }
     .charcard { text-align:center; padding:8px 0; }
-    .charcard img { max-width:100%; max-height:230px; border-radius:12px; margin:6px auto; display:block; }
-    .charcard .noimg { color:var(--muted); font-size:.85rem; padding:24px; border:1px dashed var(--edge); border-radius:12px; }
-    .charname { font-size:1.5rem; font-weight:800; }
-    .charsrc { color:var(--muted); font-size:.9rem; }
-    .checkowner { text-align:center; font-weight:700; font-size:1.05rem; }
-    .badge { display:inline-block; padding:.1rem .5rem; border-radius:999px; background:var(--accent2); font-size:.75rem; }
-    .big-emoji { font-size:3rem; text-align:center; }
+    .charcard img { max-width:100%; max-height:230px; border-radius:14px; margin:6px auto; display:block; }
+    .charcard .noimg { color:var(--muted); font-size:.85rem; padding:24px; border:3px dashed var(--edge); border-radius:12px; }
+    .charname { font-size:1.6rem; font-weight:900; color:var(--ink); }
+    .charsrc { color:var(--muted); font-size:.9rem; font-weight:600; }
+    .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
+    .badge { display:inline-block; padding:.15rem .6rem; border-radius:999px; background:var(--brand);
+             color:#fff; font-size:.75rem; font-weight:800; }
+    .big-emoji { font-size:3.4rem; text-align:center; }
+    /* Podium colouring for the top three on the results screen. */
+    .seat.rank1 { background:linear-gradient(#ffd75e,#ffc107); }
+    .seat.rank2 { background:linear-gradient(#e8e8ef,#cfcfdb); }
+    .seat.rank3 { background:linear-gradient(#f0c08a,#dda15e); }
+    .seat.rank1 .you, .seat.rank2 .you, .seat.rank3 .you { color:rgba(0,0,0,.6); }
     /* Grace countdown + forehead mode */
-    .countnum { font-size:6rem; font-weight:900; text-align:center; line-height:1.1; }
+    .countnum { font-size:7rem; font-weight:900; text-align:center; line-height:1.05; color:var(--ink); }
     #forehead { position:fixed; inset:0; display:none; background:#000; z-index:50; overflow:hidden; }
     #forehead.active { display:block; }
     /* The inner wrapper is rotated to landscape (100vh wide x 100vw tall, swapped) so the card
