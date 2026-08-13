@@ -1,7 +1,13 @@
-# Web app (party mode) — skeleton
+# Web app (party mode)
 
 The phone-in-hand, Heads Up–style frontend, living **side by side** with the Discord bot in
 the same repo without tangling into it. Full design: [docs/mobile-app-plan.md](../../docs/mobile-app-plan.md).
+
+Play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
+everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
+("phone on your forehead!") → each phone shows its wearer's character full-screen, landscape,
+for the room → on your turn, **tilt up = got it, tilt down / time out = pass** → fewest turns
+wins, and the end screen reveals who everyone was.
 
 ## How the repo is split
 
@@ -31,16 +37,23 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 ## Run it
 
 ```bash
-npm run web              # HTTP on :4180 — tap fallback (tilt sensors need HTTPS)
-npm run web:secure       # HTTPS on :4180 (self-signed) — required for tilt-to-win on phones
+npm run web              # HTTP on :4180 — tap fallback only (tilt sensors need HTTPS)
+npm run web:secure       # HTTP on :4180 AND HTTPS on :4443 (self-signed) — HTTPS enables tilt
 npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game)
 ```
 
-**Testing tilt on a phone:** mobile browsers only expose motion sensors over a secure context,
-so plain `http://<LAN-ip>` can't do tilt. Run `npm run web:secure`, open the printed
-`https://<LAN-ip>:4180` on the phone, accept the one-time self-signed-cert warning, tap
-**Enable tilt controls**, and (on iOS) grant motion access. Without any of that the game still
-plays fully via on-screen buttons (the tap fallback).
+**Why HTTPS for tilt:** browsers only expose the motion/orientation sensors (`DeviceMotion` /
+`DeviceOrientation`, and iOS's `requestPermission`) in a *secure context* — HTTPS or localhost.
+A phone hitting `http://<LAN-ip>` is not a secure context, so the sensors are simply unavailable
+there. `web:secure` serves HTTPS on `:4443` alongside the plain HTTP on `:4180`, using a cached
+self-signed cert (covering localhost + LAN IPs, gitignored under `data/dev-tls.*`).
+
+**Testing tilt on a phone:** run `npm run web:secure`, open the printed `https://<LAN-ip>:4443`
+on the phone, and accept the one-time self-signed-cert warning. Tilt is **always on** — the
+first tap (create/join) requests motion access, so on iOS you just grant it when asked; there's
+no separate enable step. The landing screen has a **📱 Test tilt** button to calibrate direction
+(a "flip" toggle) and sensitivity. Without motion (plain HTTP, or permission refused) the game
+still plays fully via on-screen buttons.
 
 Open the page on two phones (or two browser tabs): one taps **Create a room**, the other
 enters the 4-letter code (or opens `/?room=CODE`). The roster updates live, offline players
@@ -68,11 +81,20 @@ Endpoints that prove the shared core is reachable from this frontend:
 - **3. Turn loop — done.** `turnLoop.js` ports the engine.js rules (rotation, fewest-turns
   scoring, pass/give-up, resolve-once, out-of-contention) over the core Game. Server-authoritative
   turn clock; per-player views; reveal/over broadcasts; leaving mid-game forfeits.
-- **4. Forehead mode — done.** A synchronized grace countdown ("phone on your forehead!"), then
-  each phone shows its wearer's character full-screen for the room. Tilt forward = Got it, tilt
-  back = Pass (held ~550ms, debounced); Give up is a button. Falls back to the stage-3 tap model
-  when no motion sensor is available. iOS motion permission handled via an Enable-tilt tap.
-  `npm run web:secure` serves the HTTPS the sensors require. Tilt thresholds still want in-person
-  playtest tuning (see TILT_THRESHOLD / TILT_HOLD_MS in `public/app.js`).
+- **4. Forehead mode + tilt — done.** A synchronized grace countdown ("phone on your
+  forehead!"), then each phone shows its wearer's character full-screen for the room, with a
+  turn-start chime + buzz and a bright border on your turn.
+  - **Tilt** reads `DeviceMotion.accelerationIncludingGravity.z` (the screen-normal axis, which
+    is what tilting up/down changes whether the phone is portrait or landscape): tilt up = Got
+    it, tilt down / clock runs out = Pass, held ~450ms and debounced. No on-screen controls
+    during play. Thresholds (`TILT_TH` / `TILT_HOLD_MS` in `public/app.js`) and direction (the
+    Test-tilt "flip", persisted) still want in-person tuning.
+  - **Always landscape:** the card is CSS-rotated to landscape even under an iOS portrait lock
+    (iOS gives web pages no way to unlock orientation). A ▲ TOP bar during the countdown tells
+    players which edge is up before they raise the phone, then hides.
+  - **Always on:** motion is requested on the first gesture; there's no opt-in button. Falls
+    back to on-screen tap buttons when motion is unavailable.
+  - **End screen** reveals every player's character alongside the final standings.
 - **5. Reconnection hardening** — wall-clock-anchored turn timers, resume mid-turn. _next_
-- **6. Polish** — richer audio/haptic cues, rematch with same settings, scoreboard view, QR codes.
+- **6. Polish** — richer audio/haptic cues, rematch with same settings, scoreboard view, QR
+  codes, preferring characters that have artwork.

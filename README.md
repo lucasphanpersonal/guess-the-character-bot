@@ -9,6 +9,13 @@ The bot is the impartial host. It deals characters, DMs each player what they ne
 runs the turn clock, judges guesses, and keeps score — all the actual questions and answers
 happen live between humans in voice.
 
+> **There's also a phone/party version.** A second frontend turns this into a Heads Up–style
+> game where each player holds a phone to their forehead and tilts to answer — no Discord
+> needed. It shares this project's game core and content. See
+> [src/web/README.md](src/web/README.md) to run it (`npm run web:secure`), and
+> [docs/mobile-app-plan.md](docs/mobile-app-plan.md) for the design. Everything below this
+> point describes the Discord bot.
+
 ---
 
 ## How a game works

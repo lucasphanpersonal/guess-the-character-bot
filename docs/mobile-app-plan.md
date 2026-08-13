@@ -308,30 +308,47 @@ core turn loop in the original multiplayer build, not before.
 
 ---
 
-## Suggested build order
+## Build order and status
 
-Each stage should leave something playable, the same discipline
+Each stage leaves something playable, the same discipline
 [multiplayer-design.md's implementation sequence](multiplayer-design.md#implementation-sequence)
-used — two-player games kept working at every stage there; here, "play a full round with two
-phones on a desk" is the equivalent bar.
+used. **Stages 1–4 are built and committed** (see `src/web/`, and `src/web/README.md` for how
+to run and test). What actually got built matched the plan closely; the notable deviations are
+recorded below, since the deviations are the useful part of a status update.
 
-1. **Server skeleton.** Room codes, WebSocket join/leave, port `GameManager`/`Lobby`/`Game`
-   to be keyed by room code. No character dealing yet — just prove phones can join a shared
-   room and see each other.
-2. **Setup flow.** List/category/difficulty picking, confirm/reroll screen, Good-to-go gating
-   on all players. Reuses `characterLists.js` and the checker-target rule directly.
-3. **Turn loop, no gestures yet.** Port `engine.js`'s rules (rotation, pass, give-up,
-   resolved-turns-once guard, out-of-contention) behind tap-to-confirm buttons as a placeholder
-   for tilt — proves the whole game loop end-to-end before gesture detection is in the mix.
-4. **Forehead mode + tilt gestures.** The reveal mechanic, motion permission flow, tilt-up/
-   tilt-down debouncing. This is the highest-risk, most-playtesting-dependent stage — budget
-   real in-person sessions for tuning, not just desk testing.
-5. **Reconnection.** Session tokens, wall-clock-anchored timers, resume-mid-turn. Do this
-   before wide playtesting, not after — it's the failure mode that will actually happen at a
-   real party.
-6. **Polish pass.** Audio/haptic cues, standings-on-lower, rematch, optional scoreboard view,
-   audience-vote mode if still wanted.
+1. **Server skeleton — done.** Room codes + Socket.io join/leave, keyed by a 4-letter room code.
+   A web-specific `src/web/rooms.js` holds membership (nickname + live connection flag per seat)
+   rather than reusing the Discord `Lobby`, which models neither; seats are keyed by a persistent
+   client `playerId` so a reconnect reclaims the same seat.
+2. **Setup flow — done.** Pool/difficulty picking, deal, and the confirm/reroll screen, in
+   `src/web/gameSetup.js` (pure, content injected) over the real core `Game`. The checker-target
+   rule and reroll-demotion are reused verbatim. `WEB_SCOPE` auto-resolves to the richest seeded
+   content scope so a phone test deals real characters immediately.
+3. **Turn loop — done.** `src/web/turnLoop.js` ports `engine.js`'s rules (rotation, fewest-turns
+   scoring, pass/give-up, resolve-once, out-of-contention) over the core `Game`, with a
+   server-authoritative wall-clock turn timer.
+4. **Forehead mode + tilt — done.** Grace countdown → full-screen wearer's card → tilt to answer.
+   Deviations from the plan sketch:
+   - **Tilt axis.** Uses `DeviceMotion.accelerationIncludingGravity.z` (screen-normal), not the
+     `beta`/orientation angle first imagined — beta barely moves when the phone is held
+     horizontally on the forehead, which read as "tilt not working." Up = got it, down / timeout
+     = pass, held ~450ms, debounced, with a persisted direction "flip" for sign differences.
+   - **Always landscape.** iOS gives web pages no way to unlock or force orientation, so the card
+     is CSS-rotated to landscape even under a portrait lock, with a ▲ TOP guide during the
+     countdown. This replaced an accelerometer-driven auto-rotate that was fussier than it was
+     worth.
+   - **HTTPS.** Motion sensors need a secure context, so `npm run web:secure` serves HTTPS on
+     `:4443` *alongside* HTTP on `:4180` (one Socket.io across both), via a self-signed cert.
+   - **Always-on tilt**, requested on the first user gesture — no opt-in button. Tap fallback
+     covers refusal / no sensor.
+   - **Rerolls are unlimited** in both frontends (the budget was pure friction); the reroll
+     button shows no count.
+5. **Reconnection hardening — next.** Session tokens, and making the last-chance/grace timers
+   wall-clock-anchored the way the turn timer already is; resume-mid-turn. The turn view is
+   already re-sent on reconnect, and a dropped socket keeps its seat — this stage hardens the
+   timer edges.
+6. **Polish — later.** Richer audio/haptic cues, rematch with the same settings, an optional
+   read-only scoreboard device, QR-code joins, and preferring characters that have artwork.
 
-`RoundMode` (see above) should exist from stage 3 onward even though only
-`TurnRotationMode` ships — retrofitting it after the fact is exactly the rewrite this is
-meant to avoid.
+`RoundMode` (`src/core/game/roundMode.js`) exists as planned even though only `TurnRotationMode`
+ships, so a simultaneous mode stays additive.
