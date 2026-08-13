@@ -17,6 +17,7 @@ const { Server } = require('socket.io');
 // --- Shared core: the exact same modules the Discord bot uses -----------------------------
 const GameManager = require('../core/game/GameManager');
 const characterLists = require('../core/db/characterLists');
+const { FIELDS: LOBBY_FIELDS } = require('../core/game/lobbySettings');
 const { TurnRotationMode } = require('../core/game/roundMode');
 
 // --- Web-only: transport + room membership + setup ----------------------------------------
@@ -67,6 +68,16 @@ function resolvePool({ poolType, category }) {
   return { listIds: characterLists.getEnabledLists(WEB_SCOPE).map((l) => l.id), label: 'Everything' };
 }
 
+// Reuses the Discord bot's own bounds (15-600s) rather than inventing separate ones. Undefined
+// (or garbage) falls through to gameSetup.createSetup's own default instead of being coerced to
+// a number here -- there's exactly one place turnSeconds defaults, not two that could disagree.
+function clampTurnSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return undefined;
+  const { min, max } = LOBBY_FIELDS.turnSeconds;
+  return Math.min(max, Math.max(min, Math.round(n)));
+}
+
 const setup = {
   options() {
     const categories = characterLists
@@ -81,7 +92,7 @@ const setup = {
     return { categories, difficulties, defaultDifficulty: characterLists.DEFAULT_DIFFICULTY };
   },
 
-  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY } = {}) {
+  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds } = {}) {
     const { listIds, label } = resolvePool({ poolType, category });
     if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
     const n = room.players.size;
@@ -92,17 +103,34 @@ const setup = {
     const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: true });
     if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
 
+    const clampedTurnSeconds = clampTurnSeconds(turnSeconds);
     room.game = gameSetup.createSetup({
       order: [...room.order],
       guildId: WEB_SCOPE,
       listIds,
       difficulty,
       characters,
+      ...(clampedTurnSeconds !== undefined ? { turnSeconds: clampedTurnSeconds } : {}),
     });
     room.poolLabel = label;
     // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring.
-    room.lastSetup = { poolType, category, difficulty };
+    room.lastSetup = { poolType, category, difficulty, turnSeconds: room.game.turnSeconds };
     return { ok: true, label };
+  },
+
+  // Curation the web app doesn't otherwise have: the host toggles which lists in a category are
+  // in the shared pool, same underlying `enabled` flag /list toggle flips on Discord. Only
+  // meaningful for the 'category' pool type, which is the one browsable, single-category choice.
+  listsInCategory(category) {
+    return characterLists.listsForFilter(WEB_SCOPE, category).map((l) => ({
+      id: l.id,
+      name: l.name,
+      enabled: l.enabled === 1,
+      count: l.character_count,
+    }));
+  },
+  toggleList(listId) {
+    return { ok: true, enabled: characterLists.toggleListEnabled(listId) };
   },
 
   view: (game, viewerId, names) => gameSetup.buildView(game, viewerId, names),

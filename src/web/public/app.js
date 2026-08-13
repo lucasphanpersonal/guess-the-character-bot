@@ -36,7 +36,9 @@ function renderLobby(state) {
   $('shareUrl').textContent = joinUrl;
   const qr = $('qrImg');
   qr.src = `/api/qr?text=${encodeURIComponent(joinUrl)}`;
-  qr.style.display = '';
+  // 'block' (not '') -- an <img> defaults to inline, and margin:auto centering (see CSS) only
+  // takes effect on a block-level box. Leaving it inline was why the QR rendered off-center.
+  qr.style.display = 'block';
   $('playerCount').textContent = `Players (${state.players.length}/8)`;
   const roster = $('roster');
   roster.innerHTML = '';
@@ -93,10 +95,18 @@ function renderConfig(opts) {
     o.textContent = `${c.category} (${c.enabled} lists)`;
     sel.appendChild(o);
   }
-  pool.addEventListener('change', () => {
-    const v = pool.querySelector('input[name=pool]:checked')?.value;
-    sel.style.display = v === 'category' ? '' : 'none';
-  });
+  // Curation only makes sense for "pick a category" -- "everything" and "random" span multiple
+  // categories, so there's no single browsable list to show here.
+  const curationBox = $('listCuration');
+  const syncCategoryUi = () => {
+    const isCategory = pool.querySelector('input[name=pool]:checked')?.value === 'category';
+    sel.style.display = isCategory ? '' : 'none';
+    curationBox.style.display = isCategory && sel.value ? '' : 'none';
+    if (isCategory && sel.value) loadListCuration(sel.value);
+  };
+  pool.addEventListener('change', syncCategoryUi);
+  sel.addEventListener('change', syncCategoryUi);
+  curationBox.style.display = 'none'; // default pool choice is 'random', not 'category'
 
   const diff = $('diffChoices');
   diff.innerHTML = '';
@@ -108,12 +118,44 @@ function renderConfig(opts) {
     diff.appendChild(l);
   }
 }
+
+// Lets the host switch lists on/off within the chosen category, without leaving Discord to do
+// it. Toggles the shared per-scope `enabled` flag (same thing /list toggle does), so it affects
+// future games too, not just this one.
+function loadListCuration(category) {
+  const ul = $('listCurationList');
+  ul.innerHTML = '<li class="seat"><span class="you">loading…</span></li>';
+  socket.emit('setup:categoryLists', { category }, (res) => {
+    if (!res?.ok) {
+      ul.innerHTML = `<li class="seat"><span class="you">${escapeHtml(res?.error || 'Could not load lists.')}</span></li>`;
+      return;
+    }
+    ul.innerHTML = '';
+    for (const l of res.lists) {
+      const li = document.createElement('li');
+      li.className = 'seat';
+      li.innerHTML = `<input type="checkbox" ${l.enabled ? 'checked' : ''} style="width:auto">` +
+        `<span class="name" style="flex:1">${escapeHtml(l.name)}</span><span class="you">${l.count}</span>`;
+      const cb = li.querySelector('input');
+      cb.addEventListener('change', () => {
+        cb.disabled = true;
+        socket.emit('setup:toggleList', { listId: l.id }, (r) => {
+          cb.disabled = false;
+          if (r?.ok) cb.checked = r.enabled;
+          else cb.checked = !cb.checked; // roll back a failed toggle
+        });
+      });
+      ul.appendChild(li);
+    }
+  });
+}
 function deal() {
   const poolType = $('poolChoices').querySelector('input[name=pool]:checked')?.value || 'random';
   const category = poolType === 'category' ? $('categorySelect').value : null;
   const difficulty = $('diffChoices').querySelector('input[name=diff]:checked')?.value;
+  const turnSeconds = Number($('turnSecondsSelect').value) || 60;
   $('configErr').textContent = 'Dealing…';
-  socket.emit('setup:start', { poolType, category, difficulty }, (res) => {
+  socket.emit('setup:start', { poolType, category, difficulty, turnSeconds }, (res) => {
     $('configErr').textContent = res?.ok ? '' : (res?.error || 'Could not start.');
     // On success the server broadcasts status + setup:state, which switches the screen.
   });
@@ -584,6 +626,9 @@ $('createBtn').addEventListener('click', createRoom);
 $('joinBtn').addEventListener('click', joinRoom);
 $('leaveBtn').addEventListener('click', leaveRoom);
 $('playLeaveBtn').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
+// The forehead overlay covers everything else at full-screen, including playLeaveBtn above --
+// this is the only way out while a phone is actually in forehead mode.
+$('foreheadLeave').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
 $('overLeaveBtn').addEventListener('click', leaveRoom);
 $('rematchBtn').addEventListener('click', () => { primeMotion(); $('rematchBtn').disabled = true; socket.emit('game:rematch', {}, (res) => { $('rematchBtn').disabled = false; }); });
 $('changeBtn').addEventListener('click', () => socket.emit('game:again', {}, () => {}));

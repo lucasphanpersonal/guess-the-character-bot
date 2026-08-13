@@ -94,6 +94,16 @@ const connect = (playerId) => {
   check(cView.reference.length === 0, 'with 2 players the reference list is empty');
   check(cView.checking.character.name !== dView.checking.character.name, 'the two players check different characters');
 
+  // ---- list curation (host-only config-screen addition) --------------------------------
+  res = await C.emitWithAck('setup:categoryLists', { category: 'TestToons' });
+  check(res.ok && res.lists.length === 1 && res.lists[0].name === 'Test Toons' && res.lists[0].enabled === true,
+    'host can list a category\'s lists with enabled state');
+  const nonHost = await D.emitWithAck('setup:categoryLists', { category: 'TestToons' });
+  check(nonHost.ok === false, 'a non-host cannot curate lists');
+  const toggled = await C.emitWithAck('setup:toggleList', { listId: res.lists[0].id });
+  check(toggled.ok && toggled.enabled === false, 'host toggles a list off');
+  await C.emitWithAck('setup:toggleList', { listId: res.lists[0].id }); // restore for the deal above
+
   const cReroll = nextEvent(C, 'setup:state');
   res = await C.emitWithAck('setup:reroll', {});
   check(res.ok, 'C rerolls the character they check');
