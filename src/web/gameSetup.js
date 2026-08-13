@@ -62,8 +62,14 @@ function createSetup({ order, guildId, listIds, difficulty, characters, turnSeco
 
 // The safe, sendable shape of a character -- never includes anything that would identify the
 // viewer's OWN character to them.
+//
+// Artwork is handed out as a local /img/<id> path rather than the upstream CDN URL, so phones
+// fetch from this server and the server fetches upstream once (see imageCache.js -- Commons
+// throttles by IP, and a party shares one). Characters with no database row behind them (a
+// hand-picked freeform name) have no id to look up, so they keep their original URL.
 function publicCharacter(head) {
-  return { name: head.name, imageUrl: head.imageUrl ?? null, source: head.source ?? null };
+  const imageUrl = head.imageUrl ? (head.id != null ? `/img/${head.id}` : head.imageUrl) : null;
+  return { name: head.name, imageUrl, source: head.source ?? null };
 }
 
 /**

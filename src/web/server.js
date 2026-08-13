@@ -23,6 +23,7 @@ const { TurnRotationMode } = require('../core/game/roundMode');
 const { RoomRegistry } = require('./rooms');
 const { attachSockets } = require('./socket');
 const gameSetup = require('./gameSetup');
+const imageCache = require('./imageCache');
 
 const PORT = process.env.WEB_PORT || 4180;
 // The core's content queries are scoped by an id (a Discord guild id, historically). A web
@@ -43,6 +44,10 @@ const WEB_SCOPE = resolveScope();
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const registry = new RoomRegistry();
+
+// At module load, not inside the run-as-script guard: the socket check requires this file
+// rather than spawning it, and an uninitialised cache silently redirects everything upstream.
+const cachedImages = imageCache.init();
 
 // --- Setup service: resolves a pool, deals, and drives confirm/reroll via the core ---------
 // Injected into the socket layer so socket.js stays transport-only (no DB access there).
@@ -209,12 +214,44 @@ function requestHandler(req, res) {
       });
   }
 
+  // Character artwork, served from the local cache. The id names a database row, so the URL
+  // actually fetched is always one we stored -- a client can never point this at an arbitrary
+  // host. A cache miss that cannot be filled redirects upstream, which is exactly the old
+  // behaviour, so the cache can degrade without breaking a game in progress.
+  if (url.pathname.startsWith('/img/')) {
+    const id = Number(url.pathname.slice(5));
+    if (!Number.isInteger(id) || id <= 0) {
+      res.writeHead(400, { 'Content-Type': 'text/plain' });
+      return res.end('Bad image id');
+    }
+    const row = characterLists.getCharacterById(WEB_SCOPE, id);
+    if (!row?.image_url) {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      return res.end('No image');
+    }
+    return imageCache
+      .get(row.image_url)
+      .then((hit) => {
+        if (!hit) {
+          res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
+          return res.end();
+        }
+        res.writeHead(200, { 'Content-Type': hit.contentType, 'Cache-Control': 'public, max-age=604800, immutable' });
+        fs.createReadStream(hit.path).pipe(res);
+      })
+      .catch(() => {
+        res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
+        res.end();
+      });
+  }
+
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,
       rooms: registry.rooms.size,
       lobbies: GameManager.allLobbies().length,
       roundModes: ['turn-rotation'],
+      imageCache: imageCache.stats(),
       turnRotationWired: typeof TurnRotationMode === 'function',
     });
   }
@@ -281,6 +318,7 @@ if (require.main === module) {
   // this machine. Node defaults to this, but stating it makes the intent obvious.
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[web] Guess the Character (sharing core with the Discord bot). Scope: ${WEB_SCOPE}`);
+    console.log(`[web] Image cache: ${cachedImages} file(s) on disk; artwork is fetched once and served locally.`);
     console.log(`[web]   HTTP  (game, tap fallback):`);
     console.log(`[web]     on this machine:  http://localhost:${PORT}`);
     for (const ip of lanIPv4s()) console.log(`[web]     on your phone:    http://${ip}:${PORT}   (same Wi-Fi)`);
