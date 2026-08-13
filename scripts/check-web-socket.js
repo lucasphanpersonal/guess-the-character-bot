@@ -195,6 +195,16 @@ const connect = (playerId) => {
   check((await httpGet('/img/999999999')).status === 404, 'GET /img/<unknown> is a clean 404');
   check((await httpGet('/../.env')).status === 404, 'path traversal is refused');
 
+  // The join QR is built from this origin. Behind a TLS-terminating proxy the hop to us is
+  // plain HTTP, and a QR that encodes http:// silently costs whoever scans it their tilt
+  // controls -- browsers only expose motion sensors in a secure context.
+  const proxied = await fetch(`${URL}/api/health`, {
+    headers: { 'x-forwarded-proto': 'https', 'x-forwarded-host': 'example.test' },
+  }).then((r) => r.json());
+  check(proxied.joinUrlBase === 'https://example.test', 'join URL honours a proxy that terminated TLS');
+  const direct = await fetch(`${URL}/api/health`).then((r) => r.json());
+  check(direct.joinUrlBase.startsWith('http://'), 'join URL is plain http when not proxied');
+
   C2.close(); D.close();
   await wait(50);
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');

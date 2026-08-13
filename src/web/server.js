@@ -158,6 +158,30 @@ const CONTENT_TYPES = {
   '.ico': 'image/x-icon',
 };
 
+/**
+ * The origin a client actually reached this server on.
+ *
+ * req.socket.encrypted only knows about OUR listener, and behind a reverse proxy (the Cloudflare
+ * tunnel, say) TLS terminates at the proxy and the hop to us is plain HTTP -- so it reports
+ * "http" for a visitor who is browsing https. That mattered: the join QR was built from it and
+ * encoded an http:// URL, and browsers refuse motion sensors outside a secure context, so anyone
+ * who joined by scanning silently lost tilt controls while anyone who followed a pasted https
+ * link kept them.
+ *
+ * X-Forwarded-Proto/Host are what a proxy sets to describe the original request, so they win
+ * when present. Trusting them does not reopen the hole this endpoint was locked down for: the
+ * headers describe the request the CLIENT made, and a client cannot set headers on somebody
+ * else's request -- so a QR served to a victim still points at whatever host that victim is
+ * already talking to.
+ */
+function originFor(req) {
+  const first = (v) => String(v || '').split(',')[0].trim();
+  const fwdProto = first(req.headers['x-forwarded-proto']).toLowerCase();
+  const scheme = fwdProto === 'https' || fwdProto === 'http' ? fwdProto : req.socket.encrypted ? 'https' : 'http';
+  const host = first(req.headers['x-forwarded-host']) || first(req.headers.host);
+  return `${scheme}://${String(host).replace(/[^\w.:\-\[\]]/g, '')}`;
+}
+
 function sendJson(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(body, null, 2));
@@ -205,9 +229,7 @@ function requestHandler(req, res) {
       res.writeHead(400, { 'Content-Type': 'text/plain' });
       return res.end('Bad room code');
     }
-    const scheme = req.socket.encrypted ? 'https' : 'http';
-    const host = String(req.headers.host || '').replace(/[^\w.:\-\[\]]/g, '');
-    const target = `${scheme}://${host}/?room=${room}`;
+    const target = `${originFor(req)}/?room=${room}`;
     return require('qrcode')
       .toString(target, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
       .then((svg) => {
@@ -258,6 +280,9 @@ function requestHandler(req, res) {
       lobbies: GameManager.allLobbies().length,
       roundModes: ['turn-rotation'],
       imageCache: { files: imageCache.stats().files },
+      // What the join QR will encode. Handy for confirming through a proxy that it says https:
+      // a QR that says http silently disables tilt controls for whoever scans it.
+      joinUrlBase: originFor(req),
       turnRotationWired: typeof TurnRotationMode === 'function',
     });
   }
