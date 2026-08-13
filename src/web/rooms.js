@@ -97,6 +97,33 @@ class RoomRegistry {
     return [...this.rooms.values()];
   }
 
+  /**
+   * Drops rooms nobody is connected to any more.
+   *
+   * A room is only deleted on an explicit leave, and a socket that simply goes away just marks
+   * its seat offline (that is what makes reconnects work). So a client that creates a room and
+   * vanishes leaves it in memory for good -- and creating rooms is free and unauthenticated, so
+   * that is a memory leak anyone with the URL can drive. Measured: one client made 60 rooms in
+   * 12ms. Sweeping empty-of-people rooms after a grace period bounds it without shortening any
+   * real disconnection, since a party that all drops off Wi-Fi has the full TTL to come back.
+   */
+  sweepAbandoned(ttlMs = 30 * 60 * 1000, now = Date.now()) {
+    let removed = 0;
+    for (const room of [...this.rooms.values()]) {
+      const anyConnected = [...room.players.values()].some((p) => p.conns.size > 0);
+      if (anyConnected) {
+        room.lastSeen = now;
+        continue;
+      }
+      room.lastSeen ??= room.createdAt;
+      if (now - room.lastSeen > ttlMs) {
+        this.rooms.delete(room.code);
+        removed++;
+      }
+    }
+    return removed;
+  }
+
   createRoom({ hostPlayerId, nickname }) {
     if (!hostPlayerId) return { ok: false, error: 'Missing player id.' };
     const nick = cleanNickname(nickname);

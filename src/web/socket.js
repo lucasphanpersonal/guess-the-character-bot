@@ -180,6 +180,21 @@ function attachSockets(io, { registry, setup }) {
   }, WATCHDOG_MS);
   watchdog.unref?.();
 
+  // Abandoned-room sweep. Same role as GameManager.evictStaleLobbies on the Discord side.
+  const ROOM_TTL_MS = Number(process.env.WEB_ROOM_TTL_MS || 30 * 60 * 1000);
+  const sweeper = setInterval(() => {
+    const n = registry.sweepAbandoned(ROOM_TTL_MS);
+    if (n) console.log(`[web] swept ${n} abandoned room(s)`);
+  }, 5 * 60 * 1000);
+  sweeper.unref?.();
+
+  // Nothing here is authenticated -- anyone with the link can open a socket -- so the two
+  // unauthenticated actions that cost something are bounded per connection. Room codes are only
+  // 32^4, which is guessable by machine but not by a person, so the join limit is what keeps a
+  // stranger from walking into a game rather than the code length.
+  const MAX_ROOMS_PER_SOCKET = 5;
+  const MAX_FAILED_JOINS = 20;
+
   io.on('connection', (socket) => {
     const playerId = socket.handshake.auth?.playerId;
     if (!playerId) {
@@ -194,6 +209,10 @@ function attachSockets(io, { registry, setup }) {
     const isHost = () => room()?.hostPlayerId === playerId;
 
     socket.on('room:create', ({ nickname } = {}, ack) => {
+      socket.data.created = (socket.data.created || 0) + 1;
+      if (socket.data.created > MAX_ROOMS_PER_SOCKET) {
+        return ack?.({ ok: false, error: 'Too many rooms from this device. Reload the page.' });
+      }
       const res = registry.createRoom({ hostPlayerId: playerId, nickname });
       if (!res.ok) return ack?.({ ok: false, error: res.error });
       socket.data.code = res.room.code;
@@ -204,8 +223,14 @@ function attachSockets(io, { registry, setup }) {
     });
 
     socket.on('room:join', async ({ code, nickname } = {}, ack) => {
+      if ((socket.data.failedJoins || 0) >= MAX_FAILED_JOINS) {
+        return ack?.({ ok: false, error: 'Too many failed attempts. Reload the page.' });
+      }
       const res = registry.joinRoom(code, { playerId, nickname });
-      if (!res.ok) return ack?.({ ok: false, error: res.error });
+      if (!res.ok) {
+        socket.data.failedJoins = (socket.data.failedJoins || 0) + 1;
+        return ack?.({ ok: false, error: res.error });
+      }
       socket.data.code = res.room.code;
       socket.join(res.room.code);
       registry.attachConnection(res.room.code, playerId, socket.id);

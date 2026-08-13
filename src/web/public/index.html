@@ -111,6 +111,23 @@
     .seat.rank2 { background:linear-gradient(#e8e8ef,#cfcfdb); }
     .seat.rank3 { background:linear-gradient(#f0c08a,#dda15e); }
     .seat.rank1 .you, .seat.rank2 .you, .seat.rank3 .you { color:rgba(0,0,0,.6); }
+    /* How to play: shown in the lobby, where everyone is already waiting and looking at
+       their screen. It is the only moment in the game when that is true -- once the reveal
+       happens every phone is on a forehead. */
+    .howto { list-style:none; margin:0; padding:0; counter-reset:step; }
+    .howto li { position:relative; padding:0 0 12px 38px; counter-increment:step; }
+    .howto li:last-child { padding-bottom:0; }
+    .howto li::before { content:counter(step); position:absolute; left:0; top:0;
+                        width:26px; height:26px; border-radius:50%; background:var(--brand);
+                        color:#fff; font-weight:900; font-size:.85rem; display:flex;
+                        align-items:center; justify-content:center; }
+    .howto b { display:block; }
+    .howto span { color:var(--muted); font-size:.86rem; }
+    .howto .tilt { color:var(--green); font-weight:800; }
+    .howto .tiltdown { color:var(--amber-d); font-weight:800; }
+    #howtoToggle { background:none; box-shadow:none; color:var(--muted); font-size:.82rem;
+                   font-weight:700; padding:6px; width:auto; margin:0 auto; display:block; }
+    #howtoToggle:active { transform:none; }
     /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
        and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
     .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
@@ -233,6 +250,18 @@
         <div style="height:10px"></div>
         <ul class="roster" id="roster"></ul>
       </div>
+      <div class="card" id="howtoCard">
+        <div class="hint center" style="font-weight:800; color:var(--ink)">How to play</div>
+        <div style="height:12px"></div>
+        <ol class="howto">
+          <li><b>Everyone gets a secret character</b><span>You'll see everyone else's — never your own.</span></li>
+          <li><b>Put your phone on your forehead</b><span>Screen facing out, held sideways. A countdown tells you when.</span></li>
+          <li><b>On your turn, ask yes/no questions</b><span>"Am I a real person?" The room answers out loud.</span></li>
+          <li><b>Guessed it? <span class="tilt">Tilt up</span></b><span><span class="tiltdown">Tilt down</span> to pass. Wrong guesses cost nothing.</span></li>
+          <li><b>Fewest turns wins</b><span>Getting yours ends your turn, not the game — everyone plays on.</span></li>
+        </ol>
+      </div>
+      <button id="howtoToggle">Hide how to play</button>
       <button id="setupBtn">Set up game →</button>
       <p class="hint center" id="lobbyHint"></p>
       <button id="leaveBtn" class="ghost">Leave room</button>

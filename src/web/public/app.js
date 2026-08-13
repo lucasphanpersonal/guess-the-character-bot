@@ -45,7 +45,7 @@ function renderLobby(state) {
   const joinUrl = `${location.origin}/?room=${state.code}`;
   $('shareUrl').textContent = joinUrl;
   const qr = $('qrImg');
-  qr.src = `/api/qr?text=${encodeURIComponent(joinUrl)}`;
+  qr.src = `/api/qr?room=${encodeURIComponent(state.code)}`;
   // 'block' (not '') -- an <img> defaults to inline, and margin:auto centering (see CSS) only
   // takes effect on a block-level box. Leaving it inline was why the QR rendered off-center.
   qr.style.display = 'block';
@@ -749,6 +749,19 @@ $('foreheadLeave').addEventListener('click', () => { if (confirm('Leave the game
 $('overLeaveBtn').addEventListener('click', leaveRoom);
 $('rematchBtn').addEventListener('click', () => { primeMotion(); $('rematchBtn').disabled = true; socket.emit('game:rematch', {}, (res) => { $('rematchBtn').disabled = false; }); });
 $('changeBtn').addEventListener('click', () => socket.emit('game:again', {}, () => {}));
+// How-to-play is open by default (most people at a party have never played) but the choice is
+// remembered, so a group that already knows isn't shown it every round.
+const howtoHidden = () => store.get('gtc_howto') === 'hidden';
+function syncHowto() {
+  const hidden = howtoHidden();
+  $('howtoCard').style.display = hidden ? 'none' : '';
+  $('howtoToggle').textContent = hidden ? 'How to play' : 'Hide how to play';
+}
+$('howtoToggle').addEventListener('click', () => {
+  store.set('gtc_howto', howtoHidden() ? 'shown' : 'hidden');
+  syncHowto();
+});
+syncHowto();
 $('setupBtn').addEventListener('click', openConfig);
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);

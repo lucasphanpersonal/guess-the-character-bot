@@ -194,16 +194,22 @@ function requestHandler(req, res) {
     }
   }
 
-  // QR of a join URL, so a phone can scan instead of typing the room code. Returns SVG so it
-  // scales crisply; the lobby points an <img> straight at it.
+  // QR of a join URL. Takes a ROOM CODE, not arbitrary text: the earlier version encoded
+  // whatever it was given, which turned this host into a free generator of QR codes pointing
+  // anywhere -- a phishing code served from a URL the reader has been told to trust. The join
+  // URL is now built here from the request's own host, so the code can only ever point back at
+  // this server.
   if (url.pathname === '/api/qr') {
-    const text = url.searchParams.get('text') || '';
-    if (!text || text.length > 512) {
+    const room = String(url.searchParams.get('room') || '').toUpperCase();
+    if (!/^[A-Z0-9]{2,8}$/.test(room)) {
       res.writeHead(400, { 'Content-Type': 'text/plain' });
-      return res.end('Bad qr text');
+      return res.end('Bad room code');
     }
+    const scheme = req.socket.encrypted ? 'https' : 'http';
+    const host = String(req.headers.host || '').replace(/[^\w.:\-\[\]]/g, '');
+    const target = `${scheme}://${host}/?room=${room}`;
     return require('qrcode')
-      .toString(text, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
+      .toString(target, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
       .then((svg) => {
         res.writeHead(200, { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'no-store' });
         res.end(svg);
@@ -214,44 +220,13 @@ function requestHandler(req, res) {
       });
   }
 
-  // Character artwork, served from the local cache. The id names a database row, so the URL
-  // actually fetched is always one we stored -- a client can never point this at an arbitrary
-  // host. A cache miss that cannot be filled redirects upstream, which is exactly the old
-  // behaviour, so the cache can degrade without breaking a game in progress.
-  if (url.pathname.startsWith('/img/')) {
-    const id = Number(url.pathname.slice(5));
-    if (!Number.isInteger(id) || id <= 0) {
-      res.writeHead(400, { 'Content-Type': 'text/plain' });
-      return res.end('Bad image id');
-    }
-    const row = characterLists.getCharacterById(WEB_SCOPE, id);
-    if (!row?.image_url) {
-      res.writeHead(404, { 'Content-Type': 'text/plain' });
-      return res.end('No image');
-    }
-    return imageCache
-      .get(row.image_url)
-      .then((hit) => {
-        if (!hit) {
-          res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
-          return res.end();
-        }
-        res.writeHead(200, { 'Content-Type': hit.contentType, 'Cache-Control': 'public, max-age=604800, immutable' });
-        fs.createReadStream(hit.path).pipe(res);
-      })
-      .catch(() => {
-        res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
-        res.end();
-      });
-  }
-
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,
       rooms: registry.rooms.size,
       lobbies: GameManager.allLobbies().length,
       roundModes: ['turn-rotation'],
-      imageCache: imageCache.stats(),
+      imageCache: { files: imageCache.stats().files },
       turnRotationWired: typeof TurnRotationMode === 'function',
     });
   }
