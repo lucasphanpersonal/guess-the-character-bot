@@ -27,6 +27,23 @@ let abortNote = '';
 
 const socket = io({ auth: { playerId } });
 
+// Sets text one character at a time, each at its own angle and colour, so headings read as
+// hand-placed rather than typed. Skips spaces so word gaps stay natural, and writes textContent
+// per span so the source string is never treated as markup.
+const WOBBLE_ANGLES = [-6, 4, -3, 7, -5, 3, -7, 5];
+function wobble(el, text, { colour = true } = {}) {
+  if (!el) return;
+  el.innerHTML = '';
+  [...String(text)].forEach((ch, i) => {
+    if (ch === ' ') return el.appendChild(document.createTextNode(' '));
+    const span = document.createElement('span');
+    span.className = 'wob' + (colour ? ` w${i % 4}` : '');
+    span.style.setProperty('--rot', `${WOBBLE_ANGLES[i % WOBBLE_ANGLES.length]}deg`);
+    span.textContent = ch;
+    el.appendChild(span);
+  });
+}
+
 function show(screen) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === screen);
 }
@@ -249,13 +266,16 @@ function renderSetup(view) {
 
   const ref = $('refList');
   ref.innerHTML = '';
-  for (const r of view.reference) {
+  view.reference.forEach((r, i) => {
     const li = document.createElement('li');
-    li.className = 'seat';
-    li.innerHTML = `<span class="name">${escapeHtml(r.character.name)}</span>` +
-      (r.character.source ? `<span class="you"> — ${escapeHtml(r.character.source)}</span>` : '');
+    li.className = `seat tint${i % 4}`;
+    li.innerHTML =
+      `<span class="owner">${escapeHtml(r.ownerName)}</span>` +
+      `<span style="flex:1"><span class="name">${escapeHtml(r.character.name)}</span>` +
+      (r.character.source ? `<br><span class="you">${escapeHtml(r.character.source)}</span>` : '') +
+      `</span>`;
     ref.appendChild(li);
-  }
+  });
 
   // Only the host can call off a deal; anyone can leave.
   $('setupCancelBtn').style.display = amHost() ? '' : 'none';
@@ -380,7 +400,7 @@ function renderOver(result) {
   clearInterval(turnTicker);
   hideForehead();
   const names = result.winners.map((w) => w.name);
-  $('overEmoji').textContent = result.winners.length > 1 ? 'TIE' : (result.winners.length ? 'WINNER' : 'GAME OVER');
+  wobble($('overEmoji'), result.winners.length > 1 ? 'TIE!' : result.winners.length ? 'WINNER!' : 'GAME OVER');
   $('overResult').innerHTML = result.winners.length > 1
     ? `It's a tie — ${names.map(escapeHtml).join(' & ')} both got it in ${result.bestTurnCount} turns!`
     : result.winners.length
@@ -706,7 +726,12 @@ function startCountdown(seconds) {
     hideForehead();
     show('countdown');
   }
-  const paint = () => { (inForehead ? $('foreheadCount') : $('countNum')).textContent = n <= 0 ? '0' : String(n); };
+  const paint = () => {
+    const text = n <= 0 ? '0' : String(n);
+    // The forehead card stays plain -- it is read across a room, not admired up close.
+    if (inForehead) $('foreheadCount').textContent = text;
+    else wobble($('countNum'), text);
+  };
   paint();
   navigator.vibrate?.(80);
   countdown = setInterval(() => {
@@ -882,6 +907,8 @@ for (const ev of ['focus', 'click']) {
     setTimeout(() => e.target.setSelectionRange(end, end), 0);
   });
 }
+wobble(document.querySelector('h1'), 'Guess the Character');
+for (const el of document.querySelectorAll('[data-wobble]')) wobble(el, el.textContent, { colour: false });
 if (nickname) $('nickInput').value = nickname;
 
 const deepRoom = new URLSearchParams(location.search).get('room');

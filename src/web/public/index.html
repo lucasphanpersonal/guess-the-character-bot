@@ -137,6 +137,38 @@
     #howtoToggle { background:none; box-shadow:none; color:var(--muted); font-size:.82rem;
                    font-weight:700; padding:6px; width:auto; margin:0 auto; display:block; }
     #howtoToggle:active { transform:none; }
+    /* --- whimsy -------------------------------------------------------------------------
+       Hand-set lettering: each character gets its own angle (and often its own colour) so
+       headings read as arranged by hand rather than typed. Kept to the big type only -- body
+       copy has to stay readable, and the forehead card is read across a room so it stays plain. */
+    .wob { display:inline-block; transform:rotate(var(--rot)); }
+    .wob.w0 { color:var(--red); } .wob.w1 { color:var(--blue); }
+    .wob.w2 { color:var(--amber); } .wob.w3 { color:var(--green); }
+    h1 .wob { text-shadow:0 3px 0 rgba(0,0,0,.3); }
+    .card .wob.w2 { color:var(--amber-d); } /* amber needs weight on white */
+    /* Cards sit at faint alternating angles, like things laid on a table rather than a grid.
+       Under half a degree: enough to feel placed, not enough to look broken or overflow. */
+    .screen .card:nth-of-type(odd)  { transform:rotate(-0.35deg); }
+    .screen .card:nth-of-type(even) { transform:rotate(0.35deg); }
+    .choice:nth-of-type(odd)  { transform:rotate(-0.5deg); }
+    .choice:nth-of-type(even) { transform:rotate(0.5deg); }
+    /* Roster pills cycle the palette instead of all being amber. */
+    #roster .seat:nth-child(4n+1) { background:var(--amber); color:#2b1c00; }
+    #roster .seat:nth-child(4n+2) { background:var(--blue);  color:#fff; }
+    #roster .seat:nth-child(4n+3) { background:var(--green); color:#fff; }
+    #roster .seat:nth-child(4n+4) { background:var(--red);   color:#fff; }
+    #roster .seat:nth-child(4n+2) .you,
+    #roster .seat:nth-child(4n+3) .you,
+    #roster .seat:nth-child(4n+4) .you { color:rgba(255,255,255,.75); }
+    /* Reference characters: whose is whose, tinted so the rows are told apart at a glance. */
+    .seat .owner { font-weight:900; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase;
+                   background:var(--brand); color:#fff; padding:3px 9px; border-radius:999px; flex:none; }
+    .seat.tint0 { background:#fdeef0; } .seat.tint0 .owner { background:var(--red); }
+    .seat.tint1 { background:#eaf1fc; } .seat.tint1 .owner { background:var(--blue); }
+    .seat.tint2 { background:#fdf3e0; } .seat.tint2 .owner { background:var(--amber-d); }
+    .seat.tint3 { background:#e9f5e6; } .seat.tint3 .owner { background:var(--green); }
+    body { overflow-x:hidden; } /* insurance: rotated cards must never make the page scroll sideways */
+
     /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
        and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
     .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
@@ -260,7 +292,7 @@
         <ul class="roster" id="roster"></ul>
       </div>
       <div class="card" id="howtoCard">
-        <div class="hint center" style="font-weight:800; color:var(--ink)">How to play</div>
+        <div class="hint center" data-wobble style="font-weight:900; font-size:1.15rem; color:var(--ink); font-family:var(--font-display)">How to play</div>
         <div style="height:12px"></div>
         <ol class="howto">
           <li><b>Everyone gets a secret character</b><span>You'll see everyone else's — never your own.</span></li>

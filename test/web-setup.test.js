@@ -51,6 +51,18 @@ function aViewNeverContainsTheViewersOwnCharacter() {
   assert.deepEqual(view.reference.map((r) => r.character.name), ['Cloud']);
 }
 
+// Every reference entry has to say WHOSE character it is. The names were always in the payload
+// and simply were not rendered, so the setup screen listed anonymous characters and nobody could
+// tell who was wearing what -- which is the one thing that list exists to tell you.
+function referenceEntriesNameTheirOwner() {
+  const { game, names } = setup3();
+  const view = buildView(game, 'p1', names);
+  assert.equal(view.reference.length, 1);
+  assert.equal(view.reference[0].ownerName, 'Kira');
+  assert.equal(view.reference[0].character.name, 'Cloud');
+  assert.equal(view.checking.ownerName, 'Sam', 'the checked card is attributed too');
+}
+
 function everyCharacterButYourOwnIsCoveredAcrossCheckingPlusReference() {
   const { game, names } = setup3();
   const view = buildView(game, 'p2', names); // p2 wears Bulma
@@ -213,6 +225,7 @@ module.exports = {
   'turn seconds is clamped to the shared bounds': turnSecondsIsClampedToTheSharedBounds,
   'a clamped turn length reaches the game': aClampedTurnLengthReachesTheGame,
   "a view never contains the viewer's own character": aViewNeverContainsTheViewersOwnCharacter,
+  'reference entries name their owner': referenceEntriesNameTheirOwner,
   'every character but your own is covered across checking + reference':
     everyCharacterButYourOwnIsCoveredAcrossCheckingPlusReference,
   'reroll swaps the check target (unlimited by default)': rerollSwapsTheCheckTargetAndSpendsFromTheBudget,
