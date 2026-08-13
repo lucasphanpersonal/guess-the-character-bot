@@ -21,6 +21,15 @@
 //      16 (Animation) settles it per title, so this is a property of the work rather than a
 //      guess about the name.
 //
+// A known ambiguity, measured rather than assumed: for a title with both an animated original
+// and a live-action remake (Cinderella, The Jungle Book, The BFG, Moana), TMDB's top hit is
+// usually the remake. That is normally CORRECT here -- the Wikidata seeder swept Disney's film
+// catalogue, remakes included, and those lists really are the live-action casts (their character
+// names are live-action credit listings like "Lord Veneering" and "Palace Staff #1"). Where the
+// list is actually the animated original, the cast simply fails to match and almost nothing is
+// written, so the failure mode is a near-miss rather than a wrong face. Spot-check a title with
+// both versions after a run if you want certainty.
+//
 // One search + one credits call per LIST, not per character -- the credits response carries the
 // whole cast -- so this runs in minutes where the Fandom pass took hours.
 
