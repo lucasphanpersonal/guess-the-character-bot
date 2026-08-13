@@ -446,8 +446,16 @@ let tiltFlip = store.get('gtc_tilt_flip') === '1';
 // phone is rotated in its own plane, so absolute values need no calibration and cannot be poisoned
 // by a bad starting position.
 const NEUTRAL_MAX = 3.5; // |z| below this = upright, i.e. plausibly on a forehead
-const TILT_TH = 5.5;     // |z| past this = a deliberate tilt (~35 degrees off upright)
-const TILT_HOLD_MS = 450;
+// Asymmetric on purpose. Tilting UP is the irreversible move -- it ends the turn and publishes
+// the character the player is still wearing, and no undo reaches that -- while tilting down only
+// passes, which costs nothing. It is also the direction ordinary play produces by accident:
+// nodding along, or lifting the phone to reset it on the forehead. So "got it" asks for a firmer
+// tilt held slightly longer, and "pass" keeps the original, lighter touch. Same asymmetry the
+// Discord side applies to its confirm-on-correct guard.
+const TILT_TH_UP = 6.5;    // ~41 degrees off upright (was 5.5, ~34: too easy to trip)
+const TILT_TH_DOWN = 5.5;  // unchanged
+const HOLD_UP_MS = 600;    // was 450
+const HOLD_DOWN_MS = 450;  // unchanged
 // `armed` starts FALSE every turn and only becomes true once the phone has actually been seen
 // upright. That is the whole safety property: a phone that never reaches a sane orientation never
 // fires a gesture, instead of firing one instantly.
@@ -511,10 +519,12 @@ function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltT
 // `tiltFlip` swaps the two for phones that report the opposite sign (the tilt-test screen toggles it).
 function currentGesture() {
   if (!sensor.have) return null;
-  let up = sensor.z < -TILT_TH;  // screen tipped toward the ceiling = tilt up = Got it
-  let down = sensor.z > TILT_TH; // screen tipped toward the floor = tilt down = Pass
-  if (tiltFlip) { const t = up; up = down; down = t; }
-  return up ? 'gotit' : down ? 'pass' : null;
+  // One signed measure of "upness", so the flip is applied once and the two thresholds can
+  // differ without the sign handling getting tangled.
+  const upness = tiltFlip ? sensor.z : -sensor.z;
+  if (upness > TILT_TH_UP) return 'gotit';
+  if (-upness > TILT_TH_DOWN) return 'pass';
+  return null;
 }
 
 // Tilting DOWN normally passes. When you're the last player still guessing there is nobody to
@@ -599,7 +609,7 @@ function handleGameTilt() {
 
   const held = now - tilt.since;
 
-  if (held > TILT_HOLD_MS) {
+  if (held > (g === 'gotit' ? HOLD_UP_MS : HOLD_DOWN_MS)) {
     tilt.armed = false; tilt.lastFire = now;
     navigator.vibrate?.(60); beep(g === 'gotit' ? 1050 : 480, 130);
     if (g === 'gotit') socket.emit('game:gotit', {}, () => {});

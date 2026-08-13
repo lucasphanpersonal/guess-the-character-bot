@@ -96,9 +96,12 @@ Endpoints that prove the shared core is reachable from this frontend:
   turn-start chime + buzz and a bright border on your turn.
   - **Tilt** reads `DeviceMotion.accelerationIncludingGravity.z` (the screen-normal axis, which
     is what tilting up/down changes whether the phone is portrait or landscape): tilt up = Got
-    it, tilt down / clock runs out = Pass, held ~450ms and debounced. No on-screen controls
-    during play. Thresholds (`TILT_TH` / `TILT_HOLD_MS` in `public/app.js`) and direction (the
-    Test-tilt "flip", persisted) still want in-person tuning.
+    it, tilt down / clock runs out = Pass, debounced, with no on-screen controls during play.
+    The two directions are tuned **asymmetrically** (`TILT_TH_UP` 6.5 / `HOLD_UP_MS` 600 vs
+    `TILT_TH_DOWN` 5.5 / `HOLD_DOWN_MS` 450 in `public/app.js`): tilting up is irreversible — it
+    ends the turn and publishes the character — and is also what ordinary nodding produces by
+    accident, so it asks for a firmer, slightly longer tilt. Direction is calibrated by the
+    Test-tilt screen's "flip" toggle, which is persisted.
   - **Always landscape:** the card is CSS-rotated to landscape even under an iOS portrait lock
     (iOS gives web pages no way to unlock orientation). A ▲ TOP bar during the countdown tells
     players which edge is up before they raise the phone, then hides.
