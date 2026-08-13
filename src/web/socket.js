@@ -354,7 +354,14 @@ function attachSockets(io, { registry, setup }) {
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can rematch.' });
       if (r.status !== 'finished') return ack?.({ ok: false, error: 'No finished game to rematch.' });
-      if (r.players.size < 2) return ack?.({ ok: false, error: 'Need at least 2 players.' });
+      if (r.players.size < 2) {
+        return ack?.({
+          ok: false,
+          error:
+            "Someone left, so there aren't enough players for a rematch. " +
+            'Get another person to join with the room code, then try again.',
+        });
+      }
       clearTurnTimer(r);
       clearCountdown(r);
       const res = setup.start(r, r.lastSetup || {});

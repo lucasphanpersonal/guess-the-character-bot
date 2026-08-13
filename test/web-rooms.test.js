@@ -118,6 +118,29 @@ function aStartedRoomRefusesNewPlayersButLetsKnownOnesReconnect() {
   assert.equal(known.reconnected, true);
 }
 
+// A finished room is BETWEEN games. Refusing new players there meant that when somebody left
+// after a game, the host could not rematch (too few players) and could not fix it either --
+// the replacement was turned away at the door.
+function aFinishedRoomAcceptsAReplacementPlayer() {
+  const reg = new RoomRegistry();
+  const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  reg.joinRoom(room.code, { playerId: 'p2', nickname: 'Sam' });
+  room.status = 'finished';
+
+  const res = reg.joinRoom(room.code, { playerId: 'p3', nickname: 'Kira' });
+  assert.equal(res.ok, true, 'a new player can join a finished room');
+  assert.equal(room.players.size, 3);
+}
+
+function aRoomMidGameStillRefusesNewPlayers() {
+  const reg = new RoomRegistry();
+  const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  room.status = 'playing';
+  const res = reg.joinRoom(room.code, { playerId: 'pX', nickname: 'Late' });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /already started/i);
+}
+
 function disconnectingKeepsTheSeatAndShowsInState() {
   const reg = new RoomRegistry();
   const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
@@ -170,6 +193,8 @@ module.exports = {
   'joining is capped at MAX_PLAYERS': joiningIsCappedAtMaxPlayers,
   'a started room refuses new players but lets known ones reconnect':
     aStartedRoomRefusesNewPlayersButLetsKnownOnesReconnect,
+  'a finished room accepts a replacement player': aFinishedRoomAcceptsAReplacementPlayer,
+  'a room mid-game still refuses new players': aRoomMidGameStillRefusesNewPlayers,
   'disconnecting keeps the seat and shows in state': disconnectingKeepsTheSeatAndShowsInState,
   'leaving reassigns host in join order': leavingReassignsHostInJoinOrder,
   'leaving as the last player deletes the room': leavingAsTheLastPlayerDeletesTheRoom,

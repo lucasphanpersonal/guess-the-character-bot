@@ -351,6 +351,10 @@ function renderOver(result) {
     ul.appendChild(li);
   }
   const host = amHost();
+  // Repeat the code here: if someone left, the fix is to get a replacement in, and the code
+  // is otherwise only on the lobby screen which nobody is looking at any more.
+  $('overCode').textContent = lastState ? `Room code ${lastState.code} — anyone can still join` : '';
+  $('overErr').textContent = '';
   $('rematchBtn').style.display = host ? '' : 'none';
   $('changeBtn').style.display = host ? '' : 'none';
   // a little win sting
@@ -747,7 +751,17 @@ $('playLeaveBtn').addEventListener('click', () => { if (confirm('Leave the game?
 // this is the only way out while a phone is actually in forehead mode.
 $('foreheadLeave').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
 $('overLeaveBtn').addEventListener('click', leaveRoom);
-$('rematchBtn').addEventListener('click', () => { primeMotion(); $('rematchBtn').disabled = true; socket.emit('game:rematch', {}, (res) => { $('rematchBtn').disabled = false; }); });
+$('rematchBtn').addEventListener('click', () => {
+  primeMotion();
+  $('rematchBtn').disabled = true;
+  $('overErr').textContent = '';
+  socket.emit('game:rematch', {}, (res) => {
+    $('rematchBtn').disabled = false;
+    // The server always says why it refused; discarding that was what made the button look
+    // broken when a player had left.
+    if (!res?.ok) $('overErr').textContent = res?.error || 'Could not start a rematch.';
+  });
+});
 $('changeBtn').addEventListener('click', () => socket.emit('game:again', {}, () => {}));
 // How-to-play is open by default (most people at a party have never played) but the choice is
 // remembered, so a group that already knows isn't shown it every round.

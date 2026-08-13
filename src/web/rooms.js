@@ -169,9 +169,13 @@ class RoomRegistry {
     }
 
     if (!nick) return { ok: false, error: 'Pick a nickname first.' };
-    // New seats can only be taken while the room is still gathering. A reconnecting known
-    // player above is exempt, so dropping out and back mid-game will still work later.
-    if (room.status !== 'lobby') return { ok: false, error: 'That game has already started.' };
+    // New seats can be taken while the room is gathering, and again once a game has FINISHED --
+    // a finished room is between games, and refusing there meant that when somebody left, the
+    // rematch was blocked for want of a player nobody was allowed to supply. A reconnecting
+    // known player is exempt either way, so dropping out and back mid-game still works.
+    if (room.status !== 'lobby' && room.status !== 'finished') {
+      return { ok: false, error: 'That game has already started.' };
+    }
     if (room.players.size >= MAX_PLAYERS) return { ok: false, error: 'That room is full.' };
 
     room.addSeat(playerId, nick);
