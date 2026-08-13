@@ -25,8 +25,9 @@
            font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
            background:var(--brand); color:#fff; display:flex; flex-direction:column; align-items:center; }
     main { width:100%; max-width:32rem; padding:22px 20px 40px; flex:1; display:flex; flex-direction:column; }
-    h1 { font-family:var(--font-display); font-size:2.3rem; font-weight:900; letter-spacing:-.01em;
-         margin:.2rem 0 1rem; text-shadow:0 3px 0 rgba(0,0,0,.28); }
+    h1 { font-family:var(--font-display); font-size:clamp(1.7rem, 8.2vw, 2.3rem); font-weight:900;
+         letter-spacing:-.02em; margin:.2rem 0 1rem; text-shadow:0 3px 0 rgba(0,0,0,.28);
+         text-wrap:balance; }
     .roomcode, .countnum, .charname, .big-emoji, #foreheadNoImg, #foreheadCount { font-family:var(--font-display); }
     .tag { display:inline-block; padding:.2rem .7rem; border-radius:999px; background:rgba(255,255,255,.18);
            font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#fff; }
@@ -142,6 +143,8 @@
        headings read as arranged by hand rather than typed. Kept to the big type only -- body
        copy has to stay readable, and the forehead card is read across a room so it stays plain. */
     .wob { display:inline-block; transform:rotate(var(--rot)); }
+    /* Keeps a word's letters together so a line can only break between words -- see wobble(). */
+    .wob-word { display:inline-block; white-space:nowrap; }
     .wob.w0 { color:var(--red); } .wob.w1 { color:var(--blue); }
     .wob.w2 { color:var(--amber); } .wob.w3 { color:var(--green); }
     h1 .wob { text-shadow:0 3px 0 rgba(0,0,0,.3); }

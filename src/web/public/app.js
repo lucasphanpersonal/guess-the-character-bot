@@ -28,19 +28,33 @@ let abortNote = '';
 const socket = io({ auth: { playerId } });
 
 // Sets text one character at a time, each at its own angle and colour, so headings read as
-// hand-placed rather than typed. Skips spaces so word gaps stay natural, and writes textContent
-// per span so the source string is never treated as markup.
+// hand-placed rather than typed. Written with textContent per span, so the source string is
+// never treated as markup.
+//
+// Characters are grouped into WORDS, and that grouping is load-bearing rather than tidiness:
+// giving every character its own inline-block box removes ordinary word-boundary line breaking,
+// because the browser may then break between any two boxes. "Guess the Character" duly wrapped
+// with a lone "r" on the second line. A nowrap word wrapper puts the break opportunities back
+// where they belong -- between words only.
 const WOBBLE_ANGLES = [-6, 4, -3, 7, -5, 3, -7, 5];
 function wobble(el, text, { colour = true } = {}) {
   if (!el) return;
   el.innerHTML = '';
-  [...String(text)].forEach((ch, i) => {
-    if (ch === ' ') return el.appendChild(document.createTextNode(' '));
-    const span = document.createElement('span');
-    span.className = 'wob' + (colour ? ` w${i % 4}` : '');
-    span.style.setProperty('--rot', `${WOBBLE_ANGLES[i % WOBBLE_ANGLES.length]}deg`);
-    span.textContent = ch;
-    el.appendChild(span);
+  const words = String(text).split(' ');
+  let i = 0;
+  words.forEach((word, w) => {
+    const holder = document.createElement('span');
+    holder.className = 'wob-word';
+    for (const ch of word) {
+      const span = document.createElement('span');
+      span.className = 'wob' + (colour ? ` w${i % 4}` : '');
+      span.style.setProperty('--rot', `${WOBBLE_ANGLES[i % WOBBLE_ANGLES.length]}deg`);
+      span.textContent = ch;
+      holder.appendChild(span);
+      i++;
+    }
+    el.appendChild(holder);
+    if (w < words.length - 1) el.appendChild(document.createTextNode(' '));
   });
 }
 
