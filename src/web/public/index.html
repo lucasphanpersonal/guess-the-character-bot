@@ -150,9 +150,15 @@
     h1 .wob { text-shadow:0 3px 0 rgba(0,0,0,.3); }
     .card .wob.w2 { color:var(--amber-d); } /* amber needs weight on white */
     /* Cards sit at faint alternating angles, like things laid on a table rather than a grid.
-       Under half a degree: enough to feel placed, not enough to look broken or overflow. */
-    .screen .card:nth-of-type(odd)  { transform:rotate(-0.35deg); }
-    .screen .card:nth-of-type(even) { transform:rotate(0.35deg); }
+       Under half a degree: enough to feel placed, not enough to look broken.
+       
+       `.flat` opts a card out, and long-scrolling cards MUST use it. A rotation displaces a box
+       by height * sin(angle), which is nothing on a card a few hundred pixels tall and severe on
+       one that is not: the compendium's list card runs ~20,000px, where 0.35deg shears it ~120px
+       sideways and pushes content off the screen edge. The tilt is decoration, so it only belongs
+       on cards short enough for it to read as a tilt rather than a lean. */
+    .screen .card:nth-of-type(odd):not(.flat)  { transform:rotate(-0.35deg); }
+    .screen .card:nth-of-type(even):not(.flat) { transform:rotate(0.35deg); }
     .choice:nth-of-type(odd)  { transform:rotate(-0.5deg); }
     .choice:nth-of-type(even) { transform:rotate(0.5deg); }
     /* Roster pills cycle the palette instead of all being amber. */
@@ -299,7 +305,7 @@
     <section id="browse" class="screen">
       <div id="browseCrumb"></div>
       <input id="browseFilter" placeholder="Filter…" autocomplete="off" style="display:none" />
-      <div class="card"><div id="browseBody"></div></div>
+      <div class="card flat"><div id="browseBody"></div></div>
       <button id="browseMore" class="ghost" style="display:none">Load more</button>
       <button id="browseBack" class="ghost">Back</button>
     </section>
