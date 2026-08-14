@@ -48,9 +48,18 @@ Both must pass before a commit. Beyond that:
 - **Never leave a detached server running.** Each `nohup`/background restart of the launcher
   *adds* a stack rather than replacing one. Four accumulated over one session: one held :4180
   so the user's own launcher could not bind, and three extra Discord bots stayed logged in, so
-  every slash command was handled four times. Before starting a server, kill whatever holds the
-  port; when finished, kill what you started. `netstat -ano | grep ':4180.*LISTENING'` names the
-  holder, and `Get-Process node,cloudflared` shows the rest.
+  every slash command was handled four times. When finished, kill what you started.
+- **Never kill a process by port alone.** "Kill whatever holds :4180" cannot tell your leftovers
+  from the user's live session, and it took out their running web server twice in one morning --
+  while their launcher and tunnel stayed up, leaving a tunnel fronting a dead port. Identify the
+  process and its start time first, and only kill ones you can account for starting:
+
+  ```
+  Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select ProcessId,CreationDate,CommandLine
+  ```
+
+  Better still, don't compete for the port: `preview_start` with `.claude/launch.json` runs the
+  server under the tool's own lifecycle, and `preview_stop` ends it.
 - **Bind address and dial address must agree.** The server binds `0.0.0.0`, which is IPv4 only,
   while `localhost` resolves to `::1` first on Windows. Point local clients (the tunnel) at
   `127.0.0.1` explicitly. The failure reads "the target machine actively refused it", which
