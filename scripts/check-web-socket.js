@@ -28,15 +28,20 @@ if (OWN_DB) {
 
 // Seed a tiny content scope BEFORE requiring the server (which resolves WEB_SCOPE at load).
 const characterLists = require('../src/core/db/characterLists');
+// The whole cast this check deals from. Assertions about "did we get a real character?" read
+// this same constant -- keeping a second hand-written copy of the names is how a fixture that
+// grew a seventh character turned into a check that failed one run in seven.
+const SEEDED_NAMES = ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn', 'Pictured'];
+
 function seedContent() {
   const list = characterLists.createList(process.env.WEB_SCOPE, 'Test Toons', 'seed', 'TestToons', { enabled: true });
-  for (const name of ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn']) {
-    characterLists.addCharacter(list, name, 'seed', null);
+  for (const name of SEEDED_NAMES) {
+    // 'Pictured' carries an image so the /img route can be asserted POSITIVELY. A 404-only
+    // check would pass even if the route were deleted, since the static handler 404s too --
+    // which is exactly how a deleted /img route once slipped through green checks.
+    const image = name === 'Pictured' ? 'https://example.invalid/pic.png' : null;
+    characterLists.addCharacter(list, name, 'seed', image);
   }
-  // One character carries an image so the /img route can be asserted POSITIVELY. A 404-only
-  // check would pass even if the route were deleted, since the static handler 404s too --
-  // which is exactly how a deleted /img route once slipped through green checks.
-  characterLists.addCharacter(list, 'Pictured', 'seed', 'https://example.invalid/pic.png');
 }
 seedContent();
 
@@ -104,8 +109,7 @@ const connect = (playerId) => {
   check(res.ok, 'host deals characters (setup:start ok)');
   let cView = await cSetup;
   const dView = await dSetup;
-  const seeded = ['Aang', 'Bulma', 'Cloud', 'Dexter', 'Eren', 'Finn'];
-  check(seeded.includes(cView.checking.character.name), 'C sees a real character to check');
+  check(SEEDED_NAMES.includes(cView.checking.character.name), 'C sees a real character to check');
   check(cView.reference.length === 0, 'with 2 players the reference list is empty');
   check(cView.checking.character.name !== dView.checking.character.name, 'the two players check different characters');
 

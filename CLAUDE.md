@@ -41,6 +41,10 @@ Both must pass before a commit. Beyond that:
   players don't hit this; your test tab still can.
 - **A check that only works once is not a check.** `check-web-socket` used to die on the
   second run against its own leftover seed DB. Make fixtures idempotent.
+- **Run a check several times before believing it.** The same script failed one run in seven
+  because an assertion kept its own hand-written copy of the fixture's cast list, and the
+  fixture had grown a character. Derive expectations from the fixture, never restate them --
+  and when something is random (a deal, a shuffle), a single green run proves little.
 - **Assert positively.** A test that only asserts a 404 passes even when the route is deleted,
   because the static handler 404s too. That is how a deleted `/img` route once shipped green.
 
