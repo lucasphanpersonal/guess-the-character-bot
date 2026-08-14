@@ -678,7 +678,7 @@ a backstop: in the normal case the `setTimeout` fires first and the pass finds n
 ## Development
 
 ```bash
-npm test                 # 132 tests, no network or Discord needed
+npm test                 # 398 tests, no network or Discord needed
 npm run generate:sounds  # regenerate the WAV sound effects
 ```
 
@@ -698,8 +698,8 @@ automatically.
 ### Adding an interactive control
 
 Buttons and select menus are namespaced by the first segment of their `customId`
-(`lobby:join:<channelId>`). Register the namespace once in `src/components/router.js` and
-give it a handler module — no new branch in `src/index.js` is needed. Two rules worth
+(`lobby:join:<channelId>`). Register the namespace once in `src/discord/components/router.js`
+and give it a handler module — no new branch in `src/discord/index.js` is needed. Two rules worth
 remembering:
 
 - **Acknowledge within 3 seconds.** If the handler does slow work (sending DMs, starting a

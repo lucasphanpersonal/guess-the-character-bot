@@ -1,13 +1,18 @@
 ---
-description: Full design review of the bot — game design, UX, architecture, state, data, security, tests, docs
+description: Full design review — game design, UX, architecture, state, data, security, tests, docs, across both frontends
 argument-hint: "[optional: focus area, e.g. \"state and concurrency only\"]"
 ---
 
-Do a full design review of this project — a Discord bot that hosts Hedbanz-style
-"Guess the Character" games. Read the code before forming opinions: start with
-README.md, docs/multiplayer-design.md, and docs/multiplayer-ux.md to understand the
-intended design, then read src/ in full (src/game/engine.js is the core, ~1000 lines),
-and skim test/ to see what behavior is actually pinned down.
+Do a full design review of this project — Hedbanz-style "Guess the Character", played
+either through a Discord bot or a phone-in-hand party web app, both over one shared core.
+Read the code before forming opinions: start with CLAUDE.md, README.md,
+docs/multiplayer-design.md, docs/multiplayer-ux.md and docs/mobile-app-plan.md to
+understand the intended design, then read src/ in full — src/core/ is shared,
+src/discord/game/engine.js is the bot's core (~1000 lines), src/web/ is the web app — and
+skim test/ to see what behavior is actually pinned down.
+
+Hold both frontends to the review: a finding that only names the bot when the same flaw
+exists in src/web/ (or in the core they share) is half a finding.
 
 Review across all of these axes. For each, tell me what's well-designed and what
 isn't — I want the honest version, not a list of compliments.
@@ -38,7 +43,9 @@ isn't — I want the honest version, not a list of compliments.
    - Is engine.js doing too much? Propose a concrete decomposition if so, with the
      seams you'd actually cut along.
    - Evaluate the layering: commands/ → game/ → db/, plus components/router.js as the
-     single customId dispatch point. Where is that layering violated?
+     single customId dispatch point. Where is that layering violated? Separately: does
+     anything in src/core/ import from src/discord/ or src/web/? That invariant is what
+     keeps the two frontends from fusing.
    - Is Game / Lobby / GameManager the right state model? GameManager holds lobbies in
      a process-local Map keyed by channelId, and deliberately retains FINISHED lobbies
      for /rematch — assess the lifecycle, leak potential, and restart behavior.
@@ -59,13 +66,13 @@ isn't — I want the honest version, not a list of compliments.
      the game, the channel, or the process?
 
 5. DATA AND DATABASE DESIGN
-   - Review src/db/schema.sql: normalization, indexes, uniqueness constraints, and
+   - Review src/core/db/schema.sql: normalization, indexes, uniqueness constraints, and
      whether the queries in characterLists.js (560 lines) match how the schema is shaped.
    - better-sqlite3 is synchronous — is any query on a hot path long enough to block
      the event loop while games are running?
    - Multi-tenancy: are per-guild list selections properly scoped, and can one server
      see or mutate another's data?
-   - Character images (src/util/characterImages.js, scripts/fetch-fandom-images.js,
+   - Character images (src/core/util/characterImages.js, scripts/fetch-fandom-images.js,
      clean-character-images.js): how is a bad or hotlink-broken image detected, and what
      does a player see when it fails?
 
