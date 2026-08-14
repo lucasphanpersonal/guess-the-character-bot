@@ -83,8 +83,6 @@ Endpoints that prove the shared core is reachable from this frontend:
   contends with game traffic and the browser can cache it (60s). Ordered the way the game orders
   things — lists by popularity, characters by fame — and paginated, since one list runs to 1,212
   rows. Thumbnails go through `/img/<id>`, so browsing warms the same cache a game uses.
-- `GET /api/categories` — categories from the shared content DB (scoped by `WEB_SCOPE`,
-  default `web`; empty until lists are curated under that scope).
 
 ## Stage status
 

@@ -63,6 +63,20 @@ function wobble(el, text, { colour = true } = {}) {
 
 function show(screen) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === screen);
+  retilt($(screen));
+}
+
+// Alternates the decorative lean across the cards actually visible on a screen. Hidden cards are
+// skipped so toggling one (how-to-play) doesn't flip every card below it, and this runs after
+// dynamic inserts too, so the reveal log keeps the rhythm going.
+function retilt(root) {
+  if (!root) return;
+  let i = 0;
+  for (const card of root.querySelectorAll('.card:not(.flat)')) {
+    if (card.style.display === 'none') continue;
+    card.style.setProperty('--tilt', `${i % 2 ? 0.35 : -0.35}deg`);
+    i++;
+  }
 }
 const amHost = () => lastState && lastState.hostPlayerId === playerId;
 
@@ -86,7 +100,7 @@ function renderLobby(state) {
   // 'block' (not '') -- an <img> defaults to inline, and margin:auto centering (see CSS) only
   // takes effect on a block-level box. Leaving it inline was why the QR rendered off-center.
   qr.style.display = 'block';
-  $('playerCount').textContent = `Players (${state.players.length}/8)`;
+  $('playerCount').textContent = `Players (${state.players.length}/${state.maxPlayers ?? 8})`;
   const roster = $('roster');
   roster.innerHTML = '';
   for (const p of state.players) {
@@ -216,7 +230,7 @@ function deal() {
 // --- setup / confirm ----------------------------------------------------------------------
 function charCardHtml(ch) {
   const img = ch.imageUrl
-    ? `<img src="${ch.imageUrl}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'(no image)'}))">`
+    ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'(no image)'}))">`
     : `<div class="noimg">No image — reveal by name</div>`;
   // Wrapped in .charcard so the fixed image box (.charcard img { height:230px }) applies wherever
   // this is inserted -- not just inside #checkCard. Without the wrapper the image rendered at
@@ -273,6 +287,7 @@ function renderSetup(view) {
   // Only shown where the browser cannot hold the screen on, since then it is the player's job.
   // Said here rather than at the reveal: this is the last screen anyone is still looking at.
   $('wakeNote').textContent = 'wakeLock' in navigator ? '' : "Your phone may lock mid-game — set auto-lock to Never first.";
+  $('rerollNote').textContent = ''; // a note about the last reroll must not outlive this render
   $('checkOwner').textContent = `${view.checking.ownerName}'s character`;
   $('checkCard').innerHTML = charCardHtml(view.checking.character);
   $('rerollBtn').style.display = view.rerollAllowed ? '' : 'none';
@@ -346,7 +361,7 @@ function renderPlaying(view) {
       + '<div id="turnBtns"></div>';
     const btns = area.querySelector('#turnBtns');
     if (view.buttons.gotIt) addBtn(btns, 'Got it!', 'good', () => socket.emit('game:gotit', {}, () => {}));
-    if (view.buttons.pass) addBtn(btns, '⏭ Pass', 'ghost', () => socket.emit('game:pass', {}, () => {}));
+    if (view.buttons.pass) addBtn(btns, 'Pass', 'ghost', () => socket.emit('game:pass', {}, () => {}));
     if (view.buttons.giveUp) addBtn(btns, 'Give up', 'ghost', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
   } else if (view.wearing) {
     area.innerHTML = `<div class="hint center">They're wearing — help them by answering questions</div>${charCardHtml(view.wearing)}`;
@@ -408,6 +423,7 @@ function logReveal(html) {
   div.innerHTML = html;
   log.prepend(div);
   while (log.children.length > 4) log.lastChild.remove();
+  retilt($('playing'));
 }
 
 function renderOver(result) {
@@ -437,7 +453,7 @@ function renderOver(result) {
     }
     const ch = s.character;
     const thumb = ch && ch.imageUrl
-      ? `<img src="${ch.imageUrl}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:9px;flex:none">`
+      ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:9px;flex:none">`
       : '';
     // Podium colouring for the top three finishers; everyone else is a plain row.
     const rank = s.turns === null ? 0 : finishers.filter((o) => o.turns < s.turns).length + 1;
@@ -779,7 +795,7 @@ function updateTiltTest() {
 // Read-only browsing over plain HTTP, so it never contends with the game socket and the browser
 // can cache it. Three depths -- categories, lists, characters -- each ordered the way the game
 // orders things, so the top of a page is the part people actually recognise.
-const browseState = { view: 'categories', category: null, list: null, offset: 0, loading: false };
+const browseState = { view: 'categories', category: null, list: null, offset: 0, loading: false, filter: '' };
 let browseLists = []; // the current category's lists, kept client-side so filtering is instant
 
 const PAGE = 60;
@@ -831,6 +847,9 @@ async function openBrowse({ push = true } = {}) {
 }
 
 async function openCategory(category, { push = true } = {}) {
+  // Coming BACK to a category keeps what was typed; arriving at a new one starts clean. Retyping
+  // a filter after every look at a list is the kind of friction that stops people browsing.
+  if (browseState.category !== category) browseState.filter = '';
   browseState.view = 'lists';
   browseState.category = category;
   setCrumb(['All', category]);
@@ -844,9 +863,9 @@ async function openCategory(category, { push = true } = {}) {
     // lot to thumb past when you know the name you want.
     const filter = $('browseFilter');
     filter.style.display = '';
-    filter.value = '';
+    filter.value = browseState.filter;
     filter.placeholder = `Filter ${browseLists.length} lists…`;
-    renderBrowseLists('');
+    renderBrowseLists(browseState.filter);
   } catch (err) {
     $('browseBody').innerHTML = `<p class="hint center">Could not load (${escapeHtml(err.message)}).</p>`;
   } finally {
@@ -1090,6 +1109,7 @@ function syncHowto() {
   const hidden = howtoHidden();
   $('howtoCard').style.display = hidden ? 'none' : '';
   $('howtoToggle').textContent = hidden ? 'How to play' : 'Hide how to play';
+  retilt($('lobby')); // one fewer card changes the alternation below it
 }
 $('howtoToggle').addEventListener('click', () => {
   store.set('gtc_howto', howtoHidden() ? 'shown' : 'hidden');
@@ -1120,7 +1140,10 @@ $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, (
 $('browseBtn').addEventListener('click', openBrowse);
 $('browseBack').addEventListener('click', browseBack);
 $('browseMore').addEventListener('click', () => { if (!browseState.loading) { browseState.loading = true; loadCharacterPage(false); } });
-$('browseFilter').addEventListener('input', (e) => renderBrowseLists(e.target.value));
+$('browseFilter').addEventListener('input', (e) => {
+  browseState.filter = e.target.value;
+  renderBrowseLists(e.target.value);
+});
 // Tilt calibration screen
 $('tiltTestBtn').addEventListener('click', openTiltTest);
 $('ttEnable').addEventListener('click', () => enableMotion().then(() => {
@@ -1138,6 +1161,9 @@ for (const ev of ['focus', 'click']) {
     setTimeout(() => e.target.setSelectionRange(end, end), 0);
   });
 }
+// The landing screen is active from the markup, so show() never runs for it -- tilt it here or
+// the first screen anyone sees is the one screen with no lean at all.
+retilt(document.querySelector('.screen.active'));
 wobble(document.querySelector('h1'), 'Guess the Character');
 for (const el of document.querySelectorAll('[data-wobble]')) wobble(el, el.textContent, { colour: false });
 if (nickname) $('nickInput').value = nickname;

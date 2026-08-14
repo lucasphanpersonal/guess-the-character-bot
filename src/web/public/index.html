@@ -154,9 +154,14 @@
        by height * sin(angle), which is nothing on a card a few hundred pixels tall and severe on
        one that is not: the compendium's list card runs ~20,000px, where 0.35deg shears it ~120px
        sideways and pushes content off the screen edge. The tilt is decoration, so it only belongs
-       on cards short enough for it to read as a tilt rather than a lean. */
-    .screen .card:nth-of-type(odd):not(.flat)  { transform:rotate(-0.35deg); }
-    .screen .card:nth-of-type(even):not(.flat) { transform:rotate(0.35deg); }
+       on cards short enough for it to read as a tilt rather than a lean.
+
+       The angle is set per card by retilt() rather than by :nth-of-type, which counts every
+       sibling of the same TAG -- so a non-card div between two cards (the landing divider, the
+       playing screen's motion banner) ate a slot and left the two cards either side of it
+       leaning the SAME way. Most visible exactly where it mattered: the turn banner and the play
+       area, the two cards you look at all game. */
+    .screen .card:not(.flat) { transform:rotate(var(--tilt, 0deg)); }
     .choice:nth-of-type(odd)  { transform:rotate(-0.5deg); }
     .choice:nth-of-type(even) { transform:rotate(0.5deg); }
     /* Roster pills cycle the palette instead of all being amber. */
@@ -452,7 +457,7 @@
     <section id="countdown" class="screen">
       <div class="card">
         <div class="hint center">Put your phone on your forehead so everyone can see it!</div>
-        <div class="countnum" id="countNum">5</div>
+        <div class="countnum" id="countNum"></div>
         <div class="hint center">Your character appears when this hits zero. Don't peek.</div>
       </div>
     </section>

@@ -188,10 +188,19 @@ function sendJson(res, status, body) {
 }
 
 // Serves a file from PUBLIC_DIR, guarding against path traversal outside it.
+//
+// The client is unversioned -- index.html and app.js keep the same URLs forever -- so without a
+// cache header browsers apply their own heuristic and a phone can keep running yesterday's app.js
+// against today's server. `no-cache` still allows a 304, so a reload is cheap; it just stops the
+// browser deciding on its own that it need not ask.
+const NO_CACHE = new Set(['.html', '.js', '.css']);
+
 function serveStatic(res, urlPath) {
   const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
   const filePath = path.join(PUBLIC_DIR, rel);
-  if (!filePath.startsWith(PUBLIC_DIR)) {
+  // The separator matters: a bare startsWith would also accept a sibling directory whose name
+  // merely BEGINS with "public".
+  if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
   }
@@ -200,23 +209,16 @@ function serveStatic(res, urlPath) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       return res.end('Not found');
     }
-    res.writeHead(200, { 'Content-Type': CONTENT_TYPES[path.extname(filePath)] || 'application/octet-stream' });
+    const ext = path.extname(filePath);
+    const headers = { 'Content-Type': CONTENT_TYPES[ext] || 'application/octet-stream' };
+    if (NO_CACHE.has(ext)) headers['Cache-Control'] = 'no-cache';
+    res.writeHead(200, headers);
     res.end(data);
   });
 }
 
 function requestHandler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-
-  // Proves the core content pipeline is reachable, read-only. Empty for a fresh WEB_SCOPE
-  // until list curation exists under it -- the point is that the query PATH works.
-  if (url.pathname === '/api/categories') {
-    try {
-      return sendJson(res, 200, { scope: WEB_SCOPE, categories: characterLists.listCategoriesWithCounts(WEB_SCOPE) });
-    } catch (err) {
-      return sendJson(res, 500, { error: err.message });
-    }
-  }
 
   // QR of a join URL. Takes a ROOM CODE, not arbitrary text: the earlier version encoded
   // whatever it was given, which turned this host into a free generator of QR codes pointing

@@ -70,6 +70,8 @@ class Room {
       code: this.code,
       status: this.status,
       hostPlayerId: this.hostPlayerId,
+      // Published rather than hardcoded in the client, which had its own copy of "8".
+      maxPlayers: MAX_PLAYERS,
       players: this.order.map((id) => {
         const p = this.players.get(id);
         return {
