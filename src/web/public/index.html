@@ -176,7 +176,11 @@
     .seat.tint1 { background:#eaf1fc; } .seat.tint1 .owner { background:var(--blue); }
     .seat.tint2 { background:#fdf3e0; } .seat.tint2 .owner { background:var(--amber-d); }
     .seat.tint3 { background:#e9f5e6; } .seat.tint3 .owner { background:var(--green); }
-    body { overflow-x:hidden; } /* insurance: rotated cards must never make the page scroll sideways */
+    /* Insurance: rotated cards must never make the page scroll sideways. `hidden` on the body
+       alone leaves iOS willing to pan the document, so the root is clipped too -- `clip` rather
+       than `hidden` because it does not create a scroll container, which would break the
+       compendium's sticky bar. `hidden` stays as the fallback for browsers without `clip`. */
+    html, body { overflow-x:hidden; overflow-x:clip; overscroll-behavior-x:none; }
 
     /* --- compendium ---------------------------------------------------------------------- */
     .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -209,14 +213,16 @@
     #browseBar { position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:10px;
                  padding:10px 0 14px; }
     /* The scrim behind the bar fades out rather than ending in a ruled line, so rows dissolve
-       as they slide under it instead of being guillotined. Extending past `main`'s padding
-       keeps it edge to edge; the extra height above covers iOS overscroll. No backdrop-filter
-       here on purpose -- WebKit can paint a blur unmasked, which is the hard edge all over
-       again. `mask-image` is the whole effect, so browsers without it keep a solid bar. */
-    #browseBar::after { content:''; position:absolute; left:-50vw; right:-50vw;
-                        top:-60px; bottom:-44px; z-index:-1; background:var(--brand);
-                        -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 42px), transparent);
-                        mask-image:linear-gradient(to bottom, #000 calc(100% - 42px), transparent); }
+       as they slide under it instead of being guillotined. It reaches exactly as far as `main`'s
+       own padding and no further -- anything wider makes the page pannable sideways, and past
+       that edge the body is this same violet anyway. The extra height above covers iOS
+       overscroll. No backdrop-filter here on purpose: WebKit can paint a blur ignoring the mask,
+       which is the hard edge all over again. `mask-image` is the whole effect, so a browser
+       without it just keeps a solid bar. */
+    #browseBar::after { content:''; position:absolute; left:-20px; right:-20px;
+                        top:-60px; bottom:-26px; z-index:-1; background:var(--brand);
+                        -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+                        mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
     .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem; border-radius:999px;
                background:#fff; color:var(--brand); box-shadow:0 4px 0 rgba(0,0,0,.25); }
     .backbtn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
