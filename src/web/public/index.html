@@ -515,15 +515,16 @@
       <div class="card">
         <div class="hint center">Check this character — is it fair? <br>Reroll if nobody in the room would know them.</div>
         <div class="checkowner" id="checkOwner"></div>
-        <!-- Controls sit ABOVE the character, not below it. Everything under here changes size
-             as artwork loads and as names wrap to a second line, which kept walking the Reroll
-             button out from under the player's thumb. Above it, nothing below can move it. -->
-        <div class="row" style="margin-top:10px">
-          <button id="rerollBtn" class="ghost">Reroll</button>
-          <button id="undoBtn" class="ghost" style="display:none">Undo</button>
-        </div>
+        <!-- Reroll sits ABOVE the character, not below it. Everything under here changes size
+             as artwork loads and as names wrap to a second line, which kept walking the button
+             out from under the player's thumb. Above it, nothing below can move it. -->
+        <button id="rerollBtn" class="alt" style="margin-top:10px">Reroll</button>
         <p class="hint center" id="rerollNote"></p>
         <div id="checkCard"></div>
+        <!-- Undo goes under the character rather than beside Reroll. It is the rarer,
+             corrective action, and side by side it took half the width of a screen where one
+             button does nearly all the work -- and sat under the thumb doing the rerolling. -->
+        <button id="undoBtn" style="display:none; margin-top:12px">Undo last reroll</button>
       </div>
       <div class="card">
         <div class="hint">Everyone else — you'll answer questions about these</div>
