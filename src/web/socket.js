@@ -1,4 +1,5 @@
-// Socket.io wiring for the web frontend (stages 1-2: rooms + setup/confirm/reroll).
+// Socket.io wiring for the web frontend: rooms, setup/confirm/reroll, the grace countdown,
+// and the turn loop.
 //
 // Thin on purpose: it translates socket events into calls on the room registry (rooms.js) and
 // the setup service (built in server.js from the shared core), then broadcasts state. No game

@@ -3,9 +3,8 @@
 // The second frontend, alongside the Discord bot (src/discord). Both import their game state
 // and content from the SAME shared core (src/core) -- see docs/mobile-app-plan.md#architecture.
 //
-// Stage 1 (current): socket.io rooms. Phones create/join a room by code, see a live roster,
-// and reclaim their seat on reconnect. No character dealing or turn loop yet -- those are
-// later stages that will build a core `Game` from a room's roster.
+// Serves the client, the socket.io transport, character artwork through a local read-through
+// cache, the compendium's browse endpoints, and the join QR.
 
 const http = require('http');
 const https = require('https');
@@ -406,7 +405,7 @@ function devTlsOptions() {
   return { key: pems.private, cert: pems.cert };
 }
 
-// Plain HTTP is always served (what phones have been using for stages 1-3). HTTPS is additive.
+// Plain HTTP is always served (the tap fallback plays fully). HTTPS is additive.
 const server = http.createServer(requestHandler);
 const io = new Server(server); // serves its browser client at /socket.io/socket.io.js
 attachSockets(io, { registry, setup });

@@ -127,8 +127,8 @@ Endpoints that prove the shared core is reachable from this frontend:
   wall-clock **watchdog** re-checks turn/countdown deadlines every 3s so a suspended server
   doesn't hang a turn on wake (mirrors the Discord bot's `timerWatchdog`).
 - **6. Polish — in progress.** Done: **rematch** with the same settings (redeal + straight back
-  to confirm, no reconfiguring); **QR-code joins** (`GET /api/qr?text=` renders an SVG; the lobby
-  shows a scannable code for the join URL); an optional **prefer characters with artwork** toggle on the host's
+  to confirm, no reconfiguring); **QR-code joins** (`GET /api/qr?room=CODE` renders an SVG of the join URL, built
+  server-side from the request's own host -- it takes a room code, never arbitrary text); an optional **prefer characters with artwork** toggle on the host's
   config screen (OFF by default -- restricting to image-having characters shrinks the pool and
   biases it toward better-documented franchises, so it is the host's call; via
   `getRandomCharacters(..., { preferImages })`); and light **audio cues** (turn-start chime,

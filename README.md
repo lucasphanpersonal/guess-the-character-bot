@@ -642,7 +642,7 @@ src/
     util/
       permissions.js      Manage-Server permission checks
 
-  web/                 Party-mode web app (skeleton). Imports from core/. See web/README.md.
+  web/                 Party-mode web app. Imports from core/. See web/README.md.
     server.js             Dependency-free http server; reuses core db + game state
     public/index.html     Placeholder client
 

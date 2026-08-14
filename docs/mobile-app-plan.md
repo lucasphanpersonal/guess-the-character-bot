@@ -332,7 +332,9 @@ recorded below, since the deviations are the useful part of a status update.
    - **Tilt axis.** Uses `DeviceMotion.accelerationIncludingGravity.z` (screen-normal), not the
      `beta`/orientation angle first imagined — beta barely moves when the phone is held
      horizontally on the forehead, which read as "tilt not working." Up = got it, down / timeout
-     = pass, held ~450ms, debounced, with a persisted direction "flip" for sign differences.
+     = pass, debounced, with a persisted direction "flip" for sign differences. The two
+     directions are tuned asymmetrically (up 6.5 / 600ms vs down 5.5 / 450ms) because tilting
+     up is the irreversible one.
    - **Always landscape.** iOS gives web pages no way to unlock or force orientation, so the card
      is CSS-rotated to landscape even under a portrait lock, with a ▲ TOP guide during the
      countdown. This replaced an accelerometer-driven auto-rotate that was fussier than it was
@@ -354,9 +356,10 @@ recorded below, since the deviations are the useful part of a status update.
 6. **Polish — mostly done.** Shipped: **rematch** with the same settings (redeal to the same
    roster, straight back to the confirm phase); **QR-code joins** (an `/api/qr` SVG endpoint, a
    scannable code on the lobby); **preferring characters with artwork** (`preferImages` on the
-   core draw/reroll, on by default for the web app since its reveal is a full-screen picture,
-   with a graceful fallback when the pool is image-poor); and light **audio cues** (turn-start /
-   finish / win). Still open: an optional read-only **scoreboard device** (a spectator join that
+   core draw/reroll, OFF by default and offered as a host toggle -- restricting the draw shrinks
+   the pool and biases it toward the better-documented franchises, so it is the host's call);
+   light **audio cues** (turn-start / finish / win); and the read-only **character
+   compendium** (category -> list -> character, over plain HTTP). Still open: an optional read-only **scoreboard device** (a spectator join that
    shows live standings for a propped-up tablet or a cast TV) and richer haptics.
 
 `RoundMode` (`src/core/game/roundMode.js`) exists as planned even though only `TurnRotationMode`

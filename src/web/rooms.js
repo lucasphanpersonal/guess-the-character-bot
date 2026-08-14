@@ -1,4 +1,4 @@
-// Room registry for the web frontend -- membership only (stage 1).
+// Room registry for the web frontend -- membership only.
 //
 // Deliberately transport-agnostic: nothing here imports socket.io or touches a network, so it
 // is unit-testable in isolation (see test/web-rooms.test.js) and the socket layer
@@ -10,8 +10,8 @@
 // (see docs/mobile-app-plan.md#reconnection-matters-more-here-than-it-does-on-discord). Seats
 // are keyed by a persistent client-generated playerId (stored in the browser), NOT by the
 // socket id, so a reconnecting phone reclaims its exact seat instead of being seen as a new
-// player. Character dealing and the turn loop are later stages and will build a core `Game`
-// from a room's roster; this file only gets people into the same room and keeps the roster live.
+// player. Character dealing and the turn loop live in gameSetup.js/turnLoop.js over a core
+// `Game`; this file only gets people into the same room and keeps the roster live.
 
 const { MAX_PLAYERS } = require('../core/game/Lobby');
 

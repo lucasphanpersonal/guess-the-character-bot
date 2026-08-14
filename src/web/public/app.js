@@ -1,4 +1,7 @@
-// Web client -- stages 1-2 (rooms + setup/confirm/reroll). Vanilla JS, no build step.
+// Web client -- the whole party-mode frontend. Vanilla JS, no build step.
+//
+// Rooms, host config, confirm/reroll, the grace countdown, forehead mode + tilt, the results
+// screen, and the read-only character compendium.
 //
 // Screen is driven by the room status the server reports (lobby -> setup -> ready), plus the
 // per-player setup:state (which never contains your own character). Identity survives a
@@ -93,7 +96,7 @@ function renderLobby(state) {
     dot.className = 'dot' + (p.connected ? '' : ' off');
     const name = document.createElement('span');
     name.className = 'name';
-    name.textContent = p.nickname + (p.playerId === playerId ? '' : '');
+    name.textContent = p.nickname;
     if (p.playerId === playerId) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
     li.append(dot, name);
     if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
@@ -215,7 +218,7 @@ function charCardHtml(ch) {
   const img = ch.imageUrl
     ? `<img src="${ch.imageUrl}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'(no image)'}))">`
     : `<div class="noimg">No image — reveal by name</div>`;
-  // Wrapped in .charcard so the image size cap (.charcard img { max-height }) applies wherever
+  // Wrapped in .charcard so the fixed image box (.charcard img { height:230px }) applies wherever
   // this is inserted -- not just inside #checkCard. Without the wrapper the image rendered at
   // full natural size on the finished/tap screens and blew out the layout.
   return `<div class="charcard"><div class="charname">${escapeHtml(ch.name)}</div>${ch.source ? `<div class="charsrc">${escapeHtml(ch.source)}</div>` : ''}${img}</div>`;
@@ -887,8 +890,7 @@ async function openList(list, { push = true } = {}) {
   $('browseFilter').style.display = 'none';
   setCrumb(['All', browseState.category, list.name]);
   if (push) pushBrowseHistory('characters', { category: browseState.category, list });
-  browseBusy(true);
-  $('browseBody').innerHTML = '';
+  browseBusy(true); // loadCharacterPage replaces this with the grid
   await loadCharacterPage(true);
 }
 
@@ -1115,13 +1117,16 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
 // is already listening, no separate step needed. Best-effort; the tap fallback covers refusal.
 $('goodBtn').addEventListener('click', () => { primeMotion(); socket.emit('setup:confirm', {}, () => {}); });
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
-// Tilt calibration screen
 $('browseBtn').addEventListener('click', openBrowse);
 $('browseBack').addEventListener('click', browseBack);
 $('browseMore').addEventListener('click', () => { if (!browseState.loading) { browseState.loading = true; loadCharacterPage(false); } });
 $('browseFilter').addEventListener('input', (e) => renderBrowseLists(e.target.value));
+// Tilt calibration screen
 $('tiltTestBtn').addEventListener('click', openTiltTest);
-$('ttEnable').addEventListener('click', () => { enableMotion().then(() => { ttBaseline = null; updateTiltTest(); }); });
+$('ttEnable').addEventListener('click', () => enableMotion().then(() => {
+  $('ttEnable').style.display = motionEnabled ? 'none' : '';
+  updateTiltTest();
+}));
 $('ttFlip').addEventListener('click', () => { tiltFlip = !tiltFlip; store.set('gtc_tilt_flip', tiltFlip ? '1' : '0'); updateTiltTest(); });
 $('ttBack').addEventListener('click', () => show('landing'));
 $('codeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));

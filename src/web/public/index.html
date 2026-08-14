@@ -11,12 +11,12 @@
        Deliberately NOT applied to forehead mode below -- that overlay is a display surface read
        across a dim room, so its high-contrast black/white stays as-is. */
     :root {
-      --brand:#46178f; --brand-deep:#33106a; --ink:#1b1033; --paper:#fff;
+      --brand:#46178f; --ink:#1b1033; --paper:#fff;
       --muted:#6b6480; --edge:#e6e2ef;
       --red:#e21b3c; --red-d:#a81430; --blue:#1368ce; --blue-d:#0e4a95;
       --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
-      --ok:#26890c; --off:#b9b3c7; --danger:#e21b3c; --warn:#ffa602;
-      --fg:var(--ink); --card:var(--paper);
+      --ok:#26890c; --off:#b9b3c7; --warn:#ffa602;
+      --card:var(--paper);
       --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
                       'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
     }
@@ -113,8 +113,6 @@
     .charname { font-size:1.6rem; font-weight:900; color:var(--ink); }
     .charsrc { color:var(--muted); font-size:.9rem; font-weight:600; }
     .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
-    .badge { display:inline-block; padding:.15rem .6rem; border-radius:999px; background:var(--brand);
-             color:#fff; font-size:.75rem; font-weight:800; }
     .big-emoji { font-size:1.6rem; font-weight:900; letter-spacing:.12em; text-align:center; color:var(--brand); }
     /* Podium colouring for the top three on the results screen. */
     .seat.rank1 { background:linear-gradient(#ffd75e,#ffc107); }
@@ -435,7 +433,7 @@
           <button id="undoBtn" class="ghost" style="display:none">Undo</button>
         </div>
         <p class="hint center" id="rerollNote"></p>
-        <div class="charcard" id="checkCard"></div>
+        <div id="checkCard"></div>
       </div>
       <div class="card">
         <div class="hint">Everyone else — you'll answer questions about these</div>
