@@ -7,13 +7,24 @@
 // *logic* are unit-tested without a network in test/web-rooms.test.js and test/web-setup.test.js;
 // this proves the socket wiring end to end.
 
+const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
 process.env.WEB_PORT = process.env.WEB_PORT || '4199';
 process.env.WEB_SCOPE = process.env.WEB_SCOPE || 'gtc-check-scope';
 process.env.WEB_GRACE_SECONDS = process.env.WEB_GRACE_SECONDS || '1'; // short grace so the check stays quick
+const OWN_DB = !process.env.BOT_DB_PATH; // did we pick the path, or did the caller?
 process.env.BOT_DB_PATH = process.env.BOT_DB_PATH || path.join(os.tmpdir(), 'gtc-ws-check.sqlite');
+
+// Start from an empty throwaway DB every run. Without this the second run dies on a UNIQUE
+// violation against its own leftover seed -- a check that only works once is not a check.
+// Only ever removes the temp DB this script created; never a caller-supplied BOT_DB_PATH.
+if (OWN_DB) {
+  for (const suffix of ['', '-wal', '-shm']) {
+    try { fs.unlinkSync(process.env.BOT_DB_PATH + suffix); } catch { /* not there yet */ }
+  }
+}
 
 // Seed a tiny content scope BEFORE requiring the server (which resolves WEB_SCOPE at load).
 const characterLists = require('../src/core/db/characterLists');

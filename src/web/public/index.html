@@ -203,7 +203,19 @@
                        color:var(--muted); font-size:.7rem; padding:6px; }
     .chartile .cname { display:block; padding:6px 5px; font-size:.72rem; font-weight:800;
                        color:var(--ink); line-height:1.2; }
-    #browseCrumb { color:rgba(255,255,255,.85); font-size:.85rem; font-weight:700; }
+    /* A sticky bar, because the alternative is a Back button below a 20,000px card -- i.e. one
+       nobody can reach. Top-left is where a phone user looks for it, and it stays put at any
+       scroll depth. */
+    #browseBar { position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:10px;
+                 padding:10px 0 12px; background:var(--brand); }
+    #browseBar::after { content:''; position:absolute; left:-50vw; right:-50vw; top:0; bottom:0;
+                        background:var(--brand); z-index:-1; } /* bleed past main's padding */
+    .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem; border-radius:999px;
+               background:#fff; color:var(--brand); box-shadow:0 4px 0 rgba(0,0,0,.25); }
+    .backbtn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
+    #browseCrumb { color:#fff; font-size:.85rem; font-weight:800; line-height:1.25; flex:1;
+                   overflow:hidden; text-overflow:ellipsis; }
+    #browseCrumb .up { text-decoration:underline; cursor:pointer; }
 
     /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
        and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
@@ -303,11 +315,13 @@
 
     <!-- Compendium: read-only browsing, category -> list -> character -->
     <section id="browse" class="screen">
-      <div id="browseCrumb"></div>
+      <div id="browseBar">
+        <button id="browseBack" class="backbtn">‹ Back</button>
+        <div id="browseCrumb"></div>
+      </div>
       <input id="browseFilter" placeholder="Filter…" autocomplete="off" style="display:none" />
       <div class="card flat"><div id="browseBody"></div></div>
       <button id="browseMore" class="ghost" style="display:none">Load more</button>
-      <button id="browseBack" class="ghost">Back</button>
     </section>
 
     <!-- Tilt calibration / diagnostics -->

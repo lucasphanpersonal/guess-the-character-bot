@@ -791,14 +791,20 @@ function browseBusy(on) {
   if (on) $('browseBody').innerHTML = '<p class="hint center">Loading…</p>';
 }
 
-async function openBrowse() {
+async function openBrowse({ push = true } = {}) {
+  // Mark the entry we are leaving, so backing out of the compendium lands on the app rather
+  // than on whatever the tab's history happens to hold below it.
+  if (push && !$('browse').classList.contains('active')) {
+    try { history.replaceState({ gtcExit: true }, ''); } catch { historyWorks = false; }
+  }
   browseState.view = 'categories';
   browseState.category = null;
   browseState.list = null;
   show('browse');
   $('browseFilter').style.display = 'none';
   $('browseMore').style.display = 'none';
-  $('browseCrumb').textContent = 'Everything in the game';
+  setCrumb(['Everything in the game']);
+  if (push) pushBrowseHistory('categories');
   browseBusy(true);
   try {
     const { categories } = await getJson('/api/browse/categories');
@@ -821,10 +827,11 @@ async function openBrowse() {
   }
 }
 
-async function openCategory(category) {
+async function openCategory(category, { push = true } = {}) {
   browseState.view = 'lists';
   browseState.category = category;
-  $('browseCrumb').textContent = category;
+  setCrumb(['All', category]);
+  if (push) pushBrowseHistory('lists', { category });
   $('browseMore').style.display = 'none';
   browseBusy(true);
   try {
@@ -873,12 +880,13 @@ function renderBrowseLists(query) {
   }
 }
 
-async function openList(list) {
+async function openList(list, { push = true } = {}) {
   browseState.view = 'characters';
   browseState.list = list;
   browseState.offset = 0;
   $('browseFilter').style.display = 'none';
-  $('browseCrumb').textContent = `${browseState.category} › ${list.name}`;
+  setCrumb(['All', browseState.category, list.name]);
+  if (push) pushBrowseHistory('characters', { category: browseState.category, list });
   browseBusy(true);
   $('browseBody').innerHTML = '';
   await loadCharacterPage(true);
@@ -912,9 +920,8 @@ async function loadCharacterPage(first) {
     const more = browseState.offset < data.total;
     $('browseMore').style.display = more ? '' : 'none';
     $('browseMore').textContent = `Load more (${browseState.offset} of ${data.total})`;
-    $('browseCrumb').textContent =
-      `${browseState.category} › ${data.list.name} — ${data.total} character${data.total === 1 ? '' : 's'}` +
-      (data.list.playable ? '' : ' (not in play)');
+    setCrumb(['All', browseState.category,
+      `${data.list.name} · ${data.total}${data.list.playable ? '' : ' · not in play'}`]);
   } catch (err) {
     $('browseBody').innerHTML = `<p class="hint center">Could not load (${escapeHtml(err.message)}).</p>`;
   } finally {
@@ -922,7 +929,51 @@ async function loadCharacterPage(first) {
   }
 }
 
+// A breadcrumb where every level above the current one is tappable, so going up two steps does
+// not mean pressing Back twice. Taps rewind history instead of pushing, so the phone's own Back
+// gesture keeps agreeing with what is on screen.
+function setCrumb(parts) {
+  const el = $('browseCrumb');
+  el.innerHTML = '';
+  parts.forEach((label, i) => {
+    if (i) el.appendChild(document.createTextNode(' › '));
+    const span = document.createElement('span');
+    span.textContent = label;
+    if (i < parts.length - 1) {
+      span.className = 'up';
+      span.addEventListener('click', () => (historyWorks
+        ? history.go(i - (parts.length - 1))
+        : (i === 0 ? openBrowse() : openCategory(browseState.category))));
+    }
+    el.appendChild(span);
+  });
+}
+
+// The phone's own Back gesture is what people reach for first, so each depth gets a history
+// entry. Guarded on the browse screen being active: a game can pull the player out of browsing
+// at any moment, and a stray back-swipe must not then drag them out of the game.
+let historyWorks = true;
+function pushBrowseHistory(view, extra = {}) {
+  try {
+    history.pushState({ gtcBrowse: { view, ...extra } }, '');
+  } catch {
+    // Some embedded webviews refuse pushState. Note it, so Back walks the levels by hand
+    // instead of calling history.back() and sailing off the page entirely.
+    historyWorks = false;
+  }
+}
+
+window.addEventListener('popstate', (e) => {
+  if (!$('browse').classList.contains('active')) return;
+  const st = e.state?.gtcExit ? null : e.state?.gtcBrowse;
+  if (!st) return show(currentRoom ? 'lobby' : 'landing');
+  if (st.view === 'categories') return openBrowse({ push: false });
+  if (st.view === 'lists') return openCategory(st.category, { push: false });
+  if (st.view === 'characters') return openList(st.list, { push: false });
+});
+
 function browseBack() {
+  if (historyWorks) return history.back();
   if (browseState.view === 'characters') return openCategory(browseState.category);
   if (browseState.view === 'lists') return openBrowse();
   show(currentRoom ? 'lobby' : 'landing');
