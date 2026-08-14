@@ -57,7 +57,10 @@ function start(tag, command, commandArgs, env = {}) {
     buffered += chunk.toString();
     const lines = buffered.split(/\r?\n/);
     buffered = lines.pop() ?? '';
-    for (const line of lines) if (line.trim()) say(tag, line);
+    // The web server tags its own lines `[web]` so it reads well when run on its own; through
+    // here that doubles up into "[web] [web] …". Strip the child's copy — this process is
+    // already labelling every line.
+    for (const line of lines) if (line.trim()) say(tag, line.replace(new RegExp(`^\\[${tag}\\]\\s?`), ''));
   };
   child.stdout.on('data', onData);
   child.stderr.on('data', onData);
@@ -97,8 +100,13 @@ if (wantDiscord) {
 if (wantTunnel) {
   // The tunnel points at the plain HTTP port on purpose: Cloudflare terminates TLS itself, and
   // pointing it at the self-signed HTTPS listener would just make it distrust the certificate.
+  //
+  // 127.0.0.1 rather than `localhost`: the server binds 0.0.0.0, which is IPv4 only, while
+  // `localhost` resolves to ::1 first on Windows -- so cloudflared dials an address nothing is
+  // listening on and reports "the target machine actively refused it" as though the server were
+  // down. Naming the IPv4 address removes the ambiguity.
   const port = process.env.WEB_PORT || 4180;
-  start('tunnel', 'cloudflared', ['tunnel', '--url', `http://localhost:${port}`, '--no-autoupdate']);
+  start('tunnel', 'cloudflared', ['tunnel', '--url', `http://127.0.0.1:${port}`, '--no-autoupdate']);
   say('sys', 'Watch the tunnel lines for the https://<name>.trycloudflare.com URL to share.');
 }
 

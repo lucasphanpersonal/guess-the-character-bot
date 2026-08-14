@@ -45,6 +45,16 @@ Both must pass before a commit. Beyond that:
   because an assertion kept its own hand-written copy of the fixture's cast list, and the
   fixture had grown a character. Derive expectations from the fixture, never restate them --
   and when something is random (a deal, a shuffle), a single green run proves little.
+- **Never leave a detached server running.** Each `nohup`/background restart of the launcher
+  *adds* a stack rather than replacing one. Four accumulated over one session: one held :4180
+  so the user's own launcher could not bind, and three extra Discord bots stayed logged in, so
+  every slash command was handled four times. Before starting a server, kill whatever holds the
+  port; when finished, kill what you started. `netstat -ano | grep ':4180.*LISTENING'` names the
+  holder, and `Get-Process node,cloudflared` shows the rest.
+- **Bind address and dial address must agree.** The server binds `0.0.0.0`, which is IPv4 only,
+  while `localhost` resolves to `::1` first on Windows. Point local clients (the tunnel) at
+  `127.0.0.1` explicitly. The failure reads "the target machine actively refused it", which
+  blames the server for being down rather than the address for being wrong.
 - **Assert positively.** A test that only asserts a 404 passes even when the route is deleted,
   because the static handler 404s too. That is how a deleted `/img` route once shipped green.
 
@@ -138,6 +148,9 @@ consistent — new UI should look like it was always there.
   everything between two landmarks, including the whole `/img` route. Use exact-match edits.
 - *Don't chain shell commands with `&&` when a zero-match is an expected outcome* — `grep`
   exiting 1 short-circuits the rest of the line and the edit never runs, silently.
+- *Never report a change you have not made.* "I've added a note about this" was said about a
+  file that was never edited. If a fix is worth mentioning, make it in the same turn and check
+  it is there -- a stated intention reads to everyone else as a completed change.
 - *Verify the edit landed* (grep it back) before reporting it done, especially through
   heredocs where quoting can mangle the payload.
 
