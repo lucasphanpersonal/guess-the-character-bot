@@ -207,9 +207,16 @@
        nobody can reach. Top-left is where a phone user looks for it, and it stays put at any
        scroll depth. */
     #browseBar { position:sticky; top:0; z-index:6; display:flex; align-items:center; gap:10px;
-                 padding:10px 0 12px; background:var(--brand); }
-    #browseBar::after { content:''; position:absolute; left:-50vw; right:-50vw; top:0; bottom:0;
-                        background:var(--brand); z-index:-1; } /* bleed past main's padding */
+                 padding:10px 0 14px; }
+    /* The scrim behind the bar fades out rather than ending in a ruled line, so rows dissolve
+       as they slide under it instead of being guillotined. Extending past `main`'s padding
+       keeps it edge to edge; the extra height above covers iOS overscroll. No backdrop-filter
+       here on purpose -- WebKit can paint a blur unmasked, which is the hard edge all over
+       again. `mask-image` is the whole effect, so browsers without it keep a solid bar. */
+    #browseBar::after { content:''; position:absolute; left:-50vw; right:-50vw;
+                        top:-60px; bottom:-44px; z-index:-1; background:var(--brand);
+                        -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 42px), transparent);
+                        mask-image:linear-gradient(to bottom, #000 calc(100% - 42px), transparent); }
     .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem; border-radius:999px;
                background:#fff; color:var(--brand); box-shadow:0 4px 0 rgba(0,0,0,.25); }
     .backbtn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
