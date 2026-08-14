@@ -37,10 +37,16 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 ## Run it
 
 ```bash
+npm run start:all -- --secure --tunnel   # everything: web + Discord bot + a public URL
 npm run web              # HTTP on :4180 — tap fallback only (tilt sensors need HTTPS)
 npm run web:secure       # HTTP on :4180 AND HTTPS on :4443 (self-signed) — HTTPS enables tilt
 npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game)
 ```
+
+`start:all` runs both frontends (and optionally a Cloudflare tunnel) in one terminal with
+per-process prefixes, and stops them together on Ctrl+C. Flags: `--secure`, `--tunnel`,
+`--no-web`, `--no-discord`. A child exiting never takes its siblings down — a bad Discord token
+should not close a game in progress.
 
 **HTTPS also keeps the screen on.** The Screen Wake Lock API needs a secure context too, and
 without it a phone auto-locks mid-game — nobody is touching it once it's on a forehead. Over

@@ -30,7 +30,8 @@
     "fetch:tmdb": "node scripts/fetch-tmdb-images.js",
     "fetch:fandom": "node scripts/fetch-fandom-images.js",
     "backfill:fame": "node scripts/backfill-fame-from-order.js",
-    "check:images": "node scripts/check-image-urls.js"
+    "check:images": "node scripts/check-image-urls.js",
+    "start:all": "node scripts/start-all.js"
   },
   "engines": {
     "node": ">=18.0.0"
