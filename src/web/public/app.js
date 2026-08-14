@@ -543,7 +543,7 @@ function renderOver(result) {
     }
     const ch = s.character;
     const thumb = ch && ch.imageUrl
-      ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;border-radius:9px;flex:none">`
+      ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;object-position:50% 20%;border-radius:9px;flex:none">`
       : '';
     // Podium colouring for the top three finishers; everyone else is a plain row.
     const rank = s.turns === null ? 0 : finishers.filter((o) => o.turns < s.turns).length + 1;
