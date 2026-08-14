@@ -233,6 +233,91 @@
                    overflow:hidden; text-overflow:ellipsis; }
     #browseCrumb .up { text-decoration:underline; cursor:pointer; }
 
+    /* --- idle whimsy ---------------------------------------------------------------------
+       The page breathes a little when nobody is doing anything. Rules this obeys:
+
+       - transform/opacity only, 1-2px, periods of 5-9s. It should read as "alive" at the edge
+         of vision and be invisible if you look straight at it. Anything you can consciously
+         watch is too much.
+       - every keyframe re-states the element's resting transform via its var, because an
+         animation OVERRIDES the static transform -- omitting it would flatten the hand-set
+         angles retilt()/wobble() set up.
+       - :active kills the animation, or the press-down would be overridden and buttons would
+         stop feeling like buttons.
+       - nothing idles during play (see .at-play): by then every phone is on a forehead and the
+         only thing that should move is the game. It is battery, too.
+       - the whole block is behind prefers-reduced-motion, so asking for less gets exactly the
+         static page that shipped before this. */
+    @media (prefers-reduced-motion: no-preference) {
+      @keyframes idleFloat {
+        0%,100% { transform:rotate(var(--tilt,0deg)) translateY(0); }
+        50%     { transform:rotate(var(--tilt,0deg)) translateY(-2px); }
+      }
+      .screen.active .card:not(.flat) { animation:idleFloat 7.5s ease-in-out infinite; }
+      /* Staggered, or the cards pulse in unison and the page looks like it is snoring. */
+      .screen.active .card:nth-of-type(2) { animation-delay:-2.4s; }
+      .screen.active .card:nth-of-type(3) { animation-delay:-4.9s; }
+      .screen.active .card:nth-of-type(4) { animation-delay:-1.2s; }
+
+      @keyframes idleBob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-1.5px); } }
+      .screen.active > button { animation:idleBob 5.5s ease-in-out infinite; }
+      .screen.active > button:nth-of-type(2) { animation-delay:-1.8s; }
+      .screen.active > button:nth-of-type(3) { animation-delay:-3.6s; }
+      button:active, .tile:active, .rowbtn:active { animation:none; }
+
+      /* The room code is the hero of the lobby, so it gets the most life: each character eases
+         between its own angle and a shallower one, on its own clock. */
+      @keyframes idleSway {
+        0%,100% { transform:rotate(var(--rot)); }
+        50%     { transform:rotate(calc(var(--rot) * 0.4)); }
+      }
+      .roomcode .ch { animation:idleSway 6s ease-in-out infinite; }
+      .roomcode .ch:nth-child(2) { animation-delay:-1.5s; }
+      .roomcode .ch:nth-child(3) { animation-delay:-3s; }
+      .roomcode .ch:nth-child(4) { animation-delay:-4.5s; }
+
+      /* Roster pills bob after their pop-in. The delay lets pop finish first -- two animations
+         on one property means the later one wins while both are running. */
+      @keyframes idlePill { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-1.5px); } }
+      #roster .seat { animation:pop .25s ease-out, idlePill 4.5s ease-in-out .3s infinite; }
+      #roster .seat:nth-child(even) { animation-delay:0s, 2.1s; }
+
+      /* --- easter eggs ---
+         Fired from JS at a long random interval, never during play. Each is a one-shot class
+         that removes itself. !important because the idle animation above sits on a more
+         specific selector and would otherwise win. */
+      @keyframes eggHop {
+        0%   { transform:translateY(0) scaleY(1); }
+        30%  { transform:translateY(-10px) scaleY(1.04); }
+        55%  { transform:translateY(0) scaleY(.93); }
+        75%  { transform:translateY(-3px) scaleY(1); }
+        100% { transform:translateY(0) scaleY(1); }
+      }
+      .egg-hop { animation:eggHop .8s cubic-bezier(.3,1.5,.5,1) !important; }
+
+      @keyframes eggWave {
+        0%,100% { transform:rotate(var(--rot)) translateY(0); }
+        45%     { transform:rotate(calc(var(--rot) * -1.6)) translateY(-9px); }
+      }
+      .egg-wave { animation:eggWave .55s ease-in-out !important; }
+
+      @keyframes eggRoll { to { transform:rotate(calc(var(--rot) + 360deg)); } }
+      .egg-roll { animation:eggRoll .9s cubic-bezier(.5,0,.3,1.2) !important; }
+
+      @keyframes eggSpin { to { transform:rotate(calc(var(--rot,0deg) + 360deg)); } }
+      .egg-spin { animation:eggSpin 1s cubic-bezier(.5,0,.3,1.25) !important; }
+
+      @keyframes eggNudge {
+        0%,100% { transform:rotate(var(--tilt,0deg)); }
+        30%     { transform:rotate(calc(var(--tilt,0deg) * -3)); }
+        65%     { transform:rotate(calc(var(--tilt,0deg) * 2)); }
+      }
+      .egg-nudge { animation:eggNudge 1.1s ease-in-out !important; }
+    }
+    /* Play is not the time. Kills every idle animation above without touching the eggs' guard
+       in JS, so a screen mid-animation simply settles. */
+    .at-play .card, .at-play button, .at-play .seat { animation:none !important; }
+
     /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
        and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
     .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
