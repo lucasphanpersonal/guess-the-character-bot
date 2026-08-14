@@ -172,6 +172,33 @@
     .seat.tint3 { background:#e9f5e6; } .seat.tint3 .owner { background:var(--green); }
     body { overflow-x:hidden; } /* insurance: rotated cards must never make the page scroll sideways */
 
+    /* --- compendium ---------------------------------------------------------------------- */
+    .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .tile { border:none; border-radius:16px; padding:16px 12px; color:#fff; font-weight:900;
+            box-shadow:0 5px 0 rgba(0,0,0,.25); cursor:pointer; text-align:left; width:100%; }
+    .tile .n { display:block; font-size:.75rem; font-weight:700; opacity:.85; margin-top:3px; }
+    .tile.c0 { background:var(--red); } .tile.c1 { background:var(--blue); }
+    .tile.c2 { background:var(--amber); color:#2b1c00; } .tile.c3 { background:var(--green); }
+    .tile:nth-child(odd) { transform:rotate(-0.6deg); } .tile:nth-child(even) { transform:rotate(0.6deg); }
+    .tile:active { transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
+    /* Rows are buttons, so the whole strip is the tap target rather than the text. */
+    .rowbtn { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px;
+              border:none; border-radius:12px; background:#f6f4fa; color:var(--ink); font-weight:800;
+              box-shadow:none; margin-bottom:8px; cursor:pointer; }
+    .rowbtn:active { transform:translateY(2px); }
+    .rowbtn .n { margin-left:auto; color:var(--muted); font-weight:700; font-size:.8rem; flex:none; }
+    .off-pool { font-size:.6rem; font-weight:900; letter-spacing:.08em; background:var(--edge);
+                color:var(--muted); padding:2px 6px; border-radius:999px; flex:none; }
+    /* A grid of faces. Fixed tile heights so nothing reflows as thumbnails arrive. */
+    .chargrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; }
+    .chartile { background:#f6f4fa; border-radius:12px; overflow:hidden; text-align:center; }
+    .chartile img { width:100%; height:96px; object-fit:cover; display:block; background:var(--edge); }
+    .chartile .noimg { height:96px; display:flex; align-items:center; justify-content:center;
+                       color:var(--muted); font-size:.7rem; padding:6px; }
+    .chartile .cname { display:block; padding:6px 5px; font-size:.72rem; font-weight:800;
+                       color:var(--ink); line-height:1.2; }
+    #browseCrumb { color:rgba(255,255,255,.85); font-size:.85rem; font-weight:700; }
+
     /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
        and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
     .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
@@ -264,7 +291,17 @@
         <button id="joinBtn" class="alt">Join room</button>
       </div>
       <p class="err" id="landingErr"></p>
+      <button id="browseBtn" class="ghost">Browse the characters</button>
       <button id="tiltTestBtn" class="ghost" style="margin-top:4px">Test tilt on this phone</button>
+    </section>
+
+    <!-- Compendium: read-only browsing, category -> list -> character -->
+    <section id="browse" class="screen">
+      <div id="browseCrumb"></div>
+      <input id="browseFilter" placeholder="Filter…" autocomplete="off" style="display:none" />
+      <div class="card"><div id="browseBody"></div></div>
+      <button id="browseMore" class="ghost" style="display:none">Load more</button>
+      <button id="browseBack" class="ghost">Back</button>
     </section>
 
     <!-- Tilt calibration / diagnostics -->

@@ -67,6 +67,29 @@ function removeCharacter(listId, name) {
   return info.changes > 0;
 }
 
+/**
+ * One list's characters, best-known first, for browsing.
+ *
+ * Paginated because a single list can run to 1,212 rows (Pokemon) and a phone on a tunnel should
+ * not receive them in one response. Ordered by fame DESC with unranked last -- the same ordering
+ * difficulty cuts along, so what a browser sees at the top is what the game actually deals first.
+ */
+function getCharactersRanked(listId, limit = 60, offset = 0) {
+  return db
+    .prepare(
+      `SELECT id, name, image_url, fame
+         FROM characters
+        WHERE list_id = ?
+        ORDER BY fame IS NULL, fame DESC, name COLLATE NOCASE
+        LIMIT ? OFFSET ?`
+    )
+    .all(listId, limit, offset);
+}
+
+function countCharacters(listId) {
+  return db.prepare('SELECT COUNT(*) AS n FROM characters WHERE list_id = ?').get(listId)?.n ?? 0;
+}
+
 function getCharacters(listId) {
   return db
     .prepare('SELECT * FROM characters WHERE list_id = ? ORDER BY name COLLATE NOCASE')
@@ -622,6 +645,8 @@ module.exports = {
   setCharacterImage,
   removeCharacter,
   getCharacters,
+  getCharactersRanked,
+  countCharacters,
   getCharactersForLists,
   getListsByIds,
   formatListLabel,

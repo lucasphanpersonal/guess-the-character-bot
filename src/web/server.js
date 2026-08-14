@@ -274,6 +274,76 @@ function requestHandler(req, res) {
       });
   }
 
+  // --- compendium: read-only browsing of the whole library ------------------------------
+  //
+  // Plain HTTP rather than socket events, deliberately: browsing is stateless, has nothing to
+  // do with a room, and must never contend with the game traffic on the socket. It is also
+  // cacheable, which matters when several phones browse over one tunnel.
+  //
+  // Everything is paginated and ordered the way the game itself orders things -- lists by
+  // popularity, characters by fame -- so the top of a page is the part people recognise.
+  if (url.pathname.startsWith('/api/browse/')) {
+    const what = url.pathname.slice('/api/browse/'.length);
+    const int = (name, fallback, max) => {
+      const n = Number(url.searchParams.get(name));
+      return Number.isFinite(n) && n >= 0 ? Math.min(n, max) : fallback;
+    };
+    // Short cache: the library changes only when a seeder or curation runs, and a stale minute
+    // costs nothing while re-browsing the same category repeatedly is common.
+    const cached = (body) => {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=60' });
+      res.end(JSON.stringify(body));
+    };
+
+    try {
+      if (what === 'categories') {
+        const counts = characterLists.listCategoriesWithEnabledCounts(WEB_SCOPE);
+        return cached({
+          categories: counts.map((c) => ({ category: c.category, lists: c.count, playable: c.enabled })),
+        });
+      }
+
+      if (what === 'lists') {
+        const category = url.searchParams.get('category');
+        if (!category) return sendJson(res, 400, { error: 'category required' });
+        // The whole category in one response: even the largest is ~592 rows of name+counts,
+        // which is far cheaper than paging it and lets the client filter as you type.
+        const lists = characterLists.listsForFilter(WEB_SCOPE, category).map((l) => ({
+          id: l.id,
+          name: l.name,
+          characters: l.character_count,
+          playable: l.enabled === 1,
+        }));
+        return cached({ category, lists });
+      }
+
+      if (what === 'characters') {
+        const listId = Number(url.searchParams.get('listId'));
+        if (!Number.isInteger(listId) || listId <= 0) return sendJson(res, 400, { error: 'listId required' });
+        // Scope-checked like every other client-supplied id here.
+        const [list] = characterLists.getListsByIds([listId]);
+        if (!list || list.guild_id !== WEB_SCOPE) return sendJson(res, 404, { error: 'Unknown list.' });
+        const limit = int('limit', 60, 120);
+        const offset = int('offset', 0, 100000);
+        const rows = characterLists.getCharactersRanked(listId, limit, offset);
+        return cached({
+          list: { id: list.id, name: list.name, category: list.category, playable: list.enabled === 1 },
+          total: characterLists.countCharacters(listId),
+          offset,
+          characters: rows.map((c) => ({
+            id: c.id,
+            name: c.name,
+            // Through the local cache, same as in-game, so browsing warms it for free.
+            imageUrl: c.image_url ? `/img/${c.id}` : null,
+          })),
+        });
+      }
+    } catch (err) {
+      return sendJson(res, 500, { error: err.message });
+    }
+    return sendJson(res, 404, { error: 'Unknown browse endpoint.' });
+  }
+
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,

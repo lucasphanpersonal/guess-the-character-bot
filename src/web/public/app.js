@@ -771,6 +771,163 @@ function updateTiltTest() {
     : (motionNote || 'waiting for sensor…');
 }
 
+// --- compendium ---------------------------------------------------------------------------
+//
+// Read-only browsing over plain HTTP, so it never contends with the game socket and the browser
+// can cache it. Three depths -- categories, lists, characters -- each ordered the way the game
+// orders things, so the top of a page is the part people actually recognise.
+const browseState = { view: 'categories', category: null, list: null, offset: 0, loading: false };
+let browseLists = []; // the current category's lists, kept client-side so filtering is instant
+
+const PAGE = 60;
+async function getJson(path) {
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+function browseBusy(on) {
+  browseState.loading = on;
+  if (on) $('browseBody').innerHTML = '<p class="hint center">Loading…</p>';
+}
+
+async function openBrowse() {
+  browseState.view = 'categories';
+  browseState.category = null;
+  browseState.list = null;
+  show('browse');
+  $('browseFilter').style.display = 'none';
+  $('browseMore').style.display = 'none';
+  $('browseCrumb').textContent = 'Everything in the game';
+  browseBusy(true);
+  try {
+    const { categories } = await getJson('/api/browse/categories');
+    const body = $('browseBody');
+    body.innerHTML = '';
+    const tiles = document.createElement('div');
+    tiles.className = 'tiles';
+    categories.forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = `tile c${i % 4}`;
+      b.innerHTML = `${escapeHtml(c.category)}<span class="n">${c.lists} lists · ${c.playable} in play</span>`;
+      b.addEventListener('click', () => openCategory(c.category));
+      tiles.appendChild(b);
+    });
+    body.appendChild(tiles);
+  } catch (err) {
+    $('browseBody').innerHTML = `<p class="hint center">Could not load (${escapeHtml(err.message)}).</p>`;
+  } finally {
+    browseState.loading = false;
+  }
+}
+
+async function openCategory(category) {
+  browseState.view = 'lists';
+  browseState.category = category;
+  $('browseCrumb').textContent = category;
+  $('browseMore').style.display = 'none';
+  browseBusy(true);
+  try {
+    const data = await getJson(`/api/browse/lists?category=${encodeURIComponent(category)}`);
+    browseLists = data.lists;
+    // A filter box rather than paging: the whole category is already here, and 437 titles is a
+    // lot to thumb past when you know the name you want.
+    const filter = $('browseFilter');
+    filter.style.display = '';
+    filter.value = '';
+    filter.placeholder = `Filter ${browseLists.length} lists…`;
+    renderBrowseLists('');
+  } catch (err) {
+    $('browseBody').innerHTML = `<p class="hint center">Could not load (${escapeHtml(err.message)}).</p>`;
+  } finally {
+    browseState.loading = false;
+  }
+}
+
+function renderBrowseLists(query) {
+  const q = query.trim().toLowerCase();
+  const shown = q ? browseLists.filter((l) => l.name.toLowerCase().includes(q)) : browseLists;
+  const body = $('browseBody');
+  body.innerHTML = '';
+  if (!shown.length) {
+    body.innerHTML = '<p class="hint center">Nothing matches.</p>';
+    return;
+  }
+  // Capped rather than virtualised: a few hundred buttons is fine, thousands is not, and the
+  // filter is the intended way through a long category.
+  for (const l of shown.slice(0, 300)) {
+    const b = document.createElement('button');
+    b.className = 'rowbtn';
+    b.innerHTML =
+      `<span style="flex:1">${escapeHtml(l.name)}</span>` +
+      (l.playable ? '' : '<span class="off-pool">NOT IN POOL</span>') +
+      `<span class="n">${l.characters}</span>`;
+    b.addEventListener('click', () => openList(l));
+    body.appendChild(b);
+  }
+  if (shown.length > 300) {
+    const p = document.createElement('p');
+    p.className = 'hint center';
+    p.textContent = `Showing 300 of ${shown.length} — keep typing to narrow it down.`;
+    body.appendChild(p);
+  }
+}
+
+async function openList(list) {
+  browseState.view = 'characters';
+  browseState.list = list;
+  browseState.offset = 0;
+  $('browseFilter').style.display = 'none';
+  $('browseCrumb').textContent = `${browseState.category} › ${list.name}`;
+  browseBusy(true);
+  $('browseBody').innerHTML = '';
+  await loadCharacterPage(true);
+}
+
+async function loadCharacterPage(first) {
+  const { list, offset } = browseState;
+  try {
+    const data = await getJson(`/api/browse/characters?listId=${list.id}&limit=${PAGE}&offset=${offset}`);
+    const body = $('browseBody');
+    if (first) body.innerHTML = '';
+    let grid = body.querySelector('.chargrid');
+    if (!grid) {
+      grid = document.createElement('div');
+      grid.className = 'chargrid';
+      body.appendChild(grid);
+    }
+    for (const c of data.characters) {
+      const tile = document.createElement('div');
+      tile.className = 'chartile';
+      // loading="lazy": a 60-tile page would otherwise fire 60 image requests at once, and each
+      // miss makes the server fetch upstream. Only what scrolls into view is paid for.
+      tile.innerHTML =
+        (c.imageUrl
+          ? `<img src="${c.imageUrl}" alt="" loading="lazy" decoding="async">`
+          : '<div class="noimg">no picture</div>') +
+        `<span class="cname">${escapeHtml(c.name)}</span>`;
+      grid.appendChild(tile);
+    }
+    browseState.offset = offset + data.characters.length;
+    const more = browseState.offset < data.total;
+    $('browseMore').style.display = more ? '' : 'none';
+    $('browseMore').textContent = `Load more (${browseState.offset} of ${data.total})`;
+    $('browseCrumb').textContent =
+      `${browseState.category} › ${data.list.name} — ${data.total} character${data.total === 1 ? '' : 's'}` +
+      (data.list.playable ? '' : ' (not in play)');
+  } catch (err) {
+    $('browseBody').innerHTML = `<p class="hint center">Could not load (${escapeHtml(err.message)}).</p>`;
+  } finally {
+    browseState.loading = false;
+  }
+}
+
+function browseBack() {
+  if (browseState.view === 'characters') return openCategory(browseState.category);
+  if (browseState.view === 'lists') return openBrowse();
+  show(currentRoom ? 'lobby' : 'landing');
+}
+
 // --- helpers ------------------------------------------------------------------------------
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function readNick() { nickname = $('nickInput').value.trim(); if (nickname) store.set('gtc_nick', nickname); return nickname; }
@@ -908,6 +1065,10 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
 $('goodBtn').addEventListener('click', () => { primeMotion(); socket.emit('setup:confirm', {}, () => {}); });
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
 // Tilt calibration screen
+$('browseBtn').addEventListener('click', openBrowse);
+$('browseBack').addEventListener('click', browseBack);
+$('browseMore').addEventListener('click', () => { if (!browseState.loading) { browseState.loading = true; loadCharacterPage(false); } });
+$('browseFilter').addEventListener('input', (e) => renderBrowseLists(e.target.value));
 $('tiltTestBtn').addEventListener('click', openTiltTest);
 $('ttEnable').addEventListener('click', () => { enableMotion().then(() => { ttBaseline = null; updateTiltTest(); }); });
 $('ttFlip').addEventListener('click', () => { tiltFlip = !tiltFlip; store.set('gtc_tilt_flip', tiltFlip ? '1' : '0'); updateTiltTest(); });

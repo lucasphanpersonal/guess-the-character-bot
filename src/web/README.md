@@ -78,6 +78,11 @@ Endpoints that prove the shared core is reachable from this frontend:
   so ~4,600 Real People images could otherwise start failing mid-game. A miss that can't be
   filled redirects upstream, so the cache can never break a game. Cached files live in
   `data/image-cache/` (gitignored, refills itself).
+- `GET /api/browse/categories|lists|characters` — the **compendium**: read-only browsing of the
+  whole library, category → list → character. Plain HTTP rather than socket events, so it never
+  contends with game traffic and the browser can cache it (60s). Ordered the way the game orders
+  things — lists by popularity, characters by fame — and paginated, since one list runs to 1,212
+  rows. Thumbnails go through `/img/<id>`, so browsing warms the same cache a game uses.
 - `GET /api/categories` — categories from the shared content DB (scoped by `WEB_SCOPE`,
   default `web`; empty until lists are curated under that scope).
 

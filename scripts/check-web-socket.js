@@ -231,6 +231,20 @@ const connect = (playerId) => {
   check((await httpGet('/img/999999999')).status === 404, 'GET /img/<unknown> is a clean 404');
   check((await httpGet('/../.env')).status === 404, 'path traversal is refused');
 
+  // Compendium. Read-only, so the risk is a broken route rather than broken state -- and the
+  // scope check matters as much here as on /img, since listId comes from a client.
+  const cats = await fetch(`${URL}/api/browse/categories`).then((r) => r.json());
+  check(Array.isArray(cats.categories) && cats.categories.length > 0, 'browse: categories load');
+  const someCat = cats.categories[0].category;
+  const listing = await fetch(`${URL}/api/browse/lists?category=${encodeURIComponent(someCat)}`).then((r) => r.json());
+  check(listing.lists.length > 0 && listing.lists[0].name, 'browse: a category lists its titles');
+  const someList = listing.lists[0];
+  const chars = await fetch(`${URL}/api/browse/characters?listId=${someList.id}&limit=3`).then((r) => r.json());
+  check(chars.characters.length > 0 && typeof chars.total === 'number', 'browse: a list pages its characters');
+  check(chars.characters.length <= 3, 'browse: the page limit is honoured');
+  check((await httpGet('/api/browse/lists')).status === 400, 'browse: lists without a category is refused');
+  check((await httpGet('/api/browse/characters?listId=999999999')).status === 404, 'browse: an unknown list is refused');
+
   // The join QR is built from this origin. Behind a TLS-terminating proxy the hop to us is
   // plain HTTP, and a QR that encodes http:// silently costs whoever scans it their tilt
   // controls -- browsers only expose motion sensors in a secure context.
