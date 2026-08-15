@@ -6,6 +6,11 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["src/web/server.js"],
       "port": 4180
+    },
+    {
+      "name": "web-attach",
+      "url": "http://localhost:4180",
+      "port": 4180
     }
   ]
 }

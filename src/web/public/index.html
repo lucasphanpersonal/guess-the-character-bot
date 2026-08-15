@@ -110,8 +110,20 @@
     .charcard .noimg { display:flex; align-items:center; justify-content:center; height:230px;
                        color:var(--muted); font-size:.9rem; margin:6px 0; padding:12px;
                        border:3px dashed var(--edge); border-radius:14px; }
-    .charname { font-size:1.6rem; font-weight:900; color:var(--ink); }
-    .charsrc { color:var(--muted); font-size:.9rem; font-weight:600; }
+    /* Both reserve their lines whether or not they are filled, so a one-line name and a
+       two-line name occupy the same box. Together with the fixed image height above, the whole
+       character block is a constant size -- which is what lets the controls sit below it
+       without being shoved around as artwork arrives or a reroll swaps a short name for a long
+       one. */
+    .charname { font-size:1.6rem; font-weight:900; color:var(--ink);
+                line-height:1.15; min-height:2.3em;   /* exactly two lines of the above */
+                display:flex; align-items:center; justify-content:center; }
+    .charsrc { color:var(--muted); font-size:.9rem; font-weight:600; min-height:1.5em; }
+    /* Coloured, so it does not read as an exit, but visibly lighter than Reroll: it is the
+       rarer, corrective action and should not compete with the one you press repeatedly. */
+    .undo { margin-top:8px; padding:11px; font-size:.92rem; }
+    .gatetitle { text-align:center; font-family:var(--font-display); font-weight:900;
+                 font-size:1.15rem; color:var(--ink); margin-bottom:6px; }
     .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
     .big-emoji { font-size:1.6rem; font-weight:900; letter-spacing:.12em; text-align:center; color:var(--brand); }
     /* Podium colouring for the top three on the results screen. */
@@ -374,6 +386,24 @@
                       font-size:.8rem; opacity:.45; background:#000; color:#fff; border:1px solid #555;
                       border-radius:8px; }
     #foreheadLeave:active { opacity:.9; }
+    /* The turn clock, drawn on the card the ROOM is looking at.
+       This is the important half of the fix for "nobody knows whose turn it is": the wearer
+       cannot see their own screen, and half the phones in a party are on silent, so sound alone
+       cannot carry the turn. The bar drains across the bottom of the forehead card, goes amber
+       at the halfway mark and red for the last ten seconds, so anyone facing the player can see
+       exactly how long is left and say so out loud. */
+    #foreheadTimeBar { display:none; position:fixed; left:0; right:0; bottom:0; height:12px; z-index:4;
+                       background:rgba(255,255,255,.18); }
+    #foreheadTimeBar > div { height:100%; width:100%; background:#4ade4a; transition:width 1s linear; }
+    #forehead.warn #foreheadTimeBar > div { background:#ffd23f; }
+    #forehead.crit #foreheadTimeBar > div { background:#e21b3c; transition:width 1s linear, background .2s; }
+    /* The whole card flashes on the last few seconds -- visible from across a room, and it does
+       not depend on anyone's volume. */
+    #forehead.crit.mine #foreheadRot { animation:critFlash .5s steps(1) infinite; }
+    @keyframes critFlash { 0%,100% { background:#000 } 50% { background:#3a0008 } }
+    #forehead.mine.crit #foreheadRot::after { border-color:#e21b3c; animation-duration:.45s; }
+    #forehead.mine.warn #foreheadRot::after { border-color:#ffd23f; }
+
     /* Give-up hold progress: visible proof the hold is counting, since audio can be suspended. */
     #foreheadGiveUpBar { display:none; position:fixed; left:6%; right:6%; bottom:14%; height:16px; z-index:6;
                          background:rgba(255,255,255,.22); border-radius:999px; overflow:hidden; }
@@ -523,16 +553,17 @@
       <div class="card">
         <div class="hint center">Check this character — is it fair? <br>Reroll if nobody in the room would know them.</div>
         <div class="checkowner" id="checkOwner"></div>
-        <!-- Reroll sits ABOVE the character, not below it. Everything under here changes size
-             as artwork loads and as names wrap to a second line, which kept walking the button
-             out from under the player's thumb. Above it, nothing below can move it. -->
-        <button id="rerollBtn" class="alt" style="margin-top:10px">Reroll</button>
-        <p class="hint center" id="rerollNote"></p>
+        <!-- The thing, then what you can do to it, in the order you decide: look at the
+             character -> don't like it -> Reroll -> regret it -> Undo. Reroll used to sit ABOVE
+             the picture because everything below the artwork moved as it loaded and as names
+             wrapped, which walked the button out from under the reader's thumb. That is fixed at
+             the source now -- the character block holds a constant height (.charname/.charsrc
+             reserve their lines, the image box is fixed) -- so the controls can live where they
+             belong, under what they act on and above the one button that commits. -->
         <div id="checkCard"></div>
-        <!-- Undo goes under the character rather than beside Reroll. It is the rarer,
-             corrective action, and side by side it took half the width of a screen where one
-             button does nearly all the work -- and sat under the thumb doing the rerolling. -->
-        <button id="undoBtn" style="display:none; margin-top:12px">Undo last reroll</button>
+        <button id="rerollBtn" class="alt" style="margin-top:14px">Reroll</button>
+        <button id="undoBtn" class="undo" style="display:none">Undo last reroll</button>
+        <p class="hint center" id="rerollNote"></p>
       </div>
       <div class="card">
         <div class="hint">Everyone else — you'll answer questions about these</div>
@@ -540,6 +571,16 @@
         <ul class="roster" id="refList"></ul>
       </div>
       <p class="hint center" id="wakeNote"></p>
+      <!-- Tilt is not a nicety, it is the only control surface once a phone is on a forehead --
+           so this gate stands in front of "Good to go" until the sensor is live. Blocking here
+           is deliberate: it is the last moment everyone is together, looking at their phones,
+           and an unready player shows up in the room's "waiting on 1 more" instead of silently
+           breaking a game twenty minutes later. -->
+      <div class="card" id="motionGate" style="display:none">
+        <div class="gatetitle" data-wobble>Tilt controls needed</div>
+        <p class="hint center" id="motionGateWhy"></p>
+        <button id="motionGateBtn" class="alt">Turn on tilt controls</button>
+      </div>
       <button id="goodBtn" class="good">Good to go</button>
       <button id="unlockBtn" class="ghost" style="display:none">Unlock</button>
       <p class="hint center" id="waitingNote"></p>
@@ -581,6 +622,7 @@
         <div id="foreheadTurn"></div>
         <div id="foreheadName"></div>
         <div id="foreheadDebug"></div>
+        <div id="foreheadTimeBar"><div></div></div>
         <div id="foreheadGiveUpBar"><div></div></div>
         <button id="foreheadLeave">✕ leave</button>
       </div>

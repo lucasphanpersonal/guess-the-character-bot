@@ -368,8 +368,10 @@ document.addEventListener('visibilitychange', () => {
   if (wantWake && document.visibilityState === 'visible') keepAwake();
 });
 
+let lastSetupView = null;
 function renderSetup(view) {
   keepAwake();
+  lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
   // finished game's view lying around made a tilt during the NEXT game's reroll stage look like
   // a live "got it" -- so every screen that is not the playing screen clears it.
@@ -399,9 +401,22 @@ function renderSetup(view) {
     ref.appendChild(li);
   });
 
+  // Tilt is the only control surface once a phone is on a forehead, so "ready" has to mean the
+  // sensor is live. Until it is, this gate stands where Good to go would be.
+  const needsMotion = !motionEnabled && !view.confirmed;
+  $('motionGate').style.display = needsMotion ? '' : 'none';
+  if (needsMotion) {
+    const problem = motionProblem();
+    $('motionGateWhy').textContent = problem.text;
+    // A missing sensor or an http:// link has nothing to tap -- the button would only fail.
+    const canRetry = problem.fix === 'ask' || problem.fix === 'settings';
+    $('motionGateBtn').style.display = canRetry ? '' : 'none';
+    $('motionGateBtn').textContent = problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt controls';
+  }
+
   // Only the host can call off a deal; anyone can leave.
   $('setupCancelBtn').style.display = amHost() ? '' : 'none';
-  $('goodBtn').style.display = view.confirmed ? 'none' : '';
+  $('goodBtn').style.display = view.confirmed || needsMotion ? 'none' : '';
   $('unlockBtn').style.display = view.confirmed ? '' : 'none';
   $('waitingNote').textContent = view.confirmed
     ? (view.allReady ? 'Everyone is in!' : `Locked in — waiting on ${view.waitingOn} more.`)
@@ -440,32 +455,83 @@ function renderPlaying(view) {
   lastPlayView = view;
   // You've got yours: drop out of forehead mode into a "you got it" screen with your reveal.
   if (view.me?.finished) { hideForehead(); return renderFinished(view); }
-  // With a motion sensor we play the real thing: full-screen forehead card + tilt to answer.
-  // Without one (e.g. plain HTTP, no permission), fall back to the tap model below.
+  // With motion we play the real thing: full-screen forehead card + tilt to answer.
   if (motionEnabled) return renderForehead(view);
+
+  // Without it there is no honest fallback. On-screen Got it / Pass buttons LOOKED like one and
+  // were not: pressing them means holding the phone where you can see it, and the phone is
+  // showing your own character -- so they mean either cheating or tapping blind. They also made
+  // a broken setup look like a working one, and a whole game was played around someone who
+  // could not actually answer. So this screen says what is wrong and how to fix it, and offers
+  // nothing else. The turn clock keeps running, so play passes them by rather than stalling.
   hideForehead();
-  renderMotionPrompt($('motionBanner'));
-  const area = $('playArea');
-  if (view.isMyTurn) {
-    area.innerHTML = (view.outOfContentionNote ? `<p class="hint center">${escapeHtml(view.outOfContentionNote)}</p>` : '')
-      + '<div id="turnBtns"></div>';
-    const btns = area.querySelector('#turnBtns');
-    if (view.buttons.gotIt) addBtn(btns, 'Got it!', 'good', () => socket.emit('game:gotit', {}, () => {}));
-    if (view.buttons.pass) addBtn(btns, 'Pass', 'ghost', () => socket.emit('game:pass', {}, () => {}));
-    if (view.buttons.giveUp) addBtn(btns, 'Give up', 'ghost', () => { if (confirm('Give up? Your character is revealed and you drop out.')) socket.emit('game:giveup', {}, () => {}); });
-  } else if (view.wearing) {
-    area.innerHTML = `<div class="hint center">They're wearing — help them by answering questions</div>${charCardHtml(view.wearing)}`;
-  } else {
-    area.innerHTML = `<p class="hint center">Waiting for the next turn…</p>`;
+  $('motionBanner').innerHTML = '';
+  const problem = motionProblem();
+  // The banner is left to startTurnTicker below -- whose turn it is and how long is left still
+  // matters to someone who cannot answer, and setting it here would only be overwritten.
+  $('playArea').innerHTML = `<p class="hint center">${escapeHtml(problem.text)}</p><div id="turnBtns"></div>`;
+  const btns = $('playArea').querySelector('#turnBtns');
+  if (problem.fix === 'ask' || problem.fix === 'settings') {
+    addBtn(btns, problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt controls', 'alt',
+      () => enableMotion().then(() => lastPlayView && renderPlaying(lastPlayView)));
   }
   renderStandings($('standings'), view.standings);
   startTurnTicker(view);
   show('playing');
 }
 
+// Turn cues.
+//
+// The problem these solve: the player whose turn it is has their phone on their forehead. They
+// cannot see the screen, and at a party half the phones are on silent -- so a single chime at
+// the start of a turn leaves everyone guessing whether a turn has begun, how long is left, or
+// whether it has ended. Three channels now carry it, so losing any one of them still leaves two:
+//
+//   sound   a start chime, a soft tick every second, a double knock at halfway, faster and
+//           higher ticks for the last ten, and a descending alarm when time runs out
+//   sight   the clock bar on the forehead card, which the ROOM is looking at even though the
+//           wearer is not -- amber at halfway, red and flashing at the end
+//   touch   a buzz at start, at halfway and at time-up (Android; iOS Safari has no vibrate)
+//
+// Only the current player's phone ticks. Six phones ticking out of sync would be a nightmare,
+// and everyone else can see the bar on the wearer's forehead anyway.
+const CRIT_SECONDS = 10;
+
+function paintTurnClock(view, remaining) {
+  const bar = $('foreheadTimeBar');
+  const fh = $('forehead');
+  const total = view.turnSeconds || 0;
+  if (!bar) return;
+  const live = view.isMyTurn && !view.paused && remaining != null && total > 0;
+  bar.style.display = live ? 'block' : 'none';
+  fh.classList.toggle('warn', live && remaining <= total / 2 && remaining > CRIT_SECONDS);
+  fh.classList.toggle('crit', live && remaining <= CRIT_SECONDS);
+  if (live) bar.firstElementChild.style.width = `${Math.max(0, (remaining / total) * 100)}%`;
+}
+
+function turnCue(view, remaining) {
+  if (!view.isMyTurn || view.paused || remaining == null) return;
+  const total = view.turnSeconds || 0;
+  const half = Math.floor(total / 2);
+  if (remaining === 0) {
+    // Time up: unmistakable, and distinct from every other cue in the game.
+    tone(440, 220, { gain: 0.55, type: 'square' });
+    setTimeout(() => tone(330, 260, { gain: 0.55, type: 'square' }), 200);
+    setTimeout(() => tone(220, 420, { gain: 0.55, type: 'square' }), 440);
+    navigator.vibrate?.([300, 100, 300]);
+  } else if (total && remaining === half) {
+    tone(660, 110, { gain: 0.32 });
+    setTimeout(() => tone(660, 110, { gain: 0.32 }), 150);
+    navigator.vibrate?.([80, 60, 80]);
+  } else if (remaining <= CRIT_SECONDS) {
+    tone(900, 70, { gain: 0.3 }); // urgent: higher and firmer than the background tick
+  } else {
+    tone(1500, 22, { gain: 0.07 }); // the background tick -- felt more than heard
+  }
+}
+
 // The turn clock ticks locally each second and is re-synced on every server state push (so it
-// never trusts cross-device wall clocks). Paints whichever turn line is visible -- the forehead
-// banner in motion mode, or the card banner in the tap fallback.
+// never trusts cross-device wall clocks).
 let turnTicker = null;
 function startTurnTicker(view) {
   clearInterval(turnTicker);
@@ -481,12 +547,14 @@ function startTurnTicker(view) {
     } else {
       $('turnBanner').innerHTML = view.paused ? pausedMsg : bannerText(view, remaining);
     }
+    paintTurnClock(view, remaining);
   };
   paint();
   if (view.paused || remaining == null) return; // frozen while the current player is away
   turnTicker = setInterval(() => {
     remaining = Math.max(0, remaining - 1);
     paint();
+    turnCue(view, remaining);
     if (remaining === 0) clearInterval(turnTicker);
   }, 1000);
 }
@@ -577,6 +645,7 @@ function addBtn(parent, label, cls, onClick) {
 
 // --- motion / tilt / forehead mode --------------------------------------------------------
 let motionEnabled = false;
+let motionDenied = false;
 let motionNote = '';
 let audioCtx = null;
 const hasMotion = 'DeviceMotionEvent' in window;
@@ -621,25 +690,38 @@ const isUpright = () => sensor.have && Math.abs(sensor.z) < NEUTRAL_MAX;
 
 function ensureAudio() {
   try {
+    // A party is exactly where phones are on silent. On iOS, Web Audio is routed to the ringer
+    // channel by default, so the hardware mute switch kills every cue -- and the wearer, whose
+    // phone is on their forehead, has no other channel at all. Declaring a playback session
+    // moves audio to the media channel, which the mute switch does not touch (Safari 16.4+).
+    // Where it is unsupported the cues are simply inaudible on a muted phone, which is why the
+    // turn clock is drawn on screen as well.
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+  } catch {}
+  try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     // iOS starts the context suspended and keeps re-suspending it; without this the cue beeps
     // are silently dropped, which is what made the give-up hold feel like it wasn't counting.
     if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   } catch {}
 }
-function beep(freq = 880, ms = 180) {
+
+// One tone. `gain` matters: a clock tick that is as loud as the turn-start chime stops being a
+// background texture and becomes maddening over a 60-second turn.
+function tone(freq = 880, ms = 180, { gain = 0.5, type = 'sine' } = {}) {
   if (!audioCtx) return;
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(audioCtx.destination);
+    o.type = type; o.frequency.value = freq; o.connect(g); g.connect(audioCtx.destination);
     const t = audioCtx.currentTime;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
     o.start(t); o.stop(t + ms / 1000);
   } catch {}
 }
+const beep = (freq = 880, ms = 180) => tone(freq, ms);
 
 async function enableMotion() {
   if (!motionSupported) { motionNote = 'This device has no motion sensors.'; return; }
@@ -647,7 +729,13 @@ async function enableMotion() {
   try {
     if (typeof DeviceMotionEvent?.requestPermission === 'function') {
       const r = await DeviceMotionEvent.requestPermission();
-      if (r !== 'granted') { motionNote = 'Motion blocked — tap buttons still work.'; if (lastPlayView) renderPlaying(lastPlayView); return; }
+      if (r !== 'granted') {
+        // iOS only ever prompts once. After a refusal the fix is in Settings, not another tap.
+        motionDenied = true;
+        motionNote = 'Motion access was refused.';
+        if (lastPlayView) renderPlaying(lastPlayView);
+        return;
+      }
     }
     if (typeof DeviceOrientationEvent?.requestPermission === 'function') { try { await DeviceOrientationEvent.requestPermission(); } catch {} }
     window.addEventListener('devicemotion', onMotion);
@@ -658,6 +746,22 @@ async function enableMotion() {
   } catch {
     motionNote = 'Could not start motion.';
   }
+}
+
+// Why tilt is not available, phrased as something the player can act on. Each of these has a
+// different fix, and telling someone "motion blocked" when the real problem is that they opened
+// an http:// link sends them hunting through Settings for nothing.
+function motionProblem() {
+  if (!window.isSecureContext) {
+    return { fix: 'link', text: 'This page was opened over an insecure link, and phones only allow motion sensors on https. Ask the host to share the link again, or scan the QR code in the lobby.' };
+  }
+  if (!motionSupported) {
+    return { fix: 'device', text: 'This device has no motion sensor. The game is played with a phone on your forehead, so join from a phone instead.' };
+  }
+  if (motionDenied) {
+    return { fix: 'settings', text: 'Motion access was refused, and iOS will not ask a second time. Open Settings, then Safari, then Motion & Orientation Access, turn it on, and reload this page.' };
+  }
+  return { fix: 'ask', text: 'Tilting the phone is how you answer once it is on your forehead. Tap below and allow motion access.' };
 }
 
 // Turn tilt on at the first opportunity a user gesture allows (iOS needs the gesture to grant
@@ -1226,6 +1330,12 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
 // "Good to go" is a user gesture, so use it to also turn motion on -- by reveal time the phone
 // is already listening, no separate step needed. Best-effort; the tap fallback covers refusal.
 $('goodBtn').addEventListener('click', () => { primeMotion(); socket.emit('setup:confirm', {}, () => {}); });
+// The gate's own button is a user gesture, which is what iOS requires before handing over the
+// sensor -- so this is the request most likely to actually succeed.
+$('motionGateBtn').addEventListener('click', () => {
+  motionDenied = false; // someone who has just fixed Settings deserves another go
+  enableMotion().then(() => { if (lastSetupView) renderSetup(lastSetupView); });
+});
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
 $('browseBtn').addEventListener('click', openBrowse);
 $('browseBack').addEventListener('click', browseBack);
