@@ -421,7 +421,44 @@ function renderSetup(view) {
   $('waitingNote').textContent = view.confirmed
     ? (view.allReady ? 'Everyone is in!' : `Locked in — waiting on ${view.waitingOn} more.`)
     : '';
+  renderWaitingList(view);
   show('setup');
+}
+
+// Everyone still to lock in, named. The host also gets a way to remove them: readiness is
+// mandatory now, so one player who cannot enable motion would otherwise hold the whole room
+// indefinitely, and re-dealing walks into the same wall.
+function renderWaitingList(view) {
+  const ul = $('waitingList');
+  ul.innerHTML = '';
+  const waiting = (view.waitingPlayers ?? []).filter((p) => p.playerId !== playerId);
+  // Only worth showing once you are waiting on someone else -- before that it is just a list of
+  // people who are doing nothing wrong.
+  if (!waiting.length || !(view.confirmed || amHost())) return;
+  for (const p of waiting) {
+    const li = document.createElement('li');
+    li.className = 'seat';
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.style.flex = '1';
+    name.textContent = p.name;
+    li.append(name);
+    if (amHost()) {
+      const b = document.createElement('button');
+      b.className = 'rmbtn';
+      b.textContent = 'Remove';
+      b.addEventListener('click', () => {
+        if (!confirm(`Remove ${p.name} from the room? Everyone goes back to the lobby and you deal again.`)) return;
+        b.disabled = true;
+        socket.emit('room:kick', { playerId: p.playerId }, (res) => {
+          b.disabled = false;
+          if (!res?.ok) alert(res?.error || 'Could not remove them.');
+        });
+      });
+      li.append(b);
+    }
+    ul.appendChild(li);
+  }
 }
 
 // --- playing ------------------------------------------------------------------------------
@@ -541,9 +578,15 @@ function startTurnTicker(view) {
     if (motionEnabled && $('forehead').classList.contains('active')) {
       // The last player has nobody to pass to, so down = give up (held long). Say so.
       const downHint = view.buttons?.pass ? 'tilt up = got it' : 'up = got it · hold down = give up';
-      $('foreheadTurn').innerHTML = view.paused ? pausedMsg
+      // The out-of-contention note has to be painted HERE, inside the ticker, or the next
+      // second's repaint wipes it. It was rendered only by the old tap fallback, so deleting
+      // that fallback silently took it away: a player who could no longer win was never told,
+      // and from their side the game just quietly stopped mattering.
+      const ooc = view.isMyTurn && view.outOfContentionNote
+        ? `<div class="ooc">${escapeHtml(view.outOfContentionNote)}</div>` : '';
+      $('foreheadTurn').innerHTML = (view.paused ? pausedMsg
         : view.isMyTurn ? `YOUR TURN${remaining != null ? ` · ${remaining}s` : ''} — ${downHint}`
-        : `${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`;
+        : `${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`) + ooc;
     } else {
       $('turnBanner').innerHTML = view.paused ? pausedMsg : bannerText(view, remaining);
     }
@@ -764,9 +807,21 @@ function motionProblem() {
   return { fix: 'ask', text: 'Tilting the phone is how you answer once it is on your forehead. Tap below and allow motion access.' };
 }
 
-// Turn tilt on at the first opportunity a user gesture allows (iOS needs the gesture to grant
-// the sensor). Safe to call repeatedly; it no-ops once enabled.
-function primeMotion() { if (motionSupported && !motionEnabled) enableMotion(); }
+// Turn tilt on wherever it costs the player nothing.
+//
+// Platforms with no permission prompt (Android, desktop) are switched on here, silently, so
+// nobody is asked to tap a button for something that needed no asking.
+//
+// iOS is deliberately NOT primed. It prompts once per origin and never again, and this runs on
+// the "Create a room" tap -- before a single word has explained why a party game wants the
+// accelerometer. A reasonable person taps "Don't Allow", and since tilt became mandatory that
+// now means they cannot play at all, with the only fix buried in Settings. So the ask is
+// deferred to the gate on the setup screen, where the reason is on screen beside the button.
+function primeMotion() {
+  if (!motionSupported || motionEnabled) return;
+  if (typeof DeviceMotionEvent?.requestPermission === 'function') return; // asked at the gate
+  enableMotion();
+}
 
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
@@ -1184,7 +1239,12 @@ window.addEventListener('popstate', (e) => {
   if (!st) return show(currentRoom ? 'lobby' : 'landing');
   if (st.view === 'categories') return openBrowse({ push: false });
   if (st.view === 'lists') return openCategory(st.category, { push: false });
-  if (st.view === 'characters') return openList(st.list, { push: false });
+  if (st.view === 'characters') {
+    // Restore the category the entry was CREATED in. Reading it from browseState instead meant
+    // a back-navigation across two categories drew the right list under the wrong parent.
+    browseState.category = st.category ?? browseState.category;
+    return openList(st.list, { push: false });
+  }
 });
 
 function browseBack() {
@@ -1265,6 +1325,18 @@ socket.on('game:over', (result) => renderOver(result));
 
 socket.on('setup:aborted', ({ reason }) => { abortNote = `Setup stopped — ${reason}.`; });
 
+// Being removed has to be said out loud. Otherwise the screen simply stops updating and the
+// player assumes the app broke.
+socket.on('room:kicked', ({ reason }) => {
+  allowSleep();
+  lastPlayView = null; lastSetupView = null;
+  currentRoom = null; lastState = null;
+  store.del('gtc_lastRoom');
+  hideForehead();
+  show('landing');
+  $('landingErr').textContent = reason || 'You were removed from the room.';
+});
+
 socket.on('connect', () => {
   if (currentRoom && nickname) {
     socket.emit('room:join', { code: currentRoom.code, nickname }, (res) => {
@@ -1329,7 +1401,8 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
 }));
 // "Good to go" is a user gesture, so use it to also turn motion on -- by reveal time the phone
 // is already listening, no separate step needed. Best-effort; the tap fallback covers refusal.
-$('goodBtn').addEventListener('click', () => { primeMotion(); socket.emit('setup:confirm', {}, () => {}); });
+// No primeMotion here: this button only exists once the gate has already turned tilt on.
+$('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, () => {}));
 // The gate's own button is a user gesture, which is what iOS requires before handing over the
 // sensor -- so this is the request most likely to actually succeed.
 $('motionGateBtn').addEventListener('click', () => {

@@ -122,6 +122,9 @@
     /* Coloured, so it does not read as an exit, but visibly lighter than Reroll: it is the
        rarer, corrective action and should not compete with the one you press repeatedly. */
     .undo { margin-top:8px; padding:11px; font-size:.92rem; }
+    .rmbtn { width:auto; flex:none; padding:7px 12px; font-size:.78rem; border-radius:999px;
+             background:var(--red); box-shadow:0 3px 0 var(--red-d); }
+    .rmbtn:active { transform:translateY(2px); box-shadow:0 1px 0 var(--red-d); }
     .gatetitle { text-align:center; font-family:var(--font-display); font-weight:900;
                  font-size:1.15rem; color:var(--ink); margin-bottom:6px; }
     .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
@@ -376,6 +379,8 @@
                      font-size:26vh; font-weight:900; }
     #foreheadName { position:fixed; left:0; right:0; bottom:8px; text-align:center; padding:0 14px;
                     font-size:min(6vh,2rem); font-weight:800; text-shadow:0 2px 10px #000, 0 0 5px #000; }
+    /* Sized in em so it tracks the turn line it hangs under, which is itself viewport-scaled. */
+    #foreheadTurn .ooc { display:block; font-size:.62em; opacity:.85; font-weight:700; margin-top:2px; }
     #foreheadTurn { position:fixed; left:0; right:0; top:26px; text-align:center;
                     font-size:min(5vh,1.3rem); font-weight:800; text-shadow:0 2px 8px #000; }
     #foreheadDebug { position:fixed; left:8px; bottom:8px; font:11px monospace; color:#7fe; opacity:.65; }
@@ -397,11 +402,16 @@
     #foreheadTimeBar > div { height:100%; width:100%; background:#4ade4a; transition:width 1s linear; }
     #forehead.warn #foreheadTimeBar > div { background:#ffd23f; }
     #forehead.crit #foreheadTimeBar > div { background:#e21b3c; transition:width 1s linear, background .2s; }
-    /* The whole card flashes on the last few seconds -- visible from across a room, and it does
-       not depend on anyone's volume. */
-    #forehead.crit.mine #foreheadRot { animation:critFlash .5s steps(1) infinite; }
-    @keyframes critFlash { 0%,100% { background:#000 } 50% { background:#3a0008 } }
     #forehead.mine.crit #foreheadRot::after { border-color:#e21b3c; animation-duration:.45s; }
+    /* The card flashes over the last few seconds -- visible across a room, and it does not
+       depend on anyone's volume. Behind the reduced-motion guard, which it was not: every
+       decorative animation on the page respected that setting while the one full-screen FLASH
+       ignored it, which is precisely backwards. The bar's colour still carries the same warning
+       for anyone who has asked for less movement. */
+    @media (prefers-reduced-motion: no-preference) {
+      #forehead.crit.mine #foreheadRot { animation:critFlash .5s steps(1) infinite; }
+      @keyframes critFlash { 0%,100% { background:#000 } 50% { background:#3a0008 } }
+    }
     #forehead.mine.warn #foreheadRot::after { border-color:#ffd23f; }
 
     /* Give-up hold progress: visible proof the hold is counting, since audio can be suspended. */
@@ -584,6 +594,9 @@
       <button id="goodBtn" class="good">Good to go</button>
       <button id="unlockBtn" class="ghost" style="display:none">Unlock</button>
       <p class="hint center" id="waitingNote"></p>
+      <!-- Who is holding things up, by name, with a way for the host to move on without them.
+           A count alone ("waiting on 1 more") gives a room of eight nothing to act on. -->
+      <ul class="roster" id="waitingList"></ul>
       <button id="setupCancelBtn" class="ghost" style="display:none">Cancel — back to lobby</button>
       <button id="setupLeaveBtn" class="ghost">Leave room</button>
     </section>

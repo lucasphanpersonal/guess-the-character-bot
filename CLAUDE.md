@@ -151,6 +151,39 @@ consistent — new UI should look like it was always there.
 - *Commons throttles by IP, and a party shares one.* That is why `/img/<id>` reads through a
   local disk cache — the server fetches each image once.
 
+**Making something mandatory**
+
+- *A gate needs an override, or it is a deadlock with extra steps.* Requiring a working motion
+  sensor before a player could confirm was right; shipping it with no way past was not. The game
+  starts only when everyone confirms, so one person on a laptop could hold a room of eight
+  forever -- and re-dealing walked into the same wall. Whenever a precondition becomes mandatory,
+  ask in the same breath who can proceed without it and how.
+- *Do not spend a one-shot permission on the least-informed tap.* iOS prompts for motion once per
+  origin, ever. Priming it on "Create a room" -- before a word explains why a party game wants
+  the accelerometer -- earned reasonable refusals that later became unplayable. Ask where the
+  reason is on screen, and only prime silently on platforms that need no prompt.
+- *Count, then name.* "Waiting on 1 more" tells a room of eight nothing they can act on. A name
+  tells them whose phone to go and look at.
+
+**Deleting a code path**
+
+- *Inventory what the path was the only renderer of.* Removing the tap fallback also removed the
+  only place `outOfContentionNote` was displayed, so a player who could no longer win was never
+  told and the game quietly stopped mattering for them. Before deleting a branch, grep every
+  field it read; the server keeps computing them and nothing complains.
+- *A field with no reader is not automatically dead.* `wearing` renders nowhere, and I proposed
+  deleting it -- but `wearing === null` for the guesser is the assertion pinning down the one
+  leak that would ruin the game, held by both the unit tests and the socket check. Check who
+  asserts on a thing before calling it unused.
+
+**Accessibility**
+
+- *Guard the animation that can hurt before the animation that delights.* Every decorative idle
+  animation sat behind `prefers-reduced-motion` while a full-screen 2Hz flash did not -- exactly
+  backwards. When adding motion, ask which of these a person with vestibular sensitivity or
+  photosensitivity would most want stopped, and guard that one first. Keep a non-moving carrier
+  for the same information (here, the clock bar's colour).
+
 **Tooling and self-verification**
 
 - *Never rewrite a file by index/offset splicing.* An index-based splice silently deleted

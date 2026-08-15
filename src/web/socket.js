@@ -413,6 +413,45 @@ function attachSockets(io, { registry, setup }) {
       await emitSetup(r);
     });
 
+    // Removing a player, host only.
+    //
+    // This exists because readiness became mandatory. Every player must confirm before the game
+    // can begin, and confirming now requires a working motion sensor -- so one person on a
+    // laptop, or one who tapped "Don't Allow", could hold a room of eight hostage forever. The
+    // host could cancel the deal, but re-dealing walked straight back into the same wall, and
+    // nothing except that player voluntarily leaving could break it. A gate with no override is
+    // a deadlock with extra steps.
+    socket.on('room:kick', async ({ playerId: targetId } = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can remove someone.' });
+      if (!targetId || targetId === playerId) return ack?.({ ok: false, error: 'You cannot remove yourself.' });
+      if (!r.players.has(targetId)) return ack?.({ ok: false, error: 'They are not in this room.' });
+      const name = r.players.get(targetId).nickname || 'A player';
+
+      // Mid-game removal is a forfeit, exactly as if they had left: their character is revealed
+      // and the rotation moves on. Reusing the leave path rather than inventing a second one.
+      if (r.status === 'playing' && r.game?.isActive(targetId)) {
+        const res = loop.forfeit(r.game, targetId);
+        if (res.ok) handleTurnResult(r, res, res.reveal);
+      }
+      abortSetupToLobby(r, `${name} was removed`);
+      const { room: after } = registry.leaveRoom(r.code, targetId);
+
+      // Tell their own sockets before they stop hearing about the room, or they sit on a screen
+      // that has quietly stopped being real.
+      const sockets = await io.in(r.code).fetchSockets();
+      for (const s of sockets) {
+        if (s.data.playerId === targetId) {
+          s.emit('room:kicked', { reason: 'The host removed you from the room.' });
+          s.leave(r.code);
+          s.data.code = null;
+        }
+      }
+      ack?.({ ok: true });
+      broadcastRoom(after);
+    });
+
     socket.on('room:leave', (_payload, ack) => {
       const code = socket.data.code;
       if (!code) return ack?.({ ok: true });

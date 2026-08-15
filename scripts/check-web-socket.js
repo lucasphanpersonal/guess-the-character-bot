@@ -210,6 +210,41 @@ const connect = (playerId) => {
   check(result.standings.every((s) => s.character && s.character.name), 'final standings reveal each character');
 
   // ---- Stage 6: rematch with the same settings ----------------------------------------
+  // A player who never confirms used to be able to hold a room forever: the game starts only
+  // when everyone has locked in, and locking in now requires a working motion sensor. This is
+  // the escape hatch, checked end to end because it is the only thing standing between one
+  // laptop and a dead party.
+  console.log('\n# host can break a stuck confirm phase');
+  {
+    const H = await connect('pKickHost');
+    let r = await H.emitWithAck('room:create', { nickname: 'Host' });
+    const code = r.state.code;
+    const S = await connect('pKickStuck');
+    await S.emitWithAck('room:join', { code, nickname: 'Stuck' });
+
+    const hSetup = nextEvent(H, 'setup:state');
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
+    check(r.ok, 'kick: deal starts');
+    const view = await hSetup;
+    check(view.waitingPlayers?.length === 2, 'kick: the confirm view names who it is waiting on');
+
+    // Only the host, and never yourself.
+    r = await S.emitWithAck('room:kick', { playerId: 'pKickHost' });
+    check(!r.ok, 'kick: a non-host cannot remove anyone');
+    r = await H.emitWithAck('room:kick', { playerId: 'pKickHost' });
+    check(!r.ok, 'kick: the host cannot remove themselves');
+
+    const kicked = nextEvent(S, 'room:kicked');
+    const backToLobby = nextMatching(H, 'room:state', (st) => st.status === 'lobby');
+    r = await H.emitWithAck('room:kick', { playerId: 'pKickStuck' });
+    check(r.ok, 'kick: the host removes the player who never confirmed');
+    await kicked;
+    check(true, 'kick: the removed player is told, not silently cut off');
+    const lobby = await backToLobby;
+    check(lobby.players.length === 1, 'kick: the room drops back to a lobby without them');
+    H.close(); S.close();
+  }
+
   console.log('\n# stage 6 — rematch');
   const c2Setup = nextEvent(C2, 'setup:state');
   res = await C2.emitWithAck('game:rematch', {});

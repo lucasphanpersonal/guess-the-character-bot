@@ -93,7 +93,10 @@ function buildView(game, viewerId, names) {
     .filter((id) => id !== viewerId && id !== targetId)
     .map((id) => ({ ownerId: id, ownerName: nameOf(id), character: publicCharacter(game.headByPlayer[id]) }));
 
-  const waitingOn = game.turnOrder.filter((id) => !game.confirmState[id].confirmed).length;
+  // Named, not just counted. "Waiting on 1 more" tells a room of eight people nothing they can
+  // act on; a name tells them whose phone to go and look at.
+  const waiting = game.turnOrder.filter((id) => !game.confirmState[id].confirmed);
+  const waitingOn = waiting.length;
 
   return {
     checking: {
@@ -107,6 +110,7 @@ function buildView(game, viewerId, names) {
     rerollAllowed: game.rerollAllowed,
     canUndo: (state.history?.length ?? 0) > 0,
     waitingOn,
+    waitingPlayers: waiting.map((id) => ({ playerId: id, name: nameOf(id) })),
     allReady: waitingOn === 0,
   };
 }

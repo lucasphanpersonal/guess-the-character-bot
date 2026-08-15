@@ -158,11 +158,12 @@ function buildGameView(game, viewerId, names, now = Date.now()) {
     buttons: isMyTurn ? buttonsFor(game) : null,
     // The viewer's OWN character. In forehead mode every phone shows its wearer's character for
     // the room to see -- the wearer holds it to their head and doesn't look, exactly as the
-    // physical game trusts. Sent to everyone; only forehead mode renders it. The tap fallback
-    // (no motion sensor) ignores it for the current player and shows action buttons instead, so
-    // a guesser who must look at their screen to tap never sees their own answer.
+    // physical game trusts. Sent to everyone; only forehead mode renders it.
     myCharacter: game.isActive(viewerId) && !game.finished ? publicCharacter(game.headByPlayer[viewerId]) : null,
-    // The guesser's character, shown to everyone but the guesser (used by the tap fallback).
+    // The guesser's character, shown to everyone but the guesser. Nothing renders this today
+    // (forehead mode shows each phone its own wearer), but it stays: `wearing === null` for the
+    // guesser is the assertion that pins down the one leak that would ruin the game, and
+    // test/web-turnloop.test.js + the socket check both hold it to that.
     wearing: !isMyTurn && game.isActive(currentId) && !game.finished ? publicCharacter(game.headByPlayer[currentId]) : null,
     outOfContentionNote:
       isMyTurn && game.isOutOfContention(viewerId)

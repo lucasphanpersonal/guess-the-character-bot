@@ -38,7 +38,7 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 
 ```bash
 npm run start:all -- --secure --tunnel   # everything: web + Discord bot + a public URL
-npm run web              # HTTP on :4180 — tap fallback only (tilt sensors need HTTPS)
+npm run web              # HTTP on :4180 — browsing only; tilt (and so play) needs HTTPS
 npm run web:secure       # HTTP on :4180 AND HTTPS on :4443 (self-signed) — HTTPS enables tilt
 npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game)
 ```
@@ -57,6 +57,13 @@ plain HTTP the game warns the player to set auto-lock to Never instead.
 A phone hitting `http://<LAN-ip>` is not a secure context, so the sensors are simply unavailable
 there. `web:secure` serves HTTPS on `:4443` alongside the plain HTTP on `:4180`, using a cached
 self-signed cert (covering localhost + LAN IPs, gitignored under `data/dev-tls.*`).
+
+**Tilt is required to play.** It is the only control surface once a phone is on a forehead, so
+readiness is gated on the sensor being live: the setup screen holds back "Good to go" until it
+is, and names the actual problem (an insecure link, a device with no sensor, a refused
+permission — three different fixes). The host can remove a player who cannot get it working, so
+one laptop cannot hold up a room. There is no button fallback: pressing on-screen controls means
+holding the phone where you can see it, and it is showing your own character.
 
 **Testing tilt on a phone:** run `npm run web:secure`, open the printed `https://<LAN-ip>:4443`
 on the phone, and accept the one-time self-signed-cert warning. Tilt is **always on** — the
