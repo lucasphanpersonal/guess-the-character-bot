@@ -1405,6 +1405,10 @@ socket.on('room:kicked', ({ reason }) => {
 });
 
 socket.on('connect', () => {
+  // Cleared here rather than after the re-join lands: the socket being up is exactly what the
+  // notice was reporting on, and leaving it to the callback meant one Wi-Fi blip left "Reconnecting…"
+  // on screen for the rest of the party, long after everything had come back.
+  $('connState').textContent = '';
   if (currentRoom && nickname) {
     socket.emit('room:join', { code: currentRoom.code, nickname }, (res) => {
       if (res?.ok) { lastState = res.state; enterRoom(res.state); routeByStatus(res.state); }
