@@ -363,10 +363,11 @@ function requestHandler(req, res) {
 }
 
 // Mobile browsers only expose motion/orientation sensors (the tilt-to-win gestures) over a
-// secure context. So with WEB_HTTPS=1 (npm run web:secure) we serve HTTPS on WEB_HTTPS_PORT
-// ALONGSIDE the plain HTTP server -- not instead of it. That way the familiar http://<ip>:4180
-// keeps working (game plays fully via the tap fallback) and https://<ip>:4443 is there when you
-// want tilt. Serving https-only on the main port made a mistyped http:// URL fail silently.
+// secure context, and tilt is now required to play -- so over plain HTTP the client can only
+// explain why it cannot deal anyone in. With WEB_HTTPS=1 (npm run web:secure) HTTPS is served on
+// WEB_HTTPS_PORT ALONGSIDE the plain HTTP server rather than instead of it: the familiar
+// http://<ip>:4180 still answers, and says what is wrong, because serving https-only on the main
+// port made a mistyped http:// URL fail silently with nothing on screen at all.
 const USE_HTTPS = process.env.WEB_HTTPS === '1' || process.env.WEB_HTTPS === 'true';
 const HTTPS_PORT = Number(process.env.WEB_HTTPS_PORT || 4443);
 
@@ -407,7 +408,8 @@ function devTlsOptions() {
   return { key: pems.private, cert: pems.cert };
 }
 
-// Plain HTTP is always served (the tap fallback plays fully). HTTPS is additive.
+// Plain HTTP is always served, so a mistyped http:// URL reaches a page that can explain
+// itself rather than nothing at all. HTTPS is additive.
 const server = http.createServer(requestHandler);
 const io = new Server(server); // serves its browser client at /socket.io/socket.io.js
 attachSockets(io, { registry, setup });
@@ -422,7 +424,7 @@ if (require.main === module) {
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[web] Guess the Character (sharing core with the Discord bot). Scope: ${WEB_SCOPE}`);
     console.log(`[web] Image cache: ${cachedImages} file(s) on disk; artwork is fetched once and served locally.`);
-    console.log(`[web]   HTTP  (game, tap fallback):`);
+    console.log(`[web]   HTTP  (no tilt -- the client will say so):`);
     console.log(`[web]     on this machine:  http://localhost:${PORT}`);
     for (const ip of lanIPv4s()) console.log(`[web]     on your phone:    http://${ip}:${PORT}   (same Wi-Fi)`);
     if (!USE_HTTPS) console.log('[web] For tilt-to-win on phones, run `npm run web:secure` (adds HTTPS).');

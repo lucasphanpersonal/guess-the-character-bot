@@ -1,4 +1,4 @@
-// Stage 3: the turn loop, for the web frontend.
+// The turn loop, for the web frontend.
 //
 // Ports the RULES of src/discord/game/engine.js -- rotation, scoring by turns taken, pass vs
 // give-up, the resolve-a-turn-exactly-once guard, out-of-contention -- with the Discord I/O
@@ -6,10 +6,9 @@
 // nextActiveIndex, standings, isOutOfContention), so this file is a thin, pure orchestration
 // over it: no socket.io, no DB, unit-tested on its own. The socket layer drives it and emits.
 //
-// Pre-gesture display model (this stage): the current player looks at their screen to TAP, so
-// their screen shows action buttons, not their character; everyone else's screen shows the
-// guesser's character so the room can verify a "got it". Stage 4 inverts this into true
-// forehead mode (your phone shows YOUR character for the room; a tilt resolves the turn).
+// Display model: forehead mode. Every phone shows ITS OWN wearer's character for the room to
+// read, the wearer holds it to their head and doesn't look, and a tilt resolves the turn --
+// exactly as the physical game trusts. See `myCharacter` in buildGameView below.
 
 const { publicCharacter } = require('./gameSetup');
 

@@ -1040,9 +1040,10 @@ function updateForeheadDebug() {
 
 function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; resetForeheadHold(); }
 
-// Tilt is always on -- there is no opt-in button. Motion is requested on the first user gesture
-// (create/join, or the tilt-test screen), which is all iOS needs to grant the sensor. This just
-// surfaces a note if permission was refused; the tap fallback still lets the game be played.
+// A one-line note about the sensor itself (refused, missing, failed to start), for screens that
+// have room for an aside rather than a whole explanation. The screens where tilt is actually
+// REQUIRED -- the setup gate and the play screen -- use motionProblem() instead, which names the
+// fix, because "motion blocked" is useless to someone whose real problem is an http:// link.
 function renderMotionPrompt(container) {
   container.innerHTML = motionNote ? `<p class="hint center">${escapeHtml(motionNote)}</p>` : '';
 }
@@ -1470,9 +1471,9 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
   else if (!res?.ok) $('rerollNote').textContent = res?.error || '';
   else $('rerollNote').textContent = '';
 }));
-// "Good to go" is a user gesture, so use it to also turn motion on -- by reveal time the phone
-// is already listening, no separate step needed. Best-effort; the tap fallback covers refusal.
-// No primeMotion here: this button only exists once the gate has already turned tilt on.
+// No primeMotion here, though this is a user gesture and iOS wants one: the button only exists
+// once the gate has already turned tilt on, so by the time anyone can press it the phone is
+// listening. The gate's own button is where the permission is actually asked for.
 $('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, () => {}));
 // The gate's own button is a user gesture, which is what iOS requires before handing over the
 // sensor -- so this is the request most likely to actually succeed.
