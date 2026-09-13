@@ -407,11 +407,14 @@ function renderSetup(view) {
   $('motionGate').style.display = needsMotion ? '' : 'none';
   if (needsMotion) {
     const problem = motionProblem();
-    $('motionGateWhy').textContent = problem.text;
+    // Good to go is hidden for every one of these, so name that here rather than inside
+    // motionProblem() -- the same text is the whole mid-game fallback screen, which has no
+    // Good to go button to explain the absence of.
+    $('motionGateWhy').textContent = `${problem.text} Until tilt is on, "Good to go" stays hidden.`;
     // A missing sensor or an http:// link has nothing to tap -- the button would only fail.
     const canRetry = problem.fix === 'ask' || problem.fix === 'settings';
     $('motionGateBtn').style.display = canRetry ? '' : 'none';
-    $('motionGateBtn').textContent = problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt controls';
+    $('motionGateBtn').textContent = problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt to lock in';
   }
 
   // Only the host can call off a deal; anyone can leave.
@@ -509,7 +512,9 @@ function renderPlaying(view) {
   $('playArea').innerHTML = `<p class="hint center">${escapeHtml(problem.text)}</p><div id="turnBtns"></div>`;
   const btns = $('playArea').querySelector('#turnBtns');
   if (problem.fix === 'ask' || problem.fix === 'settings') {
-    addBtn(btns, problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt controls', 'alt',
+    // Same shape as the setup gate's button, naming what tilt unlocks HERE: mid-game there is
+    // nothing left to lock in, there is a turn to answer.
+    addBtn(btns, problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt to answer', 'alt',
       () => enableMotion().then(() => lastPlayView && renderPlaying(lastPlayView)));
   }
   renderStandings($('standings'), view.standings);
@@ -731,6 +736,45 @@ const HOLD_DOWN_MS = 450;  // unchanged
 const tilt = { armed: false, dir: null, since: 0, lastFire: 0 };
 const isUpright = () => sensor.have && Math.abs(sensor.z) < NEUTRAL_MAX;
 
+// The forehead card is WITHHELD until the phone has been seen upright at least once.
+//
+// Forehead mode assumes the wearer cannot see the screen -- the phone carries their OWN
+// character for the room to read. That is true the moment it is on a forehead and false at
+// exactly one moment: just after they tapped something. The countdown covers the start of a
+// game; nothing covered coming back mid-game. Tilt is off on every fresh page load, so a
+// player whose phone locked and whose tab iOS then discarded taps "Turn on tilt to answer"
+// and was handed their own character while staring straight at it.
+//
+// Latching, not live: |z| passes NEUTRAL_MAX during the answer tilt itself, and a card that
+// vanished mid-gesture would take it away from the room that is reading it.
+//
+// Only latches while the overlay is up, which is the whole reason this is not simply checked
+// wherever the sensor is read: a phone held vertically to read the setup screen is "upright"
+// too, so a latch that ran everywhere would already be set by the time it mattered. That same
+// limit applies within the wait -- someone holding the phone bolt upright in front of their
+// face satisfies it -- but a reading angle does not, which is the position this protects.
+let foreheadHeld = false;
+let foreheadHoldTimer = null;
+// Safety net, not the mechanism: a sensor that never reports upright -- held at an angle, or
+// events that never arrive despite permission -- must not cost the player their whole turn.
+const FOREHEAD_HOLD_MS = 6000;
+
+function revealForehead() {
+  if (foreheadHeld) return;
+  foreheadHeld = true;
+  clearTimeout(foreheadHoldTimer);
+  foreheadHoldTimer = null;
+  // Through renderPlaying, not renderForehead: it owns the finished/motion routing, and a
+  // reveal that arrives just as the turn ends must not paint a card over the wrong screen.
+  if (lastPlayView) renderPlaying(lastPlayView);
+}
+
+function resetForeheadHold() {
+  foreheadHeld = false;
+  clearTimeout(foreheadHoldTimer);
+  foreheadHoldTimer = null;
+}
+
 function ensureAudio() {
   try {
     // A party is exactly where phones are on silent. On iOS, Web Audio is routed to the ringer
@@ -804,6 +848,8 @@ function motionProblem() {
   if (motionDenied) {
     return { fix: 'settings', text: 'Motion access was refused, and iOS will not ask a second time. Open Settings, then Safari, then Motion & Orientation Access, turn it on, and reload this page.' };
   }
+  // Screen-agnostic on purpose: this text renders on the setup gate AND mid-game, so anything
+  // naming a control ("Good to go") is wrong on one of them. The gate adds its own line instead.
   return { fix: 'ask', text: 'Tilting the phone is how you answer once it is on your forehead. Tap below and allow motion access.' };
 }
 
@@ -826,6 +872,9 @@ function primeMotion() {
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
   if (g && g.z != null) { sensor.z = g.z; sensor.have = true; }
+  // Before handleGameTilt: the same reading that arms a gesture is the one that reveals the
+  // card, and the room should have it in front of them before an answer can fire.
+  if (!foreheadHeld && $('forehead').classList.contains('active') && isUpright()) revealForehead();
   handleGameTilt();
   updateTiltTest();
 }
@@ -939,11 +988,19 @@ function renderForehead(view) {
   el.classList.add('active');
   el.classList.toggle('mine', view.isMyTurn);
   $('foreheadCount').style.display = 'none'; // countdown is over; show the character
-  $('foreheadTop').style.display = 'none';   // phone's on the forehead now — the TOP guide is done
+  // The TOP guide belongs to positioning, so it stays up exactly as long as the card is withheld.
+  $('foreheadTop').style.display = foreheadHeld ? 'none' : '';
   $('foreheadLeave').style.display = '';     // the only way out while the overlay covers everything
   const ch = view.myCharacter;
   const img = $('foreheadImg'), noimg = $('foreheadNoImg');
-  if (ch && ch.imageUrl) {
+  if (!foreheadHeld) {
+    // Not seen upright yet, so whoever is reading this is holding the phone in front of their
+    // face -- say what to do with it instead of handing them their own character.
+    if (!foreheadHoldTimer) foreheadHoldTimer = setTimeout(revealForehead, FOREHEAD_HOLD_MS);
+    img.style.display = 'none'; noimg.style.display = 'block';
+    noimg.textContent = 'Phone on your forehead';
+    $('foreheadName').textContent = 'Hold sideways with ▲ TOP up, then on your forehead';
+  } else if (ch && ch.imageUrl) {
     // Has art: full-screen image, name + source along the bottom for the room to read.
     img.src = ch.imageUrl; img.style.display = 'block'; noimg.style.display = 'none';
     img.onerror = () => { img.style.display = 'none'; noimg.style.display = 'block'; noimg.textContent = ch.name; };
@@ -975,7 +1032,7 @@ function updateForeheadDebug() {
     : '';
 }
 
-function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; }
+function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; resetForeheadHold(); }
 
 // Tilt is always on -- there is no opt-in button. Motion is requested on the first user gesture
 // (create/join, or the tilt-test screen), which is all iOS needs to grant the sensor. This just
@@ -987,6 +1044,10 @@ function renderMotionPrompt(container) {
 function startCountdown(seconds) {
   keepAwake();
   lastPlayView = null; // the reveal has not happened yet; no gesture should resolve anything
+  // Every round re-earns the reveal: the phone comes down between games. Latching here rather
+  // than at play time is what keeps the gate invisible in the normal flow -- the countdown is
+  // spent raising the phone, so by the time the card is due it has already been seen upright.
+  resetForeheadHold();
   clearInterval(countdown);
   let n = Math.max(0, seconds);
   // With motion on, run the countdown INSIDE the landscape forehead frame so players orient the
