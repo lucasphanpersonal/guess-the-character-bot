@@ -713,34 +713,15 @@ const motionSupported = hasMotion || hasOrient;
 // when the phone was held horizontally.
 const sensor = { x: 0, y: 0, z: 0, beta: null, gamma: null, have: false };
 let tiltFlip = store.get('gtc_tilt_flip') === '1';
-// ABSOLUTE thresholds, not relative to a captured baseline.
+// The thresholds, the hold times and the gesture state machine live in tilt.js, which is pure
+// and unit-tested (test/tilt-rules.test.js). Every number in it was tuned against a bug somebody
+// hit at a party, and it is the code that can irreversibly publish the character you are wearing.
 //
-// This used to snapshot a "neutral" z at the start of each turn. That is fragile in exactly the
-// way that matters: if the phone wasn't actually on a forehead at that instant (still flat on the
-// table, still being raised), the baseline was garbage -- and since a flat phone reads ~9.8 while
-// an upright one reads ~0, every later sample sat a full 9.8 past the threshold and the gesture
-// fired immediately and repeatedly. A player who mis-oriented their phone could burn their whole
-// turn, or blow through several turns, without touching anything.
-//
-// Held upright against a forehead, gravity's screen-normal component is ~0 regardless of how the
-// phone is rotated in its own plane, so absolute values need no calibration and cannot be poisoned
-// by a bad starting position.
-const NEUTRAL_MAX = 3.5; // |z| below this = upright, i.e. plausibly on a forehead
-// Asymmetric on purpose. Tilting UP is the irreversible move -- it ends the turn and publishes
-// the character the player is still wearing, and no undo reaches that -- while tilting down only
-// passes, which costs nothing. It is also the direction ordinary play produces by accident:
-// nodding along, or lifting the phone to reset it on the forehead. So "got it" asks for a firmer
-// tilt held slightly longer, and "pass" keeps the original, lighter touch. Same asymmetry the
-// Discord side applies to its confirm-on-correct guard.
-const TILT_TH_UP = 6.5;    // ~41 degrees off upright (was 5.5, ~34: too easy to trip)
-const TILT_TH_DOWN = 5.5;  // unchanged
-const HOLD_UP_MS = 600;    // was 450
-const HOLD_DOWN_MS = 450;  // unchanged
 // `armed` starts FALSE every turn and only becomes true once the phone has actually been seen
 // upright. That is the whole safety property: a phone that never reaches a sane orientation never
 // fires a gesture, instead of firing one instantly.
-const tilt = { armed: false, dir: null, since: 0, lastFire: 0 };
-const isUpright = () => sensor.have && Math.abs(sensor.z) < NEUTRAL_MAX;
+const tilt = TiltRules.newState();
+const isUpright = () => TiltRules.isUpright(sensor.have ? sensor.z : null);
 
 // The forehead card is WITHHELD until the phone has been seen upright at least once.
 //
@@ -886,38 +867,11 @@ function onMotion(e) {
 }
 function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltTest(); }
 
-// Current tilt as a gesture: 'gotit', 'pass', or null. Absolute, so it needs no calibration.
-// `tiltFlip` swaps the two for phones that report the opposite sign (the tilt-test screen toggles it).
-function currentGesture() {
-  if (!sensor.have) return null;
-  // One signed measure of "upness", so the flip is applied once and the two thresholds can
-  // differ without the sign handling getting tangled.
-  const upness = tiltFlip ? sensor.z : -sensor.z;
-  if (upness > TILT_TH_UP) return 'gotit';
-  if (-upness > TILT_TH_DOWN) return 'pass';
-  return null;
-}
+const currentGesture = () => TiltRules.gestureFor(sensor.have ? sensor.z : null, tiltFlip);
 
-// Tilting DOWN normally passes. When you're the last player still guessing there is nobody to
-// pass to (buttons.pass is false) -- so instead of the gesture doing nothing, it gives up and
-// ends the game. That needs a much longer hold than a pass, because tilting down is also the
-// natural motion of taking the phone OFF your forehead: an instant give-up would fire on anyone
-// lowering their phone to look at it, and a give-up is irreversible and public. So the hold runs
-// long, ticks audibly while it counts (the room hears it too), and raising back to neutral
-// aborts it -- the re-arm path below clears it for free.
-const GIVEUP_HOLD_MS = 1400;  // deliberate, but achievable while holding a phone steady
-const GIVEUP_GAP_MS = 300;    // brief dips below the threshold don't restart the hold
-let giveUpTicked = 0;
-let giveUpStart = 0;
-let giveUpLastSeen = 0;
-
-// Tilting down gives up only when there is nobody to pass to -- otherwise down means pass.
+// Tilting down gives up only when there is nobody to pass to -- otherwise down means pass. Read
+// off the buttons the server sent, so the gesture and the rules agree by construction.
 const canGiveUpByTilt = (v) => !!v.buttons && !v.buttons.pass && !!v.buttons.giveUp;
-
-function resetGiveUpHold() {
-  giveUpStart = 0; giveUpTicked = 0;
-  showGiveUpProgress(0);
-}
 
 // Visible feedback for the hold. The wearer may not be looking, but the room is -- and if they
 // lowered the phone to give up, they are looking too. Either way it beats silent audio-only ticks.
@@ -929,62 +883,36 @@ function showGiveUpProgress(fraction) {
   el.firstElementChild.style.width = `${Math.round(fraction * 100)}%`;
 }
 
+// Everything below is effects: the decisions all live in TiltRules.step (public/tilt.js), which
+// is pure and unit-tested. This reads the sensor, hands it over, and does what it is told.
 function handleGameTilt() {
   const v = lastPlayView;
-  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) { tilt.dir = null; if (giveUpStart) resetGiveUpHold(); return; }
-  const now = Date.now();
-  // Arming requires actually seeing the phone upright. Until then no gesture can fire, however
-  // the phone happens to be lying -- and the player is nudged to raise it (see renderForehead).
-  if (!tilt.armed) {
-    if (isUpright()) tilt.armed = true;
-    else { tilt.dir = null; giveUpTicked = 0; return; }
-  }
-  const g = currentGesture();
-
-  // Give-up hold, tracked SEPARATELY from the strict gesture path above.
-  //
-  // It used to ride on tilt.since, which resets the instant currentGesture() returns anything
-  // else -- and holding a phone past a threshold for nearly two seconds produces plenty of
-  // momentary dips below it. Every dip restarted the clock, so the hold could never complete and
-  // tilting down as the last player appeared to do nothing at all. This tracker tolerates gaps
-  // of up to GIVEUP_GAP_MS, and reports progress on screen so the hold is visibly counting
-  // rather than relying on audio that iOS may have suspended.
-  if (canGiveUpByTilt(v)) {
-    if (g === 'pass') {
-      if (!giveUpStart) giveUpStart = now;
-      giveUpLastSeen = now;
-    } else if (giveUpStart && now - giveUpLastSeen > GIVEUP_GAP_MS) {
-      resetGiveUpHold(); // genuinely let go -> abort
-    }
-    if (giveUpStart) {
-      const heldDown = now - giveUpStart;
-      const ticks = Math.floor(heldDown / 450);
-      if (ticks > giveUpTicked) { giveUpTicked = ticks; beep(300, 90); navigator.vibrate?.(45); }
-      showGiveUpProgress(Math.min(1, heldDown / GIVEUP_HOLD_MS));
-      if (heldDown >= GIVEUP_HOLD_MS) {
-        resetGiveUpHold();
-        tilt.armed = false; tilt.lastFire = now;
-        navigator.vibrate?.([200, 80, 200]); beep(220, 320);
-        socket.emit('game:giveup', {}, () => {});
-        return;
-      }
-      if (g === 'pass') return; // the hold owns the gesture while it's counting
-    }
-  } else if (giveUpStart) {
-    resetGiveUpHold();
+  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) {
+    TiltRules.reset(tilt);
+    showGiveUpProgress(0);
+    return;
   }
 
-  if (!g) { tilt.dir = null; return; } // back near upright -> ready for the next
-  if (g !== tilt.dir) { tilt.dir = g; tilt.since = now; return; }
-  if (now - tilt.lastFire < 1200) return;
+  const out = TiltRules.step(tilt, {
+    z: sensor.have ? sensor.z : null,
+    flip: tiltFlip,
+    now: Date.now(),
+    canGiveUp: canGiveUpByTilt(v),
+  });
 
-  const held = now - tilt.since;
+  if (out.giveUpTick) { beep(300, 90); navigator.vibrate?.(45); }
+  showGiveUpProgress(out.giveUpFraction);
 
-  if (held > (g === 'gotit' ? HOLD_UP_MS : HOLD_DOWN_MS)) {
-    tilt.armed = false; tilt.lastFire = now;
-    navigator.vibrate?.(60); beep(g === 'gotit' ? 1050 : 480, 130);
-    if (g === 'gotit') socket.emit('game:gotit', {}, () => {});
-    else if (v.buttons?.pass) socket.emit('game:pass', {}, () => {});
+  if (out.action === 'giveup') {
+    navigator.vibrate?.([200, 80, 200]); beep(220, 320);
+    socket.emit('game:giveup', {}, () => {});
+  } else if (out.action === 'gotit') {
+    navigator.vibrate?.(60); beep(1050, 130);
+    socket.emit('game:gotit', {}, () => {});
+  } else if (out.action === 'pass') {
+    navigator.vibrate?.(60); beep(480, 130);
+    // Swallowed when there is nobody to pass to; the disarm has happened either way.
+    if (v.buttons?.pass) socket.emit('game:pass', {}, () => {});
   }
 }
 
@@ -1022,7 +950,7 @@ function renderForehead(view) {
   if (view.isMyTurn && !foreheadMyTurn) {
     // Disarmed until the phone is seen upright, so a turn that starts with the phone flat on a
     // table can't instantly fire a gesture.
-    tilt.armed = false; tilt.dir = null; resetGiveUpHold();
+    tilt.armed = false; TiltRules.reset(tilt); showGiveUpProgress(0);
     navigator.vibrate?.([140, 60, 140]);
     beep(880, 200); setTimeout(() => beep(1250, 220), 150);
   }

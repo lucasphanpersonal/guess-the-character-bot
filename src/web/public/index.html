@@ -671,6 +671,8 @@
   </main>
 
   <script src="/socket.io/socket.io.js"></script>
+  <!-- Before app.js, which reads the TiltRules global it defines. -->
+  <script src="/tilt.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
