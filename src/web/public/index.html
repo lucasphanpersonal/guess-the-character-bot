@@ -601,6 +601,22 @@
         <p class="hint center" id="motionGateWhy"></p>
         <button id="motionGateBtn" class="alt">Turn on tilt to lock in</button>
       </div>
+      <!-- The wearer cannot see their own screen, so the turn clock reaches them as sound -- and
+           a phone on silent loses that channel entirely and only finds out mid-turn. A nudge,
+           never a gate: the clock bar drawn on the forehead card carries the same information,
+           so a muted phone is still playable, and blocking here would just be a second way to
+           strand a player (see the note on the tilt gate above). -->
+      <div class="card" id="soundCheck">
+        <!-- A quiet label rather than a wobbled heading like the gate above: this is a nudge
+             sitting under a hard requirement, and two big headings stacked read as two gates. -->
+        <div class="hint">Sound check</div>
+        <div style="height:8px"></div>
+        <p class="hint center">The clock plays on your phone while you guess, and it will be on
+          your forehead — take it off silent and turn the volume up.</p>
+        <button id="soundCheckBtn" class="ghost">Test sound</button>
+        <button id="muteBtn" class="undo">Turn game sounds off</button>
+        <p class="hint center" id="soundCheckNote"></p>
+      </div>
       <button id="goodBtn" class="good">Good to go</button>
       <button id="unlockBtn" class="ghost" style="display:none">Unlock</button>
       <p class="hint center" id="waitingNote"></p>

@@ -79,6 +79,11 @@ consistent — new UI should look like it was always there.
   alternating angles. Body copy stays plain — the whimsy is decoration on the large type only.
 - **The forehead overlay opts out of all of it.** Black, white, huge, plain. It is read across
   a dim room by other people, not admired up close. Do not decorate it.
+- **Sound sits under the room, not over it.** The turn bed runs for a full minute at a time,
+  several turns a game, with a party talking through it. The bar is "something you notice
+  stopping", not something anyone raises their voice against — and because only the current
+  player's phone plays it, the sound is also how the room knows whose head to look at. Anything
+  continuous needs an off switch (`gtc_muted`, honoured inside `tone()` so nothing can dodge it).
 - **No emoji in UI copy.** Text-presentation glyphs (✓ ✗ ▲ ‹ › ✕ →) are typography and are
   fine. Anything with Emoji_Presentation (⏭, most pictographs) renders in colour on iOS and
   looks pasted in next to plain-text buttons. The favicon is the one deliberate exception.
