@@ -42,9 +42,16 @@
             border:3px solid var(--edge); background:#fff; color:var(--ink); }
     input:focus, select:focus { outline:none; border-color:var(--blue); }
     #codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.4rem; }
-    /* Chunky tactile slabs: the hard bottom shadow + press-down is most of the feel. */
+    /* Chunky tactile slabs: the hard bottom shadow + press-down is most of the feel.
+       `touch-action:manipulation` opts out of double-tap-to-zoom, which is the browser's other
+       reading of two quick taps on the same button -- and this is a party game, so two quick
+       taps on the same button is ordinary use. It leaves pinch-zoom alone, unlike
+       `user-scalable=no`, so nobody loses the ability to zoom the page.
+       The tap highlight is a grey box iOS paints over the slab on touch, which reads as a
+       rendering fault next to a button whose whole feel is the press-down. */
     button { width:100%; padding:16px; font-size:1.05rem; font-weight:900; border:none; border-radius:14px;
              background:var(--blue); color:#fff; cursor:pointer; box-shadow:0 6px 0 var(--blue-d);
+             touch-action:manipulation; -webkit-tap-highlight-color:transparent;
              transition:transform .05s, box-shadow .05s; }
     button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
     button.ghost { background:#fff; color:var(--brand); box-shadow:0 6px 0 rgba(0,0,0,.22); }
@@ -198,7 +205,10 @@
        alone leaves iOS willing to pan the document, so the root is clipped too -- `clip` rather
        than `hidden` because it does not create a scroll container, which would break the
        compendium's sticky bar. `hidden` stays as the fallback for browsers without `clip`. */
-    html, body { overflow-x:hidden; overflow-x:clip; overscroll-behavior-x:none; }
+    /* `overscroll-behavior-y:contain` turns off pull-to-refresh. A reload is not a neutral act
+       here: tilt is off on every fresh page load, so an accidental downward drag in the lobby
+       costs that player their motion permission and drops them on the gate to re-grant it. */
+    html, body { overflow-x:hidden; overflow-x:clip; overscroll-behavior-x:none; overscroll-behavior-y:contain; }
 
     /* --- compendium ---------------------------------------------------------------------- */
     .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
