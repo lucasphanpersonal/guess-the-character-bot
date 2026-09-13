@@ -75,6 +75,14 @@ function attachSockets(io, { registry, setup }) {
   // doesn't freeze the game: after PAUSE_MAX_MS the clock resumes on its own and will, on
   // timeout, simply pass the turn (nobody is ever removed).
   const PAUSE_MAX_MS = 30000;
+  // One owner for dropping a pause, because it is the one piece of turn state that can outlive
+  // the turn it was taken for. A pause belongs to ONE player's ONE turn: anything that arms a
+  // fresh deadline has to drop it, or the guard below later "resumes" a turn that already moved
+  // on and rewrites the current player's deadline with the previous player's leftover time.
+  const clearPause = (room) => {
+    if (room?.pauseGuard) { clearTimeout(room.pauseGuard); room.pauseGuard = null; }
+    if (room?.game) { room.game.pausedForDisconnect = false; room.game.pausedRemaining = null; }
+  };
   const pauseTurn = (room) => {
     const game = room?.game;
     if (!game || game.finished || game.pausedForDisconnect) return;
@@ -90,10 +98,8 @@ function attachSockets(io, { registry, setup }) {
   const resumeTurn = (room) => {
     const game = room?.game;
     if (!game || game.finished || !game.pausedForDisconnect) return;
-    if (room.pauseGuard) { clearTimeout(room.pauseGuard); room.pauseGuard = null; }
-    game.pausedForDisconnect = false;
     const remaining = game.pausedRemaining ?? game.turnSeconds * 1000;
-    game.pausedRemaining = null;
+    clearPause(room);
     scheduleTurn(room, remaining);
     broadcastRoom(room);
     emitGame(room);
@@ -115,18 +121,32 @@ function attachSockets(io, { registry, setup }) {
   // arm the next turn and push fresh per-player state.
   function handleTurnResult(room, result, reveal) {
     const names = namesOf(room);
-    clearTurnTimer(room);
     if (reveal) io.to(room.code).emit('game:reveal', { ...reveal, name: names[reveal.playerId] ?? 'Player' });
     if (result.timedOut) io.to(room.code).emit('game:timeout', { name: names[result.finishingId] ?? 'Player' });
+
     if (result.gameOver) {
+      clearTurnTimer(room);
+      clearPause(room);
       room.game.turnEndsAt = null;
       room.status = 'finished';
       io.to(room.code).emit('game:over', loop.resultView(room.game, names));
       broadcastRoom(room);
-    } else {
-      scheduleTurn(room);
-      emitGame(room);
+      return;
     }
+
+    // No nextPlayerId means the turn did NOT move: somebody who wasn't the guesser left or was
+    // removed (turnLoop.forfeit returns early in that case). The clock belongs to a turn still
+    // in progress, so leave it -- and any pause on it -- alone. Re-arming here handed the
+    // current player a fresh full turn every time another player walked out, and restarted the
+    // clock of a player who was paused mid-drop.
+    if (!result.nextPlayerId) return emitGame(room);
+
+    clearPause(room); // the pause belonged to the turn that just ended, not to this one
+    scheduleTurn(room);
+    // The player we advanced TO may themselves be offline -- the same rule the disconnect
+    // handler applies, arriving by a different route. pauseTurn broadcasts for us.
+    if (!registry.isConnected(room.code, room.game.currentPlayerId)) pauseTurn(room);
+    else emitGame(room);
   }
 
   // Grace period: after everyone locks in, a synchronized countdown so players can raise their

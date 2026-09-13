@@ -46,7 +46,7 @@ function seedContent() {
 seedContent();
 
 const { io } = require('socket.io-client');
-const { server } = require('../src/web/server');
+const { server, registry } = require('../src/web/server');
 
 const PORT = Number(process.env.WEB_PORT);
 const URL = `http://localhost:${PORT}`;
@@ -243,6 +243,62 @@ const connect = (playerId) => {
     const lobby = await backToLobby;
     check(lobby.players.length === 1, 'kick: the room drops back to a lobby without them');
     H.close(); S.close();
+  }
+
+  // ---- The disconnect pause must not outlive the turn it was taken for -------------------
+  // A dropped phone freezes the current player's clock. That pause belongs to one player's one
+  // turn, and both ways out of it were once left half-done: another player leaving re-armed the
+  // clock while the game still called itself paused, and removing the paused player advanced
+  // the turn but left the guard armed to rewrite the NEXT player's deadline 30s later. While
+  // the flag is wrongly set the wearer loses all three turn cues at once (bar, ticks, buzz), so
+  // this is asserted on server state rather than on what any one client happened to render.
+  console.log('\n# the disconnect pause belongs to one turn');
+  {
+    const P = await connect('pPauseA');
+    let r = await P.emitWithAck('room:create', { nickname: 'Pia' });
+    const code = r.state.code;
+    const Q = await connect('pPauseB');
+    await Q.emitWithAck('room:join', { code, nickname: 'Quinn' });
+    const R = await connect('pPauseC');
+    await R.emitWithAck('room:join', { code, nickname: 'Rae' });
+
+    r = await P.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
+    check(r.ok, 'pause: deal starts');
+    const playing = roomStatus(Q, 'playing');
+    for (const s of [P, Q, R]) await s.emitWithAck('setup:confirm', {});
+    await playing;
+    await wait(50);
+
+    const game = registry.getRoom(code).game;
+    check(game.currentPlayerId === 'pPauseA', 'pause: the first turn belongs to the host');
+
+    // The current player drops: the clock freezes.
+    P.disconnect();
+    await wait(150);
+    check(game.pausedForDisconnect === true && !game.turnEndsAt, 'pause: a dropped guesser freezes the clock');
+
+    // Someone who is NOT the guesser leaves. The turn never moved, so nothing about it changes.
+    await R.emitWithAck('room:leave', {});
+    await wait(150);
+    check(game.pausedForDisconnect === true, 'pause: another player leaving keeps the pause');
+    check(!game.turnEndsAt, 'pause: another player leaving does NOT restart the frozen clock');
+
+    // The paused player is removed, so the turn advances -- and the pause goes with it.
+    const P2 = await connect('pPauseA');
+    await P2.emitWithAck('room:join', { code, nickname: 'Pia' });
+    await wait(100);
+    await P2.emitWithAck('game:pass', {}); // hand the turn to Quinn, who is not the host
+    await wait(100);
+    check(game.currentPlayerId === 'pPauseB', 'pause: the turn is handed to a non-host');
+    Q.disconnect();
+    await wait(150);
+    check(game.pausedForDisconnect === true, 'pause: the new guesser dropping freezes the clock');
+    await P2.emitWithAck('room:kick', { playerId: 'pPauseB' });
+    await wait(150);
+    check(game.currentPlayerId !== 'pPauseB', 'pause: removing the paused guesser advances the turn');
+    check(game.pausedForDisconnect === false, 'pause: the pause does not outlive the turn it belonged to');
+    check(!!game.turnEndsAt, 'pause: the new turn gets a real deadline');
+    P2.close(); Q.close(); R.close();
   }
 
   console.log('\n# stage 6 — rematch');
