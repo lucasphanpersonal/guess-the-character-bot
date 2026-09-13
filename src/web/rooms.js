@@ -47,6 +47,11 @@ class Room {
     this.excludedListIds = new Set();
     // playerId -> { playerId, nickname, connected, joinedAt }
     this.players = new Map();
+    // Names of people who have given up their seat. A game in progress still lists them in its
+    // turn order, its reveals and its final standings, and those read the roster for names -- so
+    // without this someone who leaves or is removed mid-game turns into "Player" on the results
+    // screen they are still on.
+    this.departedNames = new Map();
     // Stable join order, so the roster doesn't reshuffle on a Map re-render.
     this.order = [];
   }
@@ -60,6 +65,8 @@ class Room {
   }
 
   removeSeat(playerId) {
+    const seat = this.players.get(playerId);
+    if (seat?.nickname) this.departedNames.set(playerId, seat.nickname);
     this.players.delete(playerId);
     this.order = this.order.filter((id) => id !== playerId);
   }

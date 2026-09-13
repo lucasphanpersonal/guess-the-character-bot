@@ -181,6 +181,23 @@ function nicknamesAreTrimmedAndLengthCapped() {
   assert.equal(room.players.get('p1').nickname.length, 20);
 }
 
+// A game in progress still lists a player who has left -- in its turn order, its reveal, and the
+// final standings -- and all of those read names off the roster. Losing the name there turned
+// them into "Player" on the results screen they are still on.
+function aDepartedPlayerKeepsTheirNameForTheStandings() {
+  const reg = new RoomRegistry();
+  const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  reg.joinRoom(room.code, { playerId: 'p2', nickname: 'Sam' });
+
+  reg.leaveRoom(room.code, 'p2');
+  assert.equal(room.players.has('p2'), false);
+  assert.equal(room.departedNames.get('p2'), 'Sam');
+
+  // Coming back retakes the seat; the roster is what names them again.
+  reg.joinRoom(room.code, { playerId: 'p2', nickname: 'Sam' });
+  assert.equal(room.players.get('p2').nickname, 'Sam');
+}
+
 module.exports = {
   'creating a room seats the host and returns a code': creatingARoomSeatsTheHostAndReturnsACode,
   'creating a room needs a nickname': creatingARoomNeedsANickname,
@@ -199,4 +216,5 @@ module.exports = {
   'leaving reassigns host in join order': leavingReassignsHostInJoinOrder,
   'leaving as the last player deletes the room': leavingAsTheLastPlayerDeletesTheRoom,
   'nicknames are trimmed and length-capped': nicknamesAreTrimmedAndLengthCapped,
+  'a departed player keeps their name for the standings': aDepartedPlayerKeepsTheirNameForTheStandings,
 };

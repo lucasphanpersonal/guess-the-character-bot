@@ -11,6 +11,8 @@ const loop = require('./turnLoop');
 
 function namesOf(room) {
   const names = {};
+  // Departed first, so a live seat always wins -- someone who left and came back is current.
+  for (const [id, nickname] of room.departedNames ?? []) names[id] = nickname;
   for (const [id, seat] of room.players) names[id] = seat.nickname;
   return names;
 }
