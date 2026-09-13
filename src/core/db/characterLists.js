@@ -1,5 +1,5 @@
 const db = require('./connection');
-const { foldDiacritics } = require('../util/text');
+const { foldDiacritics, normalizeLoose } = require('../util/text');
 
 // Lists arrive disabled because the seed scripts create them in the thousands. A list
 // somebody types out by hand is the opposite case -- that is a deliberate choice, so
@@ -302,14 +302,20 @@ function drawablePool(listIds, difficulty) {
   );
 }
 
-// Merging multiple lists can surface the same character name under two different list_ids
-// (e.g. two lists both containing "Mario") -- dedupe by lowercase name, keeping the first
-// occurrence, so the same character can never end up assigned to both players.
+// Merging multiple lists can surface the same character under two different list_ids (e.g. two
+// lists both containing "Mario") -- dedupe by name, keeping the first occurrence, so the same
+// character can never end up assigned to both players.
+//
+// Keyed with normalizeLoose, which is the same test the judge uses to decide whether a guess
+// matches a name. That is exactly the right bar: if "Spider-Man" and "Spiderman" are one answer
+// to the judge, dealing both of them puts two players in a room wearing what is, as far as the
+// game is concerned, the same character -- and whichever of them is guessed, one of the two is
+// wrong for reasons nobody can see. A plain lowercase key let every such pair through.
 function dedupeByName(characters) {
   const seen = new Set();
   const deduped = [];
   for (const c of characters) {
-    const key = c.name.toLowerCase();
+    const key = normalizeLoose(c.name);
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(c);
