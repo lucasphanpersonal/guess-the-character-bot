@@ -22,13 +22,31 @@ function attachSockets(io, { registry, setup }) {
     if (room) io.to(room.code).emit('room:state', room.publicState());
   };
 
+  /**
+   * Every socket currently in a room.
+   *
+   * fetchSockets() is the documented way to do this and is async because it is built to ask
+   * OTHER nodes. There are none: rooms live in a Map in this process, so a second node could
+   * never see them anyway. Paying an await for that made every fan-out async, which let one
+   * turn's per-player emits interleave with the next one's, and made six callers async for a
+   * promise that always resolved against local state.
+   */
+  const socketsIn = (room) => {
+    const ids = io.sockets.adapter.rooms.get(room.code) ?? [];
+    const found = [];
+    for (const id of ids) {
+      const s = io.sockets.sockets.get(id);
+      if (s) found.push(s);
+    }
+    return found;
+  };
+
   // Send every connected player in the room their OWN setup view (never their own character).
   // Per-socket rather than a room broadcast, because each player must see a different payload.
-  const emitSetup = async (room) => {
+  const emitSetup = (room) => {
     if (!room?.game) return;
     const names = namesOf(room);
-    const sockets = await io.in(room.code).fetchSockets();
-    for (const s of sockets) {
+    for (const s of socketsIn(room)) {
       const pid = s.data.playerId;
       if (room.game.confirmState[pid]) s.emit('setup:state', setup.view(room.game, pid, names));
     }
@@ -107,12 +125,11 @@ function attachSockets(io, { registry, setup }) {
     emitGame(room);
   };
 
-  const emitGame = async (room) => {
+  const emitGame = (room) => {
     if (!room?.game) return;
     const names = namesOf(room);
     const now = Date.now();
-    const sockets = await io.in(room.code).fetchSockets();
-    for (const s of sockets) {
+    for (const s of socketsIn(room)) {
       if (room.game.turnOrder.includes(s.data.playerId)) {
         s.emit('game:state', loop.buildGameView(room.game, s.data.playerId, names, now));
       }
@@ -245,7 +262,7 @@ function attachSockets(io, { registry, setup }) {
       broadcastRoom(res.room);
     });
 
-    socket.on('room:join', async ({ code, nickname } = {}, ack) => {
+    socket.on('room:join', ({ code, nickname } = {}, ack) => {
       if ((socket.data.failedJoins || 0) >= MAX_FAILED_JOINS) {
         return ack?.({ ok: false, error: 'Too many failed attempts. Reload the page.' });
       }
@@ -300,7 +317,7 @@ function attachSockets(io, { registry, setup }) {
     });
 
     // Host deals characters and moves the room into the confirm phase.
-    socket.on('setup:start', async (config = {}, ack) => {
+    socket.on('setup:start', (config = {}, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can start.' });
@@ -312,15 +329,15 @@ function attachSockets(io, { registry, setup }) {
       r.status = 'setup';
       ack?.({ ok: true, label: res.label });
       broadcastRoom(r);
-      await emitSetup(r);
+      emitSetup(r);
     });
 
-    socket.on('setup:reroll', async (_p, ack) => {
+    socket.on('setup:reroll', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
       const res = setup.reroll(r.game, playerId);
       ack?.(res);
-      if (res.ok) await emitSetup(r); // fan out: everyone else's reference view changed too
+      if (res.ok) emitSetup(r); // fan out: everyone else's reference view changed too
     });
 
     // The host calling off a deal. Until now the confirm/reroll phase had no exit at all: a bad
@@ -339,21 +356,21 @@ function attachSockets(io, { registry, setup }) {
       broadcastRoom(r);
     });
 
-    socket.on('setup:undo', async (_p, ack) => {
+    socket.on('setup:undo', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
       const res = setup.undo(r.game, playerId);
       ack?.(res);
-      if (res.ok) await emitSetup(r); // everyone else's reference card changed back too
+      if (res.ok) emitSetup(r); // everyone else's reference card changed back too
     });
 
-    socket.on('setup:confirm', async (_p, ack) => {
+    socket.on('setup:confirm', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
       const res = setup.confirm(r.game, playerId);
       ack?.(res);
       if (res.ok && res.allReady) startPlaying(r); // everyone in -> the turn loop begins
-      else await emitSetup(r);
+      else emitSetup(r);
     });
 
     // --- playing-phase actions (current player only; the loop enforces it) ----------------
@@ -414,7 +431,7 @@ function attachSockets(io, { registry, setup }) {
 
     // Rematch: re-deal with the same pool/difficulty and the same roster, straight back into the
     // confirm phase, without the host reconfiguring.
-    socket.on('game:rematch', async (_p, ack) => {
+    socket.on('game:rematch', (_p, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can rematch.' });
@@ -434,15 +451,15 @@ function attachSockets(io, { registry, setup }) {
       r.status = 'setup';
       ack?.({ ok: true, label: res.label });
       broadcastRoom(r);
-      await emitSetup(r);
+      emitSetup(r);
     });
 
-    socket.on('setup:unlock', async (_p, ack) => {
+    socket.on('setup:unlock', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
       const res = setup.unlock(r.game, playerId);
       ack?.(res);
-      await emitSetup(r);
+      emitSetup(r);
     });
 
     // Removing a player, host only.
@@ -453,7 +470,7 @@ function attachSockets(io, { registry, setup }) {
     // host could cancel the deal, but re-dealing walked straight back into the same wall, and
     // nothing except that player voluntarily leaving could break it. A gate with no override is
     // a deadlock with extra steps.
-    socket.on('room:kick', async ({ playerId: targetId } = {}, ack) => {
+    socket.on('room:kick', ({ playerId: targetId } = {}, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can remove someone.' });
@@ -472,7 +489,7 @@ function attachSockets(io, { registry, setup }) {
 
       // Tell their own sockets before they stop hearing about the room, or they sit on a screen
       // that has quietly stopped being real.
-      const sockets = await io.in(r.code).fetchSockets();
+      const sockets = socketsIn(r);
       for (const s of sockets) {
         if (s.data.playerId === targetId) {
           s.emit('room:kicked', { reason: 'The host removed you from the room.' });
