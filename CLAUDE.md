@@ -108,6 +108,10 @@ consistent — new UI should look like it was always there.
   it. Controls that a thumb aims at go *above* anything that can change size.
 - **Per-character inline-blocks remove word-boundary line breaking.** `wobble()` wraps each
   word in a `nowrap` span, or headings break mid-word (a lone "r" on line two).
+- **Without `touch-action: manipulation`, two quick taps are a zoom.** That is ordinary use in a
+  party game. Decline that one gesture rather than reaching for `user-scalable=no`, which takes
+  pinch-zoom away from everyone. Pull-to-refresh needs declining too (`overscroll-behavior-y:
+  contain`): a reload is not neutral here, because tilt is off on every fresh page load.
 - **`show()` does not run for the screen that is active in the markup.** Anything `show()`
   initialises must also be initialised once at boot, or the first screen anyone sees is the
   odd one out.
@@ -124,6 +128,15 @@ consistent — new UI should look like it was always there.
 - *Always surface the server's error string.* The Rematch button "did nothing" for a whole
   playtest because the client discarded `res.error` — the server had been explaining itself
   the entire time.
+- *State taken for one turn must be dropped with that turn.* The disconnect pause freezes the
+  current player's clock, and only their return ever cleared it -- so another player leaving
+  re-armed the clock while the game still called itself paused, and removing the paused player
+  advanced the turn but left a guard armed to rewrite the NEXT player's deadline 30s later. When
+  something is taken on behalf of one phase, name what ends it in the same breath as what starts
+  it, and give that one owner.
+- *A "no-op" result is not the same as an advance.* `forfeit` returns without a `nextPlayerId`
+  when the player who left wasn't the guesser. Treating every non-gameover result as an advance
+  restarted a turn clock that was still running.
 - *Behind a TLS-terminating proxy, `req.socket.encrypted` is false.* Trust
   `X-Forwarded-Proto`/`-Host` when present. Getting this wrong made the join QR encode
   `http://`, which silently disabled motion sensors for everyone who scanned it while anyone
@@ -146,6 +159,10 @@ consistent — new UI should look like it was always there.
   dead reported 60 of 66 images as rot; all were HTTP 429. With `--fix` it would have wiped
   ~4,600 working images. Only 404/410 is dead, and a destructive flag must never act on
   "unknown".
+- *Dedupe with the same key the judge compares with.* The draw dropped duplicate names using a
+  plain lowercase key, so "Spider-Man" and "Spiderman" were two draws from two lists -- and two
+  players wore one character. If the judge accepts either spelling as one answer, the pool has to
+  treat them as one character; `normalizeLoose` is that test and both sides now use it.
 - *Sample what a pattern actually matched before quoting a number or deleting rows.* A regex
   for "credit extras" matched Kay/O, K/DA and AC/DC; the claimed 65 was really 13.
 - *Commons throttles by IP, and a party shares one.* That is why `/img/<id>` reads through a
