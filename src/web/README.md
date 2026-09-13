@@ -48,6 +48,13 @@ per-process prefixes, and stops them together on Ctrl+C. Flags: `--secure`, `--t
 `--no-web`, `--no-discord`. A child exiting never takes its siblings down — a bad Discord token
 should not close a game in progress.
 
+`--tunnel` prefers the **named** tunnel configured in `~/.cloudflared/config.yml`, so the address
+is the same every launch (`https://guess-the-character.com`). With no config it falls back to a
+quick tunnel, which mints a throwaway random hostname each time. If cloudflared is already
+running that tunnel as a Windows service, `--tunnel` says so and starts nothing — a second
+connector for the same tunnel works but doubles the logs and makes "I stopped the tunnel and the
+site is still up" a puzzle.
+
 **HTTPS also keeps the screen on.** The Screen Wake Lock API needs a secure context too, and
 without it a phone auto-locks mid-game — nobody is touching it once it's on a forehead. Over
 plain HTTP the game warns the player to set auto-lock to Never instead.

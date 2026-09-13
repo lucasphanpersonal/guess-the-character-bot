@@ -5,6 +5,11 @@
 //   npm run start:all -- --tunnel      # ...plus a Cloudflare tunnel, for playing off the LAN
 //   npm run start:all -- --no-discord  # web only
 //
+// --tunnel prefers the NAMED tunnel in ~/.cloudflared/config.yml when one is configured, so the
+// address is the same every launch; with no config it falls back to a quick tunnel and its
+// throwaway random hostname. If cloudflared is already running that same tunnel as a Windows
+// service it is left alone rather than given a second connector.
+//
 // The two frontends are separate long-running processes sharing one SQLite file, which is why
 // this exists at all: running them by hand means two or three terminals and remembering which
 // flag belongs to which. Output is prefixed per process so one scrollback stays readable, and
@@ -16,8 +21,10 @@
 
 require('dotenv').config();
 
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(`--${flag}`);
@@ -97,17 +104,114 @@ if (wantDiscord) {
   }
 }
 
+/**
+ * The hostname routed to OUR port, rather than whichever `hostname:` happens to come first.
+ *
+ * One tunnel can front several services -- a `hostname: files.example / service: http://…:3000`
+ * rule sitting above ours is an ordinary config -- so the first hostname in the file is not
+ * necessarily this app's. Printing that one as the address to share sends the party to someone
+ * else's site, so match the rule by the port its `service:` dials and only fall back to "the
+ * first hostname" when nothing routes here.
+ */
+function ingressHostname(cfg, port) {
+  // Only the ingress block: a `- ` elsewhere in the file is some other list, not a routing rule.
+  const rules = (cfg.split(/^ingress:[ \t]*$/m)[1] ?? '').split(/^\s*-\s+/m).slice(1);
+  const field = (rule, key) => rule.match(new RegExp(`\\b${key}:\\s*(\\S+)`))?.[1] ?? null;
+  // Substring rather than regex: WEB_PORT is whatever the environment says, and a port with a
+  // regex metacharacter in it would otherwise match the wrong rule (or throw).
+  const dialsUs = (rule) => {
+    const service = field(rule, 'service') ?? '';
+    return service.endsWith(`:${port}`) || service.endsWith(`:${port}/`);
+  };
+  const hosted = rules.filter((r) => field(r, 'hostname'));
+  return field(hosted.find(dialsUs) ?? hosted[0] ?? '', 'hostname');
+}
+
+/**
+ * The configured named tunnel as `{ name, hostname }`, or null if there isn't one.
+ *
+ * A quick tunnel mints a fresh random hostname on every launch, which is fine for one party and
+ * useless as an address: the link you handed out last week is already dead. Once
+ * `cloudflared tunnel login` and `tunnel create` have been run there is a `config.yml` naming a
+ * persistent tunnel and the hostname routed to it, so prefer that whenever it exists.
+ *
+ * Read with a regex rather than a YAML dependency -- a handful of scalars do not justify a
+ * parser -- and any failure falls through to the quick tunnel instead of taking the launcher
+ * down with it.
+ */
+function namedTunnel(port) {
+  try {
+    const cfg = fs.readFileSync(path.join(os.homedir(), '.cloudflared', 'config.yml'), 'utf8');
+    const name = cfg.match(/^\s*tunnel:\s*(\S+)/m)?.[1];
+    // `<UUID>` still sitting there means the template was copied but never filled in. cloudflared
+    // reports that as a credentials error much further along, so catch it here where it is obvious.
+    if (!name || name.startsWith('<')) return null;
+    return { name, hostname: ingressHostname(cfg, port) };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is the cloudflared service already carrying that tunnel?
+ *
+ * `cloudflared service install` is the whole point of a permanent domain -- it brings the tunnel
+ * up at boot, without this launcher -- but it also means `--tunnel` here would open a SECOND
+ * connector for the same tunnel. Cloudflare load-balances across connectors, so nothing fails
+ * loudly; you just get doubled logs and a site that stays up when you stop what looks like the
+ * only tunnel, which is a confusing thing to debug at a party.
+ *
+ * "A service named cloudflared is RUNNING" is NOT the question, and answering that one instead
+ * cost an evening: a botched `service install` can leave a bare cloudflared.exe registered with
+ * no config and no `tunnel run`, which reports RUNNING forever while serving nothing. Skipping
+ * our own connector on that signal takes the site down and blames the web server. So require the
+ * service's command line to actually name a tunnel before believing it.
+ *
+ * Nor is "some tunnel" the question. `cloudflared tunnel run <name>` spells out which one, and a
+ * service carrying somebody else's tunnel must not stop us starting ours -- that is the same
+ * dark-site failure by a different route. A service that takes its tunnel from its own config,
+ * or from an opaque `--token`, names nothing we can compare: that copy lives under System32
+ * where we cannot read it, so the doubled-connector cost is accepted over guessing.
+ */
+function tunnelServedByService(name) {
+  if (process.platform !== 'win32') return false;
+  const sc = (argv) => execFileSync('sc', argv, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  try {
+    const cmd = sc(['qc', 'cloudflared']).match(/^\s*BINARY_PATH_NAME\s*:(.*)$/mi)?.[1] ?? '';
+    if (!/\btunnel\b|--token/i.test(cmd)) return false;
+    const runs = cmd.match(/\brun\s+(?!-)(\S+)/i)?.[1].replace(/^"|"$/g, '');
+    if (runs && runs !== name) return false;
+    return /\bRUNNING\b/.test(sc(['query', 'cloudflared']));
+  } catch {
+    return false; // not installed, or sc refused -- treat as "ours to start"
+  }
+}
+
 if (wantTunnel) {
-  // The tunnel points at the plain HTTP port on purpose: Cloudflare terminates TLS itself, and
-  // pointing it at the self-signed HTTPS listener would just make it distrust the certificate.
-  //
-  // 127.0.0.1 rather than `localhost`: the server binds 0.0.0.0, which is IPv4 only, while
-  // `localhost` resolves to ::1 first on Windows -- so cloudflared dials an address nothing is
-  // listening on and reports "the target machine actively refused it" as though the server were
-  // down. Naming the IPv4 address removes the ambiguity.
   const port = process.env.WEB_PORT || 4180;
-  start('tunnel', 'cloudflared', ['tunnel', '--url', `http://127.0.0.1:${port}`, '--no-autoupdate']);
-  say('sys', 'Watch the tunnel lines for the https://<name>.trycloudflare.com URL to share.');
+  const named = namedTunnel(port);
+  if (named && tunnelServedByService(named.name)) {
+    // Deliberately vague about WHICH tunnel: where the service names none we did not confirm it
+    // is this one, and a launcher that states more than it checked is how the evening above went.
+    const where = named.hostname ? ` on https://${named.hostname}` : '';
+    say('sys', `cloudflared is already running as a service${where} — not starting a second connector.`);
+  } else if (named) {
+    // `tunnel run` takes its ingress from config.yml, which carries the same 127.0.0.1 rule
+    // spelled out below, so there is no --url to pass here. --no-autoupdate for the reason the
+    // quick tunnel passes it: a connector that restarts itself to update drops the party with it.
+    start('tunnel', 'cloudflared', ['tunnel', '--no-autoupdate', 'run', named.name]);
+    say('sys', named.hostname ? `Tunnel: https://${named.hostname}` : `Running named tunnel ${named.name}.`);
+  } else {
+    // The tunnel points at the plain HTTP port on purpose: Cloudflare terminates TLS itself, and
+    // pointing it at the self-signed HTTPS listener would just make it distrust the certificate.
+    //
+    // 127.0.0.1 rather than `localhost`: the server binds 0.0.0.0, which is IPv4 only, while
+    // `localhost` resolves to ::1 first on Windows -- so cloudflared dials an address nothing is
+    // listening on and reports "the target machine actively refused it" as though the server were
+    // down. Naming the IPv4 address removes the ambiguity.
+    start('tunnel', 'cloudflared', ['tunnel', '--url', `http://127.0.0.1:${port}`, '--no-autoupdate']);
+    say('sys', 'Watch the tunnel lines for the https://<name>.trycloudflare.com URL to share.');
+  }
 }
 
 if (!children.length) {
