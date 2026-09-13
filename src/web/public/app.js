@@ -365,7 +365,13 @@ function allowSleep() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (wantWake && document.visibilityState === 'visible') keepAwake();
+  if (document.visibilityState !== 'visible') return;
+  if (wantWake) keepAwake();
+  // The turn clock is counted down locally between server pushes, and a hidden tab's timers are
+  // throttled to roughly one a second at best -- so a phone that was locked, or a tab someone
+  // switched away from, comes back showing a countdown that has quietly drifted and will not be
+  // corrected until the turn changes. Ask for the real remaining time on the way back in.
+  if (lastPlayView) socket.emit('game:resync', {}, () => {});
 });
 
 let lastSetupView = null;

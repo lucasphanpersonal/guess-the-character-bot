@@ -272,6 +272,13 @@ const connect = (playerId) => {
     const game = registry.getRoom(code).game;
     check(game.currentPlayerId === 'pPauseA', 'pause: the first turn belongs to the host');
 
+    // A hidden tab counts the clock down on throttled timers and drifts; this is how it asks
+    // for the truth on the way back, so it has to answer with a real remaining time.
+    const resynced = nextEvent(P, 'game:state');
+    const fresh = await P.emitWithAck('game:resync', {});
+    check(fresh.ok, 'resync: the server answers a returning tab');
+    check(typeof (await resynced).turnRemaining === 'number', 'resync: the answer carries the real clock');
+
     // The current player drops: the clock freezes.
     P.disconnect();
     await wait(150);

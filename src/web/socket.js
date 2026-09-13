@@ -373,6 +373,16 @@ function attachSockets(io, { registry, setup }) {
       if (res.ok) handleTurnResult(r, res, res.reveal);
     });
 
+    // A tab that was hidden has been counting the turn down on throttled timers, so it comes
+    // back with a clock that has drifted and nothing to correct it until the turn changes.
+    // Answering on the way back costs one message and beats pushing to everyone on a schedule.
+    socket.on('game:resync', (_p, ack) => {
+      const r = room();
+      if (!playing(r) || !r.game.turnOrder.includes(playerId)) return ack?.({ ok: false });
+      socket.emit('game:state', loop.buildGameView(r.game, playerId, namesOf(r), Date.now()));
+      ack?.({ ok: true });
+    });
+
     socket.on('game:pass', (_p, ack) => {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
