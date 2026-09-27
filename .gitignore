@@ -26,3 +26,5 @@ data/dev-tls.*
 
 # Bot stdout/stderr from a scripted restart -- machine-specific noise, not project files.
 data/bot-restart.log*
+# The always-on bot's own log (scripts/run-discord-bot.js). Machine-local, like the above.
+data/discord-bot.log
