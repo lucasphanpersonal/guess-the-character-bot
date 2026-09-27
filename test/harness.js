@@ -214,7 +214,19 @@ function attachFakeVoice(game) {
   return played;
 }
 
+/**
+ * Pins the current Discord turn's clock so the next finish records exactly `seconds` left.
+ *
+ * Equal turn counts are decided by time left (Game.standings), and a test run resolves turns
+ * within milliseconds of starting them -- so without this, every finish lands on "the full clock
+ * left" and a tie test passes only because the machine was fast. State the times instead.
+ */
+function leaveOnClock(game, seconds) {
+  game.timer.startedAt = Date.now() - (game.timer.durationMs - seconds * 1000);
+}
+
 module.exports = {
+  leaveOnClock,
   assert,
   createRecorder,
   createFakeClient,

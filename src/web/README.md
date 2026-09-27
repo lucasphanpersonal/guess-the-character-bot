@@ -7,7 +7,7 @@ Play flow: create/join a room by 4-letter code → host picks a pool + difficult
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
 ("phone on your forehead!") → each phone shows its wearer's character full-screen, landscape,
 for the room → on your turn, **tilt up = got it, tilt down / time out = pass** → fewest turns
-wins, and the end screen reveals who everyone was.
+wins (equal turns: most time left when they got it), and the end screen reveals who everyone was.
 
 Or the host picks: choosing **I'll pick them** on the config screen lets the host choose each
 player's character — searched from the library, or any name typed in — and sit the game out,

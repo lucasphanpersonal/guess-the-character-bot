@@ -6,6 +6,7 @@ const {
   createButtonInteraction,
   createSlashInteraction,
   attachFakeVoice,
+  leaveOnClock,
 } = require('./harness');
 
 const engine = require('../src/discord/game/engine');
@@ -310,8 +311,9 @@ module.exports = {
     assert.equal(ctx.lobby.game.finishedBy.get('p1'), 1, 'p1 got it on turn 1');
     assert.equal(ctx.lobby.game.currentPlayerId, 'p2');
     // Publicly revealed the moment they got it: everyone else could already see it, and
-    // they have just worked it out themselves.
-    assert.match(channelText(ctx), /got it in \*\*1\*\* turn!/);
+    // they have just worked it out themselves. With the time left, which is from now on the
+    // time p2 has to beat on the same turn count.
+    assert.match(channelText(ctx), /got it in \*\*1\*\* turn, with \*\*\d+s\*\* left!/);
     cleanup(ctx);
   },
 
@@ -359,16 +361,80 @@ module.exports = {
     cleanup(ctx);
   },
 
-  async 'the same turn count is a tie, with no tiebreaker'() {
+  // Level on turns AND to the second: still a genuine tie.
+  async 'the same turn count and the same time left is a tie'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);
+    leaveOnClock(ctx.lobby.game, 50);
     await guess(ctx, 'p1', true);
-    await guess(ctx, 'p2', true); // both on turn 1
+    leaveOnClock(ctx.lobby.game, 50);
+    await guess(ctx, 'p2', true); // both on turn 1, both with 50s left
 
     assert.equal(ctx.lobby.status, 'FINISHED');
-    assert.match(lastChannelMessage(ctx), /It's a tie/);
+    assert.match(lastChannelMessage(ctx), /It's a tie — .* both got it in \*\*1\*\* turn with \*\*50s\*\* left!/);
     assert.equal(stats.getPlayerStats(ctx.guildId, 'p1').ties, 1);
     assert.equal(stats.getPlayerStats(ctx.guildId, 'p2').ties, 1);
+    cleanup(ctx);
+  },
+
+  // Equal turns are decided by the clock, and the result has to say so -- otherwise a player
+  // who also got it in one is just told they lost.
+  async 'on the same turn count, more time left wins -- and says it was on time'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    leaveOnClock(ctx.lobby.game, 70);
+    await guess(ctx, 'p1', true);
+    leaveOnClock(ctx.lobby.game, 40);
+    await guess(ctx, 'p2', true);
+
+    const final = lastChannelMessage(ctx);
+    assert.match(final, /<@p1> wins on time — got it in \*\*1\*\* turn with \*\*70s\*\* left!/);
+    assert.match(final, /<@p2> also got it in \*\*1\*\* turn, but with \*\*40s\*\* left\./);
+    assert.equal(stats.getPlayerStats(ctx.guildId, 'p1').wins, 1);
+    assert.equal(stats.getPlayerStats(ctx.guildId, 'p2').losses, 1);
+    cleanup(ctx);
+  },
+
+  // Order of play is irrelevant: going second and being quicker wins.
+  async 'the later player wins on equal turns if they were quicker'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    leaveOnClock(ctx.lobby.game, 10);
+    await guess(ctx, 'p1', true);
+    leaveOnClock(ctx.lobby.game, 85);
+    await guess(ctx, 'p2', true);
+
+    assert.match(lastChannelMessage(ctx), /<@p2> wins on time/);
+    cleanup(ctx);
+  },
+
+  // After the clock runs out the player gets a last-chance window; getting it there counts as
+  // no time left, so anyone who got it in time on the same turn count beats them.
+  async 'a guess in the last-chance window counts as no time left'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    leaveOnClock(ctx.lobby.game, 5);
+    await guess(ctx, 'p1', true);
+    leaveOnClock(ctx.lobby.game, -20); // 20s past the deadline
+    await guess(ctx, 'p2', true);
+
+    assert.equal(ctx.lobby.game.secondsLeftBy.get('p2'), 0);
+    assert.match(lastChannelMessage(ctx), /<@p1> wins on time/);
+    cleanup(ctx);
+  },
+
+  // Fewer turns always beats more time: the clock only ever breaks a tie on turns.
+  async 'fewer turns beats more time left'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    leaveOnClock(ctx.lobby.game, 1);
+    await guess(ctx, 'p1', true); // turn 1, a second to spare
+    await pass(ctx, 'p2');
+    leaveOnClock(ctx.lobby.game, 89);
+    await guess(ctx, 'p2', true); // turn 2, nearly the whole clock
+
+    const final = lastChannelMessage(ctx);
+    assert.match(final, /<@p1> wins — got it in \*\*1\*\* turn!/, 'a plain win: turns decided it');
     cleanup(ctx);
   },
 

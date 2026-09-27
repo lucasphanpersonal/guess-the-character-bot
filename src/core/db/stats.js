@@ -26,7 +26,7 @@ function recordGame(guildId, standings) {
 
 // A player's rows, each carrying how many people won that game -- which is what tells a
 // solo win apart from a shared one. Ties are not stored as their own outcome, because
-// "everyone who took the fewest turns" is the same fact whether one or three people did it.
+// "everyone level on turns and time" is the same fact whether one or three people were.
 const PLAYER_ROWS = `
   SELECT
     gp.outcome,

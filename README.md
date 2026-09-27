@@ -144,8 +144,10 @@ happen live between humans in voice.
    a human deciding whether "Shikamaru" counts beats Levenshtein deciding it.
 7. **Winning: fewest turns.** Getting your character doesn't end the game — it ends *your*
    involvement. Your character is revealed then and there, you drop out of the rotation, and
-   everyone else plays on until they get theirs. The player who needed the fewest turns wins,
-   and an equal count is a tie with no tiebreaker.
+   everyone else plays on until they get theirs. The player who needed the fewest turns wins.
+   An equal count goes to whoever had more time left on the turn they got it (every earlier
+   turn cost the full clock, since a pass counts as the whole turn), and only players level
+   to the second too are tied. Both frontends score this way; it lives in `Game.standings()`.
 
    The end-of-game message carries **Rematch** and **Leaderboard** buttons, and shows only the
    characters *nobody* saw yet — in practice the one belonging to the last player, who gave up

@@ -705,7 +705,7 @@ function renderHost(view) {
     renderHostList(view.players.map((p) => ({
       ...p,
       icon: STATUS_ICON[p.status] || '•',
-      meta: p.status === 'finished' ? `got it in ${plural(p.turns)}`
+      meta: p.status === 'finished' ? `got it in ${plural(p.turns)}${p.secondsLeft == null ? '' : `, ${p.secondsLeft}s left`}`
         : p.status === 'gave_up' ? 'gave up'
           : p.status === 'guessing' ? 'guessing now'
             : p.turns ? `${plural(p.turns)} so far` : 'waiting for a first turn',
@@ -746,7 +746,7 @@ function renderStandings(el, rows) {
   for (const s of rows) {
     const li = document.createElement('li');
     li.className = 'seat';
-    const tail = s.status === 'finished' ? ` — turn ${s.turns}`
+    const tail = s.status === 'finished' ? ` — turn ${s.turns}${s.secondsLeft == null ? '' : `, ${s.secondsLeft}s left`}`
       : s.status === 'guessing' ? ` — turn ${s.turns} (guessing)`
       : s.status === 'gave_up' ? ' — gave up' : ' — waiting';
     li.innerHTML = `<span>${STATUS_ICON[s.status] || '•'}</span><span class="name">${escapeHtml(s.name)}</span><span class="you">${tail}</span>`;
@@ -917,30 +917,36 @@ function renderOver(result) {
   stopBed();
   hideForehead();
   const names = result.winners.map((w) => w.name);
+  const turnsText = (n) => `${n} turn${n === 1 ? '' : 's'}`;
+  const leftText = (secs) => (secs == null ? '' : ` with ${secs}s left`);
+  const w0 = result.winners[0];
   wobble($('overEmoji'), result.winners.length > 1 ? 'TIE!' : result.winners.length ? 'WINNER!' : 'GAME OVER');
+  // "Wins on time" when somebody matched the winner's turns and lost only on the clock -- said
+  // outright, or a player who also got it in one is simply told they lost.
   $('overResult').innerHTML = result.winners.length > 1
-    ? `It's a tie — ${names.map(escapeHtml).join(' & ')} both got it in ${result.bestTurnCount} turns!`
-    : result.winners.length
-      ? `${escapeHtml(names[0])} wins — got it in ${result.bestTurnCount} turns!`
-      : 'Nobody got their character.';
+    ? `It's a tie — ${names.map(escapeHtml).join(' & ')} both got it in ${turnsText(result.bestTurnCount)}${leftText(w0.secondsLeft)}!`
+    : !result.winners.length
+      ? 'Nobody got their character.'
+      : result.wonOnTime
+        ? `${escapeHtml(names[0])} wins on time — got it in ${turnsText(result.bestTurnCount)}${leftText(w0.secondsLeft)}!`
+        : `${escapeHtml(names[0])} wins — got it in ${turnsText(result.bestTurnCount)}!`;
   const ul = $('finalStandings');
   ul.innerHTML = '';
-  const finishers = result.standings.filter((s) => s.turns !== null);
   for (const s of result.standings) {
     const li = document.createElement('li');
     li.className = 'seat';
+    // `place` comes from the server (Game.standings): turns first, then time left, with level
+    // players sharing a place. Re-deriving it here from turns alone is how this screen and the
+    // Discord reveal could have ranked one game two different ways.
     let place;
     if (s.turns === null) place = s.outcome === 'gave_up' ? 'gave up' : 'did not finish';
-    else {
-      const rank = finishers.filter((o) => o.turns < s.turns).length + 1;
-      place = `#${rank} — ${s.turns} turn${s.turns === 1 ? '' : 's'}`;
-    }
+    else place = `#${s.place} — ${turnsText(s.turns)}${s.secondsLeft == null ? '' : ` · ${s.secondsLeft}s left`}`;
     const ch = s.character;
     const thumb = ch && ch.imageUrl
       ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;object-position:50% 20%;border-radius:9px;flex:none">`
       : '';
     // Podium colouring for the top three finishers; everyone else is a plain row.
-    const rank = s.turns === null ? 0 : finishers.filter((o) => o.turns < s.turns).length + 1;
+    const rank = s.place ?? 0;
     if (rank >= 1 && rank <= 3) li.classList.add(`rank${rank}`);
     li.style.alignItems = 'center';
     li.innerHTML = `${rank ? `<span style="font-weight:900;font-size:1.2rem;min-width:1.4em">${rank}</span>` : ''}${thumb}`
@@ -1728,8 +1734,11 @@ socket.on('game:state', (view) => renderPlaying(view));
 socket.on('host:state', (view) => renderHost(view));
 socket.on('game:reveal', (r) => {
   beep(r.kind === 'got' ? 760 : 380, 160); // a chime when someone finishes / bows out
+  // Seconds left are named at the moment of finishing because that is now the time to beat:
+  // anyone who gets theirs in as many turns needs more on the clock to win outright.
+  const left = r.secondsLeft == null ? '' : ` with <b>${r.secondsLeft}s</b> left`;
   const html = r.kind === 'got'
-    ? `<b>${escapeHtml(r.name)}</b> got it in <b>${r.turns}</b> turn${r.turns === 1 ? '' : 's'} — they were <b>${escapeHtml(r.character.name)}</b>`
+    ? `<b>${escapeHtml(r.name)}</b> got it in <b>${r.turns}</b> turn${r.turns === 1 ? '' : 's'}${left} — they were <b>${escapeHtml(r.character.name)}</b>`
     : r.kind === 'gaveup'
       ? `<b>${escapeHtml(r.name)}</b> gave up — they were <b>${escapeHtml(r.character.name)}</b>`
       : `<b>${escapeHtml(r.name)}</b> left — they were <b>${escapeHtml(r.character.name)}</b>`;

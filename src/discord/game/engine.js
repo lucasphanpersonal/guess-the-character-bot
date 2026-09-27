@@ -527,6 +527,10 @@ async function handlePass(interaction, lobby) {
 async function announceCompletion(client, lobby, playerId) {
   const game = lobby.game;
   const turns = game.finishedBy.get(playerId);
+  // Said now because it is now the time to beat: anyone who gets theirs in as many turns needs
+  // more than this left on the clock to win outright (see Game.standings).
+  const secondsLeft = game.secondsLeftBy.get(playerId);
+  const left = secondsLeft == null ? '' : `, with **${secondsLeft}s** left`;
   const stillGuessing = game.activePlayers.length;
   const channel = await getChannel(client, lobby);
   const tail = stillGuessing ? ` ${stillGuessing} still guessing.` : '';
@@ -537,7 +541,7 @@ async function announceCompletion(client, lobby, playerId) {
   try {
     await channel.send(
       characterMessage(
-        `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}!${tail}`,
+        `✅ <@${playerId}> got it in **${turns}** turn${turns === 1 ? '' : 's'}${left}!${tail}`,
         [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
       )
     );
@@ -572,10 +576,15 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
   if (game.resolvedTurns.has(turnKey)) return;
   game.resolvedTurns.add(turnKey);
 
+  // Read before clearTimers, which drops the timer this comes from. It is the tiebreak between
+  // equal turn counts (see Game.standings), taken at the moment the turn resolved -- for a
+  // judged guess, when the judge ruled. After the clock has run out, in the last-chance window,
+  // remainingMs() is 0.
+  const msLeft = game.timer?.remainingMs() ?? null;
   clearTimers(game);
 
   // Recorded before the board is frozen, so the outgoing board can state the outcome.
-  if (correct) game.finishedBy.set(finishingPlayerId, game.turnsFor(finishingPlayerId));
+  if (correct) game.recordFinish(finishingPlayerId, msLeft);
 
   // Freeze the outgoing turn's board (buttons removed, outcome shown) before anything
   // posts a new one, so old boards are never left clickable.
@@ -694,6 +703,8 @@ async function finalizeGame(client, lobby) {
   const winners = standings.filter((s) => s.outcome === 'won');
   const best = game.bestTurnCount;
   const turnWord = (n) => `**${n}** turn${n === 1 ? '' : 's'}`;
+  const secondsWord = (s) => (s.secondsLeft == null ? '' : ` with **${s.secondsLeft}s** left`);
+  const onTime = game.wonOnTime;
 
   let resultLine;
   if (!winners.length) {
@@ -701,7 +712,10 @@ async function finalizeGame(client, lobby) {
     // but a game cut short some other way shouldn't crash the reveal.
     resultLine = '🛑 Nobody got their character.';
   } else if (winners.length > 1) {
-    resultLine = `🤝 It's a tie — ${winners.map((s) => `<@${s.playerId}>`).join(' and ')} both got it in ${turnWord(best)}!`;
+    // Level on turns AND to the second (or no clock was read), so a tie is genuinely a tie.
+    resultLine = `🤝 It's a tie — ${winners.map((s) => `<@${s.playerId}>`).join(' and ')} both got it in ${turnWord(best)}${secondsWord(winners[0])}!`;
+  } else if (onTime) {
+    resultLine = `🏆 <@${winners[0].playerId}> wins on time — got it in ${turnWord(best)}${secondsWord(winners[0])}!`;
   } else {
     resultLine = `🏆 <@${winners[0].playerId}> wins — got it in ${turnWord(best)}!`;
   }
@@ -709,15 +723,16 @@ async function finalizeGame(client, lobby) {
   // The full order, which is the only place the losing turn counts are ever stated. Skipped
   // at two players, where the result line has already said everything there is to say.
   if (standings.length > 2) {
-    // Competition ranking, so equal turn counts share a place and the next one skips. Simply
-    // numbering the sorted list 1..N would quietly award a tiebreaker the game does not have
-    // -- two players on three turns are second and second, not second and third.
+    // Places come from Game.standings -- competition ranking, where players level on turns and
+    // time share a place and the next one skips -- rather than being re-derived here, so this
+    // and the web's over screen cannot rank the same game two ways. Seconds are shown so a
+    // difference in place between equal turn counts explains itself.
     const finishers = standings.filter((s) => s.turnsTaken !== null);
     const places = standings.map((s) => {
       if (s.turnsTaken === null) return `${finishers.length + 1}. <@${s.playerId}> — _gave up_`;
-      const rank = finishers.filter((o) => o.turnsTaken < s.turnsTaken).length + 1;
-      const shared = finishers.filter((o) => o.turnsTaken === s.turnsTaken).length > 1;
-      return `${rank}${shared ? '=' : '.'} <@${s.playerId}> — ${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}`;
+      const shared = finishers.filter((o) => o.place === s.place).length > 1;
+      const left = s.secondsLeft == null ? '' : `, ${s.secondsLeft}s left`;
+      return `${s.place}${shared ? '=' : '.'} <@${s.playerId}> — ${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}${left}`;
     });
     resultLine += `\n\n**Final standings**\n${places.join('\n')}`;
   } else {
@@ -726,7 +741,9 @@ async function finalizeGame(client, lobby) {
       resultLine +=
         loser.turnsTaken === null
           ? ` <@${loser.playerId}> gave up.`
-          : ` <@${loser.playerId}> needed ${loser.turnsTaken}.`;
+          : loser.turnsTaken === best
+            ? ` <@${loser.playerId}> also got it in ${turnWord(best)}, but${secondsWord(loser)}.`
+            : ` <@${loser.playerId}> needed ${loser.turnsTaken}.`;
     }
   }
 

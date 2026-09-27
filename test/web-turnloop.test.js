@@ -79,12 +79,42 @@ function fewestTurnsWins() {
   assert.equal(result.bestTurnCount, 2);
 }
 
-function equalTurnsTie() {
+// The socket layer arms the clock by setting turnEndsAt; these set it directly and pass `now`,
+// so the time left at each finish is stated rather than whatever the machine happened to take.
+const T = 1_000_000;
+function finishWith(g, playerId, secondsLeft) {
+  g.turnEndsAt = T + secondsLeft * 1000;
+  return loop.gotIt(g, playerId, T);
+}
+
+function equalTurnsAndTimeTie() {
   const g = game(['p1', 'p2'], [row(1, 'A'), row(2, 'B')]);
-  loop.gotIt(g, 'p1'); // p1 finishes on turn 1 -> p2 gets turn 1
-  loop.gotIt(g, 'p2'); // p2 finishes on turn 1 too
+  finishWith(g, 'p1', 30); // p1 finishes on turn 1 -> p2 gets turn 1
+  finishWith(g, 'p2', 30); // p2 finishes on turn 1 too, to the second
   const result = loop.resultView(g, names);
-  assert.equal(result.winners.length, 2); // both on turn 1 -> tie
+  assert.equal(result.winners.length, 2);
+  assert.equal(result.wonOnTime, false);
+}
+
+function onEqualTurnsMoreTimeLeftWins() {
+  const g = game(['p1', 'p2'], [row(1, 'A'), row(2, 'B')]);
+  const first = finishWith(g, 'p1', 10);
+  assert.equal(first.reveal.secondsLeft, 10, 'the reveal carries the time to beat');
+  finishWith(g, 'p2', 50);
+  const result = loop.resultView(g, names);
+  assert.deepEqual(result.winners.map((w) => [w.name, w.secondsLeft]), [['Sam', 50]]);
+  assert.equal(result.wonOnTime, true);
+  assert.deepEqual(result.standings.map((s) => [s.name, s.place, s.secondsLeft]), [['Sam', 1, 50], ['Alex', 2, 10]]);
+}
+
+// While the current player's clock is paused (they dropped), time left is the frozen remainder.
+function aPausedClockCountsItsFrozenRemainder() {
+  const g = game(['p1', 'p2'], [row(1, 'A'), row(2, 'B')]);
+  g.pausedForDisconnect = true;
+  g.pausedRemaining = 22_000;
+  g.turnEndsAt = null;
+  loop.gotIt(g, 'p1', T);
+  assert.equal(g.secondsLeftBy.get('p1'), 22);
 }
 
 function lastPlayerGetsGiveUpNotPass() {
@@ -138,7 +168,9 @@ module.exports = {
   'only the current player can act': onlyTheCurrentPlayerCanAct,
   'a turn resolves exactly once': aTurnResolvesExactlyOnce,
   'fewest turns wins': fewestTurnsWins,
-  'equal turns tie': equalTurnsTie,
+  'equal turns and equal time tie': equalTurnsAndTimeTie,
+  'on equal turns, more time left wins': onEqualTurnsMoreTimeLeftWins,
+  'a paused clock counts its frozen remainder': aPausedClockCountsItsFrozenRemainder,
   'the last player gets give up, not pass': lastPlayerGetsGiveUpNotPass,
   'give up ends the game for the last player': giveUpEndsTheGameForTheLastPlayer,
   'out of contention offers give up alongside pass': outOfContentionOffersGiveUpAlongsidePass,

@@ -25,14 +25,24 @@ function turnKey(game) {
   return `${game.currentPlayerId}:${game.turnsFor(game.currentPlayerId)}`;
 }
 
+// How long the current turn's clock still has to run, in ms, or null with no clock. While
+// paused (the current player dropped) that is the frozen remainder, not a deadline in the past.
+// One owner for "time left": the clock players see and the tiebreak are both read from here.
+function msLeftOf(game, now) {
+  if (game.pausedForDisconnect) return game.pausedRemaining ?? 0;
+  return game.turnEndsAt ? Math.max(0, game.turnEndsAt - now) : null;
+}
+
 // Records the outcome and advances the rotation, or ends the game when nobody is left guessing.
-function endTurn(game, { correct }) {
+function endTurn(game, { correct, now = Date.now() }) {
   const key = turnKey(game);
   if (game.resolvedTurns.has(key)) return { duplicate: true };
   game.resolvedTurns.add(key);
 
   const finishingId = game.currentPlayerId;
-  if (correct) game.finishedBy.set(finishingId, game.turnsFor(finishingId));
+  // Time left is the tiebreak between equal turn counts (Game.standings). Read here, before the
+  // socket layer re-arms the clock for the next turn.
+  if (correct) game.recordFinish(finishingId, msLeftOf(game, now));
 
   const next = game.nextActiveIndex();
   if (next === null) {
@@ -47,15 +57,22 @@ function endTurn(game, { correct }) {
 const notPlaying = (game) => !game || game.finished;
 
 /** Current player declares they got their character. Records it, reveals it, advances. */
-function gotIt(game, playerId) {
+function gotIt(game, playerId, now = Date.now()) {
   if (notPlaying(game)) return { ok: false, error: 'The game is over.' };
   if (playerId !== game.currentPlayerId) return { ok: false, error: "It's not your turn." };
   const turns = game.turnsFor(playerId);
-  const r = endTurn(game, { correct: true });
+  const r = endTurn(game, { correct: true, now });
   if (r.duplicate) return { ok: false, error: 'That turn was already resolved.' };
   return {
     ok: true,
-    reveal: { playerId, turns, character: publicCharacter(game.headByPlayer[playerId]), kind: 'got' },
+    // secondsLeft goes out with the reveal because it is, from this moment, the time to beat.
+    reveal: {
+      playerId,
+      turns,
+      secondsLeft: game.secondsLeftBy.get(playerId) ?? null,
+      character: publicCharacter(game.headByPlayer[playerId]),
+      kind: 'got',
+    },
     ...r,
   };
 }
@@ -122,7 +139,15 @@ function standingsView(game, names) {
     else if (game.surrendered.has(id)) status = 'gave_up';
     else if (id === game.currentPlayerId && !game.finished) status = 'guessing';
     else status = 'waiting';
-    return { playerId: id, name: nameOf(id), status, turns: game.finishedBy.get(id) ?? game.turnsFor(id) };
+    return {
+      playerId: id,
+      name: nameOf(id),
+      status,
+      turns: game.finishedBy.get(id) ?? game.turnsFor(id),
+      // A finisher's time, visible while the game is still on: it is the target for anyone else
+      // who gets theirs in as many turns.
+      secondsLeft: game.secondsLeftBy.get(id) ?? null,
+    };
   });
 }
 
@@ -130,8 +155,8 @@ function standingsView(game, names) {
 // frozen at the remaining time rather than counting down against them.
 function turnRemainingOf(game, now) {
   if (game.finished) return null;
-  if (game.pausedForDisconnect) return Math.max(0, Math.round((game.pausedRemaining ?? 0) / 1000));
-  return game.turnEndsAt ? Math.max(0, Math.round((game.turnEndsAt - now) / 1000)) : null;
+  const ms = msLeftOf(game, now);
+  return ms == null ? null : Math.max(0, Math.round(ms / 1000));
 }
 
 /**
@@ -205,16 +230,20 @@ function resultView(game, names) {
   const standings = game.standings();
   const winners = standings.filter((s) => s.outcome === 'won');
   return {
-    winners: winners.map((s) => ({ playerId: s.playerId, name: names[s.playerId] ?? 'Player', turns: s.turnsTaken })),
+    winners: winners.map((s) => ({ playerId: s.playerId, name: names[s.playerId] ?? 'Player', turns: s.turnsTaken, secondsLeft: s.secondsLeft })),
     standings: standings.map((s) => ({
       playerId: s.playerId,
       name: names[s.playerId] ?? 'Player',
       outcome: s.outcome,
       turns: s.turnsTaken,
+      // From core, so the client never ranks on its own -- see Game.standings.
+      place: s.place,
+      secondsLeft: s.secondsLeft,
       // Safe to reveal everyone's character now the game is over.
       character: publicCharacter(game.headByPlayer[s.playerId]),
     })),
     bestTurnCount: game.bestTurnCount,
+    wonOnTime: game.wonOnTime,
   };
 }
 

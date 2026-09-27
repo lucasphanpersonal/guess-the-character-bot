@@ -17,7 +17,8 @@ you ask questions out loud and guess; anyone who can see your character can rule
 drop out of the rotation. Play continues for everyone else. Your score is the number of turns
 you took.
 
-**The game ends when nobody is left guessing.** Fewest turns wins; equal turn counts tie.
+**The game ends when nobody is left guessing.** Fewest turns wins; equal turn counts go to
+whoever had more time left on the turn they got it, and tie only if level to the second.
 
 ### Why turn count, and not anything else
 
@@ -459,6 +460,8 @@ Flagged rather than decided, because they only matter once it's being played:
   passes rather than removing anyone, so an absent player keeps being handed turns and the game
   never ends on its own. `/lobby end` is the answer — and stage 5 makes it a non-destructive one.
 - **Ties are common at small turn counts.** Two players getting it on turn 2 is unremarkable,
-  and there is deliberately no tiebreaker. If that turns out to feel flat, the tiebreaker
-  people will reach for is wall-clock time within the round — which is available for free and
-  requires no button presses.
+  and there was deliberately no tiebreaker. It did turn out to feel flat, and the tiebreaker is
+  now the one predicted here: time left on the clock at the moment of getting it, which needs
+  no button presses. Because a pass counts as the whole turn, that is the same ranking as least
+  total time, without letting anyone bank seconds by passing fast. Kept in whole seconds (what
+  the clock shows); players level to the second still tie. See `Game.standings()`.

@@ -4,7 +4,7 @@
 // have ceilings is a handful of Discord surfaces (five action rows per message, ten embeds),
 // and those refuse for themselves rather than shrinking the game to fit.
 
-const { assert, createRecorder, createFakeClient, createButtonInteraction, createSlashInteraction } = require('./harness');
+const { assert, createRecorder, createFakeClient, createButtonInteraction, createSlashInteraction, leaveOnClock } = require('./harness');
 const { handleComponentInteraction } = require('../src/discord/components/router');
 const { buildTurnBoardPayload } = require('../src/discord/game/turnBoard');
 const { buildBallotPayload } = require('../src/discord/game/audienceVote');
@@ -244,9 +244,11 @@ module.exports = {
     const game = ctx.lobby.game;
     const stats = require('../src/core/db/stats');
 
+    leaveOnClock(game, 60);
     await judge(ctx, 'p1', true); // p1 done on turn 1
     await engine.submitPass(ctx.client, ctx.lobby, 'p2');
-    await judge(ctx, 'p3', true); // p3 done on turn 1
+    leaveOnClock(game, 60);
+    await judge(ctx, 'p3', true); // p3 done on turn 1, level with p1 to the second
     // ...and now p4 goes quiet. The host ends it.
 
     const endCmd = require('../src/discord/commands/actions/lobby-end');
@@ -691,23 +693,47 @@ module.exports = {
     cleanup(ctx);
   },
 
-  // Equal turn counts are a tie with no tiebreaker, so numbering the sorted list 1..N would
-  // award one the game does not have.
-  async 'players on the same turn count share a place'() {
+  // Level on turns AND time is a genuine tie, so numbering the sorted list 1..N would award a
+  // tiebreak the game does not have.
+  async 'players level on turns and time share a place'() {
     const ctx = await startedGame(4);
     await confirmAll(ctx);
     const game = ctx.lobby.game;
 
-    await judge(ctx, 'p1', true); // turn 1
-    await judge(ctx, 'p2', true); // turn 1
-    await judge(ctx, 'p3', true); // turn 1
+    for (const p of ['p1', 'p2', 'p3']) {
+      leaveOnClock(game, 30);
+      await judge(ctx, p, true); // turn 1, 30s left, all three
+    }
     await engine.submitGiveUp(ctx.client, ctx.lobby, 'p4'); // alone -> gives up
 
     const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`).content;
-    assert.match(reveal, /1= <@p1> — 1 turn/);
-    assert.match(reveal, /1= <@p2> — 1 turn/);
-    assert.match(reveal, /1= <@p3> — 1 turn/);
+    assert.match(reveal, /1= <@p1> — 1 turn, 30s left/);
+    assert.match(reveal, /1= <@p2> — 1 turn, 30s left/);
+    assert.match(reveal, /1= <@p3> — 1 turn, 30s left/);
     assert.match(reveal, /4\. <@p4> — _gave up_/, 'and the next place skips past the tie');
+    cleanup(ctx);
+  },
+
+  // On equal turns the clock orders them -- and two level on BOTH still share, with the next
+  // place skipping. The seconds are printed so a split between equal turn counts explains itself.
+  async 'on equal turns, places follow time left'() {
+    const ctx = await startedGame(4);
+    await confirmAll(ctx);
+    const game = ctx.lobby.game;
+
+    const left = { p1: 20, p2: 75, p3: 20 };
+    for (const p of ['p1', 'p2', 'p3']) {
+      leaveOnClock(game, left[p]);
+      await judge(ctx, p, true); // all on turn 1
+    }
+    await engine.submitGiveUp(ctx.client, ctx.lobby, 'p4');
+
+    const reveal = ctx.recorder.lastMatching(`channel:${ctx.channelId}`).content;
+    assert.match(reveal, /<@p2> wins on time/);
+    assert.match(reveal, /1\. <@p2> — 1 turn, 75s left/);
+    assert.match(reveal, /2= <@p1> — 1 turn, 20s left/);
+    assert.match(reveal, /2= <@p3> — 1 turn, 20s left/);
+    assert.match(reveal, /4\. <@p4> — _gave up_/);
     cleanup(ctx);
   },
 

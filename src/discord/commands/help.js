@@ -104,7 +104,8 @@ module.exports = {
           value:
             'Getting your character ends **your** part, not the game: it is revealed there and ' +
             'then, you drop out, and everyone else keeps playing until they get theirs. ' +
-            'Whoever needed the fewest turns wins, and the same number of turns is a tie.\n' +
+            'Fewest turns wins. Same turns? Whoever had more time left when they got it (a pass ' +
+            'uses the whole turn); level to the second is a tie.\n' +
             'Passing never removes you -- even once you can no longer win, you keep playing for ' +
             'your placement. A 🏳️ **Give up** button appears beside Pass once you are out of ' +
             'contention, to bow out if you would rather; when you are the last one still ' +

@@ -46,8 +46,8 @@ class TurnRotationMode {
    * pointer to the next still-guessing player (or leaves it, signalling game over).
    * Returns whether the game is now over, so the caller can branch on it.
    */
-  onCorrect(playerId) {
-    this.game.finishedBy.set(playerId, this.game.turnsFor(playerId));
+  onCorrect(playerId, msLeft = null) {
+    this.game.recordFinish(playerId, msLeft);
     return this.#advance();
   }
 
