@@ -323,6 +323,16 @@ function dedupeByName(characters) {
   return deduped;
 }
 
+// Filter for "not already in play", keyed exactly like dedupeByName above. The pool can only
+// hold one spelling of a character, but the names being excluded need not come from the pool:
+// a hand-picked or typed-in "Spiderman" is in play while the pool's copy is "Spider-Man". A
+// lowercase key let that through, so a random fill or a reroll could put the same character on
+// two heads -- which is the dedupe bug all over again, arriving by a different door.
+function notExcluded(excludeNames) {
+  const excluded = new Set([...excludeNames].map(normalizeLoose));
+  return (c) => !excluded.has(normalizeLoose(c.name));
+}
+
 // Counts what would actually be dealt, not what the lists hold -- the lobby board uses this
 // and a number that ignored difficulty would misrepresent the game about to be played.
 function countDistinctCharacters(listIds, difficulty = 'everything') {
@@ -336,8 +346,7 @@ function countDistinctCharacters(listIds, difficulty = 'everything') {
 // draw to characters that have artwork -- but only when there are enough of them to fill the
 // request, so a small or image-poor pool still deals rather than failing.
 function getRandomCharacters(listIds, count, excludeNames = [], difficulty = DEFAULT_DIFFICULTY, { preferImages = false } = {}) {
-  const excludeLower = new Set([...excludeNames].map((n) => n.toLowerCase()));
-  let pool = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  let pool = drawablePool(listIds, difficulty).filter(notExcluded(excludeNames));
   if (preferImages) {
     const withImage = pool.filter((c) => c.image_url);
     if (withImage.length >= count) pool = withImage;
@@ -549,8 +558,7 @@ function getRandomCategory(guildId) {
 }
 
 function getRandomCharacterExcluding(listIds, excludeNames, difficulty = DEFAULT_DIFFICULTY, { preferImages = false } = {}) {
-  const excludeLower = new Set([...excludeNames].map((n) => n.toLowerCase()));
-  let candidates = drawablePool(listIds, difficulty).filter((c) => !excludeLower.has(c.name.toLowerCase()));
+  let candidates = drawablePool(listIds, difficulty).filter(notExcluded(excludeNames));
   if (preferImages) {
     const withImage = candidates.filter((c) => c.image_url);
     if (withImage.length) candidates = withImage; // a reroll only needs one, so any is enough

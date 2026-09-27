@@ -47,7 +47,28 @@ function genuinelyDifferentNamesAllSurvive() {
   assert.equal(lists.getRandomCharacters(listIds, 3, [], 'everything').length, 3);
 }
 
+// What is already in play need not have come from the pool: a hand-picked or typed-in name can be
+// spelled differently from the pool's copy of the same character. Excluding it by plain
+// lowercase let the pool's spelling straight back in, 50/50 on a two-character pool.
+function aRandomFillSkipsSpellingsOfCharactersInPlay() {
+  const listIds = seedTwoLists(['Spider-Man', 'Batman'], []);
+  for (let i = 0; i < 50; i++) {
+    const [drawn] = lists.getRandomCharacters(listIds, 1, ['Spiderman'], 'everything');
+    assert.equal(drawn.name, 'Batman');
+  }
+  assert.equal(lists.getRandomCharacters(listIds, 5, ['spider man'], 'everything').length, 1);
+}
+
+function aRerollSkipsSpellingsOfCharactersInPlay() {
+  const listIds = seedTwoLists(['Spider-Man', 'Batman'], []);
+  for (let i = 0; i < 50; i++) {
+    assert.equal(lists.getRandomCharacterExcluding(listIds, new Set(['Spiderman']), 'everything').name, 'Batman');
+  }
+}
+
 module.exports = {
+  'a random fill skips spellings of characters in play': aRandomFillSkipsSpellingsOfCharactersInPlay,
+  'a reroll skips spellings of characters in play': aRerollSkipsSpellingsOfCharactersInPlay,
   'punctuation variants count as one character': punctuationVariantsCountAsOneCharacter,
   'accent variants count as one character': accentVariantsCountAsOneCharacter,
   'spacing variants count as one character': spacingVariantsCountAsOneCharacter,
