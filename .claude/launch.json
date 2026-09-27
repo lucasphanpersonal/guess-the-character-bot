@@ -11,6 +11,12 @@
       "name": "web-attach",
       "url": "http://localhost:4180",
       "port": 4180
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "require('./src/web/server').server.listen(4191, '0.0.0.0', () => console.log('[web-dev] listening on 4191'))"],
+      "port": 4191
     }
   ]
 }
