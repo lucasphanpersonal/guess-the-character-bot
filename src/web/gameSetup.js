@@ -14,9 +14,16 @@
 //     the names this checker has personally rejected, and feeds the reroll-demotion counter.
 //   - "Good to go" is per player and means "I've seen everyone else's and I'm happy with mine".
 //     Play begins once every player has pressed it; a player may unlock until the last one is in.
+//
+// Host-picks mode (web only) changes who decides, not the rules above: the host chooses the
+// characters (dealWithPicks) and sits the game out -- they are not in the turn order, so they
+// neither check nor wear anything. Rerolls are off, since a reroll would undo the host's choice
+// (the same call the Discord side makes for its audience vote). Players still check and lock in:
+// that screen is also where tilt gets turned on. The host gets buildHostSetupView instead.
 
 const Game = require('../core/game/Game');
 const { FIELDS: LOBBY_FIELDS } = require('../core/game/lobbySettings');
+const { normalizeLoose } = require('../core/util/text');
 
 /**
  * Clamp a client-supplied turn length to the same bounds the Discord bot enforces, so the two
@@ -47,13 +54,14 @@ const DEFAULT_MAX_REROLLS = -1;
  * @param {object[]} args.characters   one dealt character row per player, in `order`
  * @param {number} [args.turnSeconds]
  * @param {number} [args.maxRerolls]   -1 for unlimited
+ * @param {boolean} [args.rerollAllowed] false when the host picked: a reroll would undo their choice
  */
-function createSetup({ order, guildId, listIds, difficulty, characters, turnSeconds = 60, maxRerolls = DEFAULT_MAX_REROLLS, preferImages = false }) {
+function createSetup({ order, guildId, listIds, difficulty, characters, turnSeconds = 60, maxRerolls = DEFAULT_MAX_REROLLS, preferImages = false, rerollAllowed = true }) {
   // A lobby-shaped object is all Game needs: its players (turn order) and the fields Game.head
   // reads for the source label. No Discord lobby, no board, no settings surface.
   const pseudoLobby = { guildId, listIds, difficulty, preferImages, players: [...order] };
   const game = new Game({ lobby: pseudoLobby, characters, turnSeconds });
-  game.rerollAllowed = true;
+  game.rerollAllowed = rerollAllowed;
   game.confirmState = Object.fromEntries(
     // `history` is the stack of characters this checker has rolled away from, newest last, so a
     // reroll can be taken back. Kept per checker rather than per character because it is the
@@ -113,6 +121,87 @@ function buildView(game, viewerId, names) {
     waitingPlayers: waiting.map((id) => ({ playerId: id, name: nameOf(id) })),
     allReady: waitingOn === 0,
   };
+}
+
+const TYPED_NAME_MAX = 60;
+
+/**
+ * The deal for host-picks mode: the host's choice wherever they made one, random for the rest.
+ *
+ * `picks` arrives from a client, so none of it is trusted. A pick for somebody who isn't being
+ * dealt in -- the host themselves, a player who has since left -- is refused rather than quietly
+ * dropped, because dropping it would deal the room something other than what the host saw on
+ * their screen. An id must resolve to a character in this scope; a typed name is trimmed and
+ * capped. An empty pick means "random", so the host can decide for two people and let chance
+ * have the rest.
+ *
+ * Duplicates are judged with normalizeLoose, the same key the judge uses, so "Spider-Man" and a
+ * typed "spiderman" are one character here too -- and the random fill excludes the picks by that
+ * same key, or it could deal the pool's spelling of a character the host already handed out.
+ *
+ * @param {object} args
+ * @param {string[]} args.order     playerIds being dealt in, in seat order (the host is not one)
+ * @param {Record<string, {id?: number, name?: string}>} args.picks
+ * @param {Record<string, string>} args.names  playerId -> nickname, for errors a room can act on
+ * @param {object} args.content     { characterById, freeform, randomCharacters }
+ * @returns {{ok: true, characters: object[]} | {ok: false, error: string}} characters in `order`
+ */
+function dealWithPicks({ order, picks = {}, names = {}, content, listIds, difficulty, preferImages = false }) {
+  const nameOf = (id) => names[id] ?? 'a player';
+  const chosen = {};
+  for (const [playerId, pick] of Object.entries(picks ?? {})) {
+    if (!order.includes(playerId)) return { ok: false, error: "A pick was for someone who isn't being dealt in. Re-open the picker and try again." };
+    if (pick?.id != null) {
+      const id = Number(pick.id);
+      const row = Number.isInteger(id) ? content.characterById(id) : null;
+      if (!row) return { ok: false, error: `The character picked for ${nameOf(playerId)} isn't in the library any more.` };
+      chosen[playerId] = row;
+      continue;
+    }
+    const typed = String(pick?.name ?? '').trim().slice(0, TYPED_NAME_MAX);
+    if (typed) chosen[playerId] = content.freeform(typed);
+  }
+
+  const holder = new Map();
+  for (const [playerId, c] of Object.entries(chosen)) {
+    const key = normalizeLoose(c.name);
+    if (holder.has(key)) return { ok: false, error: `${nameOf(holder.get(key))} and ${nameOf(playerId)} would both be ${c.name}.` };
+    holder.set(key, playerId);
+  }
+
+  const unpicked = order.filter((id) => !chosen[id]);
+  let fill = [];
+  if (unpicked.length) {
+    if (!listIds.length) return { ok: false, error: 'Pick a character for everyone, or choose a pool with playable lists for the rest.' };
+    fill = content.randomCharacters(listIds, unpicked.length, Object.values(chosen).map((c) => c.name), difficulty, { preferImages });
+    if (fill.length < unpicked.length) {
+      return {
+        ok: false,
+        error: `${unpicked.length} player${unpicked.length === 1 ? '' : 's'} left on random, and that pool only has ${fill.length} character${fill.length === 1 ? '' : 's'} left to deal. Pick more, or widen the pool.`,
+      };
+    }
+  }
+  let next = 0;
+  return { ok: true, characters: order.map((id) => chosen[id] ?? fill[next++]) };
+}
+
+/**
+ * What the host sees while players check their characters and lock in, in host-picks mode.
+ *
+ * It holds EVERY character in play -- the host chose them, so there is nothing to hide from them
+ * -- which is exactly why it must never reach a player. socket.js sends it to the host alone,
+ * and only while they are sitting the game out.
+ */
+function buildHostSetupView(game, names) {
+  const nameOf = (id) => names[id] ?? 'Player';
+  const players = game.turnOrder.map((id) => ({
+    playerId: id,
+    name: nameOf(id),
+    character: publicCharacter(game.headByPlayer[id]),
+    confirmed: game.confirmState[id].confirmed,
+  }));
+  const waitingOn = players.filter((p) => !p.confirmed).length;
+  return { phase: 'setup', players, waitingOn, allReady: waitingOn === 0 };
 }
 
 /**
@@ -194,6 +283,8 @@ function applyUnlock(game, viewerId) {
 module.exports = {
   createSetup,
   buildView,
+  buildHostSetupView,
+  dealWithPicks,
   applyReroll,
   applyUndo,
   applyConfirm,

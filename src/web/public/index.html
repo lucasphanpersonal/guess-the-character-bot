@@ -225,6 +225,20 @@
               box-shadow:none; margin-bottom:8px; cursor:pointer; }
     .rowbtn:active { transform:translateY(2px); }
     .rowbtn .n { margin-left:auto; color:var(--muted); font-weight:700; font-size:.8rem; flex:none; }
+    /* Host-picks: one slot per player -- who, what they have now, and a search under it. */
+    .pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:#f6f4fa;
+                border-radius:14px; color:var(--ink); }
+    .pickhead { display:flex; align-items:center; gap:10px; min-height:36px; }
+    .pickcurrent { margin-left:auto; display:flex; align-items:center; gap:8px; font-weight:800;
+                   min-width:0; text-align:right; }
+    .pickcurrent.random { color:var(--muted); font-weight:700; }
+    .pickcurrent .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px;
+                 flex:none; }
+    .pickclear { width:auto; flex:none; padding:4px 10px; font-size:.8rem; border-radius:999px;
+                 background:var(--edge); color:var(--ink); box-shadow:0 2px 0 rgba(0,0,0,.15); }
+    /* White, not the slot's grey, or the results would disappear into the slot behind them. */
+    .pickresults .rowbtn { background:#fff; margin-bottom:6px; }
     .off-pool { font-size:.6rem; font-weight:900; letter-spacing:.08em; background:var(--edge);
                 color:var(--muted); padding:2px 6px; border-radius:999px; flex:none; }
     /* A grid of faces. Fixed tile heights so nothing reflows as thumbnails arrive. */
@@ -531,7 +545,19 @@
     <!-- Config (host) -->
     <section id="config" class="screen">
       <div class="card">
-        <label>Draw characters from</label>
+        <label>Who picks the characters?</label>
+        <div id="modeChoices"></div>
+        <!-- Host-picks mode: the host chooses and sits the game out. One slot per player;
+             anyone left blank is dealt at random from the pool card below. -->
+        <div id="pickerBox" style="display:none">
+          <div class="hint">Search for each player's character, or type any name. Leave someone
+            blank and they get a random one from the pool below.</div>
+          <div style="height:8px"></div>
+          <ul class="roster" id="pickerList"></ul>
+        </div>
+      </div>
+      <div class="card">
+        <label id="poolLabel">Draw characters from</label>
         <div id="poolChoices"></div>
         <select id="categorySelect" style="display:none; margin-top:6px"></select>
         <div id="listCuration" style="display:none; margin-top:10px">
@@ -571,7 +597,7 @@
     <!-- Setup / confirm -->
     <section id="setup" class="screen">
       <div class="card">
-        <div class="hint center">Check this character — is it fair? <br>Reroll if nobody in the room would know them.</div>
+        <div class="hint center" id="checkHint">Check this character — is it fair? <br>Reroll if nobody in the room would know them.</div>
         <div class="checkowner" id="checkOwner"></div>
         <!-- The thing, then what you can do to it, in the order you decide: look at the
              character -> don't like it -> Reroll -> regret it -> Undo. Reroll used to sit ABOVE
@@ -648,6 +674,20 @@
       </div>
       <div id="revealLog"></div>
       <button id="playLeaveBtn" class="ghost">Leave game</button>
+    </section>
+
+    <!-- The host who picked everyone's character and sits the game out. Watch-only: every
+         character in play, who is locked in, whose turn it is, the clock. The server sends this
+         view to that host alone -- it would spoil the game for anyone wearing one. -->
+    <section id="hosting" class="screen">
+      <div class="card" id="hostBanner"></div>
+      <div class="card">
+        <div class="hint">Everyone's characters — only you can see this</div>
+        <div style="height:8px"></div>
+        <ul class="roster" id="hostList"></ul>
+      </div>
+      <button id="hostCancelBtn" class="ghost">Call off this deal</button>
+      <button id="hostLeaveBtn" class="ghost">Leave room</button>
     </section>
 
     <!-- Forehead mode overlay (motion enabled): shows YOUR character full-screen for the room.

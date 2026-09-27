@@ -55,6 +55,11 @@ const content = {
   rerollOne: (listIds, excludeNames, difficulty, opts) =>
     characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty, opts),
   recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),
+  // Host-picks mode. Scope-checked, because the id comes from a client.
+  characterById: (id) => characterLists.getCharacterById(WEB_SCOPE, id),
+  freeform: (name) => characterLists.freeformCharacter(name),
+  randomCharacters: (listIds, n, excludeNames, difficulty, opts) =>
+    characterLists.getRandomCharacters(listIds, n, excludeNames, difficulty, opts),
 };
 
 // `excluded` is the room's own opt-outs, applied on top of the shared selection rather than
@@ -90,31 +95,51 @@ const setup = {
   // preferImages is OFF unless the host asks for it: restricting the draw to characters that
   // happen to have artwork silently shrinks the pool and biases it toward the better-documented
   // franchises, which is a real change to what the game deals. It is the host's call, not a default.
-  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds, preferImages = false } = {}) {
+  // `hostPicks` is the mode where the host chooses everyone's character and sits the game out;
+  // `picks` is their choice per player (see gameSetup.dealWithPicks). The pool still matters in
+  // that mode, for anyone the host left on random.
+  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds, preferImages = false, hostPicks = false, picks = {} } = {}) {
     const { listIds, label } = resolvePool({ poolType, category, excluded: room.excludedListIds });
-    if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
-    const n = room.players.size;
-    const available = characterLists.countDistinctCharacters(listIds, difficulty);
-    if (available < n) {
-      return { ok: false, error: `${label} has only ${available} characters at this difficulty; need ${n}.` };
+    let order = [...room.order];
+    let characters;
+    if (hostPicks) {
+      order = order.filter((id) => id !== room.hostPlayerId);
+      // Two, not one: every player checks the NEXT player's character, and a lone guesser's
+      // "next player" is themselves -- the check screen would show them their own card.
+      if (order.length < 2) return { ok: false, error: 'Picking for everyone needs at least 2 players besides you.' };
+      const names = Object.fromEntries([...room.players].map(([id, seat]) => [id, seat.nickname]));
+      const dealt = gameSetup.dealWithPicks({ order, picks, names, content, listIds, difficulty, preferImages: !!preferImages });
+      if (!dealt.ok) return dealt;
+      characters = dealt.characters;
+    } else {
+      if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
+      const n = order.length;
+      const available = characterLists.countDistinctCharacters(listIds, difficulty);
+      if (available < n) {
+        return { ok: false, error: `${label} has only ${available} characters at this difficulty; need ${n}.` };
+      }
+      characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: !!preferImages });
+      if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
     }
-    const characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: !!preferImages });
-    if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
 
     const clampedTurnSeconds = gameSetup.clampTurnSeconds(turnSeconds);
     room.game = gameSetup.createSetup({
-      order: [...room.order],
+      order,
       guildId: WEB_SCOPE,
       listIds,
       difficulty,
       characters,
       preferImages: !!preferImages,
+      rerollAllowed: !hostPicks,
       ...(clampedTurnSeconds !== undefined ? { turnSeconds: clampedTurnSeconds } : {}),
     });
-    room.poolLabel = label;
-    // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring.
-    room.lastSetup = { poolType, category, difficulty, turnSeconds: room.game.turnSeconds, preferImages: !!preferImages };
-    return { ok: true, label };
+    const shownLabel = hostPicks ? 'Picked by the host' : label;
+    room.poolLabel = shownLabel;
+    // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring. The
+    // picks themselves are deliberately NOT kept: re-dealing the same hand-picked characters to
+    // people who have just watched each other's all game would be no game at all.
+    room.lastSetup = { poolType, category, difficulty, turnSeconds: room.game.turnSeconds, preferImages: !!preferImages, hostPicks: !!hostPicks };
+    return { ok: true, label: shownLabel };
   },
 
   // Curation for this room only. Shows the lists already in the shared playable selection and
@@ -137,6 +162,7 @@ const setup = {
   },
 
   view: (game, viewerId, names) => gameSetup.buildView(game, viewerId, names),
+  hostView: (game, names) => gameSetup.buildHostSetupView(game, names),
   reroll: (game, viewerId) =>
     gameSetup.applyReroll(game, viewerId, {
       content,
@@ -316,6 +342,25 @@ function requestHandler(req, res) {
           playable: l.enabled === 1,
         }));
         return cached({ category, lists });
+      }
+
+      // The host's picker. Across every list in scope, not just the playable ones or the pool
+      // the room chose: picking someone is an explicit choice, and the library is what the
+      // compendium shows. Ranked by word start then fame, and NOT deduped by name -- the list
+      // travels with each result so the host can tell Pokemon's Ditto from Ben 10's.
+      if (what === 'search') {
+        const q = String(url.searchParams.get('q') || '').trim().slice(0, 60);
+        if (q.length < 2) return cached({ query: q, characters: [] });
+        const rows = characterLists.searchCharactersInGuild(WEB_SCOPE, q, 20);
+        return cached({
+          query: q,
+          characters: rows.map((c) => ({
+            id: c.id,
+            name: c.name,
+            list: c.listName,
+            imageUrl: c.image_url ? `/img/${c.id}` : null,
+          })),
+        });
       }
 
       if (what === 'characters') {

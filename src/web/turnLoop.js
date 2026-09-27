@@ -126,6 +126,14 @@ function standingsView(game, names) {
   });
 }
 
+// Seconds left on the current turn. When paused (the current player dropped), the clock is
+// frozen at the remaining time rather than counting down against them.
+function turnRemainingOf(game, now) {
+  if (game.finished) return null;
+  if (game.pausedForDisconnect) return Math.max(0, Math.round((game.pausedRemaining ?? 0) / 1000));
+  return game.turnEndsAt ? Math.max(0, Math.round((game.turnEndsAt - now) / 1000)) : null;
+}
+
 /**
  * Per-player view of a running (or finished) game. The current player, on their own turn, is
  * NOT shown their character; everyone else sees the guesser's character to verify a "got it".
@@ -133,15 +141,7 @@ function standingsView(game, names) {
 function buildGameView(game, viewerId, names, now = Date.now()) {
   const currentId = game.currentPlayerId;
   const isMyTurn = viewerId === currentId && game.isActive(viewerId) && !game.finished;
-  // When paused (the current player dropped), the clock is frozen at the remaining time rather
-  // than counting down against them.
-  const turnRemaining = game.finished
-    ? null
-    : game.pausedForDisconnect
-      ? Math.max(0, Math.round((game.pausedRemaining ?? 0) / 1000))
-      : game.turnEndsAt
-        ? Math.max(0, Math.round((game.turnEndsAt - now) / 1000))
-        : null;
+  const turnRemaining = turnRemainingOf(game, now);
 
   return {
     phase: game.finished ? 'over' : 'playing',
@@ -180,6 +180,26 @@ function buildGameView(game, viewerId, names, now = Date.now()) {
   };
 }
 
+/**
+ * The watching host's view of a running game, in host-picks mode: whose turn, the clock, and
+ * every player's character beside their standing. Watch-only -- it carries no buttons, because
+ * the host does not resolve turns; players answer with their own tilt.
+ *
+ * Holds EVERY character in play, so it must never reach a player. socket.js sends it to the host
+ * alone, and only while they are sitting the game out.
+ */
+function buildHostGameView(game, names, now = Date.now()) {
+  const currentId = game.currentPlayerId;
+  return {
+    phase: 'playing',
+    paused: !!game.pausedForDisconnect,
+    current: { playerId: currentId, name: names[currentId] ?? 'Player', turnNumber: game.turnsFor(currentId) },
+    turnRemaining: turnRemainingOf(game, now),
+    turnSeconds: game.turnSeconds,
+    players: standingsView(game, names).map((s) => ({ ...s, character: publicCharacter(game.headByPlayer[s.playerId]) })),
+  };
+}
+
 // Final standings for the over screen (reuses Game.standings, which is the DB shape too).
 function resultView(game, names) {
   const standings = game.standings();
@@ -207,6 +227,7 @@ module.exports = {
   timeout,
   buttonsFor,
   buildGameView,
+  buildHostGameView,
   standingsView,
   resultView,
 };

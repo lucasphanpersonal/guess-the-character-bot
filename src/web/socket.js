@@ -1,5 +1,5 @@
 // Socket.io wiring for the web frontend: rooms, setup/confirm/reroll, the grace countdown,
-// and the turn loop.
+// the turn loop, and -- in host-picks mode -- the view of the host who picked and sits out.
 //
 // Thin on purpose: it translates socket events into calls on the room registry (rooms.js) and
 // the setup service (built in server.js from the shared core), then broadcasts state. No game
@@ -41,8 +41,38 @@ function attachSockets(io, { registry, setup }) {
     return found;
   };
 
+  // --- the host who sits out (host-picks mode) --------------------------------------------
+  //
+  // A host who picked everyone's character is in the room but not in the turn order, and every
+  // per-player emit in this file skips people who aren't in the turn order -- so without this
+  // they would stare at a frozen screen for the whole game. host:state is their view instead.
+  //
+  // It carries EVERY character in play. So it goes to the host's own sockets and nobody else's,
+  // and only while the host genuinely is sitting out: a host who is dealt in (every normal game,
+  // or a player who inherited the crown after the picker left) is a player and gets a player's
+  // view like everyone else.
+  const hostSitsOut = (room) => !!room?.game && !room.game.turnOrder.includes(room.hostPlayerId);
+  const hostViewOf = (room) => {
+    const names = namesOf(room);
+    if (room.status === 'setup' || room.status === 'ready') return setup.hostView(room.game, names);
+    if (room.status === 'countdown') {
+      return { phase: 'countdown', seconds: Math.max(0, Math.round(((room.countdownEndsAt ?? Date.now()) - Date.now()) / 1000)) };
+    }
+    if (room.status === 'playing') return loop.buildHostGameView(room.game, names);
+    return null; // finished: the host gets game:over with the room, like anyone else
+  };
+  const emitHost = (room, onlyTo = null) => {
+    if (!hostSitsOut(room)) return;
+    const view = hostViewOf(room);
+    if (!view) return;
+    for (const s of onlyTo ? [onlyTo] : socketsIn(room)) {
+      if (s.data.playerId === room.hostPlayerId) s.emit('host:state', view);
+    }
+  };
+
   // Send every connected player in the room their OWN setup view (never their own character).
   // Per-socket rather than a room broadcast, because each player must see a different payload.
+  // The sitting-out host is told too: whatever changed a player's setup changed theirs.
   const emitSetup = (room) => {
     if (!room?.game) return;
     const names = namesOf(room);
@@ -50,7 +80,12 @@ function attachSockets(io, { registry, setup }) {
       const pid = s.data.playerId;
       if (room.game.confirmState[pid]) s.emit('setup:state', setup.view(room.game, pid, names));
     }
+    emitHost(room);
   };
+
+  // "hostPicked" tells the over screen that "same settings" means picking again: re-dealing the
+  // same hand-picked characters to people who have just seen them all would be no game.
+  const overView = (room, names) => ({ ...loop.resultView(room.game, names), hostPicked: !!room.lastSetup?.hostPicks });
 
   // A player leaving (or dropping) mid-setup would invalidate a deal whose turn order is fixed,
   // so setup reverts to the lobby and the host re-deals. Only for explicit leaves; a mere
@@ -134,6 +169,7 @@ function attachSockets(io, { registry, setup }) {
         s.emit('game:state', loop.buildGameView(room.game, s.data.playerId, names, now));
       }
     }
+    emitHost(room);
   };
 
   // Central handling after any turn action: announce a reveal, then either end the game or
@@ -148,7 +184,7 @@ function attachSockets(io, { registry, setup }) {
       clearPause(room);
       room.game.turnEndsAt = null;
       room.status = 'finished';
-      io.to(room.code).emit('game:over', loop.resultView(room.game, names));
+      io.to(room.code).emit('game:over', overView(room, names));
       broadcastRoom(room);
       return;
     }
@@ -187,7 +223,13 @@ function attachSockets(io, { registry, setup }) {
     room.status = 'countdown';
     room.countdownEndsAt = Date.now() + GRACE_SECONDS * 1000;
     broadcastRoom(room);
-    io.to(room.code).emit('game:countdown', { seconds: GRACE_SECONDS });
+    // To the players only. The countdown is for raising a phone to a forehead, and a host who is
+    // sitting out has no forehead in this game: game:countdown would drop their phone into the
+    // forehead overlay, with nothing ever coming to replace it.
+    for (const s of socketsIn(room)) {
+      if (room.game.turnOrder.includes(s.data.playerId)) s.emit('game:countdown', { seconds: GRACE_SECONDS });
+    }
+    emitHost(room);
     room.countdownTimer = setTimeout(() => beginGame(room), GRACE_SECONDS * 1000);
   };
 
@@ -283,7 +325,13 @@ function attachSockets(io, { registry, setup }) {
       // Rejoining mid-flow: hand this socket the view for wherever the room is, so a reconnect
       // resumes exactly where it left off rather than dropping to the lobby roster.
       const g = res.room.game;
-      if ((res.room.status === 'setup' || res.room.status === 'ready') && g?.confirmState[playerId]) {
+      const dealtIn = !!g?.turnOrder.includes(playerId);
+      if (g && !dealtIn && ['setup', 'ready', 'countdown', 'playing'].includes(res.room.status)) {
+        // In the room but not in the game: only the host sitting out can be here (nobody new can
+        // join mid-game), and emitHost sends nothing to anyone else. Checked BEFORE the
+        // countdown branch below, which would otherwise hand them a player's forehead countdown.
+        emitHost(res.room, socket);
+      } else if ((res.room.status === 'setup' || res.room.status === 'ready') && g?.confirmState[playerId]) {
         socket.emit('setup:state', setup.view(g, playerId, namesOf(res.room)));
       } else if (res.room.status === 'countdown') {
         const remaining = Math.max(0, Math.round(((res.room.countdownEndsAt ?? Date.now()) - Date.now()) / 1000));
@@ -291,7 +339,7 @@ function attachSockets(io, { registry, setup }) {
       } else if (res.room.status === 'playing' && g?.turnOrder.includes(playerId)) {
         socket.emit('game:state', loop.buildGameView(g, playerId, namesOf(res.room), Date.now()));
       } else if (res.room.status === 'finished' && g) {
-        socket.emit('game:over', loop.resultView(g, namesOf(res.room)));
+        socket.emit('game:over', overView(res.room, namesOf(res.room)));
       }
     });
 
@@ -436,6 +484,11 @@ function attachSockets(io, { registry, setup }) {
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can rematch.' });
       if (r.status !== 'finished') return ack?.({ ok: false, error: 'No finished game to rematch.' });
+      // The picks are not kept (see setup.start), so "same settings" has nothing to deal. The
+      // client routes the host to the picker instead; this is the answer for anything that asks.
+      if (r.lastSetup?.hostPicks) {
+        return ack?.({ ok: false, error: 'That game was hand-picked. Use Change settings to pick characters again.' });
+      }
       if (r.players.size < 2) {
         return ack?.({
           ok: false,

@@ -9,6 +9,12 @@ everyone checks/rerolls their assigned character and taps **Good to go** → a g
 for the room → on your turn, **tilt up = got it, tilt down / time out = pass** → fewest turns
 wins, and the end screen reveals who everyone was.
 
+Or the host picks: choosing **I'll pick them** on the config screen lets the host choose each
+player's character — searched from the library, or any name typed in — and sit the game out,
+watching everyone's characters, the turn and the clock. Anyone left blank is dealt at random
+from the pool. Rerolls are off (they would undo the host's choice), and it needs at least two
+players besides the host.
+
 ## How the repo is split
 
 ```
@@ -111,6 +117,11 @@ Endpoints that prove the shared core is reachable from this frontend:
   reference — never their own. `gameSetup.js` is pure and unit-tested in
   `test/web-setup.test.js`; content is injected so it needs no DB. `WEB_SCOPE` auto-resolves to
   the richest seeded scope so a phone test deals real characters immediately.
+  **Host-picks mode:** `dealWithPicks` validates the host's picks (ids scope-checked, duplicates
+  judged with `normalizeLoose`) and random-fills the rest; the sitting-out host gets
+  `host:state` views, which hold every character and so go to that host alone —
+  `check-web-socket` records every event every player receives and asserts none is one.
+  Picker search is `GET /api/browse/search?q=`.
 - **3. Turn loop — done.** `turnLoop.js` ports the engine.js rules (rotation, fewest-turns
   scoring, pass/give-up, resolve-once, out-of-contention) over the core Game. Server-authoritative
   turn clock; per-player views; reveal/over broadcasts; leaving mid-game forfeits.

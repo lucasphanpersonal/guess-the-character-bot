@@ -308,6 +308,90 @@ const connect = (playerId) => {
     P2.close(); Q.close(); R.close();
   }
 
+  // ---- Host-picks mode: the host chooses everyone's character and sits the game out --------
+  // The host's view carries EVERY character in play, so the property that matters most is who
+  // receives it: every event every player gets is recorded, and none may be host:state. The
+  // host, in turn, must never be handed a player's setup, game state or forehead countdown.
+  console.log('\n# host picks the characters and sits out');
+  {
+    const H = await connect('pPickHost');
+    let r = await H.emitWithAck('room:create', { nickname: 'Hana' });
+    const code = r.state.code;
+    const X = await connect('pPickX');
+    await X.emitWithAck('room:join', { code, nickname: 'Xia' });
+
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: {} });
+    check(!r.ok, 'host-picks: refused with only one player besides the host');
+
+    const Y = await connect('pPickY');
+    await Y.emitWithAck('room:join', { code, nickname: 'Yuri' });
+
+    const found = await fetch(`${URL}/api/browse/search?q=Aang`).then((res) => res.json());
+    const aang = found.characters.find((c) => c.name === 'Aang');
+    check(!!aang && Number.isInteger(aang.id) && !!aang.list, 'host-picks: search finds a listed character, with its id and list');
+    check((await fetch(`${URL}/api/browse/search?q=A`).then((res) => res.json())).characters.length === 0, 'host-picks: a one-letter search returns nothing rather than the library');
+
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { pPickHost: { id: aang.id } } });
+    check(!r.ok, 'host-picks: a pick for the host themselves is refused');
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { pPickX: { id: aang.id }, pPickY: { name: 'aang' } } });
+    check(!r.ok && /Xia/.test(r.error) && /Yuri/.test(r.error), 'host-picks: two spellings of one character are refused, naming both players');
+
+    const playerEvents = { X: [], Y: [] };
+    X.onAny((ev) => playerEvents.X.push(ev));
+    Y.onAny((ev) => playerEvents.Y.push(ev));
+    const hostEvents = [];
+    H.onAny((ev) => hostEvents.push(ev));
+
+    const hostSetup = nextMatching(H, 'host:state', (v) => v.phase === 'setup');
+    const xSetup = nextEvent(X, 'setup:state');
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { pPickX: { id: aang.id }, pPickY: { name: 'Grandma Jean' } } });
+    check(r.ok, 'host-picks: deal starts with one listed pick and one typed name');
+    const hv = await hostSetup;
+    check(hv.players.length === 2 && !hv.players.some((p) => p.playerId === 'pPickHost'), 'host-picks: the host is not dealt in');
+    check(hv.players.find((p) => p.name === 'Xia')?.character.name === 'Aang', 'host-picks: the listed pick lands on its player');
+    check(hv.players.find((p) => p.name === 'Yuri')?.character.name === 'Grandma Jean', 'host-picks: the typed name lands on its player');
+    const xv = await xSetup;
+    check(xv.rerollAllowed === false, 'host-picks: players cannot reroll the host\'s choice');
+    check(!(await X.emitWithAck('setup:reroll', {})).ok, 'host-picks: a reroll request is refused server-side too');
+
+    const xCountdown = nextEvent(X, 'game:countdown');
+    const hostCountdown = nextMatching(H, 'host:state', (v) => v.phase === 'countdown');
+    const hostPlaying = nextMatching(H, 'host:state', (v) => v.phase === 'playing');
+    await X.emitWithAck('setup:confirm', {});
+    await Y.emitWithAck('setup:confirm', {});
+    await xCountdown;
+    check((await hostCountdown).seconds >= 0, 'host-picks: the host gets their own countdown');
+    const hp = await hostPlaying;
+    check(hp.players.length === 2 && hp.players.every((p) => p.character?.name), 'host-picks: the host watches every character in play');
+
+    check(!(await H.emitWithAck('game:gotit', {})).ok, 'host-picks: the host cannot resolve a turn');
+
+    // A host who reloads mid-game has to land back on their own view, not a player's.
+    H.disconnect();
+    const H2 = await connect('pPickHost');
+    const back = [];
+    H2.onAny((ev) => back.push(ev));
+    const rejoined = nextMatching(H2, 'host:state', (v) => v.phase === 'playing');
+    await H2.emitWithAck('room:join', { code, nickname: 'Hana' });
+    check(!!(await rejoined), 'host-picks: a reconnecting host is handed their view back');
+
+    const over = nextEvent(H2, 'game:over');
+    const first = hp.current.playerId === 'pPickX' ? X : Y;
+    const second = first === X ? Y : X;
+    await first.emitWithAck('game:gotit', {});
+    await wait(50);
+    await second.emitWithAck('game:gotit', {});
+    const result = await over;
+    check(result.hostPicked === true && result.standings.length === 2, 'host-picks: game over reaches the host, marked hand-picked');
+    check(!(await H2.emitWithAck('game:rematch', {})).ok, 'host-picks: "same settings" refuses to re-deal the same picks');
+
+    const leaked = [...playerEvents.X, ...playerEvents.Y].filter((ev) => ev === 'host:state');
+    check(leaked.length === 0, `host-picks: no player ever received the host's view (${leaked.length} leaked)`);
+    const misdelivered = [...hostEvents, ...back].filter((ev) => ev === 'setup:state' || ev === 'game:state' || ev === 'game:countdown');
+    check(misdelivered.length === 0, `host-picks: the host never got a player's view (${misdelivered.join(', ') || 'none'})`);
+    H2.close(); X.close(); Y.close();
+  }
+
   console.log('\n# stage 6 — rematch');
   const c2Setup = nextEvent(C2, 'setup:state');
   res = await C2.emitWithAck('game:rematch', {});
