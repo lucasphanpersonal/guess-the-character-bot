@@ -4,8 +4,21 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#46178f" />
-  <title>Guess the Character — party mode</title>
+  <title>Guess the Character</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
+  <!-- Seasonal theme: spooky season. Decided here, in <head>, so the attribute is on <html>
+       before the first paint and the page never flashes purple on its way to orange. It ends by
+       itself on November 1 (the visitor's local midnight), so nobody has to remember to take the
+       pumpkins down. Move the date to extend it; delete this block and the [data-season] CSS to
+       retire it. The favicon is the one place an emoji is allowed (see CLAUDE.md). -->
+  <script>
+    if (new Date() < new Date(2026, 10, 1)) {
+      document.documentElement.dataset.season = 'spooky';
+      document.querySelector('meta[name=theme-color]').content = '#cc4a0c';
+      document.querySelector('link[rel=icon]').href =
+        "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎃</text></svg>";
+    }
+  </script>
   <style>
     /* Game-show palette: saturated violet field, white slabs, four shape-paired choice colours.
        Deliberately NOT applied to forehead mode below -- that overlay is a display surface read
@@ -378,6 +391,47 @@
     }
     @media (prefers-reduced-motion: reduce) { .bg { display:none; } }
     main { position:relative; z-index:1; }
+
+    /* --- Spooky season (switched on by the date check in <head>) ---------------------------
+       Pumpkin field, purple buttons, bats. Overrides only: nothing below exists outside the
+       season, and deleting this block is the whole of taking it down.
+
+       The orange is darker than a "pumpkin" swatch on purpose. White headings and the ghost
+       buttons' orange-on-white text both need 4.5:1, and #f76707 manages 3.0; #cc4a0c is the
+       brightest that clears it (4.61). It stays a flat colour, not a dusk gradient, because the
+       compendium's sticky bar fades into --brand and would show a band against a gradient.
+       Purple replaces blue for the primary buttons and the ◆ choice -- the other Halloween
+       colour -- and the shape pairing is untouched, so colour is still never the only signal. */
+    :root[data-season="spooky"] {
+      --brand:#cc4a0c;
+      --blue:#6d28d9; --blue-d:#4c1d95;
+    }
+    /* The title is the one wobbled heading that sits on the page background itself -- every
+       other one is on a white card -- and its red and green letters measure 1.02:1 against this
+       orange: to a red-green colour-blind player they are simply not there. Jack-o'-lantern
+       instead, light and dark alternating; both clear 3:1, the bar for text this large. */
+    :root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
+    :root[data-season="spooky"] h1 .wob.w1, :root[data-season="spooky"] h1 .wob.w3 {
+      color:var(--ink); text-shadow:0 3px 0 rgba(255,255,255,.2);
+    }
+    /* Bats instead of the drifting shapes. The glyph is kept (so nothing changes size) and
+       painted transparent; the bat is a mask, so it still takes the white of the shapes. They
+       flutter rather than tumble -- a bat spinning 240 degrees on its way up reads as a leaf.
+       Still inside .bg, so prefers-reduced-motion still hides the lot. */
+    :root[data-season="spooky"] .bg i {
+      color:transparent; width:2em; height:1em; background:#fff;
+      -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 32'%3E%3Cpath d='M28 4L30 9L34 9L36 4L37 10C44 4 54 4 62 8Q57 10 54 16Q50 11 46 14Q43 12 40 20Q32 30 24 20Q21 12 18 14Q14 11 10 16Q7 10 2 8C10 4 20 4 27 10Z'/%3E%3C/svg%3E") center/contain no-repeat;
+      mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 32'%3E%3Cpath d='M28 4L30 9L34 9L36 4L37 10C44 4 54 4 62 8Q57 10 54 16Q50 11 46 14Q43 12 40 20Q32 30 24 20Q21 12 18 14Q14 11 10 16Q7 10 2 8C10 4 20 4 27 10Z'/%3E%3C/svg%3E") center/contain no-repeat;
+      animation-name:batDrift;
+    }
+    @keyframes batDrift {
+      0%   { transform:translate(0, 0) rotate(-8deg);        opacity:0 }
+      18%  { opacity:.16 }
+      35%  { transform:translate(3vw, -40vh) rotate(6deg) }
+      60%  { transform:translate(-2vw, -72vh) rotate(-6deg) }
+      82%  { opacity:.16 }
+      100% { transform:translate(2vw, -118vh) rotate(4deg);   opacity:0 }
+    }
     /* Grace countdown + forehead mode */
     .countnum { font-size:7rem; font-weight:900; text-align:center; line-height:1.05; color:var(--ink); }
     #forehead { position:fixed; inset:0; display:none; background:#000; z-index:50; overflow:hidden; }
@@ -464,7 +518,6 @@
     <i style="left:94%;font-size:2.2rem;animation-duration:28s;animation-delay:-15s">■</i>
   </div>
   <main>
-    <span class="tag">Party mode</span>
     <h1>Guess the Character</h1>
 
     <!-- Landing -->
