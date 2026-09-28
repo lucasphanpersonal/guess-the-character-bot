@@ -21,14 +21,11 @@
 //      16 (Animation) settles it per title, so this is a property of the work rather than a
 //      guess about the name.
 //
-// A known ambiguity, measured rather than assumed: for a title with both an animated original
-// and a live-action remake (Cinderella, The Jungle Book, The BFG, Moana), TMDB's top hit is
-// usually the remake. That is normally CORRECT here -- the Wikidata seeder swept Disney's film
-// catalogue, remakes included, and those lists really are the live-action casts (their character
-// names are live-action credit listings like "Lord Veneering" and "Palace Staff #1"). Where the
-// list is actually the animated original, the cast simply fails to match and almost nothing is
-// written, so the failure mode is a near-miss rather than a wrong face. Spot-check a title with
-// both versions after a run if you want certainty.
+// A title with both an animated original and a live-action remake of the same name (Moana, Lady
+// and the Tramp) is SKIPPED. The list's name cannot say which one it is, and guessing the remake
+// once put live-action faces on the animated film's characters. A remake with a distinct title
+// is unaffected. Within a title, a character with any voice credit gets no photo at all, and
+// neither does a role one actor shares with other parts (puppeteers, multi-role players).
 //
 // One search + one credits call per LIST, not per character -- the credits response carries the
 // whole cast -- so this runs in minutes where the Fandom pass took hours.
@@ -118,7 +115,12 @@ function creditMatches(want, got) {
   if (short.length < 4) return false;
   // Word-boundary containment, so "han solo" matches "han solo" inside a longer billing but
   // "ron" does not match "rondo".
-  return new RegExp(`(^| )${short.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`).test(long);
+  const esc = short.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (!new RegExp(`(^| )${esc}( |$)`).test(long)) return false;
+  // ...but not as a possessive. "Jock's Owner" is somebody named after Jock, not Jock -- matching
+  // it gave the dogs in Lady and the Tramp their owners' faces, and "Danish Boy" inside "Danish
+  // Boy's Father" gave the father the boy's. After norm() the apostrophe is a space: "jock s".
+  return !new RegExp(`(^| )${esc} s( |$)`).test(long);
 }
 
 async function findTitle(name) {
@@ -126,26 +128,67 @@ async function findTitle(name) {
   const results = data.results || [];
   if (!results.length) return null;
   const wanted = norm(name);
+  const titleOf = (r) => r.name || r.title || '';
+  const exact = results.filter((r) => norm(titleOf(r)) === wanted);
+  // An animated original AND a live-action version under the same name (Moana, Lady and the
+  // Tramp, The Lion King) is a list we cannot place: their characters share names, so whichever
+  // version was meant, the live-action cast MATCHES -- and a remake's human cast is the wrong
+  // face for the cartoon, while the remake's dogs are voiced and have no face at all. The earlier
+  // assumption that such a list "simply fails to match" was measured false: the 2026 Moana gave
+  // the animated Moana's fisherman a live-action photo. So write nothing, and leave the list to
+  // fetch-fandom-images, whose wiki art is right for either version.
+  const animated = (r) => (r.genre_ids || []).includes(ANIMATION_GENRE_ID);
+  if (exact.some(animated) && exact.some((r) => !animated(r))) return { ambiguous: true, name: titleOf(exact[0]) };
   // Prefer an exact normalised title match; otherwise take TMDB's own top hit, which is ranked
   // by popularity and is usually right for a franchise name.
-  const titleOf = (r) => r.name || r.title || '';
-  return results.find((r) => norm(titleOf(r)) === wanted) || results[0];
+  return exact[0] || results[0];
 }
 
 // The whole cast in one call. `aggregate_credits` is the TV equivalent of `credits` and merges
 // a role played across seasons, which is what we want for a long-running show.
+/**
+ * The cast as one entry per role, each carrying the performer's photo -- which is only the
+ * character's look when that performer IS the character on screen.
+ *
+ * Two ways it isn't, both found in a dry run before they were ever written:
+ *   - Several characters, one photo. Sesame Street credits Jim Henson as Ernie, Guy Smiley and
+ *     half the cast, so Ernie's "artwork" would have been Jim Henson. One performer carrying
+ *     several roles in a title is a puppeteer, a voice artist or a multi-role player, and in
+ *     none of those cases is their headshot what any one of the characters looks like. So a
+ *     photo credited against more than one role is marked `shared`, and never used.
+ *   - A voice part in a live-action title ("Groot (voice)"). The animation rule in miniature.
+ */
 async function castFor(id) {
   const data = await getJson(`/${kind}/${id}/${kind === 'tv' ? 'aggregate_credits' : 'credits'}`);
   const out = [];
+  // Characters with a VOICE credit in this title. Such a character is voiced -- a dog, a toy, a
+  // CGI creature -- and no on-screen person's photo is ever its look, whoever else's credit
+  // happens to contain its name. Collected before the no-photo skip below, so a voice artist
+  // without a headshot still marks their character as voiced.
+  const voiced = new Set();
   for (const person of data.cast || []) {
+    // TV aggregate credits nest the role(s) under `roles`; either kind can also pack several
+    // parts into one string, with or without spaces -- Sesame Street's is literally
+    // "Ernie/Kermit the Frog/Guy Smiley". Splitting on a bare slash can break a name that
+    // genuinely contains one, but that can only ever REJECT a photo, never add a wrong one.
+    // A "(voice)" tag belongs to the whole credit, not the last part it happens to sit on:
+    // Disenchanted's "Pip / Cat Pip (voice)" voices BOTH, and reading it per part gave the
+    // chipmunk his voice actor's face.
+    const roles = (person.roles?.length ? person.roles.map((r) => r.character) : [person.character])
+      .flatMap((credit) => {
+        const voice = /\bvoices?\b/i.test(String(credit ?? ''));
+        return String(credit ?? '').split(/\s*\/\s*/).map((r) => ({ name: r.trim(), voice }));
+      })
+      .filter((r) => r.name);
+    for (const r of roles) if (r.voice) voiced.add(norm(r.name));
     if (!person.profile_path) continue;
-    // TV aggregate credits nest the role(s) under `roles`; film credits use a flat `character`.
-    const roles = person.roles?.length ? person.roles.map((r) => r.character) : [person.character];
-    for (const role of roles) {
-      if (role) out.push({ role, image: IMG + person.profile_path, actor: person.name });
+    const spoken = roles.filter((r) => !r.voice).map((r) => r.name);
+    const distinct = new Set(spoken.map(norm)).size;
+    for (const role of spoken) {
+      out.push({ role, image: IMG + person.profile_path, actor: person.name, shared: distinct > 1 });
     }
   }
-  return out;
+  return Object.assign(out, { voiced });
 }
 
 async function main() {
@@ -180,6 +223,12 @@ async function main() {
       console.log(`  x ${list.name} - no TMDB match`);
       continue;
     }
+    if (title.ambiguous) {
+      stats.animated++;
+      stats.skipped += list.missing;
+      console.log(`  - ${list.name} - animated original AND live-action version exist; cannot tell which, skipped`);
+      continue;
+    }
     // Guard 2: an animated title inside a live-action category. Skipping the whole title is the
     // right move -- every credit on it is a voice role.
     if ((title.genre_ids || []).includes(ANIMATION_GENRE_ID)) {
@@ -196,10 +245,24 @@ async function main() {
       .prepare('SELECT id, name FROM characters WHERE list_id = ? AND image_url IS NULL ORDER BY fame IS NULL, fame DESC')
       .all(list.id);
 
+    // One picture never goes to two different characters in a list -- see fetch-fandom-images.
+    const used = new Set(
+      db.prepare('SELECT image_url FROM characters WHERE list_id = ? AND image_url IS NOT NULL').all(list.id).map((r) => r.image_url)
+    );
+
     let found = 0;
     for (const ch of characters) {
       stats.checked++;
-      const hit = cast.find((c) => creditMatches(ch.name, c.role));
+      if (cast.voiced.has(norm(ch.name))) {
+        stats.rejected++;
+        if (verbose) console.log(`      x ${ch.name} - voiced in this title; no on-screen photo is this character`);
+        continue;
+      }
+      // An exact credit first, containment only as a fallback. Containment alone found "Danish
+      // Boy" inside "Danish Boy's Father" and "Danish Boy's Mother", and gave both parents the
+      // boy's photo; each of them has an exact credit of their own.
+      const hit =
+        cast.find((c) => norm(c.role) === norm(ch.name)) ?? cast.find((c) => creditMatches(ch.name, c.role));
       if (!hit) {
         stats.missed++;
         if (verbose) console.log(`      . ${ch.name} - no credit`);
@@ -209,6 +272,17 @@ async function main() {
         stats.rejected++;
         continue;
       }
+      if (hit.shared) {
+        stats.rejected++;
+        if (verbose) console.log(`      x ${ch.name} - ${hit.actor} plays several roles here; their photo is not this one`);
+        continue;
+      }
+      if (used.has(hit.image)) {
+        stats.rejected++;
+        if (verbose) console.log(`      x ${ch.name} - already another character's picture in this list`);
+        continue;
+      }
+      used.add(hit.image);
       stats.found++;
       found++;
       if (samples.length < 20) samples.push({ list: list.name, name: ch.name, actor: hit.actor, image: hit.image });

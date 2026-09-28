@@ -13,8 +13,15 @@
 // naruto.fandom.com cannot return a Zelda character, however the query is spelled. It is the
 // same move the bot already makes with per-title lists and per-list fame.
 //
+// A name that is not a page title is followed through the wiki's own redirects ("Grampa" ->
+// Abraham Simpson) and with a title stripped ("Captain Rex" -> Rex), but only onto a single
+// character's page: redirects into sections, lists, groups ("Mobs") and pages that merely
+// contain the name ("Steve and Alex") are refused. A Disney or Pixar title with no wiki of its
+// own falls back to the studio wikis, where a page must be filed under that title's characters.
+//
 // Nothing is overwritten -- only characters with no image at all are touched -- and every
-// candidate still has to pass the trust rule before it is stored.
+// candidate still has to pass the trust rule before it is stored. One image is never given to
+// two characters in the same list.
 
 const db = require('../src/core/db/connection');
 const { setCharacterImage } = require('../src/core/db/characterLists');
@@ -40,6 +47,12 @@ if (!guildId) {
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Studio-wide wikis, tried only for a list with no wiki of its own, and only in the categories
+// the seeder files Disney and Pixar titles under -- their films land in Movies, their series in
+// Cartoon and Television Shows. Pixar is its own wiki; Disney's covers everything else.
+const STUDIO_WIKIS = ['disney.fandom.com', 'pixar.fandom.com'];
+const STUDIO_WIKI_CATEGORIES = new Set(['Movies', 'Cartoon', 'Television Shows']);
 
 async function getJson(url) {
   const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'application/json' }, signal: AbortSignal.timeout(15000) });
@@ -354,17 +367,82 @@ async function findWiki(listName) {
   return null;
 }
 
-// The page's lead image -- which on a character page is the infobox portrait.
+// The page's lead image -- which on a character page is the infobox portrait -- plus what the
+// checks below need to judge whether the page is really the character: whether the title was
+// reached by a redirect (and whether that redirect points into a SECTION of a bigger page), and
+// the page's categories. Fetched in the same request, so none of it costs another call.
 async function leadImage(domain, title) {
   const url =
-    `https://${domain}/api.php?action=query&format=json&redirects=1&prop=pageimages` +
-    `&piprop=original|thumbnail&pithumbsize=600&titles=${encodeURIComponent(title)}`;
+    `https://${domain}/api.php?action=query&format=json&redirects=1&prop=pageimages|categories` +
+    `&piprop=original|thumbnail&pithumbsize=600&cllimit=max&titles=${encodeURIComponent(title)}`;
   const data = await getJson(url);
   const pages = data?.query?.pages ?? {};
   const page = Object.values(pages)[0];
   if (!page || page.missing !== undefined) return null;
   const image = page.original?.source ?? page.thumbnail?.source ?? null;
-  return image ? { image, title: page.title } : null;
+  const redirect = data?.query?.redirects?.[0] ?? null;
+  return image
+    ? {
+        image,
+        title: page.title,
+        redirected: Boolean(redirect),
+        toSection: Boolean(redirect?.tofragment),
+        categories: (page.categories ?? []).map((c) => c.title.replace(/^Category:/, '')),
+      }
+    : null;
+}
+
+// Titles and ranks that sit in front of a name the wiki may file without them: the Frozen wiki
+// has "Agnarr", not "King Agnarr". Also excluded from the shared-name test below, or every
+// "Captain X" would count as sharing a name with every other captain.
+const HONORIFIC =
+  /^(king|queen|prince|princess|captain|capt|lord|lady|sir|dame|dr|doctor|professor|prof|mr|mrs|ms|miss|general|admiral|commander|colonel|major|lieutenant|sergeant|officer|detective|agent|chief|emperor|empress|duke|duchess|count|countess|baron|baroness|uncle|aunt|grandma|grandpa|granny|mother|father|sister|brother|master|madame|mayor|judge|coach|nurse|principal)\.?\s+/i;
+const nameTokens = (s) =>
+  new Set(norm(s).split(' ').filter((t) => t.length >= 3 && !HONORIFIC.test(`${t} `)));
+const isCharacterPage = (hit) => hit.categories.some((c) => /\bcharacters?\b/i.test(c));
+
+/**
+ * A redirect is the wiki's own editors saying "this name is that character" -- the assertion
+ * titleMatches already honours for "Darth Maul" -> "Maul", which happens to share a substring.
+ * "Captain Salazar" -> "Armando Salazar", "Bootstrap Bill Turner" -> "William Turner Sr." and
+ * "Prince Ali Ababwa" -> "Aladdin" are the same statement without one, and rejecting them threw
+ * away portraits the wiki was handing over (measured: all four have one).
+ *
+ * A redirect can also point at things that are NOT a character: a section of a "minor
+ * characters" page, the film itself, a list. So it must land on a page of its own that either
+ * shares a real name with what was asked ("Salazar") or is filed as a character ("Aladdin").
+ * Categories alone were not enough -- the Pirates wiki files William Turner Sr. only under crew
+ * and ranks -- and a shared name alone would admit a family page, hence either-or.
+ */
+function redirectIsIdentity(name, hit, listName) {
+  if (!hit.redirected || hit.toSection) return false;
+  const got = norm(hit.title);
+  if (/\b(list|gallery|category|episode|season|characters)\b/.test(got)) return false;
+  if (got === norm(listName)) return false;
+  if (isGroupPage(hit)) return false;
+  const asked = nameTokens(name);
+  if ([...nameTokens(hit.title)].some((t) => asked.has(t))) return true;
+  // With no name in common, the only evidence is the wiki filing the page as a character -- which
+  // a team filed as ONE entry also is: "Yuna" -> "Gullwings", the trio, pictured together. That
+  // title looks plural, as group titles do; losing a singular name that happens to end in "s"
+  // is the cheap side of the trade on this, the weakest route.
+  return isCharacterPage(hit) && !/s$/.test(got);
+}
+
+/**
+ * On a studio-wide wiki (Disney's, Pixar's) the franchise-wiki guarantee is gone -- Disney's has
+ * a "King" in a dozen films. It is restored by demanding the page be FILED under this very title,
+ * as those wikis do: "Toy Story characters" for the Toy Story list. Matched on whole words, so
+ * the "Cars" list cannot be satisfied by a "Racecars" category.
+ */
+function filedUnderTitle(hit, listName) {
+  const want = norm(listName);
+  if (want.length < 3) return false;
+  const re = new RegExp(`(^| )${want.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`);
+  // Filed as a CHARACTER of this title -- "Cars characters" -- not merely somewhere under it.
+  // The first dry run took "Tow Mater (The One You Want to Call)", a song filed under "Cars
+  // songs", as Tow Mater, and stored Cars Land's soundtrack art.
+  return hit.categories.some((c) => re.test(norm(c)) && /\bcharacters?\b/.test(norm(c)));
 }
 
 async function searchTitle(domain, name) {
@@ -385,16 +463,43 @@ async function searchTitle(domain, name) {
  * The search fallback happily answers "Ed" with "List of Ed, Edd n Eddy characters", and an
  * image lifted off a cast list is a picture of somebody else.
  */
+// A disambiguating qualifier that says the page is NOT a person: "Tow Mater (The One You Want to
+// Call)" is fine to norm() away, but "(song)" or "(video game)" is the wiki telling us outright.
+const NOT_A_CHARACTER =
+  /\((song|film|movie|episode|album|soundtrack|video game|game|book|novel|comic|comics|series|tv series|show|attraction|ride|level|location|place|ship|vehicle|franchise|toy|merchandise)\)/i;
+
+// Words that, added to a character's name, make the page about something other than that one
+// character: a pairing, a group, or the work itself.
+const MORE_THAN_A_NAME = new Set([
+  'and', 'movie', 'film', 'series', 'show', 'game', 'games', 'episode', 'season', 'soundtrack', 'album',
+  'song', 'comic', 'comics', 'novel', 'book', 'franchise', 'family', 'siblings', 'brothers', 'sisters',
+  'twins', 'team', 'gang', 'crew', 'group', 'clan', 'squad', 'duo', 'trio', 'mobs',
+]);
+// A page about a GROUP, whatever it is called: redirects send a member to their team's page
+// ("Yuna" -> "Gullwings", "Creeper" -> "Mobs", "Anya Von Drake" -> "Von Drake siblings"), and
+// its picture is everyone. Judged by the title's words and by how the wiki files the page. Used
+// on the redirect route only, where that failure happened: "species" and "enemies" are kept
+// out of the category test on purpose, because a Goomba's page IS a species page and is right.
+const isGroupPage = (hit) =>
+  norm(hit.title).split(' ').some((w) => MORE_THAN_A_NAME.has(w)) ||
+  hit.categories.some((c) => /\b(groups?|teams?|organi[sz]ations?|factions?|families)\b/i.test(c));
+
 function titleMatches(characterName, pageTitle, { viaSearch = false } = {}) {
+  if (NOT_A_CHARACTER.test(pageTitle)) return false;
   const want = norm(characterName);
   const got = norm(pageTitle);
   if (!want || !got) return false;
   if (want === got) return true;
   if (/\b(list|gallery|category|episode|season|characters)\b/.test(got)) return false;
 
-  // The page being MORE specific than the name is always safe: asking for "Palpatine" and
-  // landing on "Sheev Palpatine" is the wiki using a fuller name for the same person.
-  if (got.includes(want)) return true;
+  // The page being MORE specific than the name is safe when the extra words are MORE NAME:
+  // asking for "Palpatine" and landing on "Sheev Palpatine" is the wiki using a fuller name. It is
+  // not safe when they name something else -- "Steve and Alex" is two characters (and a duo
+  // picture), "The SpongeBob SquarePants Movie" is the film -- both found in a dry run.
+  if (got.includes(want)) {
+    const extra = got.split(' ').filter((w) => !want.split(' ').includes(w));
+    return !extra.some((w) => MORE_THAN_A_NAME.has(w));
+  }
 
   // The page being LESS specific is only safe when the wiki itself said so. A redirect from
   // "Darth Maul" to "Maul" is the wiki asserting they are the same character; a search result
@@ -403,16 +508,33 @@ function titleMatches(characterName, pageTitle, { viaSearch = false } = {}) {
   return !viaSearch && want.includes(got);
 }
 
-async function imageFor(domain, name) {
-  let hit = await leadImage(domain, name).catch(() => null);
-  if (hit && titleMatches(name, hit.title)) return { ...hit, via: 'direct' };
+// `filedUnder` is set on a studio-wide wiki: every route must then also land on a page filed
+// under the list's title (see filedUnderTitle).
+async function imageFor(domain, name, listName, { filedUnder = null } = {}) {
+  const accept = (hit) => !filedUnder || filedUnderTitle(hit, filedUnder);
+
+  const hit = await leadImage(domain, name).catch(() => null);
+  if (hit && titleMatches(name, hit.title) && accept(hit)) return { ...hit, via: 'direct' };
+  if (hit && redirectIsIdentity(name, hit, listName) && accept(hit)) return { ...hit, via: 'redirect' };
 
   await sleep(PAUSE_MS);
   for (const title of await searchTitle(domain, name)) {
     if (!titleMatches(name, title, { viaSearch: true })) continue;
     await sleep(PAUSE_MS);
     const found = await leadImage(domain, title).catch(() => null);
-    if (found) return { ...found, via: 'search' };
+    if (found && accept(found)) return { ...found, via: 'search' };
+  }
+
+  // "King Agnarr" when the wiki files him as plain "Agnarr". Direct lookup only, never search,
+  // and only onto a page the wiki itself files as a character: without that, "Captain Hook"
+  // -> "Hook" would take the portrait off the 1991 film's page.
+  const bare = name.replace(HONORIFIC, '');
+  if (bare !== name && bare.length >= 3) {
+    await sleep(PAUSE_MS);
+    const plain = await leadImage(domain, bare).catch(() => null);
+    if (plain && titleMatches(bare, plain.title) && isCharacterPage(plain) && accept(plain)) {
+      return { ...plain, via: 'honorific' };
+    }
   }
   return null;
 }
@@ -500,7 +622,15 @@ async function main() {
   for (const list of lists) {
     stats.lists++;
     const wiki = await findWiki(list.name);
-    if (!wiki) {
+    // No wiki of its own: a Disney or Pixar title usually lives on the studio's wiki instead
+    // (Toy Story's own domain even calls itself "Pixar Wiki"). Tried only where such titles are
+    // filed, and every page there must be filed under THIS title -- see filedUnderTitle.
+    const wikis = wiki
+      ? [{ domain: wiki.domain, filedUnder: null }]
+      : STUDIO_WIKI_CATEGORIES.has(list.category)
+        ? STUDIO_WIKIS.map((domain) => ({ domain, filedUnder: list.name }))
+        : [];
+    if (!wikis.length) {
       stats.noWiki++;
       stats.skipped += list.missing;
       console.log(`  ✗ ${list.name} — no matching wiki`);
@@ -511,12 +641,22 @@ async function main() {
     const characters = db
       .prepare('SELECT id, name FROM characters WHERE list_id = ? AND image_url IS NULL ORDER BY fame IS NULL, fame DESC')
       .all(list.id);
+    // One picture never goes to two different characters in a list. A group screencap reached
+    // from two names, or a redirect that sends two characters to one page, both look like this,
+    // and 73 stored images of exactly that shape had to be cleared by hand.
+    const used = new Set(
+      db.prepare('SELECT image_url FROM characters WHERE list_id = ? AND image_url IS NOT NULL').all(list.id).map((r) => r.image_url)
+    );
 
     let found = 0;
     for (const ch of characters) {
       stats.checked++;
-      const hit = await imageFor(wiki.domain, ch.name).catch(() => null);
-      await sleep(PAUSE_MS);
+      let hit = null;
+      for (const w of wikis) {
+        hit = await imageFor(w.domain, ch.name, list.name, { filedUnder: w.filedUnder }).catch(() => null);
+        await sleep(PAUSE_MS);
+        if (hit) break;
+      }
 
       if (!hit) {
         stats.missed++;
@@ -528,6 +668,12 @@ async function main() {
         if (verbose) console.log(`      · ${ch.name} — rejected ${hit.image}`);
         continue;
       }
+      if (used.has(hit.image)) {
+        stats.rejected++;
+        if (verbose) console.log(`      · ${ch.name} — rejected: already another character's picture in this list`);
+        continue;
+      }
+      used.add(hit.image);
 
       stats.found++;
       found++;
@@ -538,8 +684,8 @@ async function main() {
       }
     }
     console.log(
-      `  ${found ? '✓' : '·'} ${list.name} → ${wiki.domain}  ${found}/${characters.length}` +
-        `${list.enabled ? '  (in pool)' : ''}`
+      `  ${found ? '✓' : '·'} ${list.name} → ${wiki ? wiki.domain : `${STUDIO_WIKIS.join(' / ')} (filed under the title)`}` +
+        `  ${found}/${characters.length}${list.enabled ? '  (in pool)' : ''}`
     );
   }
 
