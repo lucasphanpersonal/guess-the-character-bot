@@ -990,13 +990,36 @@ const hasMotion = 'DeviceMotionEvent' in window;
 const hasOrient = 'DeviceOrientationEvent' in window;
 const motionSupported = hasMotion || hasOrient;
 
-// Live sensor readings. `z` is gravity along the axis perpendicular to the screen (m/s^2):
-// ~0 when the phone is held vertically on a forehead, swinging toward ±9.8 as you tilt it to
-// face the ceiling or the floor. That axis is what "tilt up/down" changes no matter whether
-// the phone is portrait or landscape -- which is why the old beta-based version never fired
-// when the phone was held horizontally.
-const sensor = { x: 0, y: 0, z: 0, beta: null, gamma: null, have: false };
-let tiltFlip = store.get('gtc_tilt_flip') === '1';
+// Live sensor readings. `z` is gravity along the axis perpendicular to the screen (m/s^2), in
+// tilt.js's convention: ~0 when the phone is held vertically on a forehead, toward -9.8 as it
+// tilts to face the ceiling and +9.8 toward the floor. That axis is what "tilt up/down" changes
+// whether the phone is portrait or landscape.
+//
+// Two sources, and the order matters. deviceorientation's angles mean the same thing on every
+// platform, so once they arrive they are the only source (`fromAngles`). devicemotion's raw z is
+// kept as a fallback for phones that never send angles -- typically Androids without a gyroscope
+// -- but its SIGN differs between browsers, which is the bug that swapped "got it" and "pass" for
+// some Android players. See motionFaceUpSign for how the fallback finds out which way is up.
+const sensor = { z: 0, have: false, fromAngles: false, rawZ: null, beta: null, gamma: null };
+
+// Which sign this phone's raw devicemotion z takes when the screen faces up: +1 or -1.
+//
+// Learnt, not assumed: whenever somebody TAPS the screen, it is facing them and therefore the
+// ceiling -- nobody taps a phone that faces the floor. Each tap with a clear reading casts a vote
+// (clamped, so a few odd taps -- someone lying on a sofa holding it overhead -- can be outvoted
+// later rather than locking in). Before any vote, the platform's usual convention is the guess:
+// iPhone Safari reads face-up as negative, the spec and Chrome on Android as positive.
+const RAW_VOTE_MIN = 3;   // |z| below this is too close to upright to say which way it faces
+const RAW_VOTE_CAP = 5;
+const RAW_VOTE_TRUST = 2; // net taps before the votes overrule the guess; one odd tap is not enough
+let rawFaceUpVotes = 0;
+const rawPlatformGuess = typeof DeviceMotionEvent?.requestPermission === 'function' ? -1 : 1;
+const motionFaceUpSign = () =>
+  Math.abs(rawFaceUpVotes) >= RAW_VOTE_TRUST ? Math.sign(rawFaceUpVotes) : rawPlatformGuess;
+document.addEventListener('pointerdown', () => {
+  if (sensor.fromAngles || sensor.rawZ == null || Math.abs(sensor.rawZ) < RAW_VOTE_MIN) return;
+  rawFaceUpVotes = Math.max(-RAW_VOTE_CAP, Math.min(RAW_VOTE_CAP, rawFaceUpVotes + Math.sign(sensor.rawZ)));
+}, { capture: true, passive: true });
 // The thresholds, the hold times and the gesture state machine live in tilt.js, which is pure
 // and unit-tested (test/tilt-rules.test.js). Every number in it was tuned against a bug somebody
 // hit at a party, and it is the code that can irreversibly publish the character you are wearing.
@@ -1278,16 +1301,28 @@ function primeMotion() {
 
 function onMotion(e) {
   const g = e.accelerationIncludingGravity;
-  if (g && g.z != null) { sensor.z = g.z; sensor.have = true; }
+  if (!g || g.z == null) return;
+  sensor.rawZ = g.z;
+  if (sensor.fromAngles) return; // the angles are the source of truth once they have arrived
+  // tilt.js wants face-up NEGATIVE; a phone whose raw face-up reading is positive gets negated.
+  takeReading(motionFaceUpSign() > 0 ? -g.z : g.z);
+}
+function onOrient(e) {
+  // Some Androids fire this with nulls when they have no gyroscope; leave the fallback in charge.
+  if (e.beta == null || e.gamma == null) return;
+  sensor.beta = e.beta; sensor.gamma = e.gamma; sensor.fromAngles = true;
+  takeReading(TiltRules.zFromAngles(e.beta, e.gamma));
+}
+function takeReading(z) {
+  sensor.z = z; sensor.have = true;
   // Before handleGameTilt: the same reading that arms a gesture is the one that reveals the
   // card, and the room should have it in front of them before an answer can fire.
   if (!foreheadHeld && $('forehead').classList.contains('active') && isUpright()) revealForehead();
   handleGameTilt();
   updateTiltTest();
 }
-function onOrient(e) { sensor.beta = e.beta; sensor.gamma = e.gamma; updateTiltTest(); }
 
-const currentGesture = () => TiltRules.gestureFor(sensor.have ? sensor.z : null, tiltFlip);
+const currentGesture = () => TiltRules.gestureFor(sensor.have ? sensor.z : null);
 
 // Tilting down gives up only when there is nobody to pass to -- otherwise down means pass. Read
 // off the buttons the server sent, so the gesture and the rules agree by construction.
@@ -1315,7 +1350,6 @@ function handleGameTilt() {
 
   const out = TiltRules.step(tilt, {
     z: sensor.have ? sensor.z : null,
-    flip: tiltFlip,
     now: Date.now(),
     canGiveUp: canGiveUpByTilt(v),
   });
@@ -1451,7 +1485,8 @@ function updateTiltTest() {
     : sensor.have ? (isUpright() ? 'upright — ready' : 'hold the phone upright') : 'enable motion';
   res.style.color = g === 'gotit' ? 'var(--green)' : g === 'pass' ? 'var(--amber)' : 'var(--ink)';
   $('ttVals').textContent = sensor.have
-    ? `z ${sensor.z.toFixed(1)}  ·  upright ${isUpright() ? 'yes' : 'no'}  ·  flip ${tiltFlip ? 'ON' : 'off'}`
+    ? `z ${sensor.z.toFixed(1)}  ·  upright ${isUpright() ? 'yes' : 'no'}  ·  ` +
+      (sensor.fromAngles ? 'from angles' : `from accelerometer, face-up ${motionFaceUpSign() > 0 ? '+' : '−'}`)
     : (motionNote || 'waiting for sensor…');
 }
 
@@ -1879,7 +1914,6 @@ $('ttEnable').addEventListener('click', () => enableMotion().then(() => {
   $('ttEnable').style.display = motionEnabled ? 'none' : '';
   updateTiltTest();
 }));
-$('ttFlip').addEventListener('click', () => { tiltFlip = !tiltFlip; store.set('gtc_tilt_flip', tiltFlip ? '1' : '0'); updateTiltTest(); });
 $('ttBack').addEventListener('click', () => show('landing'));
 $('codeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));
 // Tapping a partly-filled code box should continue the code, not drop the caret mid-string.

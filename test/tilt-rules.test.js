@@ -9,13 +9,13 @@ const { assert } = require('./harness');
 const TiltRules = require('../src/web/public/tilt');
 
 const UPRIGHT = 0.5;   // on a forehead
-const FLAT = 9.8;      // face up on a table
-const UP = -8;         // tilted to face the ceiling (negative z reads as "up" unflipped)
+const FLAT = -9.8;     // face up on a table -- which reads as the strongest "got it" there is
+const UP = -8;         // tilted to face the ceiling (tilt.js: negative z is up)
 const DOWN = 8;        // tilted to face the floor
 
 // Feeds one reading and returns what the caller was told to do.
 function feed(state, z, now, opts = {}) {
-  return TiltRules.step(state, { z, flip: !!opts.flip, now, canGiveUp: !!opts.canGiveUp });
+  return TiltRules.step(state, { z, now, canGiveUp: !!opts.canGiveUp });
 }
 
 // --- arming -------------------------------------------------------------------------------
@@ -89,11 +89,53 @@ function aHeldDownTiltPasses() {
   assert.equal(feed(s, DOWN, 100 + TiltRules.HOLD_DOWN_MS + 50).action, 'pass');
 }
 
-function flipSwapsTheTwoDirections() {
-  const s = TiltRules.newState();
-  feed(s, UPRIGHT, 0, { flip: true });
-  feed(s, DOWN, 100, { flip: true });
-  assert.equal(feed(s, DOWN, 900, { flip: true }).action, 'gotit', 'flipped, down reads as up');
+// --- reading the angles ---------------------------------------------------------------------
+//
+// The raw accelerometer's sign differs between browsers, which swapped "got it" and "pass" for
+// some Android players. The orientation angles do not, so these pin the angle conversion to the
+// physical postures: whichever way the phone is turned in its own plane, facing the ceiling is
+// "got it" and facing the floor is "pass".
+
+const fromAngles = (beta, gamma) => TiltRules.gestureFor(TiltRules.zFromAngles(beta, gamma));
+
+function anglesReadFaceUpAsUpAndFaceDownAsDown() {
+  assert.ok(TiltRules.zFromAngles(0, 0) < -9.7, 'flat, face up');
+  assert.ok(TiltRules.zFromAngles(180, 0) > 9.7, 'flat, face down');
+  assert.ok(TiltRules.zFromAngles(-180, 0) > 9.7, 'flat, face down (beta wraps)');
+}
+
+function anglesReadUprightAsUprightInEitherOrientation() {
+  assert.ok(TiltRules.isUpright(TiltRules.zFromAngles(90, 0)), 'portrait, upright');
+  assert.ok(TiltRules.isUpright(TiltRules.zFromAngles(-90, 0)), 'portrait, upside down');
+  assert.ok(TiltRules.isUpright(TiltRules.zFromAngles(0, 90)), 'landscape, one way');
+  assert.ok(TiltRules.isUpright(TiltRules.zFromAngles(0, -89)), 'landscape, the other');
+}
+
+// The forehead is held landscape, where beta barely moves and the whole gesture is in gamma
+// (tilting toward the ceiling) or in beta flipping past 90 (toward the floor).
+function anglesGiveTheRightGestureInLandscape() {
+  assert.equal(fromAngles(0, 40), 'gotit', 'landscape, tilted to the ceiling');
+  assert.equal(fromAngles(0, -40), 'gotit', 'landscape the other way, tilted to the ceiling');
+  assert.equal(fromAngles(180, 50), 'pass', 'landscape, tilted to the floor');
+  assert.equal(fromAngles(-180, -50), 'pass', 'landscape the other way, tilted to the floor');
+  assert.equal(fromAngles(5, 75), null, 'a nod is not a gesture');
+}
+
+function anglesGiveTheRightGestureInPortrait() {
+  assert.equal(fromAngles(40, 0), 'gotit', 'portrait, tilted to the ceiling');
+  assert.equal(fromAngles(140, 0), 'pass', 'portrait, tilted to the floor');
+}
+
+// Up is the irreversible direction and asks for more tilt; the angles must not erode that.
+function upNeedsMoreTiltThanDownFromAnglesToo() {
+  // ~37 degrees off upright: enough to pass, not enough to publish the character.
+  assert.equal(fromAngles(0, 53), null, '37 degrees toward the ceiling');
+  assert.equal(fromAngles(180, 53), 'pass', '37 degrees toward the floor');
+}
+
+function missingAnglesAreNoReading() {
+  assert.equal(TiltRules.zFromAngles(null, 10), null);
+  assert.equal(TiltRules.zFromAngles(10, null), null);
 }
 
 // --- give up ------------------------------------------------------------------------------
@@ -181,7 +223,7 @@ function noReadingYetIsNotAGesture() {
   const s = TiltRules.newState();
   assert.equal(feed(s, null, 100).action, null);
   assert.equal(s.armed, false);
-  assert.equal(TiltRules.gestureFor(null, false), null);
+  assert.equal(TiltRules.gestureFor(null), null);
   assert.equal(TiltRules.isUpright(null), false);
 }
 
@@ -193,7 +235,12 @@ module.exports = {
   'a shallow tilt never fires': aShallowTiltNeverFires,
   'firing disarms until upright again': firingDisarmsUntilUprightAgain,
   'a held down tilt passes': aHeldDownTiltPasses,
-  'flip swaps the two directions': flipSwapsTheTwoDirections,
+  'angles: face up is up, face down is down': anglesReadFaceUpAsUpAndFaceDownAsDown,
+  'angles: upright in either orientation': anglesReadUprightAsUprightInEitherOrientation,
+  'angles: right gesture in landscape': anglesGiveTheRightGestureInLandscape,
+  'angles: right gesture in portrait': anglesGiveTheRightGestureInPortrait,
+  'angles: up still needs more tilt than down': upNeedsMoreTiltThanDownFromAnglesToo,
+  'angles: missing angles are no reading': missingAnglesAreNoReading,
   'giving up needs the long hold': givingUpNeedsTheLongHold,
   'a momentary dip does not restart the hold': aMomentaryDipDoesNotRestartTheHold,
   'raising the phone aborts the hold': raisingTheP1honeAbortsTheHold,

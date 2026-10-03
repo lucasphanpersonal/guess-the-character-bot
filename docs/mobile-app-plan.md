@@ -329,10 +329,13 @@ recorded below, since the deviations are the useful part of a status update.
    server-authoritative wall-clock turn timer.
 4. **Forehead mode + tilt — done.** Grace countdown → full-screen wearer's card → tilt to answer.
    Deviations from the plan sketch:
-   - **Tilt axis.** Uses `DeviceMotion.accelerationIncludingGravity.z` (screen-normal), not the
-     `beta`/orientation angle first imagined — beta barely moves when the phone is held
-     horizontally on the forehead, which read as "tilt not working." Up = got it, down / timeout
-     = pass, debounced, with a persisted direction "flip" for sign differences. The two
+   - **Tilt axis.** Screen-normal gravity, not the `beta` angle first imagined — beta alone
+     barely moves when the phone is held horizontally on the forehead, which read as "tilt not
+     working." It is computed from the orientation angles as `cos(beta)·cos(gamma)`, which works
+     in both orientations and means the same on every platform; raw
+     `accelerationIncludingGravity.z` is only a fallback, because its sign differs between
+     browsers (that swapped up and down for some Android players). The fallback learns its sign
+     from taps rather than a manual "flip". Up = got it, down / timeout = pass, debounced. The two
      directions are tuned asymmetrically (up 6.5 / 600ms vs down 5.5 / 450ms) because tilting
      up is the irreversible one.
    - **Always landscape.** iOS gives web pages no way to unlock or force orientation, so the card

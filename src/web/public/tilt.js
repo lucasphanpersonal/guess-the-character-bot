@@ -48,15 +48,37 @@ const TiltRules = (() => {
   const GIVEUP_GAP_MS = 300;    // brief dips below the threshold don't restart the hold
   const GIVEUP_TICK_MS = 450;   // audible progress while it counts, so the room hears it too
 
+  const G = 9.81;
+
   const isUpright = (z) => z != null && Math.abs(z) < NEUTRAL_MAX;
 
+  // `z` everywhere in this file is gravity along the screen's normal in m/s^2, NEGATIVE when the
+  // screen faces the ceiling: ~-9.8 face up on a table, ~0 upright on a forehead, ~+9.8 face down.
+  //
+  // That is a convention this file fixes, not something any one sensor promises. The obvious
+  // source -- devicemotion's accelerationIncludingGravity.z -- does not agree on its sign across
+  // browsers: iPhone Safari reads face-up as negative, Chrome on Android as positive, and other
+  // Android browsers have not been reliably either. Read raw, it swapped "got it" and "pass" for
+  // some Android players and not others, which looked like flakiness rather than a convention. A
+  // manual flip existed, on a diagnostics screen nobody at a party ever opened. app.js now prefers
+  // zFromAngles below, and learns the raw fallback's sign per phone instead of assuming it.
+
+  // The same quantity from deviceorientation's angles, whose meaning the two platforms agree on.
+  // With the spec's Z-X'-Y'' rotation, the vertical component of the screen normal is
+  // cos(beta)·cos(gamma): 1 face up, -1 face down, 0 upright -- in portrait AND landscape, which
+  // is what the old beta-only reading got wrong (beta barely moves on a phone held sideways).
+  function zFromAngles(beta, gamma) {
+    if (beta == null || gamma == null) return null;
+    const rad = Math.PI / 180;
+    return -G * Math.cos(beta * rad) * Math.cos(gamma * rad);
+  }
+
   // Current tilt as a gesture: 'gotit', 'pass', or null. Absolute, so it needs no calibration.
-  // `flip` swaps the two for phones that report the opposite sign (the tilt-test screen sets it).
-  function gestureFor(z, flip) {
+  function gestureFor(z) {
     if (z == null) return null;
-    // One signed measure of "upness", so the flip is applied once and the two thresholds can
-    // differ without the sign handling getting tangled.
-    const upness = flip ? z : -z;
+    // One signed measure of "upness", so the two thresholds can differ without the sign handling
+    // getting tangled.
+    const upness = -z;
     if (upness > TILT_TH_UP) return 'gotit';
     if (-upness > TILT_TH_DOWN) return 'pass';
     return null;
@@ -86,13 +108,13 @@ const TiltRules = (() => {
    *
    * @param {object} state              mutated in place; make one with newState()
    * @param {object} reading
-   * @param {number|null} reading.z     screen-normal gravity, or null if the sensor has said nothing
-   * @param {boolean} reading.flip      this phone reports the opposite sign
+   * @param {number|null} reading.z     screen-normal gravity (negative = facing the ceiling), or
+   *                                    null if the sensor has said nothing
    * @param {number} reading.now        Date.now(), passed in so tests own the clock
    * @param {boolean} reading.canGiveUp down means give up rather than pass (nobody left to pass to)
    * @returns {{action: null|'gotit'|'pass'|'giveup', giveUpFraction: number, giveUpTick: boolean}}
    */
-  function step(state, { z, flip, now, canGiveUp }) {
+  function step(state, { z, now, canGiveUp }) {
     // Arming requires actually seeing the phone upright. Until then no gesture can fire, however
     // the phone happens to be lying -- that is the whole safety property, and it is what stops a
     // turn that starts with the phone flat on a table from firing a gesture instantly.
@@ -105,7 +127,7 @@ const TiltRules = (() => {
       }
     }
 
-    const g = gestureFor(z, flip);
+    const g = gestureFor(z);
     let giveUpTick = false;
     let fraction = 0;
 
@@ -164,7 +186,7 @@ const TiltRules = (() => {
   return {
     NEUTRAL_MAX, TILT_TH_UP, TILT_TH_DOWN, HOLD_UP_MS, HOLD_DOWN_MS,
     REFIRE_MS, GIVEUP_HOLD_MS, GIVEUP_GAP_MS, GIVEUP_TICK_MS,
-    isUpright, gestureFor, newState, step, reset,
+    isUpright, gestureFor, zFromAngles, newState, step, reset,
   };
 })();
 

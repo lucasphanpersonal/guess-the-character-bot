@@ -155,6 +155,11 @@ consistent — new UI should look like it was always there.
 - *Absolute thresholds beat calibrated baselines.* Snapshotting a "neutral" reading at turn
   start meant a phone still flat on the table poisoned the baseline and fired gestures
   instantly and repeatedly, burning whole turns.
+- *A sensor's sign is a browser convention, not physics.* `accelerationIncludingGravity.z` reads
+  face-up as negative on iPhone and positive on Chrome for Android, so "got it" and "pass" were
+  swapped for some Android players -- with a manual flip on a screen nobody opened. Prefer
+  quantities the platforms agree on (orientation angles), and where you can't, learn the sign
+  from something the user does anyway (a tap means the screen faces up) rather than asking.
 - *Asymmetric costs deserve asymmetric thresholds.* Tilting up is irreversible and publishes
   your character; tilting down only passes. Up asks for a firmer, longer hold.
 
