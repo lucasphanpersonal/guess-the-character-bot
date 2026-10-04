@@ -19,7 +19,7 @@ const { handleComponentInteraction } = require('../src/discord/components/router
 const engine = require('../src/discord/game/engine');
 const Lobby = require('../src/core/game/Lobby');
 const GameManager = require('../src/core/game/GameManager');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -28,7 +28,7 @@ function makeLobby(playerCount = 4) {
   const n = ++counter;
   const guildId = `setchar-guild-${n}`;
   const channelId = `setchar-chan-${n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Set-Chars List', 'tester', 'Anime');
   for (const name of ['Zoro', 'Luffy', 'Nami', 'Sanji', 'Usopp', 'Chopper']) {

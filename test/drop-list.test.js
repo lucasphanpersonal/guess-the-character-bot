@@ -9,7 +9,7 @@ const engine = require('../src/discord/game/engine');
 const confirmPhase = require('../src/discord/game/confirmPhase');
 const Lobby = require('../src/core/game/Lobby');
 const GameManager = require('../src/core/game/GameManager');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -19,7 +19,7 @@ async function startedGame({ maxRerolls = 2, secondList = true, p2Freeform = fal
   const n = ++counter;
   const guildId = `drop-guild-${n}`;
   const channelId = `drop-chan-${n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
 
   const obscure = lists.createList(guildId, 'Obscure Show', 'tester', 'Anime', { enabled: true });
   for (const name of ['Nobody One', 'Nobody Two']) lists.addCharacter(obscure, name, 'tester');
@@ -95,7 +95,7 @@ module.exports = {
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
 
     assert.equal(
-      lists.getListsByIds([obscure])[0].enabled,
+      lists.getListsByIds([obscure], guildId)[0].enabled,
       0,
       'the list is out of the pool for future lobbies'
     );
@@ -120,7 +120,7 @@ module.exports = {
     const { lobby, client, recorder, channelId, obscure } = await startedGame({ secondList: false });
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
 
-    assert.equal(lists.getListsByIds([obscure])[0].enabled, 1, 'nothing was switched off');
+    assert.equal(lists.getListsByIds([obscure], lobby.guildId)[0].enabled, 1, 'nothing was switched off');
     assert.match(recorder.allText(), /would leave nothing else to deal from/);
     assert.equal(lobby.game.confirmState.p1.rerollsLeft, 2, 'and it cost nothing');
     GameManager.endLobby(channelId);
@@ -130,7 +130,7 @@ module.exports = {
     const { lobby, client, recorder, channelId, obscure } = await startedGame({ maxRerolls: 0 });
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
 
-    assert.equal(lists.getListsByIds([obscure])[0].enabled, 1);
+    assert.equal(lists.getListsByIds([obscure], lobby.guildId)[0].enabled, 1);
     assert.match(recorder.allText(), /out of rerolls/);
     GameManager.endLobby(channelId);
   },
@@ -141,7 +141,7 @@ module.exports = {
 
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
 
-    assert.equal(lists.getListsByIds([obscure])[0].enabled, 1);
+    assert.equal(lists.getListsByIds([obscure], lobby.guildId)[0].enabled, 1);
     assert.equal(lobby.game.headByPlayer.p2.name, before);
     assert.match(recorder.allText(), /Manage Server permission/);
     GameManager.endLobby(channelId);
@@ -159,7 +159,7 @@ module.exports = {
     const { lobby, client, recorder, channelId, obscure } = await startedGame();
     lobby.game.rerollAllowed = false;
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });
-    assert.equal(lists.getListsByIds([obscure])[0].enabled, 1);
+    assert.equal(lists.getListsByIds([obscure], lobby.guildId)[0].enabled, 1);
     assert.match(recorder.allText(), /audience picked this character/);
     GameManager.endLobby(channelId);
   },

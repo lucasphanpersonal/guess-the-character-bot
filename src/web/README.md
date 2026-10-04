@@ -31,9 +31,10 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 
 ## What's shared vs. new
 
-- **Reused verbatim from core:** the SQLite layer (`core/db`), the content/difficulty/curation
-  logic, and the pure game state (`core/game/Game.js`, `GameManager.js`, `Lobby.js`,
-  `lobbySettings.js`).
+- **Reused verbatim:** the content/difficulty/curation logic from `src/compendium/` (the web
+  app plays as its own compendium scope, `'web'`, with its own playable selection -- see
+  "The compendium" in the top-level README), and the pure game state from core
+  (`core/game/Game.js`, `GameManager.js`, `Lobby.js`, `lobbySettings.js`).
 - **New here:** the transport (WebSocket rooms instead of Discord's gateway), the UI, and the
   forehead-mode tilt mechanic — none of which the Discord bot has an equivalent of.
 - **The seam for a future simultaneous mode:** `core/game/roundMode.js`. Only
@@ -115,8 +116,10 @@ Endpoints that prove the shared core is reachable from this frontend:
   difficulty; the server deals via the shared core, then each player gets a confirm/reroll
   screen showing the one character they check (unlimited rerolls, demotion) plus everyone else's as
   reference — never their own. `gameSetup.js` is pure and unit-tested in
-  `test/web-setup.test.js`; content is injected so it needs no DB. `WEB_SCOPE` auto-resolves to
-  the richest seeded scope so a phone test deals real characters immediately.
+  `test/web-setup.test.js`; content is injected so it needs no DB. The pool is the web's own
+  compendium scope (`'web'`, or `WEB_SCOPE`), curated with `npm run select:lists`. It used to
+  auto-resolve to the richest Discord guild, which meant playing -- and risking writing -- that
+  server's selection.
   **Host-picks mode:** `dealWithPicks` validates the host's picks (ids scope-checked, duplicates
   judged with `normalizeLoose`) and random-fills the rest; the sitting-out host gets
   `host:state` views, which hold every character and so go to that host alone —

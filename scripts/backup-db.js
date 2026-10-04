@@ -8,9 +8,12 @@
 //
 // Usage:
 //   node scripts/backup-db.js [label]
+//
+// The bare handle (src/db), NOT the compendium's or the game layer's: those migrate the database
+// when they load, and the backup worth having before a schema change is the one taken before it.
 
 const path = require('path');
-const db = require('../src/core/db/connection');
+const db = require('../src/db/connection');
 
 function timestamp() {
   const d = new Date();

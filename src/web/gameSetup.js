@@ -23,7 +23,7 @@
 
 const Game = require('../core/game/Game');
 const { FIELDS: LOBBY_FIELDS } = require('../core/game/lobbySettings');
-const { normalizeLoose } = require('../core/util/text');
+const { normalizeLoose } = require('../compendium/text');
 
 /**
  * Clamp a client-supplied turn length to the same bounds the Discord bot enforces, so the two

@@ -1,37 +1,84 @@
-const db = require('./connection');
-const { foldDiacritics, normalizeLoose } = require('../util/text');
+// The compendium's lists and characters: every content read and write goes through here.
+//
+// SCOPES. Anything that plays -- a Discord server (its guild id), the web app ('web') -- is a
+// scope, and a scope sees two kinds of list:
+//
+//   - the SHARED compendium (owner_scope NULL), visible to every scope: every seeded list, and
+//     every list made with /list create -- a list typed out by hand is wanted everywhere;
+//   - its OWN private lists (owner_scope = the scope), invisible elsewhere. Nothing makes these
+//     today except the migration, for a second Discord server's lists (see db.js); the slot is
+//     kept so a scope CAN hold something no one else sees.
+//
+// Each scope also has its own playable selection (list_selection), which is what `enabled`
+// means on any row returned here: 1 if THAT scope has the list switched on. The same list can be
+// on for one Discord server, off for another and on for the web, which is the whole reason the
+// selection stopped being a column on the list.
+//
+// A null scope means "the compendium itself": it sees only shared lists and has no selection.
+// That is what the content scripts (seeding, image fills) work against.
 
-// Lists arrive disabled because the seed scripts create them in the thousands. A list
-// somebody types out by hand is the opposite case -- that is a deliberate choice, so
-// /list create passes enabled: true and it is playable straight away.
-function createList(guildId, name, createdBy, category = null, { enabled = false } = {}) {
-  const info = db
-    .prepare(
-      'INSERT INTO character_lists (guild_id, name, created_by, created_at, category, enabled) VALUES (?, ?, ?, ?, ?, ?)'
-    )
-    .run(guildId, name, createdBy, Date.now(), category, enabled ? 1 : 0);
-  return info.lastInsertRowid;
+const db = require('./db');
+const { foldDiacritics, normalizeLoose } = require('./text');
+
+// The web app's scope, resolved once, here: the web server plays as it, and /list create in
+// Discord switches a new list on for it too -- two processes that must agree on the name.
+// WEB_SCOPE overrides it (the socket check gives itself a throwaway one).
+const WEB_SCOPE = process.env.WEB_SCOPE || 'web';
+
+// SQL fragments, each binding the scope ONCE with a positional `?`. Every query below that uses
+// them passes the scope in the order the fragments appear in its text -- SELECT list first.
+const VISIBLE = '(cl.owner_scope IS NULL OR cl.owner_scope = ?)';
+const ENABLED = 'EXISTS (SELECT 1 FROM list_selection s WHERE s.scope = ? AND s.list_id = cl.id)';
+
+/** Lists visible to `scope`, each with `enabled` for that scope. `tail` continues the WHERE. */
+function scopedLists(scope, tail = '', ...params) {
+  return db
+    .prepare(`SELECT cl.*, ${ENABLED} AS enabled FROM character_lists cl WHERE ${VISIBLE} ${tail}`)
+    .all(scope, scope, ...params);
+}
+
+/** Whether a list row may be used by `scope` -- for ids that came from a client. */
+function isVisibleTo(list, scope) {
+  return !!list && (list.owner_scope == null || list.owner_scope === scope);
+}
+
+// `scope` null makes a SHARED list -- what the seed scripts and /list create do. A scope makes a
+// list private to it. Lists arrive switched off because the seed scripts create them in the
+// thousands. A list somebody types out by hand is the opposite case -- that is a deliberate
+// choice, so it is playable straight away: `enabled` switches it on for its owning scope, and
+// `enabledFor` for any others (/list create names the server it was typed in, and the web).
+function createList(scope, name, createdBy, category = null, { enabled = false, enabledFor = [] } = {}) {
+  const id = db.transaction(() => {
+    const info = db
+      .prepare(
+        'INSERT INTO character_lists (owner_scope, name, created_by, created_at, category) VALUES (?, ?, ?, ?, ?)'
+      )
+      .run(scope ?? null, name, createdBy, Date.now(), category);
+    const on = [...(enabled && scope != null ? [scope] : []), ...enabledFor];
+    for (const s of new Set(on)) setListsEnabled(s, [info.lastInsertRowid], true);
+    return info.lastInsertRowid;
+  })();
+  return id;
 }
 
 // COLLATE NOCASE only folds ASCII case, not diacritics, and most people typing a list name
 // won't bother with accents -- so "Pokemon" needs to resolve to "Pokémon" too.
 const normalizeForMatch = foldDiacritics;
 
-function getListByName(guildId, name) {
-  const exact = db
-    .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND name = ? COLLATE NOCASE')
-    .get(guildId, name);
+// A scope's own list wins over a shared one of the same name: a server that made its own
+// "Pokemon" means that one when it types the name.
+function getListByName(scope, name) {
+  const exact = scopedLists(scope, 'AND cl.name = ? COLLATE NOCASE ORDER BY cl.owner_scope IS NULL', name)[0];
   if (exact) return exact;
 
   // Fallback: diacritic-insensitive match (e.g. "Pokemon" should find "Pokémon").
   const target = normalizeForMatch(name);
-  return listLists(guildId).find((l) => normalizeForMatch(l.name) === target) || null;
+  const matches = listLists(scope).filter((l) => normalizeForMatch(l.name) === target);
+  return matches.find((l) => l.owner_scope != null) || matches[0] || null;
 }
 
-function listLists(guildId) {
-  return db
-    .prepare('SELECT * FROM character_lists WHERE guild_id = ? ORDER BY name COLLATE NOCASE')
-    .all(guildId);
+function listLists(scope) {
+  return scopedLists(scope, 'ORDER BY cl.name COLLATE NOCASE');
 }
 
 function setListCategory(listId, category) {
@@ -128,18 +175,18 @@ function formatListLabel(list) {
  * back to the next-best list ("Television Shows"). Returns null only when that leaves
  * nothing, e.g. a one-off list somebody typed by hand for a single character.
  */
-function getCharacterSource(guildId, characterName, drawnListId = null) {
+function getCharacterSource(scope, characterName, drawnListId = null) {
   const rows = db
     .prepare(
       `SELECT cl.id, cl.name, cl.category, COUNT(c2.id) AS size
          FROM characters ch
          JOIN character_lists cl ON cl.id = ch.list_id
          JOIN characters c2 ON c2.list_id = cl.id
-        WHERE cl.guild_id = ? AND ch.name = ? COLLATE NOCASE
+        WHERE ${VISIBLE} AND ch.name = ? COLLATE NOCASE
         GROUP BY cl.id
         ORDER BY size DESC`
     )
-    .all(guildId, characterName);
+    .all(scope, characterName);
   // normalizeForMatch folds case as well as diacritics, so this needs no extra lowercasing.
   const sameName = (a, b) => normalizeForMatch(a) === normalizeForMatch(b);
   const candidates = rows.filter((row) => !sameName(row.name, characterName));
@@ -171,7 +218,7 @@ const LABEL_LIST_LIMIT = 3;
  * handful, the shared category is the honest summary; a mixed selection just gets counted.
  */
 function getListLabelForIds(listIds) {
-  const lists = getListsByIds(listIds);
+  const lists = getListsByIds(listIds, null);
   if (lists.length <= LABEL_LIST_LIMIT) return lists.map(formatListLabel).join(' + ');
 
   const categories = new Set(lists.map((l) => l.category || 'Uncategorized'));
@@ -181,10 +228,17 @@ function getListLabelForIds(listIds) {
 
 // Returned in the same order as `listIds` so display labels match the order the host typed
 // them, rather than whatever order SQLite happens to return rows in.
-function getListsByIds(listIds) {
+//
+// NOT filtered by visibility: the ids usually come from a game already in progress, and a list
+// that vanished from a game's own record would be worse than a stale label. Where an id came from
+// a client, check it with isVisibleTo. `enabled` is relative to `scope`, as everywhere here; a
+// null scope (labels, which never read it) reports every list as off.
+function getListsByIds(listIds, scope) {
   if (!listIds.length) return [];
   const placeholders = listIds.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT * FROM character_lists WHERE id IN (${placeholders})`).all(...listIds);
+  const rows = db
+    .prepare(`SELECT cl.*, ${ENABLED} AS enabled FROM character_lists cl WHERE cl.id IN (${placeholders})`)
+    .all(scope ?? null, ...listIds);
   const byId = new Map(rows.map((r) => [r.id, r]));
   return listIds.map((id) => byId.get(id)).filter(Boolean);
 }
@@ -364,10 +418,10 @@ function getRandomPair(listIds, difficulty = DEFAULT_DIFFICULTY) {
   return getRandomCharacters(listIds, 2, [], difficulty);
 }
 
-function searchListNames(guildId, query, limit = 25) {
+function searchListNames(scope, query, limit = 25) {
   const direct = db
-    .prepare('SELECT name FROM character_lists WHERE guild_id = ? AND name LIKE ? ORDER BY name COLLATE NOCASE LIMIT ?')
-    .all(guildId, `%${query}%`, limit)
+    .prepare(`SELECT cl.name FROM character_lists cl WHERE ${VISIBLE} AND cl.name LIKE ? ORDER BY cl.name COLLATE NOCASE LIMIT ?`)
+    .all(scope, `%${query}%`, limit)
     .map((r) => r.name);
   if (direct.length >= limit || !query) return direct;
 
@@ -375,113 +429,81 @@ function searchListNames(guildId, query, limit = 25) {
   // "Pokémon" as a suggestion), merged in after the direct matches, capped at limit.
   const target = normalizeForMatch(query);
   const seen = new Set(direct.map((n) => n.toLowerCase()));
-  const extra = listLists(guildId)
+  const extra = listLists(scope)
     .map((l) => l.name)
     .filter((name) => !seen.has(name.toLowerCase()) && normalizeForMatch(name).includes(target));
   return [...direct, ...extra].slice(0, limit);
 }
 
-// Scopes (guild ids, historically) ranked by how much playable content they hold. The web
-// frontend has no guild, so it uses this to auto-pick the richest existing scope to play from
-// when WEB_SCOPE isn't set explicitly -- otherwise a fresh install would deal from nothing.
-function guildsRankedByContent() {
+// `category = ?` with the 'Uncategorized' pseudo-category meaning NULL, plus its parameters.
+const categoryClause = (category) =>
+  category === 'Uncategorized' ? ['cl.category IS NULL', []] : ['cl.category = ?', [category]];
+
+function listCategoriesWithCounts(scope) {
   return db
     .prepare(
-      `SELECT cl.guild_id AS guildId,
-              SUM(CASE WHEN cl.enabled = 1 THEN 1 ELSE 0 END) AS enabledLists,
-              COUNT(DISTINCT c.id) AS characters
-         FROM character_lists cl
-         LEFT JOIN characters c ON c.list_id = cl.id
-        GROUP BY cl.guild_id
-        ORDER BY enabledLists DESC, characters DESC`
+      `SELECT COALESCE(cl.category, 'Uncategorized') as category, COUNT(*) as count
+       FROM character_lists cl WHERE ${VISIBLE} GROUP BY cl.category ORDER BY cl.category COLLATE NOCASE`
     )
-    .all();
+    .all(scope);
 }
 
-function listCategoriesWithCounts(guildId) {
-  return db
-    .prepare(
-      `SELECT COALESCE(category, 'Uncategorized') as category, COUNT(*) as count
-       FROM character_lists WHERE guild_id = ? GROUP BY category ORDER BY category COLLATE NOCASE`
-    )
-    .all(guildId);
+function listNamesInCategory(scope, category) {
+  const [where, params] = categoryClause(category);
+  return scopedLists(scope, `AND ${where} ORDER BY cl.name COLLATE NOCASE`, ...params).map((r) => r.name);
 }
 
-function listNamesInCategory(guildId, category) {
-  if (category === 'Uncategorized') {
-    return db
-      .prepare('SELECT name FROM character_lists WHERE guild_id = ? AND category IS NULL ORDER BY name COLLATE NOCASE')
-      .all(guildId)
-      .map((r) => r.name);
-  }
-  return db
-    .prepare('SELECT name FROM character_lists WHERE guild_id = ? AND category = ? ORDER BY name COLLATE NOCASE')
-    .all(guildId, category)
-    .map((r) => r.name);
-}
-
-function getListsByCategory(guildId, category) {
-  if (category === 'Uncategorized') {
-    return db.prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category IS NULL').all(guildId);
-  }
-  return db.prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category = ?').all(guildId, category);
+function getListsByCategory(scope, category) {
+  const [where, params] = categoryClause(category);
+  return scopedLists(scope, `AND ${where}`, ...params);
 }
 
 // ---------------------------------------------------------------------------
-// The server's playable selection (`enabled`), curated from /list select
+// A scope's playable selection (`enabled`), curated from /list select
 // ---------------------------------------------------------------------------
 //
 // Only pooled draws consult this. Naming a list outright -- `/lobby create list:Naruto` --
 // deliberately bypasses it: the point of the selection is to keep obscure lists out of a
 // random deal, not to make them unreachable when somebody asks for one by name.
 
-function getEnabledListsByCategory(guildId, category) {
-  if (category === 'Uncategorized') {
-    return db
-      .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category IS NULL AND enabled = 1')
-      .all(guildId);
-  }
-  return db
-    .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND category = ? AND enabled = 1')
-    .all(guildId, category);
+function getEnabledListsByCategory(scope, category) {
+  const [where, params] = categoryClause(category);
+  return scopedLists(scope, `AND ${ENABLED} AND ${where}`, scope, ...params);
 }
 
-function getEnabledLists(guildId) {
-  return db
-    .prepare('SELECT * FROM character_lists WHERE guild_id = ? AND enabled = 1 ORDER BY name COLLATE NOCASE')
-    .all(guildId);
+function getEnabledLists(scope) {
+  return scopedLists(scope, `AND ${ENABLED} ORDER BY cl.name COLLATE NOCASE`, scope);
 }
 
 // Every category with how much of it is switched on -- drives the /list select landing page
 // and the "nothing is enabled yet" errors, which need to name what IS available.
-function listCategoriesWithEnabledCounts(guildId) {
+function listCategoriesWithEnabledCounts(scope) {
   return db
     .prepare(
-      `SELECT COALESCE(category, 'Uncategorized') as category,
+      `SELECT COALESCE(cl.category, 'Uncategorized') as category,
               COUNT(*) as count,
-              SUM(enabled) as enabled
-       FROM character_lists WHERE guild_id = ? GROUP BY category ORDER BY category COLLATE NOCASE`
+              SUM(${ENABLED}) as enabled
+       FROM character_lists cl WHERE ${VISIBLE} GROUP BY cl.category ORDER BY cl.category COLLATE NOCASE`
     )
-    .all(guildId)
+    .all(scope, scope)
     .map((row) => ({ ...row, enabled: row.enabled ?? 0 }));
 }
 
 // Ordered most-recognisable-first so the lists worth switching on land on page 1. Lists
 // with no fame score (hand-made ones, and anything the backfill couldn't match) sort last
 // rather than being treated as unpopular.
-function listsForFilter(guildId, category) {
-  const where = category === 'Uncategorized' ? 'category IS NULL' : 'category = ?';
-  const params = category === 'Uncategorized' ? [guildId] : [guildId, category];
+function listsForFilter(scope, category) {
+  const [where, params] = categoryClause(category);
   return db
     .prepare(
-      `SELECT cl.*, COUNT(c.id) AS character_count
+      `SELECT cl.*, ${ENABLED} AS enabled, COUNT(c.id) AS character_count
          FROM character_lists cl
          LEFT JOIN characters c ON c.list_id = cl.id
-        WHERE cl.guild_id = ? AND ${where}
+        WHERE ${VISIBLE} AND ${where}
         GROUP BY cl.id
         ORDER BY cl.popularity IS NULL, cl.popularity DESC, cl.name COLLATE NOCASE`
     )
-    .all(...params);
+    .all(scope, scope, ...params);
 }
 
 /**
@@ -497,60 +519,83 @@ function listsForFilter(guildId, category) {
  * Hand-picked extras do get dropped. `/list toggle` puts one back in three keystrokes,
  * which is a smaller cost than a command that lies about what it did.
  */
-function setTopN(guildId, category, n) {
+function setTopN(scope, category, n) {
   const categories =
-    category != null ? [category] : listCategoriesWithEnabledCounts(guildId).map((c) => c.category);
+    category != null ? [category] : listCategoriesWithEnabledCounts(scope).map((c) => c.category);
 
   let enabled = 0;
   let disabled = 0;
   for (const cat of categories) {
-    const ranked = listsForFilter(guildId, cat);
+    const ranked = listsForFilter(scope, cat);
     const keep = ranked.slice(0, n);
     const drop = ranked.slice(n);
-    enabled += setListsEnabled(keep.filter((l) => l.enabled !== 1).map((l) => l.id), true);
-    disabled += setListsEnabled(drop.filter((l) => l.enabled === 1).map((l) => l.id), false);
+    enabled += setListsEnabled(scope, keep.filter((l) => l.enabled !== 1).map((l) => l.id), true);
+    disabled += setListsEnabled(scope, drop.filter((l) => l.enabled === 1).map((l) => l.id), false);
   }
   return { enabled, disabled };
 }
 
-function setListsEnabled(listIds, enabled) {
+// A selection belongs to a scope, so there is no such thing as switching a list on "globally" --
+// the null scope (the compendium itself) has none, and asking it for one is a bug in the caller.
+function requireScope(scope) {
+  if (scope == null) throw new Error('A playable selection belongs to a scope; none was given.');
+}
+
+// Returns how many lists actually changed state. Only lists the scope can see can be switched
+// on: the ids may have come from a client, and a selection row for an invisible list would be a
+// way to deal another server's private list.
+function setListsEnabled(scope, listIds, enabled) {
+  requireScope(scope);
   if (!listIds.length) return 0;
   const placeholders = listIds.map(() => '?').join(',');
+  if (enabled) {
+    return db
+      .prepare(
+        `INSERT OR IGNORE INTO list_selection (scope, list_id)
+         SELECT ?, cl.id FROM character_lists cl WHERE cl.id IN (${placeholders}) AND ${VISIBLE}`
+      )
+      .run(scope, ...listIds, scope).changes;
+  }
   return db
-    .prepare(`UPDATE character_lists SET enabled = ? WHERE id IN (${placeholders})`)
-    .run(enabled ? 1 : 0, ...listIds).changes;
+    .prepare(`DELETE FROM list_selection WHERE scope = ? AND list_id IN (${placeholders})`)
+    .run(scope, ...listIds).changes;
 }
 
 // Clears the whole selection. The only way back to a known state: enableTopN only ever
 // adds, so re-cutting a server that has drifted means starting from nothing.
-function disableAllLists(guildId) {
-  return db.prepare('UPDATE character_lists SET enabled = 0 WHERE guild_id = ?').run(guildId).changes;
+function disableAllLists(scope) {
+  requireScope(scope);
+  return db.prepare('DELETE FROM list_selection WHERE scope = ?').run(scope).changes;
 }
 
 // Flips one list and reports the state it landed on, so the caller can say what happened
 // without a second read.
-function toggleListEnabled(listId) {
-  db.prepare('UPDATE character_lists SET enabled = 1 - enabled WHERE id = ?').run(listId);
-  return db.prepare('SELECT enabled FROM character_lists WHERE id = ?').get(listId)?.enabled === 1;
+function toggleListEnabled(scope, listId) {
+  requireScope(scope);
+  const on = !!db.prepare('SELECT 1 FROM list_selection WHERE scope = ? AND list_id = ?').get(scope, listId);
+  setListsEnabled(scope, [listId], !on);
+  return !!db.prepare('SELECT 1 FROM list_selection WHERE scope = ? AND list_id = ?').get(scope, listId);
 }
 
-function clearPopularity(guildId) {
-  return db.prepare('UPDATE character_lists SET popularity = NULL WHERE guild_id = ?').run(guildId).changes;
+// Popularity is a property of the list, not of who plays it: these touch every list the scope
+// can see, and the content scripts pass null to work on the shared compendium.
+function clearPopularity(scope) {
+  return db.prepare(`UPDATE character_lists AS cl SET popularity = NULL WHERE ${VISIBLE}`).run(scope).changes;
 }
 
-function setPopularityByName(guildId, name, popularity) {
+function setPopularityByName(scope, name, popularity) {
   return (
     db
-      .prepare('UPDATE character_lists SET popularity = ? WHERE guild_id = ? AND name = ? COLLATE NOCASE')
-      .run(popularity, guildId, name).changes > 0
+      .prepare(`UPDATE character_lists AS cl SET popularity = ? WHERE ${VISIBLE} AND cl.name = ? COLLATE NOCASE`)
+      .run(popularity, scope, name).changes > 0
   );
 }
 
 // Picks one random category (uniformly among distinct categories, not weighted by list
 // count) for "category roulette". Only categories with something enabled can be rolled --
 // otherwise roulette lands on an empty pool and the lobby dies at Start.
-function getRandomCategory(guildId) {
-  const categories = listCategoriesWithEnabledCounts(guildId)
+function getRandomCategory(scope) {
+  const categories = listCategoriesWithEnabledCounts(scope)
     .filter((c) => c.enabled > 0)
     .map((c) => c.category);
   if (!categories.length) return null;
@@ -581,7 +626,7 @@ function freeformCharacter(name) {
 }
 
 // ---------------------------------------------------------------------------
-// Looking a character up across the whole server, for /character
+// Looking a character up across everything a scope can see, for /character and the host's picker
 // ---------------------------------------------------------------------------
 //
 // Deliberately NOT scoped to a lobby's lists, unlike the two functions below it: this is
@@ -592,13 +637,13 @@ function freeformCharacter(name) {
 // another in Ben 10 -- so results are NOT deduplicated by name the way the lobby search is.
 // The autocomplete label carries the list, and the value carries the row id, so picking a
 // suggestion resolves to exactly one character rather than to whichever shared the name.
-function searchCharactersInGuild(guildId, query, limit = 25) {
+function searchCharactersInScope(scope, query, limit = 25) {
   return db
     .prepare(
-      `SELECT ch.id, ch.name, ch.image_url, ch.fame, cl.name AS listName, cl.category, cl.enabled
+      `SELECT ch.id, ch.name, ch.image_url, ch.fame, cl.name AS listName, cl.category, ${ENABLED} AS enabled
          FROM characters ch
          JOIN character_lists cl ON cl.id = ch.list_id
-        WHERE cl.guild_id = ? AND ch.name LIKE ? ESCAPE '\\'
+        WHERE ${VISIBLE} AND ch.name LIKE ? ESCAPE '\\'
         ORDER BY
           -- Ranked by WORD start, not string start. Ranking on string prefix alone answers
           -- "Zoro" with Zorome and Zoroark while burying Roronoa Zoro, and "Einstein" with
@@ -616,7 +661,8 @@ function searchCharactersInGuild(guildId, query, limit = 25) {
         LIMIT ?`
     )
     .all(
-      guildId,
+      scope,
+      scope,
       `%${escapeLike(query)}%`,
       query,
       `${escapeLike(query)}%`,
@@ -625,19 +671,19 @@ function searchCharactersInGuild(guildId, query, limit = 25) {
     );
 }
 
-// Guild-scoped on purpose: the id comes back from an autocomplete value, which is client
-// -supplied and so cannot be trusted to belong to this server.
-function getCharacterById(guildId, id) {
+// Scoped on purpose: the id comes back from an autocomplete value or a web request, which is
+// client-supplied and so cannot be trusted to be one this scope can see.
+function getCharacterById(scope, id) {
   return (
     db
       .prepare(
         `SELECT ch.id, ch.name, ch.image_url, ch.fame, ch.list_id,
-                cl.name AS listName, cl.category, cl.enabled
+                cl.name AS listName, cl.category, ${ENABLED} AS enabled
            FROM characters ch
            JOIN character_lists cl ON cl.id = ch.list_id
-          WHERE cl.guild_id = ? AND ch.id = ?`
+          WHERE ${VISIBLE} AND ch.id = ?`
       )
-      .get(guildId, id) ?? null
+      .get(scope, scope, id) ?? null
   );
 }
 
@@ -681,7 +727,8 @@ module.exports = {
   setCharacterFame,
   REROLL_DEMOTE_THRESHOLD,
   searchListNames,
-  guildsRankedByContent,
+  isVisibleTo,
+  WEB_SCOPE,
   listCategoriesWithCounts,
   listNamesInCategory,
   getListsByCategory,
@@ -699,6 +746,6 @@ module.exports = {
   getCharacterByNameInLists,
   freeformCharacter,
   searchCharactersInLists,
-  searchCharactersInGuild,
+  searchCharactersInScope,
   getCharacterById,
 };

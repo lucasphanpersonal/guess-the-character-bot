@@ -5,7 +5,7 @@ const {
   searchListNames, 
   searchCharactersInLists, 
   setCharacterImage 
-} = require('../../../core/db/characterLists');
+} = require('../../../compendium/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {

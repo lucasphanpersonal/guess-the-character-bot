@@ -5,7 +5,7 @@ const remove = require('../src/discord/commands/actions/list-remove');
 const image = require('../src/discord/commands/actions/list-image');
 const toggle = require('../src/discord/commands/actions/list-toggle');
 const select = require('../src/discord/commands/actions/list-select');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -24,7 +24,7 @@ function interaction(recorder, guildId, options) {
 module.exports = {
   async 'non-managers cannot mutate shared lists through slash commands'() {
     const guildId = `permissions-guild-${++counter}`;
-    db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+    db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
     const listId = lists.createList(guildId, 'Existing', 'owner', 'Anime');
     lists.addCharacter(listId, 'Original', 'owner');
     lists.createList(guildId, 'Second', 'owner', 'Anime');
@@ -53,7 +53,7 @@ module.exports = {
   // never blocks a genuinely new one.
   async "/list create's category argument autocompletes from this guild's existing categories"() {
     const guildId = `permissions-guild-${++counter}`;
-    db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+    db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
     lists.createList(guildId, 'Naruto', 'owner', 'Anime');
     lists.createList(guildId, 'One Piece', 'owner', 'Anime');
     lists.createList(guildId, 'Pokemon', 'owner', 'Video Games');

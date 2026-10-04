@@ -1,7 +1,7 @@
 // Fills in missing LIVE-ACTION character artwork from TMDB.
 //
-//   node scripts/fetch-tmdb-images.js <guildId> --category="Television Shows" --dry-run
-//   node scripts/fetch-tmdb-images.js <guildId> --category=Movies --lists=5 --verbose
+//   node scripts/fetch-tmdb-images.js --category="Television Shows" --dry-run
+//   node scripts/fetch-tmdb-images.js --category=Movies --lists=5 --verbose
 //
 // Why this exists alongside fetch-fandom-images.js: the Fandom pass reached only 36% of
 // Television Shows and 39% of Movies, and the reason was not bad matching -- where a wiki was
@@ -9,7 +9,7 @@
 // lists had no findable wiki at all, so ~3,400 characters were never even asked about. TMDB's
 // coverage of film and television is close to total, which is exactly the gap.
 //
-// It is deliberately restricted to live action, for the reason src/core/util/characterImages.js
+// It is deliberately restricted to live action, for the reason src/compendium/characterImages.js
 // gives: TMDB's per-character image is the ACTOR's photo, and for live action a photograph of
 // the actor genuinely is the character's canonical look. For animation no photograph can be
 // right -- a voice actor's headshot is the "Woody as a theme-park mascot" failure in a new
@@ -32,17 +32,18 @@
 
 require('dotenv').config();
 
-const db = require('../src/core/db/connection');
-const { setCharacterImage } = require('../src/core/db/characterLists');
-const { imageIsTrustworthy, DRAWN_MEDIA } = require('../src/core/util/characterImages');
+const db = require('../src/compendium/db');
+const { setCharacterImage } = require('../src/compendium/characterLists');
+const { imageIsTrustworthy, DRAWN_MEDIA } = require('../src/compendium/characterImages');
 
 const API = 'https://api.themoviedb.org/3';
 const IMG = 'https://image.tmdb.org/t/p/w500';
 const ANIMATION_GENRE_ID = 16;
 const PAUSE_MS = 120; // TMDB is generous, but there is no reason to hammer it
 
-const args = process.argv.slice(2);
-const guildId = args.find((a) => !a.startsWith('--'));
+// Every list in the category, shared or private, is in reach; lists some scope actually plays
+// with go first, since that is where a missing picture is seen.
+const args = require('./lib/compendiumArgs').scriptArgs();
 const flag = (name, fallback) => {
   const hit = args.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : fallback;
@@ -53,10 +54,6 @@ const listLimit = Number(flag('lists', 0)) || Infinity;
 const verbose = args.includes('--verbose');
 const apiKey = process.env.TMDB_API_KEY;
 
-if (require.main === module && !guildId) {
-  console.error('Usage: node scripts/fetch-tmdb-images.js <guildId> [--category="Television Shows"] [--dry-run] [--lists=N] [--verbose]');
-  process.exit(1);
-}
 if (require.main === module && !apiKey) {
   console.error(
     'TMDB_API_KEY is not set.\n\n' +
@@ -71,7 +68,7 @@ if (require.main === module && DRAWN_MEDIA.has(category)) {
     `Refusing to run on "${category}".\n\n` +
       'TMDB supplies the ACTOR\'s photograph, which is only the character\'s canonical look for\n' +
       'live action. For drawn media that would store a voice actor\'s headshot -- exactly the\n' +
-      'failure src/core/util/characterImages.js exists to prevent. Use fetch-fandom-images.js\n' +
+      'failure src/compendium/characterImages.js exists to prevent. Use fetch-fandom-images.js\n' +
       'for Cartoon and Video Games.'
   );
   process.exit(1);
@@ -194,15 +191,16 @@ async function castFor(id) {
 async function main() {
   const lists = db
     .prepare(
-      `SELECT cl.id, cl.name, cl.category, cl.enabled,
+      `SELECT cl.id, cl.name, cl.category,
+              EXISTS (SELECT 1 FROM list_selection s WHERE s.list_id = cl.id) AS enabled,
               COUNT(ch.id) AS missing
          FROM character_lists cl
          JOIN characters ch ON ch.list_id = cl.id
-        WHERE cl.guild_id = ? AND COALESCE(cl.category, 'Uncategorised') = ? AND ch.image_url IS NULL
+        WHERE COALESCE(cl.category, 'Uncategorised') = ? AND ch.image_url IS NULL
         GROUP BY cl.id
-        ORDER BY cl.enabled DESC, cl.popularity IS NULL, cl.popularity DESC`
+        ORDER BY enabled DESC, cl.popularity IS NULL, cl.popularity DESC`
     )
-    .all(guildId, category)
+    .all(category)
     .slice(0, listLimit);
 
   console.log(
@@ -292,7 +290,7 @@ async function main() {
       }
     }
     const titleName = title.name || title.title;
-    console.log(`  ${found ? 'v' : '.'} ${list.name} -> ${titleName}  ${found}/${characters.length}${list.enabled ? '  (in pool)' : ''}`);
+    console.log(`  ${found ? 'v' : '.'} ${list.name} -> ${titleName}  ${found}/${characters.length}${list.enabled ? '  (selected somewhere)' : ''}`);
   }
 
   console.log('\n--- sample of what was matched ---');

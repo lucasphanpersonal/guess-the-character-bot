@@ -6,18 +6,36 @@ part that is easy to get wrong twice. Every rule below is here because something
 ## Shape of the repo
 
 ```
-src/core/     Shared, frontend-agnostic: db + content pipeline + pure game state.
-src/discord/  The Discord bot.
-src/web/      The party-mode web app (phones, forehead mode, tilt).
+src/db/          Opens the SQLite file. No tables of its own.
+src/compendium/  The content: lists, characters, scopes, each scope's selection. Own schema.
+src/core/        Frontend-agnostic game state + the games' records.
+src/discord/     The Discord bot.
+src/web/         The party-mode web app (phones, forehead mode, tilt).
 ```
 
 **`core/` never imports from `discord/` or `web/`.** Both frontends depend on the core; the
 core depends on neither. This is the one invariant that keeps two frontends from fusing.
 
-Anything shared between them lives in core and is changed with *both* callers in mind. The
-`enabled` column on a list is the clearest trap: it is the Discord bot's playable pool, so a
-web host unticking a list must never write to it. Per-room exclusion sets exist for exactly
-that reason (`Room.excludedListIds`).
+**Nothing above the compendium queries its tables.** Content goes through
+`src/compendium/characterLists.js`; `compendium/` imports only `db/`, never `core/`. That is
+what keeps the content separable from any one game -- and more games are coming. The content
+scripts in `scripts/` are the compendium's own tools and are the one exception.
+
+**Every content read is through a scope's eyes.** A scope is anything that plays: a Discord
+guild id, or `'web'`. It sees the shared lists (`owner_scope IS NULL`: everything seeded and
+everything from `/list create`) plus its own private ones, and `enabled` on any returned row
+means *that scope's* selection
+(`list_selection`). Pass the scope you are acting for -- never borrow another's. The web app
+once played as the richest Discord guild and so read that server's selection, and the shared
+`enabled` column it replaced meant a web host unticking a list would have changed what the
+server got dealt. Per-room exclusion sets (`Room.excludedListIds`) still exist so one party
+cannot reshape the web's selection for the next. The null scope is the compendium itself:
+shared lists only, no selection -- it is what the content scripts work against.
+
+**The live database is migrated by whichever new process opens it first** (`compendium/db.js`
+on require). A running process on the old code then reads a layout it does not understand.
+Rehearse a schema change on a copy (`BOT_DB_PATH`, taken with better-sqlite3's `.backup()`),
+and restart every live process together when it ships.
 
 ## Verifying a change
 

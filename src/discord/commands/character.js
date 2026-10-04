@@ -15,12 +15,12 @@
 
 const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
 const {
-  searchCharactersInGuild,
+  searchCharactersInScope,
   getCharacterById,
   getCharacterSource,
   countRerollers,
   REROLL_DEMOTE_THRESHOLD,
-} = require('../../core/db/characterLists');
+} = require('../../compendium/characterLists');
 
 // Discord caps an autocomplete label at 100 characters.
 const LABEL_MAX = 100;
@@ -81,7 +81,7 @@ module.exports = {
     // /lobby set-characters frustrating, and this command has nothing at stake in guessing.
     let character = /^\d+$/.test(raw) ? getCharacterById(interaction.guildId, Number(raw)) : null;
     if (!character) {
-      [character] = searchCharactersInGuild(interaction.guildId, raw, 1);
+      [character] = searchCharactersInScope(interaction.guildId, raw, 1);
     }
 
     if (!character) {
@@ -103,7 +103,7 @@ module.exports = {
     // arbitrary 25. Nothing is a better answer than an arbitrary something.
     if (!focused.trim()) return interaction.respond([]);
 
-    const matches = searchCharactersInGuild(interaction.guildId, focused.trim(), 25);
+    const matches = searchCharactersInScope(interaction.guildId, focused.trim(), 25);
     return interaction.respond(
       matches.map((c) => ({
         // The list is part of the label because the name alone is often ambiguous, and

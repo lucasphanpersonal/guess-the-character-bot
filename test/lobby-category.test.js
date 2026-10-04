@@ -6,7 +6,7 @@
 // blow past what Discord will render, so the label has to collapse.
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 const createLobby = require('../src/discord/commands/actions/lobby-create');
 const GameManager = require('../src/core/game/GameManager');
@@ -14,7 +14,7 @@ const GameManager = require('../src/core/game/GameManager');
 let guildCounter = 0;
 function freshGuild() {
   const guildId = `pool-guild-${++guildCounter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   return guildId;
 }
 
@@ -23,7 +23,7 @@ function freshGuild() {
 function seed(guildId, name, category, names, { enabled = true } = {}) {
   const listId = lists.createList(guildId, name, 'tester', category);
   for (const n of names) lists.addCharacter(listId, n, 'tester');
-  if (enabled) lists.setListsEnabled([listId], true);
+  if (enabled) lists.setListsEnabled(guildId, [listId], true);
   return listId;
 }
 

@@ -15,7 +15,7 @@ const { Server } = require('socket.io');
 
 // --- Shared core: the exact same modules the Discord bot uses -----------------------------
 const GameManager = require('../core/game/GameManager');
-const characterLists = require('../core/db/characterLists');
+const characterLists = require('../compendium/characterLists');
 const { TurnRotationMode } = require('../core/game/roundMode');
 
 // --- Web-only: transport + room membership + setup ----------------------------------------
@@ -25,21 +25,12 @@ const gameSetup = require('./gameSetup');
 const imageCache = require('./imageCache');
 
 const PORT = process.env.WEB_PORT || 4180;
-// The core's content queries are scoped by an id (a Discord guild id, historically). A web
-// party has no guild. If WEB_SCOPE isn't set, auto-pick the richest existing scope so a phone
-// test can deal real characters straight away rather than from an empty 'web' scope. Per-room
-// or per-account scoping is a later decision (see "Identity and leaderboard scope" in the plan).
-function resolveScope() {
-  if (process.env.WEB_SCOPE) return process.env.WEB_SCOPE;
-  try {
-    const top = characterLists.guildsRankedByContent()[0];
-    if (top && top.enabledLists > 0) return top.guildId;
-  } catch {
-    /* fall through to the empty default */
-  }
-  return 'web';
-}
-const WEB_SCOPE = resolveScope();
+// The compendium scope the web app plays as: it sees the shared lists, and deals from its OWN
+// playable selection (see src/compendium/characterLists.js). This used to borrow the richest
+// Discord server's id, which meant reading -- and risking writing -- that server's selection.
+// Curate it with `npm run select:lists`. Resolved in the compendium (WEB_SCOPE overrides 'web'),
+// because /list create in Discord switches new lists on for this same scope.
+const { WEB_SCOPE } = characterLists;
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const registry = new RoomRegistry();
@@ -142,9 +133,9 @@ const setup = {
     return { ok: true, label: shownLabel };
   },
 
-  // Curation for this room only. Shows the lists already in the shared playable selection and
-  // lets the host drop some for THIS game; it never writes to the shared `enabled` column, so a
-  // party can't reshape what the Discord server gets dealt.
+  // Curation for this room only. Shows the lists already in the web's playable selection and
+  // lets the host drop some for THIS game; it never writes to the selection, so one party can't
+  // reshape what the next party gets dealt.
   listsInCategory(category, room) {
     return characterLists
       .listsForFilter(WEB_SCOPE, category)
@@ -154,8 +145,8 @@ const setup = {
   // The id arrives from a client, so it is NOT trusted -- it must name a list that really is in
   // this scope's playable selection before the room may act on it.
   toggleList(listId, room) {
-    const [list] = characterLists.getListsByIds([listId]);
-    if (!list || list.guild_id !== WEB_SCOPE || list.enabled !== 1) return { ok: false, error: 'Unknown list.' };
+    const [list] = characterLists.getListsByIds([listId], WEB_SCOPE);
+    if (!characterLists.isVisibleTo(list, WEB_SCOPE) || list.enabled !== 1) return { ok: false, error: 'Unknown list.' };
     if (room.excludedListIds.has(list.id)) room.excludedListIds.delete(list.id);
     else room.excludedListIds.add(list.id);
     return { ok: true, playing: !room.excludedListIds.has(list.id) };
@@ -351,7 +342,7 @@ function requestHandler(req, res) {
       if (what === 'search') {
         const q = String(url.searchParams.get('q') || '').trim().slice(0, 60);
         if (q.length < 2) return cached({ query: q, characters: [] });
-        const rows = characterLists.searchCharactersInGuild(WEB_SCOPE, q, 20);
+        const rows = characterLists.searchCharactersInScope(WEB_SCOPE, q, 20);
         return cached({
           query: q,
           characters: rows.map((c) => ({
@@ -367,8 +358,8 @@ function requestHandler(req, res) {
         const listId = Number(url.searchParams.get('listId'));
         if (!Number.isInteger(listId) || listId <= 0) return sendJson(res, 400, { error: 'listId required' });
         // Scope-checked like every other client-supplied id here.
-        const [list] = characterLists.getListsByIds([listId]);
-        if (!list || list.guild_id !== WEB_SCOPE) return sendJson(res, 404, { error: 'Unknown list.' });
+        const [list] = characterLists.getListsByIds([listId], WEB_SCOPE);
+        if (!characterLists.isVisibleTo(list, WEB_SCOPE)) return sendJson(res, 404, { error: 'Unknown list.' });
         const limit = int('limit', 60, 120);
         const offset = int('offset', 0, 100000);
         const rows = characterLists.getCharactersRanked(listId, limit, offset);
@@ -467,7 +458,7 @@ if (require.main === module) {
   // Bind to 0.0.0.0 explicitly so other devices on the LAN (phones) can connect, not just
   // this machine. Node defaults to this, but stating it makes the intent obvious.
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[web] Guess the Character (sharing core with the Discord bot). Scope: ${WEB_SCOPE}`);
+    console.log(`[web] Guess the Character (sharing core with the Discord bot). Compendium scope: ${WEB_SCOPE}`);
     console.log(`[web] Image cache: ${cachedImages} file(s) on disk; artwork is fetched once and served locally.`);
     console.log(`[web]   HTTP  (no tilt -- the client will say so):`);
     console.log(`[web]     on this machine:  http://localhost:${PORT}`);

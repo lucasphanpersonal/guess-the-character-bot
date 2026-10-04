@@ -20,6 +20,13 @@
 // for Wikidata), so this reuses their own merge functions rather than re-deriving the
 // naming -- otherwise "Naruto Shippuden" would fail to match the "Naruto" list it was
 // folded into.
+//
+//   node scripts/backfill-popularity.js [scope] [--top=N] [--reset] [--no-enable]
+//
+// Ranking is done on the shared compendium. The optional scope -- a Discord guild id, or 'web'
+// -- is whose playable selection then gets re-cut to each category's top N; with none, it only
+// ranks. (Unlike the other content scripts, a leading guild id still means something here:
+// whose selection to cut, which is what it always meant.)
 
 const fs = require('fs');
 const path = require('path');
@@ -35,7 +42,7 @@ const {
   disableAllLists,
   listCategoriesWithEnabledCounts,
   setCharacterFame,
-} = require('../src/core/db/characterLists');
+} = require('../src/compendium/characterLists');
 
 // Ranking without acting on it leaves a server staring at 2,000 disabled lists, so the
 // script finishes the job: the best-known DEFAULT_TOP of each category go into the pool.
@@ -137,7 +144,7 @@ function characterScores() {
   return scores;
 }
 
-function backfillCharacterFame(guildId, lists) {
+function backfillCharacterFame(lists) {
   const scores = characterScores();
   let ranked = 0;
   let unranked = 0;
@@ -156,16 +163,10 @@ function backfillCharacterFame(guildId, lists) {
 
 function main() {
   const args = process.argv.slice(2);
-  const guildId = args.find((a) => !a.startsWith('--'));
-  if (!guildId) {
-    console.error('Usage: node scripts/backfill-popularity.js <guildId> [--top=N] [--reset] [--no-enable]');
-    console.error("Ranks the guild's lists by fame, then enables the top N of each category.");
-    console.error('  --reset  clear the selection first, so the result is EXACTLY the top N');
-    process.exit(1);
-  }
+  const scope = args.find((a) => !a.startsWith('--')) ?? null;
   const topArg = args.find((a) => a.startsWith('--top='));
   const top = topArg ? Number(topArg.slice('--top='.length)) : DEFAULT_TOP;
-  const enable = !args.includes('--no-enable') && Number.isFinite(top) && top > 0;
+  const enable = scope != null && !args.includes('--no-enable') && Number.isFinite(top) && top > 0;
   const reset = args.includes('--reset');
 
   const scores = new Map([...scoresFromWikidata(), ...scoresFromAniList(), ...scoresFromPeople()]);
@@ -173,20 +174,20 @@ function main() {
 
   // Clear first, so a re-run after the seed data changes drops scores that no longer match
   // instead of leaving a stale one in place.
-  clearPopularity(guildId);
+  clearPopularity(null);
 
   let matched = 0;
   const unmatched = [];
-  for (const list of listLists(guildId)) {
+  for (const list of listLists(null)) {
     const score = scores.get(key(list.category, list.name));
     if (score == null) {
       unmatched.push(list.name);
       continue;
     }
-    if (setPopularityByName(guildId, list.name, score)) matched++;
+    if (setPopularityByName(null, list.name, score)) matched++;
   }
 
-  console.log(`Ranked ${matched} lists in guild ${guildId}.`);
+  console.log(`Ranked ${matched} shared lists.`);
   if (unmatched.length) {
     // Unranked lists still work -- they just sort last on the /list select page.
     console.log(`${unmatched.length} lists had no score and will sort last, e.g. ${unmatched.slice(0, 5).join(', ')}`);
@@ -194,22 +195,26 @@ function main() {
 
   // Character fame is what difficulty cuts on, so it has to be filled in for Easy/Normal
   // to mean anything.
-  const { ranked: chars, unranked } = backfillCharacterFame(guildId, listLists(guildId));
+  const { ranked: chars, unranked } = backfillCharacterFame(listLists(null));
   console.log(`Ranked ${chars} characters (${unranked} had no score and are never cut by difficulty).`);
 
   if (!enable) {
-    console.log('Ranking only (--no-enable); the playable selection was left alone.');
+    console.log(
+      scope == null
+        ? 'Ranking only (no scope given); no playable selection was touched.'
+        : 'Ranking only (--no-enable); the playable selection was left alone.'
+    );
     return;
   }
 
   if (reset) {
-    const cleared = disableAllLists(guildId);
-    console.log(`\nCleared the selection (${cleared} lists reset to off).`);
+    const cleared = disableAllLists(scope);
+    console.log(`\nCleared ${scope}'s selection (${cleared} lists reset to off).`);
   }
 
-  const { enabled, disabled } = setTopN(guildId, null, top);
-  console.log(`Every category is now exactly its top ${top} -- ${enabled} on, ${disabled} off.`);
-  for (const c of listCategoriesWithEnabledCounts(guildId)) {
+  const { enabled, disabled } = setTopN(scope, null, top);
+  console.log(`Every category is now exactly its top ${top} for ${scope} -- ${enabled} on, ${disabled} off.`);
+  for (const c of listCategoriesWithEnabledCounts(scope)) {
     console.log(`  ${c.category}: ${c.enabled} of ${c.count}`);
   }
   console.log('\nAdjust with /list select (checkboxes) or /list toggle <list> (one at a time).');

@@ -1,8 +1,11 @@
 // Builds (or tops up) a character list from a franchise's own MediaWiki, with artwork.
 //
-//   node scripts/seed-wiki-characters.js <guildId> --wiki=slaythespire.wiki.gg \
+//   node scripts/seed-wiki-characters.js --wiki=slaythespire.wiki.gg \
 //     --list="Slay the Spire" --category="Video Games" \
 //     --categories="Character,Bosses,Elites,Monsters,NPC" --dry-run
+//
+// The list lands in the shared compendium, switched off everywhere: switch it on per scope with
+// `/list toggle` in a Discord server, or `npm run select:lists -- --scope=web --add="<name>"`.
 //
 // The other fetchers fill artwork for characters that are ALREADY in the database. This one
 // creates the characters too, for a game the bulk seeders never covered -- Wikidata only lists
@@ -27,15 +30,14 @@
 
 require('dotenv').config();
 
-const db = require('../src/core/db/connection');
-const { createList, getListByName, addCharacter, setCharacterImage, setCharacterFame, getCharacters } = require('../src/core/db/characterLists');
-const { imageIsTrustworthy } = require('../src/core/util/characterImages');
+const db = require('../src/compendium/db');
+const { createList, getListByName, addCharacter, setCharacterImage, setCharacterFame, getCharacters } = require('../src/compendium/characterLists');
+const { imageIsTrustworthy } = require('../src/compendium/characterImages');
 
 const UA = 'guess-the-character-bot/1.0 (character list build; contact via repo)';
 const PAUSE_MS = 150;
 
-const args = process.argv.slice(2);
-const guildId = args.find((a) => !a.startsWith('--'));
+const args = require('./lib/compendiumArgs').scriptArgs();
 const flag = (name, fallback) => {
   const hit = args.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : fallback;
@@ -50,9 +52,9 @@ const imageWiki = flag('image-wiki');
 const dryRun = args.includes('--dry-run');
 const verbose = args.includes('--verbose');
 
-if (!guildId || !wiki || !listName) {
+if (!wiki || !listName) {
   console.error(
-    'Usage: node scripts/seed-wiki-characters.js <guildId> --wiki=<host> --list="<list name>"\n' +
+    'Usage: node scripts/seed-wiki-characters.js --wiki=<host> --list="<list name>"\n' +
       '       [--category="Video Games"] [--categories="A,B,C"] [--image-wiki=<host>] [--dry-run] [--verbose]'
   );
   process.exit(1);
@@ -185,14 +187,17 @@ async function main() {
 
   // The list is created only if it does not exist; an existing one is topped up in place, so a
   // hand-curated list keeps whatever was added by hand.
-  let list = getListByName(guildId, listName);
+  let list = getListByName(null, listName);
   if (!list) {
     if (dryRun) {
-      console.log(`(dry run) would create list "${listName}" in ${category}`);
+      console.log(`(dry run) would create shared list "${listName}" in ${category}`);
     } else {
-      const id = createList(guildId, listName, 'wiki-seed', category, { enabled: true });
-      list = getListByName(guildId, listName);
-      console.log(`created list "${listName}" (#${id}) in ${category}, enabled`);
+      const id = createList(null, listName, 'wiki-seed', category);
+      list = getListByName(null, listName);
+      console.log(
+        `created shared list "${listName}" (#${id}) in ${category}. It is off everywhere until a ` +
+          'scope switches it on: /list toggle in Discord, or npm run select:lists for the web.'
+      );
     }
   } else {
     console.log(`topping up existing list "${list.name}" (#${list.id}, ${list.category})`);

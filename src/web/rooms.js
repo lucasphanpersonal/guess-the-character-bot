@@ -39,11 +39,12 @@ class Room {
     this.status = 'lobby'; // 'lobby' -> (later) 'setup' | 'playing' | 'finished'
     this.createdAt = Date.now();
     // Lists this room has chosen not to play with. Per-room ON PURPOSE: the obvious
-    // implementation was to flip each list's shared `enabled` column, but that column is the
-    // Discord bot's playable pool too, so one party host unticking "Naruto" would silently and
-    // permanently change what a whole Discord server gets dealt -- and the web app is reachable
-    // by anyone with the room link. An exclusion set keeps the choice where it belongs: this
-    // room, this session.
+    // implementation was to switch lists off in the web's playable selection, but every room
+    // deals from that selection, so one party host unticking "Naruto" would silently and
+    // permanently change what every later party gets -- and the web app is reachable by anyone
+    // with the room link. (It was worse still when the selection was an `enabled` column the
+    // Discord bot shared.) An exclusion set keeps the choice where it belongs: this room, this
+    // session.
     this.excludedListIds = new Set();
     // playerId -> { playerId, nickname, connected, joinedAt }
     this.players = new Map();

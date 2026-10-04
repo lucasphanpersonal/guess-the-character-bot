@@ -10,7 +10,7 @@
 // two other places format lobby.listNames directly and so bypassed that fix entirely.
 
 const { assert } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 const { rematchAnnouncement } = require('../src/discord/game/rematch');
 
@@ -19,7 +19,7 @@ const DISCORD_CONTENT_LIMIT = 2000;
 let guildCounter = 0;
 function freshGuild() {
   const guildId = `limits-guild-${++guildCounter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   return guildId;
 }
 

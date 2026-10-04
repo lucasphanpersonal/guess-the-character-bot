@@ -27,7 +27,7 @@ if (OWN_DB) {
 }
 
 // Seed a tiny content scope BEFORE requiring the server (which resolves WEB_SCOPE at load).
-const characterLists = require('../src/core/db/characterLists');
+const characterLists = require('../src/compendium/characterLists');
 // The whole cast this check deals from. Assertions about "did we get a real character?" read
 // this same constant -- keeping a second hand-written copy of the names is how a fixture that
 // grew a seventh character turned into a check that failed one run in seven.

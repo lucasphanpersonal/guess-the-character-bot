@@ -118,7 +118,7 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const state = { guild: '', category: '', q: '', sort: 'fame', enabled: '', image: '', list: '', listName: '', page: 0, mode: 'characters' };
+const state = { scope: '', category: '', q: '', sort: 'fame', enabled: '', image: '', list: '', listName: '', page: 0, mode: 'characters' };
 let total = 0;
 
 const fmt = (n) => n.toLocaleString();
@@ -200,7 +200,7 @@ async function load({ append = false } = {}) {
 
   try {
     if (state.mode === 'lists') {
-      const rows = await api('/api/lists', { guild: state.guild, category: state.category, q: state.q, enabled: state.enabled });
+      const rows = await api('/api/lists', { scope: state.scope, category: state.category, q: state.q, enabled: state.enabled });
       results.className = 'lists';
       results.replaceChildren(...rows.map(listRow));
       $('status').hidden = rows.length > 0;
@@ -211,7 +211,7 @@ async function load({ append = false } = {}) {
     }
 
     const data = await api('/api/characters', {
-      guild: state.guild, category: state.category, q: state.q, sort: state.sort,
+      scope: state.scope, category: state.category, q: state.q, sort: state.sort,
       enabled: state.enabled, image: state.image, list: state.list, page: state.page,
     });
     total = data.total;
@@ -258,7 +258,7 @@ function toggleChip(id, apply) {
 
 (async function init() {
   const m = await api('/api/meta', {});
-  state.guild = m.guildId;
+  state.scope = m.scope;
   for (const c of m.categories) {
     const opt = document.createElement('option');
     opt.value = c.category;

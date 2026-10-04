@@ -7,13 +7,13 @@
 
 const { assert } = require('./harness');
 const { RoomRegistry } = require('../src/web/rooms');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let n = 0;
 function seed() {
   const guildId = `excl-${++n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   const a = lists.createList(guildId, 'Alpha', 'tester', 'Video Games', { enabled: true });
   const b = lists.createList(guildId, 'Beta', 'tester', 'Video Games', { enabled: true });
   for (let i = 0; i < 5; i++) {
@@ -39,11 +39,11 @@ function excludingAListDoesNotTouchTheSharedEnabledFlag() {
 
   r.excludedListIds.add(a);
 
-  // The shared selection -- what the Discord bot plays from -- is untouched.
+  // The scope's selection -- what every other room deals from -- is untouched.
   const enabledNames = lists.getEnabledLists(guildId).map((l) => l.name).sort();
   assert.deepEqual(enabledNames, ['Alpha', 'Beta'], 'both lists are still in the shared pool');
   const row = lists.getListByName(guildId, 'Alpha');
-  assert.equal(row.enabled, 1, 'Alpha is still enabled globally');
+  assert.equal(row.enabled, 1, "Alpha is still in the scope's selection");
 }
 
 function anExclusionOnlyAffectsItsOwnRoom() {

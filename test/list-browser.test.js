@@ -3,14 +3,14 @@
 // seeded server has lists with hundreds of characters in them.
 
 const { assert } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 const browser = require('../src/discord/components/listBrowser');
 
 let guildCounter = 0;
 function freshGuild() {
   const guildId = `browse-guild-${++guildCounter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   return guildId;
 }
 

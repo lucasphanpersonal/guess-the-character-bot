@@ -1,7 +1,7 @@
 // Fills in missing character artwork from each show's own Fandom wiki.
 //
-//   node scripts/fetch-fandom-images.js <guildId> --category=Cartoon --dry-run
-//   node scripts/fetch-fandom-images.js <guildId> --category=Cartoon --lists=5
+//   node scripts/fetch-fandom-images.js --category=Cartoon --dry-run
+//   node scripts/fetch-fandom-images.js --category=Cartoon --lists=5
 //
 // Cartoon and Video Games arrive almost entirely without art, because Wikidata only carries
 // freely-licensed images and there are none for most drawn characters. A general image
@@ -23,15 +23,16 @@
 // candidate still has to pass the trust rule before it is stored. One image is never given to
 // two characters in the same list.
 
-const db = require('../src/core/db/connection');
-const { setCharacterImage } = require('../src/core/db/characterLists');
-const { imageIsTrustworthy } = require('../src/core/util/characterImages');
+const db = require('../src/compendium/db');
+const { setCharacterImage } = require('../src/compendium/characterLists');
+const { imageIsTrustworthy } = require('../src/compendium/characterImages');
 
 const UA = 'guess-the-character-bot/1.0 (character artwork backfill; https://github.com/lucasphanpersonal/guess-the-character-bot)';
 const PAUSE_MS = 180; // polite serial pacing; Fandom is somebody else's server
 
-const args = process.argv.slice(2);
-const guildId = args.find((a) => !a.startsWith('--'));
+// Every list in the category, shared or private, is in reach; lists some scope actually plays
+// with go first, since that is where a missing picture is seen.
+const args = require('./lib/compendiumArgs').scriptArgs();
 const flag = (name, fallback) => {
   const hit = args.find((a) => a.startsWith(`--${name}=`));
   return hit ? hit.slice(name.length + 3) : fallback;
@@ -41,10 +42,6 @@ const category = flag('category', 'Cartoon');
 const listLimit = Number(flag('lists', 0)) || Infinity;
 const verbose = args.includes('--verbose');
 
-if (!guildId) {
-  console.error('Usage: node scripts/fetch-fandom-images.js <guildId> [--category=Cartoon] [--dry-run] [--lists=N] [--verbose] [--undo] [--prune]');
-  process.exit(1);
-}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -551,10 +548,10 @@ function undo() {
     .prepare(
       `SELECT ch.id FROM characters ch
          JOIN character_lists cl ON cl.id = ch.list_id
-        WHERE cl.guild_id = ? AND COALESCE(cl.category, 'Uncategorised') = ?
+        WHERE COALESCE(cl.category, 'Uncategorised') = ?
           AND (ch.image_url LIKE '%wikia.nocookie.net%' OR ch.image_url LIKE '%fandom.com%')`
     )
-    .all(guildId, category);
+    .all(category);
 
   console.log(`${category}: ${rows.length} Fandom image(s) to clear${dryRun ? '  [DRY RUN]' : ''}`);
   if (dryRun || !rows.length) return;
@@ -576,10 +573,10 @@ function prune() {
     .prepare(
       `SELECT ch.id, ch.name, ch.image_url AS url, cl.name AS list
          FROM characters ch JOIN character_lists cl ON cl.id = ch.list_id
-        WHERE cl.guild_id = ? AND COALESCE(cl.category, 'Uncategorised') = ?
+        WHERE COALESCE(cl.category, 'Uncategorised') = ?
           AND (ch.image_url LIKE '%wikia.nocookie.net%' OR ch.image_url LIKE '%fandom.com%')`
     )
-    .all(guildId, category)
+    .all(category)
     .filter((r) => looksLikeJunk(r.url));
 
   console.log(`${category}: ${rows.length} stored image(s) fail the junk filter${dryRun ? '  [DRY RUN]' : ''}`);
@@ -599,15 +596,16 @@ async function main() {
 
   const lists = db
     .prepare(
-      `SELECT cl.id, cl.name, cl.category, cl.enabled,
+      `SELECT cl.id, cl.name, cl.category,
+              EXISTS (SELECT 1 FROM list_selection s WHERE s.list_id = cl.id) AS enabled,
               COUNT(ch.id) AS missing
          FROM character_lists cl
          JOIN characters ch ON ch.list_id = cl.id
-        WHERE cl.guild_id = ? AND COALESCE(cl.category, 'Uncategorised') = ? AND ch.image_url IS NULL
+        WHERE COALESCE(cl.category, 'Uncategorised') = ? AND ch.image_url IS NULL
         GROUP BY cl.id
-        ORDER BY cl.enabled DESC, cl.popularity IS NULL, cl.popularity DESC`
+        ORDER BY enabled DESC, cl.popularity IS NULL, cl.popularity DESC`
     )
-    .all(guildId, category)
+    .all(category)
     .slice(0, listLimit);
 
   const totalMissing = lists.reduce((n, l) => n + l.missing, 0);
@@ -685,7 +683,7 @@ async function main() {
     }
     console.log(
       `  ${found ? '✓' : '·'} ${list.name} → ${wiki ? wiki.domain : `${STUDIO_WIKIS.join(' / ')} (filed under the title)`}` +
-        `  ${found}/${characters.length}${list.enabled ? '  (in pool)' : ''}`
+        `  ${found}/${characters.length}${list.enabled ? '  (selected somewhere)' : ''}`
     );
   }
 

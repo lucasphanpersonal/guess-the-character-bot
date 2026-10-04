@@ -26,7 +26,7 @@ const {
   countDistinctCharacters,
   getCharacterByNameInLists,
   freeformCharacter,
-} = require('../../core/db/characterLists');
+} = require('../../compendium/characterLists');
 
 const ephemeral = (content) => ({ content, flags: MessageFlags.Ephemeral });
 

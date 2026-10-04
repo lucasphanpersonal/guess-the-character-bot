@@ -1,5 +1,5 @@
 const { MessageFlags } = require('discord.js');
-const { countDistinctCharacters, DEFAULT_DIFFICULTY } = require('../../../core/db/characterLists');
+const { countDistinctCharacters, DEFAULT_DIFFICULTY } = require('../../../compendium/characterLists');
 const { resolvePool, poolSuggestions, poolAnnouncement } = require('../../game/lobbyPool');
 const { DEFAULTS, votePoolError } = require('../../../core/game/lobbySettings');
 const Lobby = require('../../../core/game/Lobby');

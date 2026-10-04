@@ -29,7 +29,7 @@ const {
   listCategoriesWithEnabledCounts,
   listsForFilter,
   setListsEnabled,
-} = require('../../core/db/characterLists');
+} = require('../../compendium/characterLists');
 const { requireManageGuild } = require('../util/permissions');
 
 // Discord's hard limits: 25 options per select, 5 action rows per message.
@@ -254,8 +254,8 @@ async function handle(interaction) {
       .map((l) => l.id);
 
     const ticked = new Set(interaction.values.map(Number));
-    setListsEnabled(offered.filter((id) => ticked.has(id)), true);
-    setListsEnabled(offered.filter((id) => !ticked.has(id)), false);
+    setListsEnabled(guildId, offered.filter((id) => ticked.has(id)), true);
+    setListsEnabled(guildId, offered.filter((id) => !ticked.has(id)), false);
 
     return interaction.update(ephemeralPayload(categoryView(guildId, categoryIndex, currentPage)));
   }
@@ -268,7 +268,7 @@ async function handle(interaction) {
 
     const all = listsForFilter(guildId, category.category);
     const target = action === 'clear' ? all : paginate(all, currentPage, LISTS_PER_PAGE).slice;
-    setListsEnabled(target.map((l) => l.id), action === 'all');
+    setListsEnabled(guildId, target.map((l) => l.id), action === 'all');
 
     return interaction.update(ephemeralPayload(categoryView(guildId, categoryIndex, currentPage)));
   }

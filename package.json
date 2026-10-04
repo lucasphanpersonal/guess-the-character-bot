@@ -19,6 +19,7 @@
     "seed:anilist": "node scripts/seed-anilist-characters.js",
     "seed:people": "node scripts/seed-wikidata-people.js",
     "browse": "node scripts/browse-characters.js",
+    "select:lists": "node scripts/select-lists.js",
     "backup": "node scripts/backup-db.js",
     "reset:seeded": "node scripts/reset-seeded-lists.js",
     "backfill:popularity": "node scripts/backfill-popularity.js",

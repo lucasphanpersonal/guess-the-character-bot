@@ -148,13 +148,13 @@ module.exports = {
   },
 
   'trimming is on by default and can be turned off from the command line'() {
-    const defaults = parseArgs(['guild-1']);
+    const defaults = parseArgs([]);
     assert.equal(defaults.fameFloor, FAME_FLOOR, 'the floor applies without being asked for');
     assert.equal(defaults.perShow, PER_SHOW_LIMIT, 'and so does the cap');
 
     // Taken as a percent, so the flag reads the way the trade-off is discussed.
-    assert.equal(parseArgs(['guild-1', '--fame-floor', '1.5']).fameFloor, 0.015);
-    assert.equal(parseArgs(['guild-1', '--fame-floor', '0']).fameFloor, 0, 'keep everything');
-    assert.throws(() => parseArgs(['guild-1', '--fame-floor', '250']), /fame-floor/);
+    assert.equal(parseArgs(['--fame-floor', '1.5']).fameFloor, 0.015);
+    assert.equal(parseArgs(['--fame-floor', '0']).fameFloor, 0, 'keep everything');
+    assert.throws(() => parseArgs(['--fame-floor', '250']), /fame-floor/);
   },
 };

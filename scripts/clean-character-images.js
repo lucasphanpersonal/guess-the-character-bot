@@ -1,32 +1,30 @@
-// Applies the image trust rule (src/util/characterImages.js) to a database that was seeded
+// Applies the image trust rule (src/compendium/characterImages.js) to a database that was seeded
 // before it existed, so nobody has to re-import 43,000 characters to stop seeing Kiefer
 // Sutherland captioned as a cartoon character.
 //
 // Clearing image_url only -- the character stays, and a later seed run will not put the
 // image back, because the seeder now applies the same rule.
 //
-//   node scripts/clean-character-images.js <guildId> [--dry-run]
+//   node scripts/clean-character-images.js [--dry-run]
+//
+// Every list in the database, shared or private: the rule is about the medium, not about who
+// plays the list.
 
-const db = require('../src/core/db/connection');
-const { imageIsTrustworthy } = require('../src/core/util/characterImages');
+const db = require('../src/compendium/db');
+const { imageIsTrustworthy } = require('../src/compendium/characterImages');
+const { scriptArgs } = require('./lib/compendiumArgs');
 
 function main() {
-  const args = process.argv.slice(2);
-  const guildId = args.find((a) => !a.startsWith('--'));
-  const dryRun = args.includes('--dry-run');
-  if (!guildId) {
-    console.error('Usage: node scripts/clean-character-images.js <guildId> [--dry-run]');
-    process.exit(1);
-  }
+  const dryRun = scriptArgs().includes('--dry-run');
 
   const rows = db
     .prepare(
       `SELECT ch.id, ch.name, ch.image_url, l.category
          FROM characters ch
          JOIN character_lists l ON l.id = ch.list_id
-        WHERE l.guild_id = ? AND ch.image_url IS NOT NULL`
+        WHERE ch.image_url IS NOT NULL`
     )
-    .all(guildId);
+    .all();
 
   const doomed = rows.filter((r) => !imageIsTrustworthy(r.category, r.image_url));
   const byCategory = {};

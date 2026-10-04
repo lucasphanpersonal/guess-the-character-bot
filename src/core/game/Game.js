@@ -1,4 +1,4 @@
-const { getCharacterSource } = require('../db/characterLists');
+const { getCharacterSource } = require('../../compendium/characterLists');
 
 class Game {
   /**

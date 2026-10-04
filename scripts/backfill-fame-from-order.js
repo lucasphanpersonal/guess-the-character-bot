@@ -20,7 +20,7 @@
 // alphabetically, which would produce a confidently wrong ranking. Both are skipped, and a list
 // is only backfilled when EVERY row in it qualifies.
 
-const db = require('../src/core/db/connection');
+const db = require('../src/compendium/db');
 
 const args = process.argv.slice(2);
 const dryRun = args.includes('--dry-run');
@@ -31,13 +31,14 @@ function main() {
   // Lists with no fame at all, where every row came from a ranked-order seeder.
   const lists = db
     .prepare(
-      `SELECT cl.id, cl.name, cl.category, cl.enabled, COUNT(c.id) AS n
+      `SELECT cl.id, cl.name, cl.category, COUNT(c.id) AS n,
+              EXISTS (SELECT 1 FROM list_selection s WHERE s.list_id = cl.id) AS enabled
          FROM character_lists cl
          JOIN characters c ON c.list_id = cl.id
         GROUP BY cl.id
        HAVING COUNT(c.fame) = 0
           AND COUNT(*) = SUM(CASE WHEN c.added_by = ? THEN 1 ELSE 0 END)
-        ORDER BY cl.enabled DESC, n DESC`
+        ORDER BY enabled DESC, n DESC`
     )
     .all(SEEDER);
 

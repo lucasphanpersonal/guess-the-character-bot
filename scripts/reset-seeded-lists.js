@@ -1,5 +1,5 @@
-// Removes every list this repo's seed scripts created for a guild, so the character bank
-// can be rebuilt from a chosen set of sources.
+// Removes every list this repo's seed scripts created in the shared compendium, so the character
+// bank can be rebuilt from a chosen set of sources.
 //
 // WHY THIS EXISTS
 // The Character Codex was the original bulk source and turned out to be a poor fit: it
@@ -12,28 +12,30 @@
 //
 // So the honest way to drop one source is to clear everything the seeders own and re-run
 // the ones being kept. Lists created by a person -- anything whose created_by is not
-// 'seed-script' -- are left completely alone.
+// 'seed-script' -- are left completely alone, and so is every scope's private list.
 //
-// Deleting a list cascades to its characters (schema.sql, ON DELETE CASCADE).
+// Deleting a list cascades to its characters and to every scope's selection of it
+// (src/compendium/schema.sql, ON DELETE CASCADE) -- so this also empties /list select.
 //
 // Usage:
-//   node scripts/reset-seeded-lists.js <guildId>            # dry run, shows what would go
-//   node scripts/reset-seeded-lists.js <guildId> --yes      # actually delete
+//   node scripts/reset-seeded-lists.js            # dry run, shows what would go
+//   node scripts/reset-seeded-lists.js --yes      # actually delete
 
-const db = require('../src/core/db/connection');
+const db = require('../src/compendium/db');
+const { scriptArgs } = require('./lib/compendiumArgs');
 
 const SEED_AUTHOR = 'seed-script';
 
-function summarise(guildId) {
+function summarise() {
   const lists = db
     .prepare(
       `SELECT cl.id, cl.name, cl.category, cl.created_by, COUNT(ch.id) AS characters
          FROM character_lists cl
          LEFT JOIN characters ch ON ch.list_id = cl.id
-        WHERE cl.guild_id = ?
+        WHERE cl.owner_scope IS NULL
         GROUP BY cl.id`
     )
-    .all(guildId);
+    .all();
 
   const seeded = lists.filter((l) => l.created_by === SEED_AUTHOR);
   const kept = lists.filter((l) => l.created_by !== SEED_AUTHOR);
@@ -44,22 +46,17 @@ function summarise(guildId) {
     .prepare(
       `SELECT COUNT(*) AS n FROM characters ch
          JOIN character_lists cl ON cl.id = ch.list_id
-        WHERE cl.guild_id = ? AND cl.created_by = ? AND ch.added_by <> ?`
+        WHERE cl.owner_scope IS NULL AND cl.created_by = ? AND ch.added_by <> ?`
     )
-    .get(guildId, SEED_AUTHOR, SEED_AUTHOR).n;
+    .get(SEED_AUTHOR, SEED_AUTHOR).n;
 
   return { lists, seeded, kept, handAdded };
 }
 
 function main() {
-  const guildId = process.argv[2];
-  const confirmed = process.argv.includes('--yes');
-  if (!guildId) {
-    console.error('Usage: node scripts/reset-seeded-lists.js <guildId> [--yes]');
-    process.exit(1);
-  }
+  const confirmed = scriptArgs().includes('--yes');
 
-  const { seeded, kept, handAdded } = summarise(guildId);
+  const { seeded, kept, handAdded } = summarise();
   const characters = seeded.reduce((sum, l) => sum + l.characters, 0);
 
   const byCategory = new Map();
@@ -68,7 +65,7 @@ function main() {
     byCategory.set(key, (byCategory.get(key) || 0) + 1);
   }
 
-  console.log(`Guild ${guildId}`);
+  console.log('Shared compendium');
   console.log(`  seed-created lists to remove: ${seeded.length} (${characters} character rows)`);
   for (const [category, n] of [...byCategory.entries()].sort((a, b) => b[1] - a[1])) {
     console.log(`      ${String(n).padStart(5)}  ${category}`);
@@ -89,8 +86,8 @@ function main() {
   });
   run();
 
-  const remaining = db.prepare('SELECT COUNT(*) AS n FROM character_lists WHERE guild_id = ?').get(guildId).n;
-  console.log(`\nDeleted ${seeded.length} list(s). ${remaining} list(s) remain for this guild.`);
+  const remaining = db.prepare('SELECT COUNT(*) AS n FROM character_lists WHERE owner_scope IS NULL').get().n;
+  console.log(`\nDeleted ${seeded.length} list(s). ${remaining} shared list(s) remain.`);
 }
 
 module.exports = { summarise, SEED_AUTHOR };

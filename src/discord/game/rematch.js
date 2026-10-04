@@ -1,6 +1,6 @@
 const Lobby = require('../../core/game/Lobby');
 const GameManager = require('../../core/game/GameManager');
-const { getListLabelForIds } = require('../../core/db/characterLists');
+const { getListLabelForIds } = require('../../compendium/characterLists');
 
 // Shared by /rematch and the game-over board's Rematch button.
 //

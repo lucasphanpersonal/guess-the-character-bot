@@ -1,5 +1,5 @@
 const { MessageFlags } = require('discord.js');
-const { listCategoriesWithCounts, searchListNames } = require('../../../core/db/characterLists');
+const { listCategoriesWithCounts, searchListNames } = require('../../../compendium/characterLists');
 const { buildBrowsePayload, payloadForList, payloadForCategory } = require('../../components/listBrowser');
 
 module.exports = {

@@ -8,7 +8,7 @@
 // Any change here should preserve that: `buildVoteBoardPayload` must stay name-free.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } = require('discord.js');
-const { getRandomCharacters } = require('../../core/db/characterLists');
+const { getRandomCharacters } = require('../../compendium/characterLists');
 const { untrackBoard } = require('./boards');
 
 // A slot per player, 1-indexed, so slot N maps to lobby.players[N-1].

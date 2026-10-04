@@ -1,11 +1,12 @@
-// Seeds a "Pokemon" character list for a guild from data/seed/pokemon-species.json
+// Seeds the shared "Pokemon" character list from data/seed/pokemon-species.json
 // (the National Pokedex species list, fetched once from PokeAPI). Safe to re-run --
 // it skips characters that are already in the list.
 //
-// Usage: node scripts/seed-pokemon-list.js <guildId> [listName]
+// Usage: node scripts/seed-pokemon-list.js [listName]
 
 const fs = require('fs');
 const path = require('path');
+const { scriptArgs } = require('./lib/compendiumArgs');
 const {
   createList,
   setListCategory,
@@ -13,7 +14,7 @@ const {
   addCharacter,
   setCharacterImage,
   getCharacters,
-} = require('../src/core/db/characterLists');
+} = require('../src/compendium/characterLists');
 
 // Same category seed:lol files itself under, so `/lobby create category:Video Games` and
 // random category roulette both reach the Pokédex. Left uncategorised it sat alone in
@@ -54,24 +55,15 @@ function formatName(slug) {
 }
 
 function main() {
-  const guildId = process.argv[2];
-  const listName = process.argv[3] || 'Pokemon';
-  if (!guildId) {
-    console.error('Usage: node scripts/seed-pokemon-list.js <guildId> [listName]');
-    console.error(
-      "Find your server's ID: enable Developer Mode (User Settings > Advanced Settings > Developer Mode), " +
-        'then right-click the server icon > Copy Server ID.'
-    );
-    process.exit(1);
-  }
+  const [listName = 'Pokemon'] = scriptArgs();
 
   const species = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'seed', 'pokemon-species.json'), 'utf8'));
 
-  let list = getListByName(guildId, listName);
+  let list = getListByName(null, listName);
   if (!list) {
-    const id = createList(guildId, listName, 'seed-script', CATEGORY);
+    const id = createList(null, listName, 'seed-script', CATEGORY);
     list = { id };
-    console.log(`Created list "${listName}" for guild ${guildId}.`);
+    console.log(`Created shared list "${listName}".`);
   } else {
     console.log(`Found existing list "${listName}" (id ${list.id}) -- adding/updating characters.`);
     // An earlier run of this script left the list uncategorised. Only rows this script

@@ -6,7 +6,7 @@
 const { assert } = require('./harness');
 const { createSetup, dealWithPicks, buildHostSetupView, applyReroll } = require('../src/web/gameSetup');
 const loop = require('../src/web/turnLoop');
-const { normalizeLoose } = require('../src/core/util/text');
+const { normalizeLoose } = require('../src/compendium/text');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 const LIBRARY = { 1: row(1, 'Spider-Man'), 2: row(2, 'Batman'), 3: row(3, 'Mario') };

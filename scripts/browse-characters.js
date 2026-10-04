@@ -7,7 +7,13 @@
 //
 // Read-only, deliberately: it opens the live database in readonly mode so it is safe to run
 // while the bot is up (SQLite's WAL allows concurrent readers), and nothing here can change
-// what the bot deals. Curation still happens through `/list toggle` and `/list select`.
+// what the bot deals. Curation still happens through `/list toggle`, `/list select` and
+// `npm run select:lists`. That is also why this has its own SQL rather than going through
+// src/compendium, which migrates the database when it loads.
+//
+// It looks through one scope's eyes (src/compendium/characterLists.js): the shared lists plus
+// that scope's own, with "in the playable pool" meaning THAT scope's selection. --scope=<id>
+// picks it (a Discord guild id, or 'web'); the default is the web app's.
 //
 // No new dependencies -- node's own http server, and the better-sqlite3 the bot already uses.
 
@@ -25,6 +31,12 @@ const flag = (name, fallback) => {
 const PORT = Number(flag('port', process.env.PORT || 4173));
 const DB_PATH = flag('db', process.env.BOT_DB_PATH || path.join(__dirname, '..', 'data', 'bot.sqlite'));
 const PAGE_SIZE = 60;
+const DEFAULT_SCOPE = flag('scope', process.env.WEB_SCOPE || 'web');
+
+// The same two fragments src/compendium/characterLists.js builds every query from, each binding
+// the scope once.
+const VISIBLE = '(cl.owner_scope IS NULL OR cl.owner_scope = ?)';
+const ENABLED = 'EXISTS (SELECT 1 FROM list_selection s WHERE s.scope = ? AND s.list_id = cl.id)';
 
 if (!fs.existsSync(DB_PATH)) {
   console.error(`No database at ${DB_PATH}. Seed one first, or pass --db=<path>.`);
@@ -34,31 +46,19 @@ if (!fs.existsSync(DB_PATH)) {
 const db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
 const HTML = fs.readFileSync(path.join(__dirname, 'browse-characters.html'), 'utf8');
 
-// The bot is keyed by guild, and a seeded database has one real guild plus whatever the tests
-// left behind, so the busiest one is the right default rather than making people choose.
-function guilds() {
-  return db
-    .prepare(
-      `SELECT guild_id AS id, COUNT(*) AS lists
-       FROM character_lists GROUP BY guild_id ORDER BY lists DESC`
-    )
-    .all();
-}
-
-function meta(guildId) {
+function meta(scope) {
   const categories = db
     .prepare(
       `SELECT COALESCE(cl.category, 'Uncategorised') AS category,
               COUNT(DISTINCT cl.id) AS lists,
-              COUNT(ch.id) AS characters,
-              SUM(CASE WHEN cl.enabled = 1 THEN 1 ELSE 0 END) AS enabledRows
+              COUNT(ch.id) AS characters
        FROM character_lists cl
        LEFT JOIN characters ch ON ch.list_id = cl.id
-       WHERE cl.guild_id = ?
+       WHERE ${VISIBLE}
        GROUP BY COALESCE(cl.category, 'Uncategorised')
        ORDER BY characters DESC`
     )
-    .all(guildId);
+    .all(scope);
 
   const totals = db
     .prepare(
@@ -67,22 +67,22 @@ function meta(guildId) {
               SUM(CASE WHEN ch.image_url IS NOT NULL THEN 1 ELSE 0 END) AS withImage
        FROM character_lists cl
        LEFT JOIN characters ch ON ch.list_id = cl.id
-       WHERE cl.guild_id = ?`
+       WHERE ${VISIBLE}`
     )
-    .get(guildId);
+    .get(scope);
 
   const enabledLists = db
-    .prepare('SELECT COUNT(*) AS n FROM character_lists WHERE guild_id = ? AND enabled = 1')
-    .get(guildId).n;
+    .prepare(`SELECT COUNT(*) AS n FROM character_lists cl WHERE ${VISIBLE} AND ${ENABLED}`)
+    .get(scope, scope).n;
 
-  return { guilds: guilds(), guildId, categories, totals, enabledLists, pageSize: PAGE_SIZE };
+  return { scope, categories, totals, enabledLists, pageSize: PAGE_SIZE };
 }
 
 // Shared WHERE building, so the count and the page can never disagree about what is being
 // looked at -- which is the classic way a "1 of 340" ends up lying.
 function characterFilters(query) {
-  const where = ['cl.guild_id = ?'];
-  const params = [query.guild];
+  const where = [VISIBLE];
+  const params = [query.scope];
 
   if (query.category) {
     where.push("COALESCE(cl.category, 'Uncategorised') = ?");
@@ -98,8 +98,10 @@ function characterFilters(query) {
   }
   if (query.image === 'yes') where.push('ch.image_url IS NOT NULL');
   if (query.image === 'no') where.push('ch.image_url IS NULL');
-  if (query.enabled === 'yes') where.push('cl.enabled = 1');
-  if (query.enabled === 'no') where.push('cl.enabled = 0');
+  if (query.enabled === 'yes' || query.enabled === 'no') {
+    where.push(query.enabled === 'yes' ? ENABLED : `NOT ${ENABLED}`);
+    params.push(query.scope);
+  }
 
   return { clause: where.join(' AND '), params };
 }
@@ -125,7 +127,7 @@ function characters(query) {
   const rows = db
     .prepare(
       `SELECT ch.id, ch.name, ch.image_url AS imageUrl, ch.fame,
-              cl.id AS listId, cl.name AS listName, cl.enabled,
+              cl.id AS listId, cl.name AS listName, ${ENABLED} AS enabled,
               COALESCE(cl.category, 'Uncategorised') AS category,
               (SELECT COUNT(*) FROM character_rerolls r WHERE r.character_id = ch.id) AS rerolls
        FROM characters ch
@@ -134,14 +136,14 @@ function characters(query) {
        ORDER BY ${order}
        LIMIT ? OFFSET ?`
     )
-    .all(...params, PAGE_SIZE, page * PAGE_SIZE);
+    .all(query.scope, ...params, PAGE_SIZE, page * PAGE_SIZE);
 
   return { total, page, pageSize: PAGE_SIZE, rows };
 }
 
 function lists(query) {
-  const where = ['cl.guild_id = ?'];
-  const params = [query.guild];
+  const where = [VISIBLE];
+  const params = [query.scope];
   if (query.category) {
     where.push("COALESCE(cl.category, 'Uncategorised') = ?");
     params.push(query.category);
@@ -150,12 +152,14 @@ function lists(query) {
     where.push('cl.name LIKE ? ESCAPE \'\\\'');
     params.push(`%${String(query.q).replace(/[\\%_]/g, '\\$&')}%`);
   }
-  if (query.enabled === 'yes') where.push('cl.enabled = 1');
-  if (query.enabled === 'no') where.push('cl.enabled = 0');
+  if (query.enabled === 'yes' || query.enabled === 'no') {
+    where.push(query.enabled === 'yes' ? ENABLED : `NOT ${ENABLED}`);
+    params.push(query.scope);
+  }
 
   return db
     .prepare(
-      `SELECT cl.id, cl.name, cl.enabled, cl.popularity,
+      `SELECT cl.id, cl.name, ${ENABLED} AS enabled, cl.popularity,
               COALESCE(cl.category, 'Uncategorised') AS category,
               COUNT(ch.id) AS characters,
               SUM(CASE WHEN ch.image_url IS NOT NULL THEN 1 ELSE 0 END) AS withImage
@@ -166,11 +170,11 @@ function lists(query) {
        ORDER BY cl.popularity IS NULL, cl.popularity DESC, cl.name COLLATE NOCASE
        LIMIT 400`
     )
-    .all(...params);
+    .all(query.scope, ...params);
 }
 
 const ROUTES = {
-  '/api/meta': (q) => meta(q.guild),
+  '/api/meta': (q) => meta(q.scope),
   '/api/characters': characters,
   '/api/lists': lists,
 };
@@ -191,8 +195,8 @@ const server = http.createServer((req, res) => {
   }
 
   try {
-    // Every query is guild-scoped; default to the one with the most lists.
-    query.guild = query.guild || guilds()[0]?.id || '';
+    // Every query looks through one scope's eyes; the page can ask for another with ?scope=.
+    query.scope = query.scope || DEFAULT_SCOPE;
     const body = JSON.stringify(route(query));
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
     return res.end(body);
@@ -204,8 +208,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  const { lists: l, characters: c, withImage } = meta(guilds()[0]?.id ?? '').totals;
-  console.log(`Character browser: http://localhost:${PORT}`);
+  const { lists: l, characters: c, withImage } = meta(DEFAULT_SCOPE).totals;
+  console.log(`Character browser: http://localhost:${PORT}  (as scope "${DEFAULT_SCOPE}")`);
   console.log(`  ${c} characters in ${l} lists, ${withImage} with artwork`);
   console.log(`  reading ${DB_PATH} (read-only -- safe to run while the bot is up)`);
   console.log('  Ctrl+C to stop.');

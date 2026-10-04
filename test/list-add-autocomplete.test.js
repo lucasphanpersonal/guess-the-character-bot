@@ -7,13 +7,13 @@
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
 const add = require('../src/discord/commands/actions/list-add');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
 function seed() {
   const guildId = `list-add-ac-guild-${++counter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   const mario = lists.createList(guildId, 'Mario Bros', 'tester', 'Video Games');
   lists.addCharacter(mario, 'Mario', 'tester');
   lists.addCharacter(mario, 'Luigi', 'tester');

@@ -5,7 +5,7 @@
 // and the pool check below, so the modal can never leave a lobby in a state the slash
 // command would have rejected.
 
-const { countDistinctCharacters } = require('../db/characterLists');
+const { countDistinctCharacters } = require('../../compendium/characterLists');
 
 const DEFAULTS = { turnSeconds: 90, voteOptions: 5, voteSeconds: 90 };
 

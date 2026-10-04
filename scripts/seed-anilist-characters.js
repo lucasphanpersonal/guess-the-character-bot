@@ -46,21 +46,24 @@
 // famous members keeps a playable list instead of vanishing.
 //
 // Usage:
-//   node scripts/seed-anilist-characters.js <guildId>
-//   node scripts/seed-anilist-characters.js <guildId> --include-background
-//   node scripts/seed-anilist-characters.js <guildId> --per-show 50
-//   node scripts/seed-anilist-characters.js <guildId> --fame-floor 1     # percent; 0 = off
-//   node scripts/seed-anilist-characters.js <guildId> --dry-run
+//   node scripts/seed-anilist-characters.js
+//   node scripts/seed-anilist-characters.js --include-background
+//   node scripts/seed-anilist-characters.js --per-show 50
+//   node scripts/seed-anilist-characters.js --fame-floor 1     # percent; 0 = off
+//   node scripts/seed-anilist-characters.js --dry-run
+//
+// Lists land in the shared compendium, which every Discord server and the web app see.
 
 const fs = require('fs');
 const path = require('path');
+const { scriptArgs } = require('./lib/compendiumArgs');
 const {
   createList,
   getListByName,
   addCharacter,
   getCharacters,
   setCharacterImage,
-} = require('../src/core/db/characterLists');
+} = require('../src/compendium/characterLists');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'anilist-characters.json');
 
@@ -164,9 +167,9 @@ function selectCast(characters, { includeBackground, perShow, fameFloor = 0 }) {
   return perShow ? kept.slice(0, perShow) : kept;
 }
 
-function importTitle(guildId, title, cast, { dryRun }) {
+function importTitle(title, cast, { dryRun }) {
   if (dryRun) {
-    const list = getListByName(guildId, title.label);
+    const list = getListByName(null, title.label);
     const existing = list ? new Set(getCharacters(list.id).map((c) => c.name.toLowerCase())) : new Set();
     return {
       created: !list,
@@ -176,10 +179,10 @@ function importTitle(guildId, title, cast, { dryRun }) {
     };
   }
 
-  let list = getListByName(guildId, title.label);
+  let list = getListByName(null, title.label);
   let created = false;
   if (!list) {
-    list = { id: createList(guildId, title.label, 'seed-script', title.category) };
+    list = { id: createList(null, title.label, 'seed-script', title.category) };
     created = true;
   }
 
@@ -211,7 +214,6 @@ function importTitle(guildId, title, cast, { dryRun }) {
 
 function parseArgs(argv) {
   const opts = {
-    guildId: null,
     includeBackground: false,
     perShow: PER_SHOW_LIMIT,
     fameFloor: FAME_FLOOR,
@@ -226,8 +228,7 @@ function parseArgs(argv) {
     else if (arg === '--fame-floor') opts.fameFloor = Number(argv[++i]) / 100;
     else if (arg === '--dry-run') opts.dryRun = true;
     else if (arg === '--quiet') opts.quiet = true;
-    else if (arg.startsWith('--')) throw new Error(`Unknown flag ${arg}`);
-    else if (!opts.guildId) opts.guildId = arg;
+    else throw new Error(`Unknown argument ${arg}`);
   }
   if (opts.perShow !== null && (!Number.isInteger(opts.perShow) || opts.perShow < 1)) {
     throw new Error('--per-show needs a positive integer');
@@ -239,14 +240,7 @@ function parseArgs(argv) {
 }
 
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (!opts.guildId) {
-    console.error(
-      'Usage: node scripts/seed-anilist-characters.js <guildId> [--include-background] ' +
-        '[--per-show N] [--fame-floor PERCENT] [--dry-run]'
-    );
-    process.exit(1);
-  }
+  const opts = parseArgs(scriptArgs());
   if (!fs.existsSync(DATA_PATH)) {
     console.error(`Missing ${path.relative(process.cwd(), DATA_PATH)}. Build it with: npm run fetch:anilist-characters`);
     process.exit(1);
@@ -273,7 +267,7 @@ function main() {
     // What the role filter alone would have taken, so the trim is visible per title.
     const untrimmed = selectCast(title.characters, { ...opts, perShow: null, fameFloor: 0 }).length;
     totalTrimmed += untrimmed - cast.length;
-    const r = importTitle(opts.guildId, title, cast, opts);
+    const r = importTitle(title, cast, opts);
     if (r.created) created++;
     if (r.added && !opts.quiet) {
       console.log(

@@ -29,10 +29,12 @@
 // existing image is never overwritten.
 //
 // Usage:
-//   node scripts/seed-wikidata-people.js <guildId>
-//   node scripts/seed-wikidata-people.js <guildId> --per-list 200
-//   node scripts/seed-wikidata-people.js <guildId> --group actors
-//   node scripts/seed-wikidata-people.js <guildId> --dry-run
+//   node scripts/seed-wikidata-people.js
+//   node scripts/seed-wikidata-people.js --per-list 200
+//   node scripts/seed-wikidata-people.js --group actors
+//   node scripts/seed-wikidata-people.js --dry-run
+//
+// Lists land in the shared compendium, which every Discord server and the web app see.
 
 const fs = require('fs');
 const path = require('path');
@@ -42,9 +44,10 @@ const {
   getListByName,
   addCharacter,
   getCharacters,
-} = require('../src/core/db/characterLists');
-const { trustworthyImageOrNull } = require('../src/core/util/characterImages');
+} = require('../src/compendium/characterLists');
+const { trustworthyImageOrNull } = require('../src/compendium/characterImages');
 const { GROUPS } = require('./fetch-wikidata-people');
+const { scriptArgs } = require('./lib/compendiumArgs');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'wikidata-people.json');
 const CATEGORY = 'Real People';
@@ -56,8 +59,9 @@ const PER_LIST_LIMIT = 150;
 // between, and it clutters `/list select` for everyone.
 const MIN_PEOPLE = 5;
 
-const args = process.argv.slice(2);
-const guildId = args.find((a) => !a.startsWith('--'));
+// Read lazily-safe at module scope: backfill-popularity.js imports assignPeople from this file,
+// and nothing here acts on the arguments until main() runs.
+const args = require.main === module ? scriptArgs() : [];
 const flagValue = (name, fallback) => {
   const i = args.indexOf(`--${name}`);
   if (i !== -1 && args[i + 1] && !args[i + 1].startsWith('--')) return args[i + 1];
@@ -106,12 +110,6 @@ function assignPeople(groups, perListLimit = PER_LIST_LIMIT) {
 }
 
 function main() {
-  // Checked here rather than at module scope: backfill-popularity.js imports assignPeople
-  // from this file, and a top-level process.exit would take that script down with it.
-  if (!guildId) {
-    console.error('Usage: node scripts/seed-wikidata-people.js <guildId> [--per-list N] [--group KEY] [--dry-run]');
-    process.exit(1);
-  }
   if (!fs.existsSync(DATA_PATH)) {
     console.error(`No ${DATA_PATH}. Run: node scripts/fetch-wikidata-people.js`);
     process.exit(1);
@@ -141,9 +139,9 @@ function main() {
       continue;
     }
 
-    let list = getListByName(guildId, listName);
+    let list = getListByName(null, listName);
     if (!list && !dryRun) {
-      list = { id: createList(guildId, listName, 'seed-script', CATEGORY) };
+      list = { id: createList(null, listName, 'seed-script', CATEGORY) };
       created++;
     } else if (list) {
       setListCategory(list.id, CATEGORY);

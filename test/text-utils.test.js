@@ -4,7 +4,7 @@
 // player who can see the answer, so there is no string for the bot to match.
 
 const { assert } = require('./harness');
-const { foldDiacritics, normalizeLoose } = require('../src/core/util/text');
+const { foldDiacritics, normalizeLoose } = require('../src/compendium/text');
 
 module.exports = {
   'foldDiacritics reduces accents to base letters'() {

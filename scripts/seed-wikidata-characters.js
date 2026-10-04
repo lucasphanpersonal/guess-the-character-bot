@@ -23,10 +23,12 @@
 // loses its long tail, Ed Edd n Eddy keeps its entire cast, and no show can flood the pool.
 //
 // Usage:
-//   node scripts/seed-wikidata-characters.js <guildId>
-//   node scripts/seed-wikidata-characters.js <guildId> --per-show 50
-//   node scripts/seed-wikidata-characters.js <guildId> --group kids-tv
-//   node scripts/seed-wikidata-characters.js <guildId> --dry-run
+//   node scripts/seed-wikidata-characters.js
+//   node scripts/seed-wikidata-characters.js --per-show 50
+//   node scripts/seed-wikidata-characters.js --group kids-tv
+//   node scripts/seed-wikidata-characters.js --dry-run
+//
+// Lists land in the shared compendium, which every Discord server and the web app see.
 
 const fs = require('fs');
 const path = require('path');
@@ -37,8 +39,9 @@ const {
   addCharacter,
   getCharacters,
   setCharacterImage,
-} = require('../src/core/db/characterLists');
-const { trustworthyImageOrNull } = require('../src/core/util/characterImages');
+} = require('../src/compendium/characterLists');
+const { trustworthyImageOrNull } = require('../src/compendium/characterImages');
+const { scriptArgs } = require('./lib/compendiumArgs');
 
 const DATA_PATH = path.join(__dirname, '..', 'data', 'seed', 'wikidata-characters.json');
 
@@ -222,18 +225,18 @@ function dedupeByName(selected) {
   return out;
 }
 
-function importShow(guildId, listName, category, characters, { dryRun }) {
+function importShow(listName, category, characters, { dryRun }) {
   if (dryRun) {
-    const list = getListByName(guildId, listName);
+    const list = getListByName(null, listName);
     const existing = list ? new Set(getCharacters(list.id).map((c) => c.name.toLowerCase())) : new Set();
     const added = characters.filter((c) => !existing.has(c.name.toLowerCase())).length;
     return { created: !list, added, skipped: characters.length - added, images: 0 };
   }
 
-  let list = getListByName(guildId, listName);
+  let list = getListByName(null, listName);
   let created = false;
   if (!list) {
-    list = { id: createList(guildId, listName, 'seed-script', category) };
+    list = { id: createList(null, listName, 'seed-script', category) };
     created = true;
   } else if (list.category !== category && list.created_by === 'seed-script') {
     // An earlier run of this script derived the category from the source group rather than
@@ -273,14 +276,13 @@ function importShow(guildId, listName, category, characters, { dryRun }) {
 }
 
 function parseArgs(argv) {
-  const opts = { guildId: null, perShow: PER_SHOW_LIMIT, groups: [], dryRun: false };
+  const opts = { perShow: PER_SHOW_LIMIT, groups: [], dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--per-show') opts.perShow = Number(argv[++i]);
     else if (arg === '--group') opts.groups.push(argv[++i]);
     else if (arg === '--dry-run') opts.dryRun = true;
-    else if (arg.startsWith('--')) throw new Error(`Unknown flag ${arg}`);
-    else if (!opts.guildId) opts.guildId = arg;
+    else throw new Error(`Unknown argument ${arg}`);
   }
   if (!Number.isInteger(opts.perShow) || opts.perShow < 1) {
     throw new Error('--per-show needs a positive integer');
@@ -289,17 +291,7 @@ function parseArgs(argv) {
 }
 
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
-  if (!opts.guildId) {
-    console.error(
-      'Usage: node scripts/seed-wikidata-characters.js <guildId> [--per-show N] [--group KEY] [--dry-run]'
-    );
-    console.error(
-      "Find your server's ID: enable Developer Mode (User Settings > Advanced Settings > Developer Mode), " +
-        'then right-click the server icon > Copy Server ID.'
-    );
-    process.exit(1);
-  }
+  const opts = parseArgs(scriptArgs());
   if (!fs.existsSync(DATA_PATH)) {
     console.error(`Missing ${path.relative(process.cwd(), DATA_PATH)}.`);
     console.error('Build it first with: npm run fetch:wikidata');
@@ -330,7 +322,6 @@ function main() {
     }
 
     const { created, added, skipped, images } = importShow(
-      opts.guildId,
       show.label,
       show.category,
       selected,

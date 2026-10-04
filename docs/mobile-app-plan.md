@@ -322,8 +322,10 @@ recorded below, since the deviations are the useful part of a status update.
    client `playerId` so a reconnect reclaims the same seat.
 2. **Setup flow — done.** Pool/difficulty picking, deal, and the confirm/reroll screen, in
    `src/web/gameSetup.js` (pure, content injected) over the real core `Game`. The checker-target
-   rule and reroll-demotion are reused verbatim. `WEB_SCOPE` auto-resolves to the richest seeded
-   content scope so a phone test deals real characters immediately.
+   rule and reroll-demotion are reused verbatim. The web deals from its own compendium scope
+   (`'web'`, or `WEB_SCOPE`) with its own playable selection (`npm run select:lists`). It
+   originally auto-resolved to the richest Discord guild, i.e. it played that server's
+   selection; the compendium's scopes ended that (see "The compendium" in the README).
 3. **Turn loop — done.** `src/web/turnLoop.js` ports `engine.js`'s rules (rotation, fewest-turns
    scoring, pass/give-up, resolve-once, out-of-contention) over the core `Game`, with a
    server-authoritative wall-clock turn timer.

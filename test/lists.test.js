@@ -1,12 +1,12 @@
 const { assert } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 // Each test gets its own guild id so suites can't interfere with each other.
 let guildCounter = 0;
 function freshGuild() {
   const guildId = `test-guild-${++guildCounter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   return guildId;
 }
 
@@ -79,7 +79,7 @@ module.exports = {
     const id = lists.createList(guildId, 'Only List', 'tester', 'Anime');
     assert.equal(lists.getRandomCategory(guildId), null, 'exists but is not enabled');
 
-    lists.setListsEnabled([id], true);
+    lists.setListsEnabled(guildId, [id], true);
     for (let i = 0; i < 10; i++) {
       assert.equal(lists.getRandomCategory(guildId), 'Anime');
     }
@@ -95,7 +95,7 @@ module.exports = {
     const b = lists.createList(guildId, 'Beta', 'tester', 'Anime');
     assert.deepEqual(lists.getEnabledLists(guildId), [], 'nothing is playable by default');
 
-    lists.setListsEnabled([a], true);
+    lists.setListsEnabled(guildId, [a], true);
     assert.deepEqual(
       lists.getEnabledLists(guildId).map((l) => l.name),
       ['Alpha']

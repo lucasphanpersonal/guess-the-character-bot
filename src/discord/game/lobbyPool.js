@@ -19,7 +19,7 @@ const {
   listCategoriesWithEnabledCounts,
   searchListNames,
   countDistinctCharacters,
-} = require('../../core/db/characterLists');
+} = require('../../compendium/characterLists');
 
 const RANDOM = '::random';
 const EVERYTHING = '::everything';

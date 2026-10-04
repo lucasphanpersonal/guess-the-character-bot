@@ -1,5 +1,5 @@
 const { MessageFlags } = require('discord.js');
-const { createList, getListByName, listCategoriesWithCounts } = require('../../../core/db/characterLists');
+const { createList, getListByName, listCategoriesWithCounts, WEB_SCOPE } = require('../../../compendium/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
@@ -13,12 +13,18 @@ module.exports = {
     if (getListByName(interaction.guildId, name)) {
       return interaction.reply({ content: `A list named **${name}** already exists.`, flags: MessageFlags.Ephemeral });
     }
-    // Enabled on creation: typing a list out by hand is a deliberate choice, unlike the
-    // thousands the seed scripts add, so it should be playable without a trip to
-    // /list select.
-    createList(interaction.guildId, name, interaction.user.id, category, { enabled: true });
+    // SHARED, not private to this server: a list typed out by hand is wanted everywhere this
+    // bot is played -- every server and the web app see it. The name check above already
+    // covers shared lists, so this cannot create a second "Naruto".
+    //
+    // Switched on where it was made and on the web: typing a list out is a deliberate choice,
+    // unlike the thousands the seed scripts add, so it should be playable without a trip to
+    // /list select -- and the web dealt whatever this server had on before the compendium had
+    // scopes. Other servers curate their own selection, so it waits for them to choose it.
+    createList(null, name, interaction.user.id, category, { enabledFor: [interaction.guildId, WEB_SCOPE] });
     return interaction.reply(
-      `✅ Created character list **${name}**, enabled for pooled draws. ` +
+      `✅ Created character list **${name}**, enabled for pooled draws here and on the web ` +
+        '(other servers can switch it on with `/list toggle`). ' +
         `Add characters with \`/list add list:${name} character:<name>\`.`
     );
   },

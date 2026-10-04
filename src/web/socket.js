@@ -347,7 +347,7 @@ function attachSockets(io, { registry, setup }) {
     socket.on('setup:options', (_p, ack) => ack?.(setup.options()));
 
     // Host-only curation for the config screen's "pick a category" path. Scoped to this room:
-    // it never touches the shared `enabled` column the Discord bot reads.
+    // it never writes to the web's playable selection, which every other room deals from too.
     socket.on('setup:categoryLists', (payload = {}, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });

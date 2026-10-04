@@ -1,6 +1,6 @@
 const { MessageFlags } = require('discord.js');
 const { categoriesView, categoryView } = require('../../components/listFilter');
-const { listCategoriesWithEnabledCounts, setTopN } = require('../../../core/db/characterLists');
+const { listCategoriesWithEnabledCounts, setTopN } = require('../../../compendium/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {

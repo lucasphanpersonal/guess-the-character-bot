@@ -10,7 +10,7 @@ const { buildLobbyBoardPayload } = require('../src/discord/game/lobbyBoard');
 const { handleComponentInteraction } = require('../src/discord/components/router');
 const Lobby = require('../src/core/game/Lobby');
 const GameManager = require('../src/core/game/GameManager');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -19,7 +19,7 @@ function makeLobby({ hostId = 'host', players = [] } = {}) {
   const n = ++counter;
   const guildId = `board-guild-${n}`;
   const channelId = `board-chan-${n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Board List', 'tester', 'Video Games');
   for (const name of ['Mario', 'Luigi', 'Peach']) lists.addCharacter(listId, name, 'tester');

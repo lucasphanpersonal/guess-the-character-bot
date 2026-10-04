@@ -251,7 +251,7 @@ misleads whoever is answering questions.
 The seeder applies it going forward. For a database seeded before it existed:
 
 ```bash
-node scripts/clean-character-images.js <guildId> --dry-run
+node scripts/clean-character-images.js --dry-run
 ```
 
 ### Rerolls teach the pool
@@ -277,12 +277,18 @@ is a wasted turn — the reroll button was doing the job a filter should. Server
 `/list select` for that filter: a page of checkboxes (multi-select menus, 75 per page)
 covering every list, with a running count of what's on.
 
+**Every server has its own selection.** The lists themselves are one shared compendium (see
+[The compendium](#the-compendium-shared-lists-and-scopes)), but which of them a server plays
+with is that server's alone — and the web app has a separate one again. Ticking a list here
+changes nothing anywhere else.
+
 **Setup enables the top 100 of each category**, so a server starts with a sensible pool
-rather than an empty one. That happens in `npm run backfill:popularity`, which ranks lists
-by fame and then switches on the best-known 100 per category (`--top=N` to move the line,
-`--no-enable` to rank without touching the selection). The ranking reads the seed files —
-AniList audience size for Anime and Manga, summed Wikipedia sitelinks across the cast for
-everything else. Unranked lists sort last and still work.
+rather than an empty one. That happens in `npm run backfill:popularity -- <server-id>`, which
+ranks the shared lists by fame and then switches on the best-known 100 per category for that
+server (`--top=N` to move the line, `--no-enable` to rank without touching the selection; with
+no id it only ranks). The ranking reads the seed files — AniList audience size for Anime and
+Manga, summed Wikipedia sitelinks across the cast for everything else. Unranked lists sort last
+and still work.
 
 From there curation is exceptions, and there are three ways to do it, in rough order of how
 often you'll want them:
@@ -299,7 +305,47 @@ show across six pages is worse than naming it.
 The selection governs **pooled draws only** — `category`, `everything` and `random`. Naming a
 list outright (`/lobby create list:Naruto`) always works, enabled or not, because asking for
 one by name is already a deliberate choice. Lists made by hand with `/list create` are
-enabled on creation for the same reason.
+enabled on creation for the same reason — in the server that made them **and on the web**.
+They are shared, so every other server can see them too, and switch them on with `/list
+toggle`.
+
+### The compendium: shared lists and scopes
+
+Every list and character lives in one **compendium** (`src/compendium/`), and anything that
+plays reads it as a **scope**: a Discord server is a scope (its guild id), and so is the web
+app (`'web'`, or `WEB_SCOPE` if set). A scope sees:
+
+- the **shared** lists — everything the seed scripts create and everything made with `/list
+  create`, visible to every scope; and
+- its **own private** lists, which nobody else sees. Nothing creates these today except the
+  migration below, for a second server's lists; the slot exists for anything a scope should
+  keep to itself.
+
+Each scope also keeps its **own playable selection**. That used to be a single `enabled` flag
+on each list, shared by everyone — so the web app was quietly playing (and could have been
+rewriting) one Discord server's choices. Now a server's `/list select` and the web's selection
+are independent.
+
+The Discord commands that edit a list's characters (`/list add`, `/list remove`, `/list
+image`) work on any list the server can see, shared ones included, and still need **Manage
+Server**. An edit to a shared list is an edit for everyone who plays it — fine for one owner's
+servers, and the thing to revisit before the bot is shared more widely.
+
+The web app's selection has no admin screen; set it from the command line:
+
+```bash
+npm run select:lists                                       # show the web's selection
+npm run select:lists -- --top=100                          # exactly each category's top 100
+npm run select:lists -- --add="Naruto" --remove="Bleach"   # one list at a time
+npm run select:lists -- --copy-from=<server-id>            # copy a Discord server's selection
+npm run select:lists -- --scope=<server-id>                # any other scope instead of the web
+```
+
+Databases from before scopes are migrated automatically the first time the new code opens
+them: every list of the server with the most content becomes shared — its hand-made ones too,
+because the web app could already see them — while any other server's lists stay private to
+it. Every server keeps exactly the selection it had, and the web app starts with a copy of that
+server's selection, so it deals what it dealt before.
 
 ### Audience-vote mode
 
@@ -419,24 +465,30 @@ data creates over two thousand lists.
 
 ## Seeding character lists
 
-Four bundled importers, all idempotent — re-running only adds what's missing, so they're
-safe to run repeatedly.
+Bundled importers, all idempotent — re-running only adds what's missing, so they're safe to
+run repeatedly. Everything they create goes into the **shared compendium**, which every server
+and the web app see; nothing is switched on until a scope selects it (`npm run
+backfill:popularity -- <server-id>` does that in bulk — see
+[Choosing which lists you play with](#choosing-which-lists-you-play-with)).
 
 ```bash
-npm run seed:people   -- <your-server-id>   # ~2,900 famous real people, with photographs
-npm run seed:pokemon  -- <your-server-id>   # 1,025 Pokémon, with official artwork
-npm run seed:lol      -- <your-server-id>   # 173 League of Legends champions, with splash art
-npm run seed:wikidata -- <your-server-id>   # Western TV/film/game casts, one list per title
-npm run seed:anilist  -- <your-server-id>   # anime/manga casts, one list per title
+npm run seed:people     # ~2,900 famous real people, with photographs
+npm run seed:pokemon    # 1,025 Pokémon, with official artwork
+npm run seed:lol        # 173 League of Legends champions, with splash art
+npm run seed:wikidata   # Western TV/film/game casts, one list per title
+npm run seed:anilist    # anime/manga casts, one list per title
 ```
+
+These used to take a server id first. An old command that still passes one is fine: the id is
+recognised, ignored with a note, and the lists land in the shared compendium as usual.
 
 > **The Character Codex was removed.** It was the original bulk source and a poor fit: it
 > carried categories nobody plays with (Blogs, Magazines, Scientific Papers, Research
 > Journals), filed authors as characters (Eiichiro Oda under One Piece), and duplicated
 > characters under several spellings — One Piece arrived with four Luffys and three
 > Choppers, but no Zoro, Nami, Sanji or Usopp. The Wikidata and AniList importers cover the
-> same ground with real casts. Use `npm run reset:seeded -- <server-id>` to clear
-> seed-created lists before rebuilding from these sources.
+> same ground with real casts. Use `npm run reset:seeded` to clear seed-created lists from
+> the shared compendium before rebuilding from these sources.
 
 - **`seed:people`** fills a **Real People** category with 21 lists by field — Actors,
   Footballers, Scientists & Inventors, Politicians & Leaders, Religious Figures, Musicians,
@@ -543,7 +595,9 @@ Search by name across everything, filter by category, by whether a list is in th
 pool, or by whether a character has artwork at all, and sort by fame or by how often people
 have rerolled someone. Clicking a list drills into it. It reads the live database
 **read-only**, so it is safe to run while the bot is up and cannot change what gets dealt --
-curation still happens through `/list toggle` and `/list select`.
+curation still happens through `/list toggle`, `/list select` and `npm run select:lists`.
+It looks through one scope's eyes — the web app's by default; `--scope=<server-id>` shows a
+server's private lists and its own playable pool instead.
 
 Two views worth knowing about: **Missing artwork** finds the characters that will reveal as
 plain text, and sorting by **Most rerolled** shows what people keep rejecting, with anything
@@ -551,7 +605,7 @@ past three different rerollers marked *retired* -- the bot has already stopped d
 
 `--port=` and `--db=` override the defaults.
 
-`seed:pokemon` and `seed:lol` take an optional list name as a second argument. Combine
+`seed:pokemon` and `seed:lol` take an optional list name as their argument. Combine
 anything at game time: `/lobby create list:Naruto, Scrubs`.
 
 <details>
@@ -590,20 +644,40 @@ Add `--group <key>` to sweep one source group, or `--list-groups` to see them.
 
 ## Project layout
 
-The repo holds **two frontends over one shared core**. `core/` is Discord-agnostic and
-frontend-agnostic; `discord/` is this bot; `web/` is the party-mode web app
-([docs/mobile-app-plan.md](docs/mobile-app-plan.md)). The rule that keeps them untangled:
-**`core/` never imports from `discord/` or `web/`** — both frontends depend on the core, the
-core depends on neither.
+The repo holds **two frontends over one shared core, on top of one compendium**. The layers,
+bottom up — each imports only from the ones below it:
+
+- `db/` opens the one SQLite file, and nothing more.
+- `compendium/` is the content: every list and character, the scopes that see them, and each
+  scope's playable selection ([The compendium](#the-compendium-shared-lists-and-scopes)). It
+  owns its own tables and knows nothing about games.
+- `core/` is the game: rules, turn counts, standings, and the records of finished games.
+  Discord-agnostic and frontend-agnostic.
+- `discord/` is this bot; `web/` is the party-mode web app
+  ([docs/mobile-app-plan.md](docs/mobile-app-plan.md)).
+
+The two rules that keep them untangled: **`core/` never imports from `discord/` or `web/`**,
+and **nothing above the compendium queries its tables directly** — content goes through
+`src/compendium/characterLists.js`. (The content scripts in `scripts/` are the compendium's
+own maintenance tools, and may.)
 
 ```
 src/
-  core/                 Shared, frontend-agnostic. Imports nothing from discord/ or web/.
+  db/
+    connection.js         Opens data/bot.sqlite (or BOT_DB_PATH); applies no schema itself
+
+  compendium/           The content. Imports only db/.
+    db.js                 Applies schema.sql + migrates older layouts (guild-scoped lists -> scopes)
+    schema.sql            character_lists, characters, character_rerolls, list_selection
+    characterLists.js     Scopes, selections, list/character queries, random dealing, search
+    characterImages.js    Which image sources can be believed to depict the character
+    text.js               Shared accent/case normalization (the judge's matching key)
+
+  core/                 Shared, frontend-agnostic. Imports compendium/, never discord/ or web/.
     db/
-      connection.js       SQLite setup + lightweight column migrations
-      schema.sql          character_lists, characters, games, game_players, active_boards
+      connection.js       The game layer's tables, after the compendium's
+      schema.sql          games, game_players, active_boards
       activeBoards.js     Which board messages are live right now
-      characterLists.js   List/character queries, random selection, search
       stats.js            Win/loss records and leaderboard
     game/
       GameManager.js      Map<roomKey, Lobby> — one lobby per channel (Discord) / room (web)
@@ -611,9 +685,6 @@ src/
       lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
       Game.js             Active-game state: turn counts, who has finished, standings
       roundMode.js        The who-may-act / how-to-advance seam (TurnRotationMode today)
-    util/
-      text.js             Shared accent/case normalization
-      characterImages.js  Which image sources can be believed to depict the character
 
   discord/              The Discord bot. Imports from core/.
     index.js              Client bootstrap, interaction routing, graceful shutdown
@@ -644,11 +715,14 @@ src/
     util/
       permissions.js      Manage-Server permission checks
 
-  web/                 Party-mode web app. Imports from core/. See web/README.md.
-    server.js             Dependency-free http server; reuses core db + game state
-    public/index.html     Placeholder client
+  web/                 Party-mode web app. Imports from core/ and compendium/. See web/README.md.
+    server.js             http server, browse API, /img cache; plays as compendium scope 'web'
+    socket.js             The room/setup/game socket protocol
+    rooms.js, gameSetup.js, turnLoop.js, imageCache.js   Rooms, dealing, the turn rules, images
+    public/               The phone client: index.html, app.js, tilt.js
 
-scripts/                Seed and sound-generation scripts, plus the character browser
+scripts/                Content tools (seeding, image fills, select-lists), sounds, the browser
+  lib/compendiumArgs.js   Shared argument handling (drops a legacy leading server id)
 test/                   Test suite (npm test)
 data/
   bot.sqlite            Created on first run (gitignored)
@@ -656,7 +730,9 @@ data/
   sounds/               Generated WAVs (npm run generate:sounds)
 ```
 
-**State:** character lists and game results are persisted in SQLite. Active lobby and game
+**State:** the compendium (lists, characters, rerolls, each scope's selection) and game results
+are persisted in SQLite, in one file with two owners — `src/compendium/schema.sql` and
+`src/core/db/schema.sql`. Active lobby and game
 state is deliberately in-memory only — a game in progress does not survive a bot restart.
 
 **Restarts.** Because the game state is gone but its messages aren't, the *messages* are

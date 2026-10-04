@@ -4,13 +4,13 @@
 // the same way guesses are.
 
 const { assert } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let n = 0;
 function seedTwoLists(namesA, namesB) {
   const guildId = `dedupe-${++n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   const a = lists.createList(guildId, 'List A', 'tester', 'Test', { enabled: true });
   const b = lists.createList(guildId, 'List B', 'tester', 'Test', { enabled: true });
   for (const name of namesA) lists.addCharacter(a, name, 'tester', null);

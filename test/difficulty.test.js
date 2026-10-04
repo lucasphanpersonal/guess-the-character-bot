@@ -4,13 +4,13 @@
 // list -- which list-level curation cannot reach.
 
 const { assert } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
 function freshGuild() {
   const guildId = `diff-guild-${++counter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   return guildId;
 }
 

@@ -6,14 +6,14 @@ const { handleComponentInteraction } = require('../src/discord/components/router
 const listFilter = require('../src/discord/components/listFilter');
 const createLobby = require('../src/discord/commands/actions/lobby-create');
 const GameManager = require('../src/core/game/GameManager');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
 
 function freshGuild() {
   const guildId = `filter-guild-${++counter}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   return guildId;
 }
 
@@ -60,7 +60,7 @@ module.exports = {
     const a = seed(guildId, 'Naruto', 'Anime');
     seed(guildId, 'Bleach', 'Anime');
     seed(guildId, 'Zelda', 'Video Games');
-    lists.setListsEnabled([a], true);
+    lists.setListsEnabled(guildId, [a], true);
 
     const payload = listFilter.categoriesView(guildId, 0);
     assert.match(payload.content, /1 of 2 enabled/, 'Anime is partly on');
@@ -75,7 +75,7 @@ module.exports = {
     const guildId = freshGuild();
     const famous = seed(guildId, 'Famous', 'Anime', { popularity: 400000, characters: 7 });
     seed(guildId, 'Obscure', 'Anime', { popularity: 12 });
-    lists.setListsEnabled([famous], true);
+    lists.setListsEnabled(guildId, [famous], true);
 
     const [menu] = selectsOf(listFilter.categoryView(guildId, 0, 0));
     // min 0 is what makes "untick everything" a submittable answer rather than a no-op.
@@ -109,7 +109,7 @@ module.exports = {
     const keep = seed(guildId, 'Keep', 'Anime', { popularity: 300 });
     const drop = seed(guildId, 'Drop', 'Anime', { popularity: 200 });
     const other = seed(guildId, 'Other', 'Anime', { popularity: 100 });
-    lists.setListsEnabled([drop, other], true);
+    lists.setListsEnabled(guildId, [drop, other], true);
 
     const recorder = createRecorder();
     await click({
@@ -149,6 +149,7 @@ module.exports = {
       seed(guildId, `Show ${String(i).padStart(3, '0')}`, 'Anime', { popularity: 1000 - i });
     }
     lists.setListsEnabled(
+      guildId,
       lists.listsForFilter(guildId, 'Anime').map((l) => l.id),
       true
     );
@@ -199,7 +200,7 @@ module.exports = {
     const guildId = freshGuild();
     const on = seed(guildId, 'Enabled Show', 'Anime', { characters: 3 });
     seed(guildId, 'Disabled Show', 'Anime', { characters: 3 });
-    lists.setListsEnabled([on], true);
+    lists.setListsEnabled(guildId, [on], true);
     const channelId = `filter-chan-all-${guildId}`;
     const recorder = createRecorder();
 
@@ -295,7 +296,7 @@ module.exports = {
     for (let i = 0; i < 10; i++) {
       seed(guildId, `Show ${String(i).padStart(2, '0')}`, 'Anime', { popularity: 100 - i });
     }
-    lists.setListsEnabled(lists.listsForFilter(guildId, 'Anime').map((l) => l.id), true);
+    lists.setListsEnabled(guildId, lists.listsForFilter(guildId, 'Anime').map((l) => l.id), true);
     assert.equal(lists.getEnabledLists(guildId).length, 10);
 
     const { enabled, disabled } = lists.setTopN(guildId, 'Anime', 3);
@@ -313,7 +314,7 @@ module.exports = {
       seed(guildId, `Show ${String(i).padStart(2, '0')}`, 'Anime', { popularity: 100 - i });
     }
     const favourite = lists.getListByName(guildId, 'Show 09').id;
-    lists.setListsEnabled([favourite], true);
+    lists.setListsEnabled(guildId, [favourite], true);
 
     const { enabled, disabled } = lists.setTopN(guildId, 'Anime', 3);
     assert.equal(enabled, 3);
@@ -331,9 +332,9 @@ module.exports = {
   'toggling by name flips a list both ways'() {
     const guildId = freshGuild();
     const id = seed(guildId, 'Flip Me', 'Anime');
-    assert.equal(lists.toggleListEnabled(id), true, 'off -> on');
+    assert.equal(lists.toggleListEnabled(guildId, id), true, 'off -> on');
     assert.deepEqual(lists.getEnabledLists(guildId).map((l) => l.name), ['Flip Me']);
-    assert.equal(lists.toggleListEnabled(id), false, 'on -> off');
+    assert.equal(lists.toggleListEnabled(guildId, id), false, 'on -> off');
     assert.deepEqual(lists.getEnabledLists(guildId), []);
   },
 
@@ -394,7 +395,7 @@ module.exports = {
     const guildId = freshGuild();
     const on = seed(guildId, 'Enabled Show', 'Anime');
     seed(guildId, 'Disabled Show', 'Anime');
-    lists.setListsEnabled([on], true);
+    lists.setListsEnabled(guildId, [on], true);
     const recorder = createRecorder();
 
     await require('../src/discord/commands/actions/list-toggle').autocomplete(

@@ -20,7 +20,8 @@ const {
   getListByName,
   getCharacters,
   getListsByIds,
-} = require('../../core/db/characterLists');
+  isVisibleTo,
+} = require('../../compendium/characterLists');
 
 const CATEGORIES_PER_PAGE = 12;
 const LISTS_PER_PAGE = 20;
@@ -107,9 +108,9 @@ function listsView(guildId, categoryIndex, page) {
   };
 }
 
-function charactersView(listId, page) {
-  const [list] = getListsByIds([listId]);
-  if (!list) return { content: 'That list no longer exists.', components: [] };
+function charactersView(guildId, listId, page) {
+  const [list] = getListsByIds([listId], guildId);
+  if (!isVisibleTo(list, guildId)) return { content: 'That list no longer exists.', components: [] };
 
   const characters = getCharacters(list.id).map((c) => c.name);
   if (!characters.length) {
@@ -118,7 +119,7 @@ function charactersView(listId, page) {
   const { slice, page: current, pages } = paginate(characters, page, CHARACTERS_PER_PAGE);
 
   // The category index lets the Back button return to where the list was found.
-  const categoryIndex = listCategoriesWithCounts(list.guild_id).findIndex(
+  const categoryIndex = listCategoriesWithCounts(guildId).findIndex(
     (c) => c.category === (list.category || 'Uncategorized')
   );
 
@@ -138,14 +139,14 @@ function charactersView(listId, page) {
 // Entry point shared by the slash command and the buttons, so both render identically.
 function buildBrowsePayload(guildId, view, key, page) {
   if (view === 'lists') return listsView(guildId, Number(key), page);
-  if (view === 'chars') return charactersView(Number(key), page);
+  if (view === 'chars') return charactersView(guildId, Number(key), page);
   return categoriesView(guildId, page);
 }
 
 function payloadForList(guildId, listName) {
   const list = getListByName(guildId, listName);
   if (!list) return { content: `No list named **${listName}**.`, components: [] };
-  return charactersView(list.id, 0);
+  return charactersView(guildId, list.id, 0);
 }
 
 function payloadForCategory(guildId, categoryName) {

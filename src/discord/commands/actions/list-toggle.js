@@ -11,7 +11,7 @@ const {
   toggleListEnabled,
   searchListNames,
   countDistinctCharacters,
-} = require('../../../core/db/characterLists');
+} = require('../../../compendium/characterLists');
 const { requireManageGuild } = require('../../util/permissions');
 
 module.exports = {
@@ -30,7 +30,7 @@ module.exports = {
       });
     }
 
-    const enabled = toggleListEnabled(list.id);
+    const enabled = toggleListEnabled(interaction.guildId, list.id);
     const characters = countDistinctCharacters([list.id]);
     // Public, unlike the /list select page: this changes what everyone plays with, and one
     // line in the channel is how the rest of the server finds out.

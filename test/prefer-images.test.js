@@ -2,13 +2,13 @@
 // so the full-screen forehead reveal is a picture whenever the pool can supply enough.
 
 const { assert } = require('./harness');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let n = 0;
 function seed({ withImages, withoutImages }) {
   const guildId = `prefimg-${++n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   const listId = lists.createList(guildId, 'Pref List', 'tester', 'Test', { enabled: true });
   for (let i = 0; i < withImages; i++) lists.addCharacter(listId, `Img ${i}`, 'tester', `https://x/${i}.png`);
   for (let i = 0; i < withoutImages; i++) lists.addCharacter(listId, `Text ${i}`, 'tester', null);

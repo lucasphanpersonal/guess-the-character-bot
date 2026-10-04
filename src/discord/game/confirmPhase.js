@@ -17,7 +17,7 @@ const {
   getListsByIds,
   setCharacterImage,
   REROLL_DEMOTE_THRESHOLD,
-} = require('../../core/db/characterLists');
+} = require('../../compendium/characterLists');
 const { buildUnlockRow, checkMessagePayload, checkStatePayload, fanOutReference } = require('./characterDM');
 const { requireManageGuild } = require('../util/permissions');
 
@@ -97,7 +97,7 @@ async function handleConfirmationButton(interaction) {
     // before; from three up it is specifically theirs to rule on.
     const otherPlayerId = game.checkTargetOf(playerId);
     const rejected = game.headByPlayer[otherPlayerId];
-    const [list] = rejected.listId ? getListsByIds([rejected.listId]) : [];
+    const [list] = rejected.listId ? getListsByIds([rejected.listId], lobby.guildId) : [];
     if (!list) {
       return interaction.reply({
         content: "Couldn't tell which list this character came from, so there's nothing to drop.",
@@ -126,7 +126,7 @@ async function handleConfirmationButton(interaction) {
       });
     }
 
-    setListsEnabled([list.id], false);
+    setListsEnabled(lobby.guildId, [list.id], false);
     recordReroll(rejected.id, playerId);
     state.rejectedNames.add(rejected.name);
     if (!unlimited) state.rerollsLeft -= 1;

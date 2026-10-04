@@ -17,7 +17,7 @@
 // supported, playable state (it reveals as large text), so losing the picture should not lose
 // the character. The backfill scripts can then refill it on a later run.
 
-const db = require('../src/core/db/connection');
+const db = require('../src/compendium/db');
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {

@@ -4,7 +4,7 @@ const {
   getCharacterByNameInLists,
   freeformCharacter,
   searchCharactersInLists,
-} = require('../../../core/db/characterLists');
+} = require('../../../compendium/characterLists');
 
 const MAX_SLOTS = 5;
 

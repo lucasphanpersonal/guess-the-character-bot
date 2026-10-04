@@ -6,8 +6,8 @@
 
 const { assert, createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
 const command = require('../src/discord/commands/character');
-const { searchCharactersInGuild, getCharacterById } = require('../src/core/db/characterLists');
-const lists = require('../src/core/db/characterLists');
+const { searchCharactersInScope, getCharacterById } = require('../src/compendium/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -15,7 +15,7 @@ let counter = 0;
 function seed() {
   const n = ++counter;
   const guildId = `charlookup-guild-${n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
 
   // One enabled list with artwork, one disabled without -- so both halves of the embed's
   // "would this server deal them" answer are exercised.
@@ -53,7 +53,7 @@ const execute = async (c, guildId, options) => {
 module.exports = {
   'a match on a later word outranks an obscure match on the first'() {
     const { guildId } = seed();
-    const names = searchCharactersInGuild(guildId, 'Zoro', 25).map((c) => c.name);
+    const names = searchCharactersInScope(guildId, 'Zoro', 25).map((c) => c.name);
     assert.equal(names[0], 'Roronoa Zoro', `expected Roronoa Zoro first, got ${names.join(', ')}`);
     assert.ok(names.includes('Zorome') && names.includes('Zoroark'), 'the others are still offered');
   },
@@ -61,7 +61,7 @@ module.exports = {
   'an exact name wins outright, however famous the alternatives'() {
     const { guildId, misc } = seed();
     lists.addCharacter(misc, 'Zoro', 'tester'); // exact, and deliberately unranked
-    const names = searchCharactersInGuild(guildId, 'Zoro', 25).map((c) => c.name);
+    const names = searchCharactersInScope(guildId, 'Zoro', 25).map((c) => c.name);
     assert.equal(names[0], 'Zoro');
   },
 

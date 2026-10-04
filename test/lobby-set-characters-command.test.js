@@ -11,7 +11,7 @@ const { assert, createRecorder, createFakeClient, createSlashInteraction } = req
 const setChars = require('../src/discord/commands/actions/lobby-set-characters');
 const GameManager = require('../src/core/game/GameManager');
 const Lobby = require('../src/core/game/Lobby');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -20,7 +20,7 @@ function makeLobby(playerCount = 4) {
   const n = ++counter;
   const guildId = `setcmd-guild-${n}`;
   const channelId = `setcmd-chan-${n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Set-Cmd List', 'tester', 'Anime');
   for (const name of ['Zoro', 'Luffy', 'Nami', 'Sanji', 'Usopp', 'Chopper']) {

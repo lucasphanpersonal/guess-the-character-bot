@@ -16,7 +16,7 @@ const engine = require('../src/discord/game/engine');
 const confirmPhase = require('../src/discord/game/confirmPhase');
 const Lobby = require('../src/core/game/Lobby');
 const GameManager = require('../src/core/game/GameManager');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -25,7 +25,7 @@ async function startedGame({ playerCount = 2, p2Freeform = false } = {}) {
   const n = ++counter;
   const guildId = `img-guild-${n}`;
   const channelId = `img-chan-${n}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
 
   const listId = lists.createList(guildId, 'Show', 'tester', 'Anime', { enabled: true });
   for (const name of ['Hero', 'Sidekick', 'Villain']) lists.addCharacter(listId, name, 'tester');

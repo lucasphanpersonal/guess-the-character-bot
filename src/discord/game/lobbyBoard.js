@@ -4,7 +4,7 @@
 // per action.
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
-const { countDistinctCharacters, getListLabelForIds, difficultyOf } = require('../../core/db/characterLists');
+const { countDistinctCharacters, getListLabelForIds, difficultyOf } = require('../../compendium/characterLists');
 const { trackBoard, untrackBoard } = require('./boards');
 const { MAX_PLAYERS } = require('../../core/game/Lobby');
 

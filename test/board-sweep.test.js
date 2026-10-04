@@ -13,7 +13,7 @@ const confirmPhase = require('../src/discord/game/confirmPhase');
 const Game = require('../src/core/game/Game');
 const Lobby = require('../src/core/game/Lobby');
 const GameManager = require('../src/core/game/GameManager');
-const lists = require('../src/core/db/characterLists');
+const lists = require('../src/compendium/characterLists');
 const db = require('../src/core/db/connection');
 
 let counter = 0;
@@ -33,7 +33,7 @@ function postedBoard(recorder, channelId, payload) {
 // Minimal lobby with a real character list behind it, for the untracking checks.
 function makeLobby(channelId, { players = ['p1', 'p2'] } = {}) {
   const guildId = `sweep-guild-${channelId}`;
-  db.prepare('DELETE FROM character_lists WHERE guild_id = ?').run(guildId);
+  db.prepare('DELETE FROM character_lists WHERE owner_scope = ?').run(guildId);
   const listId = lists.createList(guildId, 'Sweep List', 'tester', 'Video Games');
   for (const name of ['Mario', 'Luigi', 'Peach', 'Bowser']) lists.addCharacter(listId, name, 'tester');
 

@@ -5,7 +5,7 @@ const {
   setCharacterImage,
   searchListNames,
   searchCharactersInLists,
-} = require('../../../core/db/characterLists');
+} = require('../../../compendium/characterLists');
 
 module.exports = {
   async execute(interaction) {
