@@ -19,10 +19,37 @@ players besides the host.
 
 ```
 src/
-  core/      Shared, frontend-agnostic. db + content pipeline + pure game state.
-  discord/   The Discord bot. Imports from core.
-  web/        <- you are here. The web app. Imports from core.
+  db/          Opens the SQLite file.
+  compendium/  The content: lists, characters, scopes, selections.
+  core/        Shared, frontend-agnostic game state.
+  discord/     The Discord bot. Imports from core and compendium.
+  web/         <- you are here. The web games. Import from core and compendium.
 ```
+
+`src/web/` itself is split the same way: what every web game shares, and one folder per game.
+
+```
+web/
+  server.js            HTTP(S) + the one socket.io, static files, /img, browse API, QR, health.
+                       Mounts each game.
+  content.js           The web's view of the compendium: its scope ('web'), pools, per-room
+                       curation, dealing. Games use this, never the compendium directly.
+  rooms.js             The room registry -- one for every game, so a code means one room.
+  publicCharacter.js   A character as clients see it (artwork through /img).
+  imageCache.js        The local read-through artwork cache behind /img.
+  party/               Party mode, the phone game. Served at the site root and on the default
+                       socket.io namespace, because the links and QR codes out there point there.
+    index.js             Its setup service, and what server.js mounts.
+    socket.js            Its socket protocol.
+    gameSetup.js         Dealing and the confirm/reroll screen (pure, unit-tested).
+    turnLoop.js          Turns and the forehead display (pure, unit-tested).
+    public/              The phone client: index.html, app.js, tilt.js.
+```
+
+A computer game (Guess the Character on a laptop, Draw the Character) goes in a folder of its
+own beside `party/`, with its own client path and its own socket.io namespace, and gets rooms,
+pools and images from the shared files above for free. Anything it would copy out of `party/`
+is the signal to move that piece up a level instead.
 
 The rule that keeps it clean: **`core/` never imports from `discord/` or `web/`.** Both
 frontends depend on the core; the core depends on neither. The codemod that created this split
@@ -135,7 +162,7 @@ Endpoints that prove the shared core is reachable from this frontend:
     is what tilting up/down changes whether the phone is portrait or landscape): tilt up = Got
     it, tilt down / clock runs out = Pass, debounced, with no on-screen controls during play.
     The two directions are tuned **asymmetrically** (`TILT_TH_UP` 6.5 / `HOLD_UP_MS` 600 vs
-    `TILT_TH_DOWN` 5.5 / `HOLD_DOWN_MS` 450 in `public/app.js`): tilting up is irreversible — it
+    `TILT_TH_DOWN` 5.5 / `HOLD_DOWN_MS` 450 in `party/public/tilt.js`): tilting up is irreversible — it
     ends the turn and publishes the character — and is also what ordinary nodding produces by
     accident, so it asks for a firmer, slightly longer tilt. Direction is calibrated by the
     Test-tilt screen's "flip" toggle, which is persisted.

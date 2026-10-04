@@ -10,8 +10,19 @@ src/db/          Opens the SQLite file. No tables of its own.
 src/compendium/  The content: lists, characters, scopes, each scope's selection. Own schema.
 src/core/        Frontend-agnostic game state + the games' records.
 src/discord/     The Discord bot.
-src/web/         The party-mode web app (phones, forehead mode, tilt).
+src/web/         The web games: shared server/rooms/content, one folder per game.
+  party/           The phone game (forehead mode, tilt). Owns the site root + default namespace.
 ```
+
+**A web game gets content through `src/web/content.js`, and rooms through `src/web/rooms.js`.**
+Shared web pieces sit at `src/web/`; a game's own rules, protocol and client sit in its folder.
+When a second game wants something from `party/`, move it up a level rather than importing
+across or copying -- copies are how two games end up disagreeing about the same rule.
+
+**Moving a served file breaks the live server, not just the next one.** The web server reads
+the client from disk on every request, so `git mv` of `public/` 404'd the live site until it
+restarted on the new path. Bridge a move like that (a directory junction from the old path)
+until the live process has restarted, then remove the bridge.
 
 **`core/` never imports from `discord/` or `web/`.** Both frontends depend on the core; the
 core depends on neither. This is the one invariant that keeps two frontends from fusing.

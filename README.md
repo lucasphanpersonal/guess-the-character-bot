@@ -715,11 +715,14 @@ src/
     util/
       permissions.js      Manage-Server permission checks
 
-  web/                 Party-mode web app. Imports from core/ and compendium/. See web/README.md.
-    server.js             http server, browse API, /img cache; plays as compendium scope 'web'
-    socket.js             The room/setup/game socket protocol
-    rooms.js, gameSetup.js, turnLoop.js, imageCache.js   Rooms, dealing, the turn rules, images
-    public/               The phone client: index.html, app.js, tilt.js
+  web/                 The web games. Imports from core/ and compendium/. See web/README.md.
+    server.js             HTTP(S) + socket.io, static files, /img, browse API, QR; mounts each game
+    content.js            The web's view of the compendium (scope 'web', pools, curation, dealing)
+    rooms.js, publicCharacter.js, imageCache.js   Shared by every web game
+    party/                The phone game (foreheads + tilt), at the site root
+      index.js, socket.js   Its setup service and socket protocol
+      gameSetup.js, turnLoop.js   Dealing/confirm and the turn rules (pure, unit-tested)
+      public/               The phone client: index.html, app.js, tilt.js
 
 scripts/                Content tools (seeding, image fills, select-lists), sounds, the browser
   lib/compendiumArgs.js   Shared argument handling (drops a legacy leading server id)

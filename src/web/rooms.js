@@ -2,7 +2,7 @@
 //
 // Deliberately transport-agnostic: nothing here imports socket.io or touches a network, so it
 // is unit-testable in isolation (see test/web-rooms.test.js) and the socket layer
-// (src/web/socket.js) is a thin translation from events to these calls. This mirrors how the
+// (src/web/party/socket.js) is a thin translation from events to these calls. This mirrors how the
 // Discord side keeps Game/GameManager as plain state with the I/O pushed to the edges.
 //
 // What a web room needs that the core Discord `Lobby` doesn't model: a nickname per seat and a

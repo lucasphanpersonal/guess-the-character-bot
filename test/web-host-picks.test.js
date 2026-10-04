@@ -1,11 +1,11 @@
-// Host-picks mode (src/web/gameSetup.js dealWithPicks + the host's views): the host chooses
+// Host-picks mode (src/web/party/gameSetup.js dealWithPicks + the host's views): the host chooses
 // characters and sits the game out. Real core Game, fake content -- no DB, no sockets.
 //
 // The picks arrive from a client, so most of what is pinned down here is what gets REFUSED.
 
 const { assert } = require('./harness');
-const { createSetup, dealWithPicks, buildHostSetupView, applyReroll } = require('../src/web/gameSetup');
-const loop = require('../src/web/turnLoop');
+const { createSetup, dealWithPicks, buildHostSetupView, applyReroll } = require('../src/web/party/gameSetup');
+const loop = require('../src/web/party/turnLoop');
 const { normalizeLoose } = require('../src/compendium/text');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });

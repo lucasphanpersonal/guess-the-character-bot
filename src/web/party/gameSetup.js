@@ -21,9 +21,12 @@
 // (the same call the Discord side makes for its audience vote). Players still check and lock in:
 // that screen is also where tilt gets turned on. The host gets buildHostSetupView instead.
 
-const Game = require('../core/game/Game');
-const { FIELDS: LOBBY_FIELDS } = require('../core/game/lobbySettings');
-const { normalizeLoose } = require('../compendium/text');
+const Game = require('../../core/game/Game');
+const { FIELDS: LOBBY_FIELDS } = require('../../core/game/lobbySettings');
+const { normalizeLoose } = require('../../compendium/text');
+// The sendable shape of a character. Who may RECEIVE which one is this file's business -- never
+// anyone their own -- and that is decided below, not in the shape.
+const { publicCharacter } = require('../publicCharacter');
 
 /**
  * Clamp a client-supplied turn length to the same bounds the Discord bot enforces, so the two
@@ -71,17 +74,6 @@ function createSetup({ order, guildId, listIds, difficulty, characters, turnSeco
   return game;
 }
 
-// The safe, sendable shape of a character -- never includes anything that would identify the
-// viewer's OWN character to them.
-//
-// Artwork is handed out as a local /img/<id> path rather than the upstream CDN URL, so phones
-// fetch from this server and the server fetches upstream once (see imageCache.js -- Commons
-// throttles by IP, and a party shares one). Characters with no database row behind them (a
-// hand-picked freeform name) have no id to look up, so they keep their original URL.
-function publicCharacter(head) {
-  const imageUrl = head.imageUrl ? (head.id != null ? `/img/${head.id}` : head.imageUrl) : null;
-  return { name: head.name, imageUrl, source: head.source ?? null };
-}
 
 /**
  * The personalized setup view for one viewer. Critically, it NEVER contains the viewer's own
@@ -289,7 +281,6 @@ module.exports = {
   applyUndo,
   applyConfirm,
   applyUnlock,
-  publicCharacter,
   clampTurnSeconds,
   DEFAULT_MAX_REROLLS,
 };

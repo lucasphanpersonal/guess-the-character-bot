@@ -1,8 +1,9 @@
-// Socket.io wiring for the web frontend: rooms, setup/confirm/reroll, the grace countdown,
-// the turn loop, and -- in host-picks mode -- the view of the host who picked and sits out.
+// Socket.io wiring for the phone game (party mode): rooms, setup/confirm/reroll, the grace
+// countdown, the turn loop, and -- in host-picks mode -- the view of the host who picked and sits
+// out.
 //
-// Thin on purpose: it translates socket events into calls on the room registry (rooms.js) and
-// the setup service (built in server.js from the shared core), then broadcasts state. No game
+// Thin on purpose: it translates socket events into calls on the room registry (../rooms.js) and
+// the setup service (built in ./index.js over ../content.js), then broadcasts state. No game
 // rules and no DB access live here -- rooms.js and gameSetup.js hold those and are unit-tested
 // without a network. Seats are keyed by a persistent client playerId (handshake auth), never by
 // socket id, so a reconnecting phone reclaims its seat and its in-progress setup view.

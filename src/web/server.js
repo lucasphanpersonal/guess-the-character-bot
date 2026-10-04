@@ -1,10 +1,19 @@
-// Guess the Character -- web app server.
+// Guess the Character -- the web server, and everything its games share.
 //
 // The second frontend, alongside the Discord bot (src/discord). Both import their game state
-// and content from the SAME shared core (src/core) -- see docs/mobile-app-plan.md#architecture.
+// from the shared core (src/core) and their content from the compendium (src/compendium) -- see
+// docs/mobile-app-plan.md#architecture.
 //
-// Serves the client, the socket.io transport, character artwork through a local read-through
-// cache, the compendium's browse endpoints, and the join QR.
+// It hosts the web GAMES and owns what they have in common: the HTTP(S) servers and the one
+// socket.io instance, static files, character artwork through a local read-through cache, the
+// compendium's browse endpoints, the join QR, and the room registry (one registry, so a room
+// code means one room whichever game it is). Each game is a module under this directory that
+// brings its own client and its own socket protocol:
+//
+//   party/   the phone game -- foreheads and tilt. Served at the site root.
+//
+// What a game needs from the content comes from ./content.js, never from the compendium
+// directly, so what the web deals from is decided in one place.
 
 const http = require('http');
 const https = require('https');
@@ -13,158 +22,25 @@ const path = require('path');
 const os = require('os');
 const { Server } = require('socket.io');
 
-// --- Shared core: the exact same modules the Discord bot uses -----------------------------
 const GameManager = require('../core/game/GameManager');
 const characterLists = require('../compendium/characterLists');
 const { TurnRotationMode } = require('../core/game/roundMode');
 
-// --- Web-only: transport + room membership + setup ----------------------------------------
 const { RoomRegistry } = require('./rooms');
-const { attachSockets } = require('./socket');
-const gameSetup = require('./gameSetup');
+const { WEB_SCOPE } = require('./content');
 const imageCache = require('./imageCache');
+const party = require('./party');
 
 const PORT = process.env.WEB_PORT || 4180;
-// The compendium scope the web app plays as: it sees the shared lists, and deals from its OWN
-// playable selection (see src/compendium/characterLists.js). This used to borrow the richest
-// Discord server's id, which meant reading -- and risking writing -- that server's selection.
-// Curate it with `npm run select:lists`. Resolved in the compendium (WEB_SCOPE overrides 'web'),
-// because /list create in Discord switches new lists on for this same scope.
-const { WEB_SCOPE } = characterLists;
-const PUBLIC_DIR = path.join(__dirname, 'public');
+// Party mode owns the site root: it was the only game when the links and QR codes out there were
+// made, and the client is unversioned.
+const PUBLIC_DIR = party.publicDir;
 
 const registry = new RoomRegistry();
 
 // At module load, not inside the run-as-script guard: the socket check requires this file
 // rather than spawning it, and an uninitialised cache silently redirects everything upstream.
 const cachedImages = imageCache.init();
-
-// --- Setup service: resolves a pool, deals, and drives confirm/reroll via the core ---------
-// Injected into the socket layer so socket.js stays transport-only (no DB access there).
-const content = {
-  demoteThreshold: characterLists.REROLL_DEMOTE_THRESHOLD,
-  rerollOne: (listIds, excludeNames, difficulty, opts) =>
-    characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty, opts),
-  recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),
-  // Host-picks mode. Scope-checked, because the id comes from a client.
-  characterById: (id) => characterLists.getCharacterById(WEB_SCOPE, id),
-  freeform: (name) => characterLists.freeformCharacter(name),
-  randomCharacters: (listIds, n, excludeNames, difficulty, opts) =>
-    characterLists.getRandomCharacters(listIds, n, excludeNames, difficulty, opts),
-};
-
-// `excluded` is the room's own opt-outs, applied on top of the shared selection rather than
-// written back into it -- see the note on Room.excludedListIds.
-function resolvePool({ poolType, category, excluded = new Set() }) {
-  const keep = (lists) => lists.map((l) => l.id).filter((id) => !excluded.has(id));
-  if (poolType === 'category' && category) {
-    return { listIds: keep(characterLists.getEnabledListsByCategory(WEB_SCOPE, category)), label: category };
-  }
-  if (poolType === 'random') {
-    const cat = characterLists.getRandomCategory(WEB_SCOPE);
-    if (!cat) return { listIds: [], label: 'nothing enabled' };
-    return { listIds: keep(characterLists.getEnabledListsByCategory(WEB_SCOPE, cat)), label: `Random: ${cat}` };
-  }
-  // Default: everything enabled in this scope.
-  return { listIds: keep(characterLists.getEnabledLists(WEB_SCOPE)), label: 'Everything' };
-}
-
-const setup = {
-  options() {
-    const categories = characterLists
-      .listCategoriesWithEnabledCounts(WEB_SCOPE)
-      .filter((c) => c.enabled > 0)
-      .map((c) => ({ category: c.category, enabled: c.enabled }));
-    const difficulties = Object.entries(characterLists.DIFFICULTIES).map(([key, d]) => ({
-      key,
-      label: d.label,
-      blurb: d.blurb,
-    }));
-    return { categories, difficulties, defaultDifficulty: characterLists.DEFAULT_DIFFICULTY };
-  },
-
-  // preferImages is OFF unless the host asks for it: restricting the draw to characters that
-  // happen to have artwork silently shrinks the pool and biases it toward the better-documented
-  // franchises, which is a real change to what the game deals. It is the host's call, not a default.
-  // `hostPicks` is the mode where the host chooses everyone's character and sits the game out;
-  // `picks` is their choice per player (see gameSetup.dealWithPicks). The pool still matters in
-  // that mode, for anyone the host left on random.
-  start(room, { poolType = 'random', category = null, difficulty = characterLists.DEFAULT_DIFFICULTY, turnSeconds, preferImages = false, hostPicks = false, picks = {} } = {}) {
-    const { listIds, label } = resolvePool({ poolType, category, excluded: room.excludedListIds });
-    let order = [...room.order];
-    let characters;
-    if (hostPicks) {
-      order = order.filter((id) => id !== room.hostPlayerId);
-      // Two, not one: every player checks the NEXT player's character, and a lone guesser's
-      // "next player" is themselves -- the check screen would show them their own card.
-      if (order.length < 2) return { ok: false, error: 'Picking for everyone needs at least 2 players besides you.' };
-      const names = Object.fromEntries([...room.players].map(([id, seat]) => [id, seat.nickname]));
-      const dealt = gameSetup.dealWithPicks({ order, picks, names, content, listIds, difficulty, preferImages: !!preferImages });
-      if (!dealt.ok) return dealt;
-      characters = dealt.characters;
-    } else {
-      if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
-      const n = order.length;
-      const available = characterLists.countDistinctCharacters(listIds, difficulty);
-      if (available < n) {
-        return { ok: false, error: `${label} has only ${available} characters at this difficulty; need ${n}.` };
-      }
-      characters = characterLists.getRandomCharacters(listIds, n, [], difficulty, { preferImages: !!preferImages });
-      if (characters.length < n) return { ok: false, error: 'Could not deal enough distinct characters.' };
-    }
-
-    const clampedTurnSeconds = gameSetup.clampTurnSeconds(turnSeconds);
-    room.game = gameSetup.createSetup({
-      order,
-      guildId: WEB_SCOPE,
-      listIds,
-      difficulty,
-      characters,
-      preferImages: !!preferImages,
-      rerollAllowed: !hostPicks,
-      ...(clampedTurnSeconds !== undefined ? { turnSeconds: clampedTurnSeconds } : {}),
-    });
-    const shownLabel = hostPicks ? 'Picked by the host' : label;
-    room.poolLabel = shownLabel;
-    // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring. The
-    // picks themselves are deliberately NOT kept: re-dealing the same hand-picked characters to
-    // people who have just watched each other's all game would be no game at all.
-    room.lastSetup = { poolType, category, difficulty, turnSeconds: room.game.turnSeconds, preferImages: !!preferImages, hostPicks: !!hostPicks };
-    return { ok: true, label: shownLabel };
-  },
-
-  // Curation for this room only. Shows the lists already in the web's playable selection and
-  // lets the host drop some for THIS game; it never writes to the selection, so one party can't
-  // reshape what the next party gets dealt.
-  listsInCategory(category, room) {
-    return characterLists
-      .listsForFilter(WEB_SCOPE, category)
-      .filter((l) => l.enabled === 1)
-      .map((l) => ({ id: l.id, name: l.name, count: l.character_count, playing: !room.excludedListIds.has(l.id) }));
-  },
-  // The id arrives from a client, so it is NOT trusted -- it must name a list that really is in
-  // this scope's playable selection before the room may act on it.
-  toggleList(listId, room) {
-    const [list] = characterLists.getListsByIds([listId], WEB_SCOPE);
-    if (!characterLists.isVisibleTo(list, WEB_SCOPE) || list.enabled !== 1) return { ok: false, error: 'Unknown list.' };
-    if (room.excludedListIds.has(list.id)) room.excludedListIds.delete(list.id);
-    else room.excludedListIds.add(list.id);
-    return { ok: true, playing: !room.excludedListIds.has(list.id) };
-  },
-
-  view: (game, viewerId, names) => gameSetup.buildView(game, viewerId, names),
-  hostView: (game, names) => gameSetup.buildHostSetupView(game, names),
-  reroll: (game, viewerId) =>
-    gameSetup.applyReroll(game, viewerId, {
-      content,
-      listIds: game.lobby.listIds,
-      difficulty: game.lobby.difficulty,
-      preferImages: game.lobby.preferImages,
-    }),
-  undo: (game, viewerId) => gameSetup.applyUndo(game, viewerId),
-  confirm: (game, viewerId) => gameSetup.applyConfirm(game, viewerId),
-  unlock: (game, viewerId) => gameSetup.applyUnlock(game, viewerId),
-};
 
 const CONTENT_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -448,7 +324,7 @@ function devTlsOptions() {
 // itself rather than nothing at all. HTTPS is additive.
 const server = http.createServer(requestHandler);
 const io = new Server(server); // serves its browser client at /socket.io/socket.io.js
-attachSockets(io, { registry, setup });
+party.attach(io, { registry });
 
 // The same io handles both servers, so players on http and https share rooms.
 const httpsServer = USE_HTTPS ? https.createServer(devTlsOptions(), requestHandler) : null;

@@ -10,7 +10,7 @@
 // read, the wearer holds it to their head and doesn't look, and a tilt resolves the turn --
 // exactly as the physical game trusts. See `myCharacter` in buildGameView below.
 
-const { publicCharacter } = require('./gameSetup');
+const { publicCharacter } = require('../publicCharacter');
 
 /** Begin a turn for the current player: their turn counter ticks up. */
 function startTurn(game) {

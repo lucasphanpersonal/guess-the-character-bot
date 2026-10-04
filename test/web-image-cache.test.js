@@ -13,7 +13,7 @@ process.env.WEB_IMAGE_CACHE_DIR =
 
 const { assert } = require('./harness');
 const cache = require('../src/web/imageCache');
-const { publicCharacter } = require('../src/web/gameSetup');
+const { publicCharacter } = require('../src/web/publicCharacter');
 
 function theKeyIsTheUrlNotTheCharacter() {
   // Keying on the character id would serve the OLD picture forever after re-pointing a character

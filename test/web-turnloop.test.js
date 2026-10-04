@@ -1,10 +1,10 @@
-// Unit tests for the web turn loop (src/web/turnLoop.js). Uses the real core Game via
+// Unit tests for the web turn loop (src/web/party/turnLoop.js). Uses the real core Game via
 // gameSetup; no socket.io, no network. Verifies the ported engine.js rules: rotation, scoring
 // by turns taken, pass vs give-up, resolve-once, out-of-contention, and the button logic.
 
 const { assert } = require('./harness');
-const { createSetup } = require('../src/web/gameSetup');
-const loop = require('../src/web/turnLoop');
+const { createSetup } = require('../src/web/party/gameSetup');
+const loop = require('../src/web/party/turnLoop');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 

@@ -1,4 +1,4 @@
-// The tilt gesture rules (src/web/public/tilt.js), which decide when a phone on a forehead has
+// The tilt gesture rules (src/web/party/public/tilt.js), which decide when a phone on a forehead has
 // answered. Pure, so it can be driven here with a fake clock instead of a real accelerometer.
 //
 // Every case below is a bug somebody hit at a party. Tilting UP is irreversible -- it ends the
@@ -6,7 +6,7 @@
 // are the ones asserting it does NOT fire.
 
 const { assert } = require('./harness');
-const TiltRules = require('../src/web/public/tilt');
+const TiltRules = require('../src/web/party/public/tilt');
 
 const UPRIGHT = 0.5;   // on a forehead
 const FLAT = -9.8;     // face up on a table -- which reads as the strongest "got it" there is
