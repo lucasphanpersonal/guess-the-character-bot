@@ -23,7 +23,7 @@
 
 const Game = require('../../core/game/Game');
 const { FIELDS: LOBBY_FIELDS } = require('../../core/game/lobbySettings');
-const { normalizeLoose } = require('../../compendium/text');
+const { identityKeys } = require('../../compendium/answers');
 // The sendable shape of a character. Who may RECEIVE which one is this file's business -- never
 // anyone their own -- and that is decided below, not in the shape.
 const { publicCharacter } = require('../publicCharacter');
@@ -127,9 +127,10 @@ const TYPED_NAME_MAX = 60;
  * capped. An empty pick means "random", so the host can decide for two people and let chance
  * have the rest.
  *
- * Duplicates are judged with normalizeLoose, the same key the judge uses, so "Spider-Man" and a
- * typed "spiderman" are one character here too -- and the random fill excludes the picks by that
- * same key, or it could deal the pool's spelling of a character the host already handed out.
+ * Duplicates are judged with identityKeys, the same keys the guess-checker and the pool dedupe
+ * use, so "Spider-Man" and a typed "spiderman" -- or "Tails" and Miles "Tails" Prower -- are one
+ * character here too. The random fill excludes the picks by those same keys, or it could deal the
+ * pool's spelling of a character the host already handed out.
  *
  * @param {object} args
  * @param {string[]} args.order     playerIds being dealt in, in seat order (the host is not one)
@@ -156,9 +157,10 @@ function dealWithPicks({ order, picks = {}, names = {}, content, listIds, diffic
 
   const holder = new Map();
   for (const [playerId, c] of Object.entries(chosen)) {
-    const key = normalizeLoose(c.name);
-    if (holder.has(key)) return { ok: false, error: `${nameOf(holder.get(key))} and ${nameOf(playerId)} would both be ${c.name}.` };
-    holder.set(key, playerId);
+    const keys = identityKeys(c.name);
+    const clash = keys.find((k) => holder.has(k));
+    if (clash) return { ok: false, error: `${nameOf(holder.get(clash))} and ${nameOf(playerId)} would both be ${c.name}.` };
+    for (const k of keys) holder.set(k, playerId);
   }
 
   const unpicked = order.filter((id) => !chosen[id]);

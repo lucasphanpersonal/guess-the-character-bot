@@ -18,7 +18,8 @@
 // That is what the content scripts (seeding, image fills) work against.
 
 const db = require('./db');
-const { foldDiacritics, normalizeLoose } = require('./text');
+const { foldDiacritics } = require('./text');
+const { identityKeys } = require('./answers');
 
 // The web app's scope, resolved once, here: the web server plays as it, and /list create in
 // Discord switches a new list on for it too -- two processes that must agree on the name.
@@ -360,18 +361,20 @@ function drawablePool(listIds, difficulty) {
 // lists both containing "Mario") -- dedupe by name, keeping the first occurrence, so the same
 // character can never end up assigned to both players.
 //
-// Keyed with normalizeLoose, which is the same test the judge uses to decide whether a guess
-// matches a name. That is exactly the right bar: if "Spider-Man" and "Spiderman" are one answer
-// to the judge, dealing both of them puts two players in a room wearing what is, as far as the
-// game is concerned, the same character -- and whichever of them is guessed, one of the two is
-// wrong for reasons nobody can see. A plain lowercase key let every such pair through.
+// Keyed with identityKeys (./answers.js), the forms the guess-checker accepts as the whole name.
+// That is exactly the right bar: if "Spider-Man" and "Spiderman" -- or "Noelle Silva" and "Silva
+// Noelle" -- are one answer to the checker, dealing both of them puts two players in a room
+// wearing what is, as far as the game is concerned, the same character, and whichever of them is
+// guessed, one of the two is wrong for reasons nobody can see. A plain lowercase key let every
+// such pair through; so did normalizeLoose alone, once the checker learned word order and
+// nicknames. Two characters are one when they share ANY key.
 function dedupeByName(characters) {
   const seen = new Set();
   const deduped = [];
   for (const c of characters) {
-    const key = normalizeLoose(c.name);
-    if (seen.has(key)) continue;
-    seen.add(key);
+    const keys = identityKeys(c.name);
+    if (keys.some((k) => seen.has(k))) continue;
+    for (const k of keys) seen.add(k);
     deduped.push(c);
   }
   return deduped;
@@ -383,8 +386,8 @@ function dedupeByName(characters) {
 // lowercase key let that through, so a random fill or a reroll could put the same character on
 // two heads -- which is the dedupe bug all over again, arriving by a different door.
 function notExcluded(excludeNames) {
-  const excluded = new Set([...excludeNames].map(normalizeLoose));
-  return (c) => !excluded.has(normalizeLoose(c.name));
+  const excluded = new Set([...excludeNames].flatMap(identityKeys));
+  return (c) => !identityKeys(c.name).some((k) => excluded.has(k));
 }
 
 // Counts what would actually be dealt, not what the lists hold -- the lobby board uses this
@@ -612,8 +615,14 @@ function getRandomCharacterExcluding(listIds, excludeNames, difficulty = DEFAULT
   return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
+// The spelling typed if the pool has it, else the pool's spelling of the same character -- the
+// dedupe keeps one of "Noelle Silva" / "Silva Noelle", and either typed should find it.
 function getCharacterByNameInLists(listIds, name) {
-  return dedupeByName(getCharactersForLists(listIds)).find((c) => c.name.toLowerCase() === name.toLowerCase()) || null;
+  const pool = dedupeByName(getCharactersForLists(listIds));
+  const exact = pool.find((c) => c.name.toLowerCase() === name.toLowerCase());
+  if (exact) return exact;
+  const keys = new Set(identityKeys(name));
+  return pool.find((c) => identityKeys(c.name).some((k) => keys.has(k))) || null;
 }
 
 // A hand-picked name that isn't in any list -- an inside joke, a person not in the database,

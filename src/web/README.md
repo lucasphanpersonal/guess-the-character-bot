@@ -148,7 +148,7 @@ Endpoints that prove the shared core is reachable from this frontend:
   auto-resolve to the richest Discord guild, which meant playing -- and risking writing -- that
   server's selection.
   **Host-picks mode:** `dealWithPicks` validates the host's picks (ids scope-checked, duplicates
-  judged with `normalizeLoose`) and random-fills the rest; the sitting-out host gets
+  judged with the guess-checker's `identityKeys`) and random-fills the rest; the sitting-out host gets
   `host:state` views, which hold every character and so go to that host alone —
   `check-web-socket` records every event every player receives and asserts none is one.
   Picker search is `GET /api/browse/search?q=`.

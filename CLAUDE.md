@@ -201,7 +201,11 @@ consistent — new UI should look like it was always there.
 - *Dedupe with the same key the judge compares with.* The draw dropped duplicate names using a
   plain lowercase key, so "Spider-Man" and "Spiderman" were two draws from two lists -- and two
   players wore one character. If the judge accepts either spelling as one answer, the pool has to
-  treat them as one character; `normalizeLoose` is that test and both sides now use it.
+  treat them as one character. The judge is now `src/compendium/answers.js`, and its
+  `identityKeys` are the test: the pool dedupe, the in-play exclusion and the host-picks check all
+  use them. **Widen the checker and you widen the dedupe** -- they must move together, which is
+  why they live in one file. Measured on the live compendium when they did: the checker accepts no
+  character's full name for a different character, and the keys merged 89 of 20,749.
 - *Sample what a pattern actually matched before quoting a number or deleting rows.* A regex
   for "credit extras" matched Kay/O, K/DA and AC/DC; the claimed 65 was really 13.
 - *Commons throttles by IP, and a party shares one.* That is why `/img/<id>` reads through a

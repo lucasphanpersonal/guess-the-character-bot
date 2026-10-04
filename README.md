@@ -347,6 +347,22 @@ because the web app could already see them — while any other server's lists st
 it. Every server keeps exactly the selection it had, and the web app starts with a copy of that
 server's selection, so it deals what it dealt before.
 
+### Checking a typed guess
+
+The Discord bot and the phones leave guesses to the people at the table. Games played on a
+computer can't, so the compendium has a checker (`src/compendium/answers.js`) with three
+verdicts:
+
+| Verdict | For |
+| --- | --- |
+| **correct** | The name however it's typed (`spiderman`, `uzumaki naruto`); without a qualifier or a leading "The"; a quoted nickname alone (`Tails`) or the name without it; the part before a describing comma (`Catherine`). And — only if the game turns it on — one word of a two- or three-word name when nobody else in the pool has it (`Sasuke`). |
+| **close** | Something a person should look at: a title stripped off (`Leia` for Princess Leia, but also `America` for Captain America), a word other characters share (`Uzumaki`), a typo or two, or the right name with extra words. |
+| **wrong** | Everything else. |
+
+Run against every character in the compendium, it never accepts one character's full name for a
+different character's. The same rules decide which two names are one character when a game is
+dealt, so nobody is dealt "Noelle Silva" while somebody else wears "Silva Noelle".
+
 ### Audience-vote mode
 
 Add `audience-vote:true` to `/lobby create` — or hit the **🗳️ Audience vote** toggle on the
@@ -670,8 +686,9 @@ src/
     db.js                 Applies schema.sql + migrates older layouts (guild-scoped lists -> scopes)
     schema.sql            character_lists, characters, character_rerolls, list_selection
     characterLists.js     Scopes, selections, list/character queries, random dealing, search
+    answers.js            The guess-checker (correct / close / wrong) and the keys the pool dedupes by
     characterImages.js    Which image sources can be believed to depict the character
-    text.js               Shared accent/case normalization (the judge's matching key)
+    text.js               Shared accent/case normalization
 
   core/                 Shared, frontend-agnostic. Imports compendium/, never discord/ or web/.
     db/

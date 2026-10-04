@@ -64,6 +64,10 @@ function theSameCharacterTwiceIsRefusedNamingBoth() {
   const r = deal({ a: { id: 1 }, b: { name: 'spiderman' } });
   assert.equal(r.ok, false);
   assert.ok(r.error.includes('Alex') && r.error.includes('Sam'), r.error);
+  // The checker's other spellings of one character count too: the name reversed, a nickname.
+  assert.equal(deal({ a: { name: 'Noelle Silva' }, b: { name: 'Silva Noelle' } }).ok, false);
+  assert.equal(deal({ a: { name: 'Miles "Tails" Prower' }, b: { name: 'Tails' } }).ok, false);
+  assert.equal(deal({ a: { name: 'Sasuke Uchiha' }, b: { name: 'Itachi Uchiha' } }).ok, true, 'a shared surname is two people');
 }
 
 // The pool here holds "Spiderman"; the host picked "Spider-Man". The fill must not hand it out.

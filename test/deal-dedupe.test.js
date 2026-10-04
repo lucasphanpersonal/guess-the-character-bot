@@ -39,6 +39,36 @@ function spacingVariantsCountAsOneCharacter() {
   assert.equal(lists.countDistinctCharacters(listIds, 'everything'), 1);
 }
 
+// Once the checker accepted the words in any order and a quoted nickname on its own, those became
+// "one answer" too -- and the live compendium had 67 such pairs INSIDE single lists (Black
+// Clover's "Noelle Silva" and "Silva Noelle"), every one of them dealable to two players at once.
+function wordOrderVariantsCountAsOneCharacter() {
+  const listIds = seedTwoLists(['Noelle Silva', 'Asta'], ['Silva Noelle']);
+  assert.equal(lists.countDistinctCharacters(listIds, 'everything'), 2);
+}
+
+function aNicknameAndTheFullNameCountAsOneCharacter() {
+  const listIds = seedTwoLists(['Miles "Tails" Prower', 'Sonic'], ['Tails']);
+  assert.equal(lists.countDistinctCharacters(listIds, 'everything'), 2);
+}
+
+function anyKeyInPlayKeepsTheOtherSpellingOut() {
+  const listIds = seedTwoLists(['Miles "Tails" Prower', 'Knuckles'], []);
+  for (let i = 0; i < 10; i++) {
+    const drawn = lists.getRandomCharacters(listIds, 5, ['Tails'], 'everything').map((c) => c.name);
+    assert.deepEqual(drawn, ['Knuckles'], 'Tails is in play, so Miles "Tails" Prower is too');
+  }
+  // ...and a typed name finds the pool's spelling of the same character.
+  assert.equal(lists.getCharacterByNameInLists(listIds, 'Tails')?.name, 'Miles "Tails" Prower');
+}
+
+// The keys are the WHOLE name's forms, never a single word: "Sasuke Uchiha" and "Itachi Uchiha"
+// share "Uchiha", and they are two people.
+function sharingOneWordIsNotBeingTheSameCharacter() {
+  const listIds = seedTwoLists(['Sasuke Uchiha', 'Itachi Uchiha'], ['Naruto Uzumaki', 'Kushina Uzumaki']);
+  assert.equal(lists.countDistinctCharacters(listIds, 'everything'), 4);
+}
+
 // The counter and the draw read the same pool, so a room is never told it has enough characters
 // to deal and then handed fewer.
 function genuinelyDifferentNamesAllSurvive() {
@@ -72,5 +102,9 @@ module.exports = {
   'punctuation variants count as one character': punctuationVariantsCountAsOneCharacter,
   'accent variants count as one character': accentVariantsCountAsOneCharacter,
   'spacing variants count as one character': spacingVariantsCountAsOneCharacter,
+  'word-order variants count as one character': wordOrderVariantsCountAsOneCharacter,
+  'a nickname and the full name count as one character': aNicknameAndTheFullNameCountAsOneCharacter,
+  'any key in play keeps the other spelling out': anyKeyInPlayKeepsTheOtherSpellingOut,
+  'sharing one word is not being the same character': sharingOneWordIsNotBeingTheSameCharacter,
   'genuinely different names all survive': genuinelyDifferentNamesAllSurvive,
 };
