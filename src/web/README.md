@@ -1,9 +1,20 @@
-# Web app (party mode)
+# Web app
 
-The phone-in-hand, Heads Up–style frontend, living **side by side** with the Discord bot in
-the same repo without tangling into it. Full design: [docs/mobile-app-plan.md](../../docs/mobile-app-plan.md).
+Guess the Character in a browser, living **side by side** with the Discord bot in the same repo
+without tangling into it. Two ways to play, from one server:
 
-Play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
+- **Phones** (party mode, the site root): Heads Up–style, below. Full design:
+  [docs/mobile-app-plan.md](../../docs/mobile-app-plan.md).
+- **Computers** (`/desk/`): every screen shows everyone's character except its owner's.
+  Questions are asked out loud or over a call; on your turn you type a name. The compendium's
+  guess-checker rules: a clear match is "got it", a clear miss costs nothing (no limit), and a
+  close one (a typo, a stripped title, a shared surname) goes to the other players — the first
+  to tap Yes or No (or press <kbd>Y</kbd>/<kbd>N</kbd>) settles it. Nobody ruling within 20 s
+  (`WEB_DESK_RULING_MS`) counts as a miss, and a turn whose clock runs out mid-ruling waits for
+  it. No countdown, no motion sensors. Host-picks mode works on the server but has no picker in
+  the computer client yet.
+
+Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
 ("phone on your forehead!") → each phone shows its wearer's character full-screen, landscape,
 for the room → on your turn, **tilt up = got it, tilt down / time out = pass** → fewest turns
@@ -37,19 +48,37 @@ web/
   rooms.js             The room registry -- one for every game, so a code means one room.
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
-  party/               Party mode, the phone game. Served at the site root and on the default
-                       socket.io namespace, because the links and QR codes out there point there.
-    index.js             Its setup service, and what server.js mounts.
-    socket.js            Its socket protocol.
+  guess/               Guess the Character on the web, however it is played.
     gameSetup.js         Dealing and the confirm/reroll screen (pure, unit-tested).
-    turnLoop.js          Turns and the forehead display (pure, unit-tested).
+    turnLoop.js          Turns, standings, the clock, results (pure, unit-tested).
+    service.js           The setup service both ways of playing drive.
+    socket.js            The room/setup/turn protocol, parameterised by a VARIANT.
+  party/               Phones: the forehead variant. Served at the site root and on the default
+                       socket.io namespace, because the links and QR codes out there point there.
+    index.js             The variant: forehead view, a grace countdown, the tilt event.
+    view.js              The forehead view -- the one view that carries your OWN character.
     public/              The phone client: index.html, app.js, tilt.js.
+  desk/                Computers: the board variant. Served at /desk/, namespace /desk.
+    index.js             The variant: board view, no countdown, guess + ruling events.
+    guessing.js          Typed guesses and the other players' rulings (pure, unit-tested).
+    view.js              The board: everyone's character but yours.
+    public/              The computer client.
 ```
 
-A computer game (Guess the Character on a laptop, Draw the Character) goes in a folder of its
-own beside `party/`, with its own client path and its own socket.io namespace, and gets rooms,
-pools and images from the shared files above for free. Anything it would copy out of `party/`
-is the signal to move that piece up a level instead.
+**Two ways of playing one game.** Phones and computers deal, check, take turns and score by
+exactly the same rules (`guess/`); a variant supplies only what genuinely differs — what a
+player sees, the events that answer a turn, whether there is a countdown. The variant's VIEW is
+the dangerous part: the forehead view sends each phone its own character on purpose, and the
+same field on a computer would show you your answer. `test/desk.test.js` and the socket check
+both search every payload a computer receives for its own character.
+
+Rooms carry a `kind` (`party` / `desk`) and each protocol only joins its own, so a phone can
+never be dealt into a game its client cannot draw. One registry still holds them all, so a code
+means one room either way.
+
+Another game entirely (Draw the Character) goes in a folder of its own beside these, with its
+own client path and namespace, and gets rooms, pools and images from the shared files above.
+Anything it would copy out of a game folder is the signal to move that piece up a level instead.
 
 The rule that keeps it clean: **`core/` never imports from `discord/` or `web/`.** Both
 frontends depend on the core; the core depends on neither. The codemod that created this split
@@ -74,8 +103,10 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 npm run start:all -- --secure --tunnel   # everything: web + Discord bot + a public URL
 npm run web              # HTTP on :4180 — browsing only; tilt (and so play) needs HTTPS
 npm run web:secure       # HTTP on :4180 AND HTTPS on :4443 (self-signed) — HTTPS enables tilt
-npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game)
+npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game -- both ways)
 ```
+
+The computer version needs no HTTPS (it uses no sensors): `http://<host>:4180/desk/` works.
 
 `start:all` runs both frontends (and optionally a Cloudflare tunnel) in one terminal with
 per-process prefixes, and stops them together on Ctrl+C. Flags: `--secure`, `--tunnel`,

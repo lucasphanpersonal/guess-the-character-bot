@@ -1,4 +1,4 @@
-// The turn loop, for the web frontend.
+// The turn loop, for Guess the Character on the web -- phones and computers alike.
 //
 // Ports the RULES of src/discord/game/engine.js -- rotation, scoring by turns taken, pass vs
 // give-up, the resolve-a-turn-exactly-once guard, out-of-contention -- with the Discord I/O
@@ -6,9 +6,10 @@
 // nextActiveIndex, standings, isOutOfContention), so this file is a thin, pure orchestration
 // over it: no socket.io, no DB, unit-tested on its own. The socket layer drives it and emits.
 //
-// Display model: forehead mode. Every phone shows ITS OWN wearer's character for the room to
-// read, the wearer holds it to their head and doesn't look, and a tilt resolves the turn --
-// exactly as the physical game trusts. See `myCharacter` in buildGameView below.
+// It has no opinion on what a PLAYER sees: that differs completely between the two ways of
+// playing (phones show each wearer their own character; computers show everyone's but your own),
+// so each brings its own view -- ../party/view.js and ../desk/view.js. What every view shares --
+// standings, the clock, the buttons, the results -- is here.
 
 const { publicCharacter } = require('../publicCharacter');
 
@@ -151,58 +152,16 @@ function standingsView(game, names) {
   });
 }
 
+// Shown to the current player when they can no longer win. Both ways of playing render it: it
+// was once rendered by a single code path, and deleting that path quietly stopped telling anyone.
+const OUT_OF_CONTENTION_NOTE = "You can't win it now — but getting yours still sets where you place.";
+
 // Seconds left on the current turn. When paused (the current player dropped), the clock is
 // frozen at the remaining time rather than counting down against them.
 function turnRemainingOf(game, now) {
   if (game.finished) return null;
   const ms = msLeftOf(game, now);
   return ms == null ? null : Math.max(0, Math.round(ms / 1000));
-}
-
-/**
- * Per-player view of a running (or finished) game. The current player, on their own turn, is
- * NOT shown their character; everyone else sees the guesser's character to verify a "got it".
- */
-function buildGameView(game, viewerId, names, now = Date.now()) {
-  const currentId = game.currentPlayerId;
-  const isMyTurn = viewerId === currentId && game.isActive(viewerId) && !game.finished;
-  const turnRemaining = turnRemainingOf(game, now);
-
-  return {
-    phase: game.finished ? 'over' : 'playing',
-    // True while the current player is disconnected -- their clock is held and everyone waits.
-    paused: !!game.pausedForDisconnect,
-    current: {
-      playerId: currentId,
-      name: names[currentId] ?? 'Player',
-      turnNumber: game.turnsFor(currentId),
-      outOfContention: game.isOutOfContention(currentId),
-    },
-    isMyTurn,
-    buttons: isMyTurn ? buttonsFor(game) : null,
-    // The viewer's OWN character. In forehead mode every phone shows its wearer's character for
-    // the room to see -- the wearer holds it to their head and doesn't look, exactly as the
-    // physical game trusts. Sent to everyone; only forehead mode renders it.
-    myCharacter: game.isActive(viewerId) && !game.finished ? publicCharacter(game.headByPlayer[viewerId]) : null,
-    // The guesser's character, shown to everyone but the guesser. Nothing renders this today
-    // (forehead mode shows each phone its own wearer), but it stays: `wearing === null` for the
-    // guesser is the assertion that pins down the one leak that would ruin the game, and
-    // test/web-turnloop.test.js + the socket check both hold it to that.
-    wearing: !isMyTurn && game.isActive(currentId) && !game.finished ? publicCharacter(game.headByPlayer[currentId]) : null,
-    outOfContentionNote:
-      isMyTurn && game.isOutOfContention(viewerId)
-        ? "You can't win it now — but getting yours still sets where you place."
-        : null,
-    turnRemaining,
-    turnSeconds: game.turnSeconds,
-    standings: standingsView(game, names),
-    me: {
-      finished: game.finishedBy.has(viewerId),
-      turns: game.finishedBy.get(viewerId) ?? null,
-      // Once you've got it, you've earned the reveal of what you were wearing.
-      character: game.finishedBy.has(viewerId) ? publicCharacter(game.headByPlayer[viewerId]) : null,
-    },
-  };
 }
 
 /**
@@ -255,8 +214,9 @@ module.exports = {
   forfeit,
   timeout,
   buttonsFor,
-  buildGameView,
   buildHostGameView,
   standingsView,
+  turnRemainingOf,
   resultView,
+  OUT_OF_CONTENTION_NOTE,
 };

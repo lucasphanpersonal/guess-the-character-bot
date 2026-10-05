@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#46178f" />
+  <title>Guess the Character</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
+  <!-- Seasonal theme, the same switch as the phones' page (src/web/party/public/index.html): set
+       in <head> so the first paint is already orange, and gone by itself on November 1. -->
+  <script>
+    if (new Date() < new Date(2026, 10, 1)) {
+      document.documentElement.dataset.season = 'spooky';
+      document.querySelector('meta[name=theme-color]').content = '#cc4a0c';
+      document.querySelector('link[rel=icon]').href =
+        "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎃</text></svg>";
+    }
+  </script>
+  <style>
+    /* The game-show language of the phones' page, at desk width: saturated field, white slabs
+       with a hard bottom edge, chunky buttons whose shadow IS the feel, colour always paired with
+       a shape. The tokens are the phones' own, so a change to the palette is made in both. */
+    :root {
+      --brand:#46178f; --ink:#1b1033; --paper:#fff;
+      --muted:#6b6480; --edge:#e6e2ef;
+      --red:#e21b3c; --red-d:#a81430; --blue:#1368ce; --blue-d:#0e4a95;
+      --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
+      --ok:#26890c; --off:#b9b3c7;
+      --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
+                      'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
+    }
+    :root[data-season="spooky"] { --brand:#cc4a0c; --blue:#6d28d9; --blue-d:#4c1d95; }
+    * { box-sizing:border-box; }
+    html { overflow-x:clip; }
+    body { margin:0; min-height:100vh; font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+           background:var(--brand); color:#fff; display:flex; justify-content:center; }
+    main { width:100%; max-width:72rem; padding:28px 28px 48px; }
+    h1 { font-family:var(--font-display); font-size:2.6rem; font-weight:900; letter-spacing:-.02em;
+         margin:0 0 1.2rem; text-shadow:0 3px 0 rgba(0,0,0,.28); }
+    h1 .wob-word { white-space:nowrap; }
+    h1 .wob { display:inline-block; transform:rotate(var(--rot)); }
+    h1 .wob.w0 { color:var(--red); } h1 .wob.w1 { color:#fff; } h1 .wob.w2 { color:var(--amber); } h1 .wob.w3 { color:#7fd6ff; }
+    :root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
+    :root[data-season="spooky"] h1 .wob.w1, :root[data-season="spooky"] h1 .wob.w3 { color:var(--ink); text-shadow:0 3px 0 rgba(255,255,255,.2); }
+    h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
+    .screen { display:none; }
+    .screen.active { display:block; }
+    .card { background:var(--paper); color:var(--ink); border-radius:18px; padding:20px;
+            box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    .stack > * + * { margin-top:16px; }
+    .cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; }
+    @media (max-width: 760px) { .cols { grid-template-columns:1fr; } main { padding:20px 16px 40px; } }
+    label { display:block; font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+            color:var(--muted); margin:0 0 6px; }
+    input, select { width:100%; padding:12px 14px; font-size:1.05rem; font-weight:600; border-radius:12px;
+                    border:3px solid var(--edge); background:#fff; color:var(--ink); font-family:inherit; }
+    input:focus, select:focus { outline:none; border-color:var(--blue); }
+    #codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.3rem; }
+    button { padding:14px 18px; font-size:1.02rem; font-weight:900; border:none; border-radius:14px;
+             background:var(--blue); color:#fff; cursor:pointer; box-shadow:0 6px 0 var(--blue-d);
+             transition:transform .05s, box-shadow .05s; font-family:inherit; }
+    button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
+    button.wide { width:100%; }
+    button.ghost { background:#fff; color:var(--brand); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
+    .card button.ghost { background:#f3f0f8; color:var(--ink); box-shadow:0 6px 0 #d9d3e6; }
+    button.alt { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); }
+    button.alt:active { box-shadow:0 2px 0 var(--amber-d); }
+    button.good { background:var(--green); box-shadow:0 6px 0 var(--green-d); }
+    button.good:active { box-shadow:0 2px 0 var(--green-d); }
+    button.bad { background:var(--red); box-shadow:0 6px 0 var(--red-d); }
+    button.bad:active { box-shadow:0 2px 0 var(--red-d); }
+    button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+    .row > .grow { flex:1; }
+    .err { color:var(--red); font-weight:700; min-height:1.3em; }
+    .on-field .err, .err.light { color:#ffd7dd; }
+    .hint { color:var(--muted); font-size:.92rem; }
+    .light { color:rgba(255,255,255,.88); }
+    kbd { font:700 .8rem ui-monospace, monospace; background:#f3f0f8; border:1px solid var(--edge);
+          border-bottom-width:3px; border-radius:6px; padding:1px 6px; color:var(--ink); }
+
+    /* Lobby */
+    .roomcode { font-family:var(--font-display); font-size:3.4rem; font-weight:900; letter-spacing:.06em; }
+    .roomcode .ch { display:inline-block; transform:rotate(var(--rot)); }
+    .roomcode .ch:nth-child(1) { color:var(--red); } .roomcode .ch:nth-child(2) { color:var(--blue); }
+    .roomcode .ch:nth-child(3) { color:var(--amber-d); } .roomcode .ch:nth-child(4) { color:var(--green); }
+    .roster { display:flex; flex-wrap:wrap; gap:8px; list-style:none; margin:0; padding:0; }
+    .pill { display:inline-flex; align-items:center; gap:8px; background:var(--amber); color:#2b1c00;
+            border-radius:999px; padding:8px 14px; font-weight:900; }
+    .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); }
+    .dot.off { background:var(--off); }
+    .crown { font-size:.62rem; letter-spacing:.1em; background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; border-radius:999px; }
+    .choices { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+    .choice { display:flex; align-items:center; gap:10px; padding:12px; border-radius:14px; color:#fff;
+              font-weight:800; cursor:pointer; box-shadow:0 5px 0 rgba(0,0,0,.25); }
+    .choice input { width:auto; accent-color:#fff; margin:0; }
+    .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); } .choice.c2 { background:var(--green); }
+    .choice .shape { font-size:1.1rem; }
+
+    /* Character cards. FIXED image height: artwork arrives asynchronously, and a box that grows
+       when it lands shoves everything below it -- here, the guess box being typed into. */
+    .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:16px; }
+    .pcard { background:#fff; color:var(--ink); border-radius:16px; padding:12px; box-shadow:0 6px 0 rgba(0,0,0,.22);
+             display:flex; flex-direction:column; gap:6px; position:relative; }
+    .pcard .who { font-weight:900; display:flex; align-items:center; gap:6px; min-height:1.5em; }
+    .pcard .who .turns { margin-left:auto; color:var(--muted); font-weight:700; font-size:.82rem; }
+    .pcard .art { height:170px; border-radius:12px; background:#f3f0f8; display:flex; align-items:center;
+                  justify-content:center; overflow:hidden; }
+    .pcard .art img { width:100%; height:100%; object-fit:contain; }
+    .pcard .art .noimg { color:var(--muted); font-size:.85rem; padding:10px; text-align:center; }
+    .pcard .art.mystery { background:repeating-linear-gradient(45deg, #ede8f6 0 12px, #e3dcf0 12px 24px);
+                          font-family:var(--font-display); font-size:4.4rem; font-weight:900; color:#b8acd0; }
+    .pcard .cname { font-family:var(--font-display); font-weight:900; font-size:1.12rem; line-height:1.2;
+                    min-height:2.4em; display:flex; align-items:center; }
+    .pcard .src { color:var(--muted); font-size:.78rem; min-height:1.2em; }
+    .pcard.current { outline:5px solid var(--amber); outline-offset:3px; }
+    .pcard.done { opacity:.72; }
+    .badge { font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border-radius:999px;
+             padding:2px 8px; background:#f3f0f8; color:var(--muted); }
+    .badge.go { background:var(--amber); color:#2b1c00; }
+    .badge.got { background:var(--green); color:#fff; }
+    .badge.out { background:var(--off); color:#fff; }
+
+    /* Play */
+    .turnbar { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
+    .turnbar .who { font-family:var(--font-display); font-size:1.5rem; font-weight:900; }
+    .clock { flex:1; height:14px; border-radius:999px; background:rgba(255,255,255,.25); overflow:hidden; }
+    .clock i { display:block; height:100%; width:100%; background:#fff; transition:width 1s linear, background .3s; }
+    /* The colour carries "time is short" without moving, for anyone with motion turned down. */
+    .clock.crit i { background:#ffd166; }
+    .secs { font-family:var(--font-display); font-weight:900; font-size:1.3rem; min-width:3ch; text-align:right; }
+    .guessbox { display:flex; gap:12px; }
+    .guessbox input { font-size:1.3rem; }
+    .verdict { font-weight:800; }
+    .verdict.wrong::before { content:"✗ "; color:var(--red); }
+    .verdict.correct::before { content:"✓ "; color:var(--green); }
+    .verdict.close::before { content:"? "; color:var(--amber-d); }
+    .log { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+    .log li { display:flex; gap:8px; align-items:baseline; }
+    .log .by { color:var(--muted); font-size:.82rem; }
+    .ruling { border:4px solid var(--amber); }
+    .ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
+    .feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
+    .toast { background:var(--ink); color:#fff; border-radius:12px; padding:10px 14px; box-shadow:0 5px 0 rgba(0,0,0,.3);
+             font-weight:700; animation:pop .2s ease-out; }
+    @keyframes pop { from { transform:scale(.8); opacity:0 } to { transform:scale(1); opacity:1 } }
+    @media (prefers-reduced-motion: reduce) { .toast { animation:none; } .clock i { transition:none; } }
+    .standings { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+    .standings li { display:flex; align-items:center; gap:12px; background:#f6f4fa; border-radius:12px; padding:10px 12px; }
+    .standings .place { font-family:var(--font-display); font-weight:900; font-size:1.4rem; min-width:2ch; }
+    .standings img { width:52px; height:52px; object-fit:contain; border-radius:8px; background:#fff; }
+  </style>
+</head>
+<body>
+<main>
+  <h1 id="title">Guess the Character</h1>
+
+  <!-- Landing -->
+  <section id="landing" class="screen active">
+    <div class="cols">
+      <div class="card stack">
+        <h2>Play on a computer</h2>
+        <p class="hint">Everyone sees everyone's character but their own. On your turn, ask yes-or-no
+          questions out loud or over a call, then type who you think you are. Close guesses go to the
+          others to rule on.</p>
+        <div>
+          <label for="nameInput">Your name</label>
+          <input id="nameInput" maxlength="20" autocomplete="nickname" />
+        </div>
+        <button id="createBtn" class="wide">Create a room</button>
+      </div>
+      <div class="card stack">
+        <h2>Join a room</h2>
+        <div>
+          <label for="codeInput">Room code</label>
+          <input id="codeInput" maxlength="4" autocomplete="off" />
+        </div>
+        <button id="joinBtn" class="alt wide">Join</button>
+        <p class="hint">Playing with phones on foreheads instead? That's the
+          <a href="/">phone version</a>.</p>
+      </div>
+    </div>
+    <p class="err light" id="landingErr" role="alert"></p>
+  </section>
+
+  <!-- Lobby -->
+  <section id="lobby" class="screen">
+    <div class="cols">
+      <div class="card stack">
+        <div>
+          <label>Room code</label>
+          <div class="roomcode" id="roomCode"></div>
+        </div>
+        <div class="row">
+          <input id="shareLink" readonly class="grow" aria-label="Link to this room" />
+          <button id="copyBtn" class="ghost">Copy link</button>
+        </div>
+        <div>
+          <label id="rosterLabel">Players</label>
+          <ul class="roster" id="roster"></ul>
+        </div>
+        <button id="leaveBtn" class="ghost">Leave room</button>
+      </div>
+      <div class="card stack" id="hostPanel">
+        <h2>Game settings</h2>
+        <div>
+          <label>Characters from</label>
+          <div class="choices" role="radiogroup">
+            <label class="choice c0"><input type="radio" name="pool" value="random" checked /><span class="shape">▲</span> Random category</label>
+            <label class="choice c1"><input type="radio" name="pool" value="all" /><span class="shape">◆</span> Everything</label>
+            <label class="choice c2"><input type="radio" name="pool" value="category" /><span class="shape">●</span> A category</label>
+          </div>
+        </div>
+        <div id="categoryRow" hidden>
+          <label for="categorySelect">Category</label>
+          <select id="categorySelect"></select>
+        </div>
+        <div class="row">
+          <div class="grow">
+            <label for="difficultySelect">Difficulty</label>
+            <select id="difficultySelect"></select>
+          </div>
+          <div class="grow">
+            <label for="turnSelect">Turn length</label>
+            <select id="turnSelect">
+              <option value="45">45 seconds</option>
+              <option value="60" selected>60 seconds</option>
+              <option value="90">90 seconds</option>
+              <option value="120">2 minutes</option>
+            </select>
+          </div>
+        </div>
+        <button id="startBtn" class="good wide">Deal the characters</button>
+        <p class="err" id="lobbyErr" role="alert"></p>
+      </div>
+      <div class="card" id="guestPanel" hidden>
+        <h2>Waiting for the host</h2>
+        <p class="hint" id="guestNote">The host picks where the characters come from and deals.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Setup: check and reroll -->
+  <section id="setup" class="screen">
+    <div class="cols">
+      <div class="card stack">
+        <h2 id="checkTitle">You check this one</h2>
+        <div id="checkCard"></div>
+        <p class="hint" id="checkHint"></p>
+        <div class="row">
+          <button id="rerollBtn" class="alt">Reroll</button>
+          <button id="undoBtn" class="ghost">Undo</button>
+          <button id="confirmBtn" class="good grow">Looks good</button>
+        </div>
+        <p class="err" id="setupErr" role="alert"></p>
+      </div>
+      <div class="stack">
+        <div class="card">
+          <h2>Everyone else's</h2>
+          <p class="hint">Yours stays hidden until you work it out.</p>
+          <div class="cards" id="referenceCards"></div>
+        </div>
+        <p class="light" id="waitingNote"></p>
+        <button id="cancelDealBtn" class="ghost" hidden>Cancel this deal</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Play -->
+  <section id="game" class="screen">
+    <div class="turnbar">
+      <div class="who" id="turnWho"></div>
+      <div class="clock" id="clock"><i id="clockFill"></i></div>
+      <div class="secs" id="clockSecs"></div>
+    </div>
+    <div class="cols">
+      <div class="stack">
+        <div class="card stack" id="myTurnPanel" hidden>
+          <h2>Your turn: who are you?</h2>
+          <p class="hint">Ask yes-or-no questions, then type a name. A miss costs nothing.</p>
+          <form class="guessbox" id="guessForm" autocomplete="off">
+            <input id="guessInput" maxlength="80" placeholder="Type a name and press Enter" aria-label="Your guess" />
+            <button type="submit" class="good">Guess</button>
+          </form>
+          <p class="err" id="guessErr" role="alert"></p>
+          <p class="hint" id="contentionNote" hidden></p>
+          <div class="row">
+            <button id="passBtn" class="ghost">Pass</button>
+            <button id="giveUpBtn" class="bad" hidden>Give up</button>
+          </div>
+        </div>
+        <div class="card ruling stack" id="rulingPanel" hidden>
+          <div class="q" id="rulingQ"></div>
+          <div id="rulingAnswer"></div>
+          <div class="row" id="rulingButtons">
+            <button id="ruleYesBtn" class="good grow">✓ Yes, that's it <kbd>Y</kbd></button>
+            <button id="ruleNoBtn" class="bad grow">✗ No <kbd>N</kbd></button>
+          </div>
+        </div>
+        <div class="card" id="waitPanel" hidden>
+          <h2 id="waitTitle"></h2>
+          <p class="hint" id="waitHint"></p>
+        </div>
+        <div class="card">
+          <h2 id="logTitle">Guesses</h2>
+          <ul class="log" id="guessLog"></ul>
+        </div>
+      </div>
+      <div class="cards" id="board"></div>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="over" class="screen">
+    <div class="cols">
+      <div class="card stack">
+        <h2 id="overTitle">Game over</h2>
+        <ol class="standings" id="standings"></ol>
+      </div>
+      <div class="card stack">
+        <div id="hostOver" class="stack">
+          <button id="rematchBtn" class="good wide">Rematch, same settings</button>
+          <button id="againBtn" class="ghost wide">Change settings</button>
+        </div>
+        <p class="hint" id="guestOver">The host can start another game.</p>
+        <p class="err" id="overErr" role="alert"></p>
+        <button id="leaveOverBtn" class="ghost wide">Leave room</button>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="feed" id="feed" aria-live="polite"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

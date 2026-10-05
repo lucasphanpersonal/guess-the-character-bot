@@ -2,7 +2,7 @@
 //
 // Deliberately transport-agnostic: nothing here imports socket.io or touches a network, so it
 // is unit-testable in isolation (see test/web-rooms.test.js) and the socket layer
-// (src/web/party/socket.js) is a thin translation from events to these calls. This mirrors how the
+// (src/web/guess/socket.js) is a thin translation from events to these calls. This mirrors how the
 // Discord side keeps Game/GameManager as plain state with the I/O pushed to the edges.
 //
 // What a web room needs that the core Discord `Lobby` doesn't model: a nickname per seat and a
@@ -20,6 +20,14 @@ const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
 const NICK_MAX = 20;
 
+// Which game a room is, and what to tell someone whose device opened the other one. One registry
+// holds every web game's rooms, so a code means one room -- but a phone that joins a computer
+// room would be dealt into a game its client cannot draw, so each game only joins its own kind.
+const KINDS = {
+  party: 'a phone game. Join it from a phone, at the main address',
+  desk: 'a computer game. Open it on a computer, at /desk/',
+};
+
 function randomCode() {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
@@ -33,9 +41,10 @@ function cleanNickname(nickname) {
 }
 
 class Room {
-  constructor(code, hostPlayerId) {
+  constructor(code, hostPlayerId, kind = 'party') {
     this.code = code;
     this.hostPlayerId = hostPlayerId;
+    this.kind = kind;
     this.status = 'lobby'; // 'lobby' -> (later) 'setup' | 'playing' | 'finished'
     this.createdAt = Date.now();
     // Lists this room has chosen not to play with. Per-room ON PURPOSE: the obvious
@@ -76,6 +85,7 @@ class Room {
   publicState() {
     return {
       code: this.code,
+      kind: this.kind,
       status: this.status,
       hostPlayerId: this.hostPlayerId,
       // Published rather than hardcoded in the client, which had its own copy of "8".
@@ -134,8 +144,9 @@ class RoomRegistry {
     return removed;
   }
 
-  createRoom({ hostPlayerId, nickname }) {
+  createRoom({ hostPlayerId, nickname, kind = 'party' }) {
     if (!hostPlayerId) return { ok: false, error: 'Missing player id.' };
+    if (!KINDS[kind]) return { ok: false, error: 'Unknown game.' };
     const nick = cleanNickname(nickname);
     if (!nick) return { ok: false, error: 'Pick a nickname first.' };
 
@@ -151,7 +162,7 @@ class RoomRegistry {
     }
     if (!code) return { ok: false, error: 'Could not allocate a room code, try again.' };
 
-    const room = new Room(code, hostPlayerId);
+    const room = new Room(code, hostPlayerId, kind);
     room.addSeat(hostPlayerId, nick);
     this.rooms.set(code, room);
     return { ok: true, room };
@@ -164,10 +175,12 @@ class RoomRegistry {
    * rejected for a full room -- they already hold a seat. A new playerId is subject to the
    * lobby being open and not full.
    */
-  joinRoom(code, { playerId, nickname }) {
+  joinRoom(code, { playerId, nickname, kind = 'party' }) {
     const room = this.getRoom(code);
     if (!room) return { ok: false, error: 'No room with that code.' };
     if (!playerId) return { ok: false, error: 'Missing player id.' };
+    // Before the seat logic, so not even a known player reclaims a seat through the wrong game.
+    if (room.kind !== kind) return { ok: false, error: `That room is ${KINDS[room.kind]}.`, kind: room.kind };
     const nick = cleanNickname(nickname);
 
     const existing = room.players.get(playerId);
@@ -246,4 +259,4 @@ class RoomRegistry {
   }
 }
 
-module.exports = { RoomRegistry, Room, MAX_PLAYERS, randomCode, cleanNickname, CODE_LENGTH };
+module.exports = { RoomRegistry, Room, MAX_PLAYERS, randomCode, cleanNickname, CODE_LENGTH, KINDS };

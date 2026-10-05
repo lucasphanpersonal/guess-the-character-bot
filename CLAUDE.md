@@ -11,8 +11,16 @@ src/compendium/  The content: lists, characters, scopes, each scope's selection.
 src/core/        Frontend-agnostic game state + the games' records.
 src/discord/     The Discord bot.
 src/web/         The web games: shared server/rooms/content, one folder per game.
-  party/           The phone game (forehead mode, tilt). Owns the site root + default namespace.
+  guess/           Guess the Character's web rules + room protocol, shared by both ways below.
+  party/           Phones (forehead view, tilt). Owns the site root + default namespace.
+  desk/            Computers (board view, typed guesses, rulings). /desk/ + namespace /desk.
 ```
+
+**The forehead view and the board view are opposites, and only one may carry your own
+character.** `party/view.js` sends each phone its wearer's character on purpose; on a computer
+the same field shows you your answer. When adding to either view -- or to any per-player event
+-- ask which device receives it. The desk leak check searches whole payloads, because the
+dangerous field is never the one named "character".
 
 **A web game gets content through `src/web/content.js`, and rooms through `src/web/rooms.js`.**
 Shared web pieces sit at `src/web/`; a game's own rules, protocol and client sit in its folder.

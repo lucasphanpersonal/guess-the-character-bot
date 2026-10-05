@@ -452,6 +452,105 @@ const connect = (playerId) => {
   const direct = await fetch(`${URL}/api/health`).then((r) => r.json());
   check(direct.joinUrlBase.startsWith('http://'), 'join URL is plain http when not proxied');
 
+  // ---- Desk: Guess the Character on computers (/desk namespace) ------------------------------
+  //
+  // The same game played the other way round: everybody's character on screen but your own, and
+  // typed guesses. The leak that would ruin it is a payload naming your own character, so EVERY
+  // event each player receives is recorded and searched, not just the obvious fields.
+  console.log('\n# desk — computers: board, typed guesses, rulings');
+  const connectDesk = (pid) => {
+    const sock = io(`${URL}/desk`, { auth: { playerId: pid } });
+    sock.received = [];
+    sock.onAny((event, payload) => sock.received.push({ event, json: JSON.stringify(payload ?? null) }));
+    return new Promise((r) => sock.on('connect', () => r(sock)));
+  };
+  const W = await connectDesk('dW');
+  res = await W.emitWithAck('room:create', { nickname: 'Wren' });
+  check(res.ok && res.state.kind === 'desk', 'a computer creates a desk room');
+  const deskCode = res.state.code;
+  const X = await connectDesk('dX');
+  res = await X.emitWithAck('room:join', { code: deskCode, nickname: 'Xia' });
+  check(res.ok && res.state.players.length === 2, 'a second computer joins it');
+
+  // One registry, two games: neither may walk into the other's room.
+  const phone = await connect('pPhone');
+  res = await phone.emitWithAck('room:join', { code: deskCode, nickname: 'Phone' });
+  check(!res.ok && /computer/.test(res.error), "a phone cannot join a computer's room, and is told why");
+  res = await W.emitWithAck('room:join', { code: code2, nickname: 'Wren' });
+  check(!res.ok && /phone/.test(res.error), "a computer cannot join a phone's room");
+  phone.close();
+  // ...and its own room again, which that refusal must not have cost it.
+  res = await W.emitWithAck('room:join', { code: deskCode, nickname: 'Wren' });
+  check(res.ok && res.reconnected, 'the desk host still holds its own seat');
+
+  const wSetup = nextEvent(W, 'setup:state');
+  const xSetup = nextEvent(X, 'setup:state');
+  res = await W.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+  check(res.ok, 'the desk host deals');
+  await Promise.all([wSetup, xSetup]);
+
+  // No countdown on a computer: the game begins the moment both are in.
+  const wFirst = nextEvent(W, 'game:state');
+  const xFirst = nextEvent(X, 'game:state');
+  await W.emitWithAck('setup:confirm', {});
+  await X.emitWithAck('setup:confirm', {});
+  const [wView, xView] = await Promise.all([wFirst, xFirst]);
+  check(wView.phase === 'playing' && wView.board.length === 2, 'play starts straight away, with a board of two');
+  const guesser = wView.isMyTurn ? W : X;
+  const ruler = guesser === W ? X : W;
+  const guesserId = guesser === W ? 'dW' : 'dX';
+  const rulerId = guesser === W ? 'dX' : 'dW';
+  const rulerView = guesser === W ? xView : wView;
+  const guesserView = guesser === W ? wView : xView;
+  const answer = rulerView.board.find((b) => b.playerId === guesserId).character.name;
+  const rulerAnswer = guesserView.board.find((b) => b.playerId === rulerId).character.name;
+  check(guesserView.board.find((b) => b.isMe).character === null, "the guesser's own card is face down");
+  check(guesserView.buttons && guesserView.buttons.gotIt === false, 'a computer has no got-it button, only typing');
+
+  // A miss: costs nothing, the turn goes on, and everyone sees it in the log.
+  const rulerSeesMiss = nextMatching(ruler, 'game:state', (v) => v.guesses.length === 1);
+  res = await guesser.emitWithAck('game:guess', { text: 'Definitely Nobody' });
+  check(res.ok && res.verdict === 'wrong', 'a wrong guess is judged wrong');
+  check((await rulerSeesMiss).current.playerId === guesserId, '...and the turn goes on');
+
+  // A typo: close, so the OTHER player rules. Their view says what it is held up against.
+  const typo = answer.slice(0, -1) + (answer.endsWith('x') ? 'y' : 'x');
+  const rulerSeesRuling = nextMatching(ruler, 'game:state', (v) => !!v.ruling);
+  res = await guesser.emitWithAck('game:guess', { text: typo });
+  check(res.ok && res.verdict === 'close', `a typo ("${typo}" for "${answer}") is close`);
+  const ruling = (await rulerSeesRuling).ruling;
+  check(ruling.canRule && ruling.answer.name === answer, 'the other player is asked to rule, and shown the answer');
+  res = await guesser.emitWithAck('game:rule', { id: ruling.id, accept: true });
+  check(!res.ok, 'the guesser cannot rule on their own guess');
+  const revealed = nextEvent(guesser, 'game:reveal');
+  res = await ruler.emitWithAck('game:rule', { id: ruling.id, accept: true });
+  check(res.ok && res.accepted, 'the other player accepts it');
+  const reveal = await revealed;
+  check(reveal.kind === 'got' && reveal.playerId === guesserId && reveal.character.name === answer, 'an accepted ruling is "got it", revealed');
+
+  // The second player, exactly right, ends the game.
+  const deskOver = nextEvent(W, 'game:over');
+  await nextMatching(ruler, 'game:state', (v) => v.isMyTurn);
+  res = await ruler.emitWithAck('game:guess', { text: rulerAnswer.toLowerCase() });
+  check(res.ok && res.verdict === 'correct', 'an exact guess, in any case, is correct');
+  const deskResult = await deskOver;
+  check(deskResult.standings.length === 2 && deskResult.winners.some((w) => w.playerId === guesserId), 'the game ends with the first to get it winning');
+
+  // The leak check, over everything each computer was sent before its own reveal.
+  const leakedTo = (sock, pid, own) => {
+    const until = sock.received.findIndex((e) => e.event === 'game:reveal' && JSON.parse(e.json).playerId === pid);
+    const before = until === -1 ? sock.received : sock.received.slice(0, until);
+    return before.filter((e) => e.json.includes(JSON.stringify(own).slice(1, -1)));
+  };
+  const leaks = [...leakedTo(guesser, guesserId, answer), ...leakedTo(ruler, rulerId, rulerAnswer)];
+  check(leaks.length === 0, `no computer was ever sent its own character before getting it${leaks.length ? `: ${leaks.map((e) => e.event).join(', ')}` : ''}`);
+
+  const deskPage = await httpGet('/desk/');
+  check(deskPage.status === 200 && deskPage.type.includes('text/html'), 'GET /desk/ serves the computer client');
+  check((await httpGet('/desk/app.js')).type.includes('javascript'), 'GET /desk/app.js serves its script');
+  check((await httpGet('/desk')).status === 301, 'GET /desk redirects to /desk/, so relative links resolve');
+  W.close(); X.close();
+
   C2.close(); D.close();
   await wait(50);
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');

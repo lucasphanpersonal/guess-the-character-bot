@@ -1,10 +1,11 @@
-// Unit tests for the web turn loop (src/web/party/turnLoop.js). Uses the real core Game via
+// Unit tests for the web turn loop (src/web/guess/turnLoop.js). Uses the real core Game via
 // gameSetup; no socket.io, no network. Verifies the ported engine.js rules: rotation, scoring
 // by turns taken, pass vs give-up, resolve-once, out-of-contention, and the button logic.
 
 const { assert } = require('./harness');
-const { createSetup } = require('../src/web/party/gameSetup');
-const loop = require('../src/web/party/turnLoop');
+const { createSetup } = require('../src/web/guess/gameSetup');
+const loop = require('../src/web/guess/turnLoop');
+const { buildGameView } = require('../src/web/party/view');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 
@@ -152,11 +153,11 @@ function outOfContentionOffersGiveUpAlongsidePass() {
 
 function theGuesserNeverSeesTheirOwnCharacterButOthersDo() {
   const g = game(['p1', 'p2'], [row(1, 'A'), row(2, 'B')]);
-  const mine = loop.buildGameView(g, 'p1', names); // p1 is current
+  const mine = buildGameView(g, 'p1', names); // p1 is current
   assert.equal(mine.isMyTurn, true);
   assert.equal(mine.wearing, null); // guesser is shown no character
   assert.ok(mine.buttons);
-  const theirs = loop.buildGameView(g, 'p2', names); // p2 watches
+  const theirs = buildGameView(g, 'p2', names); // p2 watches
   assert.equal(theirs.isMyTurn, false);
   assert.equal(theirs.wearing.name, 'A'); // sees the guesser's character to verify
 }

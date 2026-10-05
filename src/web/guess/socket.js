@@ -1,9 +1,20 @@
-// Socket.io wiring for the phone game (party mode): rooms, setup/confirm/reroll, the grace
+// Socket.io wiring for Guess the Character on the web: rooms, setup/confirm/reroll, the grace
 // countdown, the turn loop, and -- in host-picks mode -- the view of the host who picked and sits
-// out.
+// out. Shared by both ways of playing; what differs between them is a VARIANT:
+//
+//   variant.kind           which rooms are theirs ('party' phones, 'desk' computers)
+//   variant.graceSeconds   the countdown before play (phones: time to raise them to foreheads)
+//   variant.playerView     what one player sees during play -- the one thing that MUST differ:
+//                          a phone shows its wearer their own character, a computer never may
+//   variant.attachHandlers the events only that way of playing has (a tilt; a typed guess)
+//   variant.deferTimeout   "not yet" for a turn whose clock ran out mid-something (a ruling)
+//   variant.onTurnEnded    drop state taken for one turn, with the turn
+//
+// Each variant gets its own socket.io namespace, so the two protocols never see each other's
+// sockets even though their rooms share one registry.
 //
 // Thin on purpose: it translates socket events into calls on the room registry (../rooms.js) and
-// the setup service (built in ./index.js over ../content.js), then broadcasts state. No game
+// the setup service (./service.js, over ../content.js), then broadcasts state. No game
 // rules and no DB access live here -- rooms.js and gameSetup.js hold those and are unit-tested
 // without a network. Seats are keyed by a persistent client playerId (handshake auth), never by
 // socket id, so a reconnecting phone reclaims its seat and its in-progress setup view.
@@ -18,9 +29,10 @@ function namesOf(room) {
   return names;
 }
 
-function attachSockets(io, { registry, setup }) {
+function attachSockets(nsp, { registry, setup, variant }) {
+  const turnEnded = (room) => variant.onTurnEnded?.(room);
   const broadcastRoom = (room) => {
-    if (room) io.to(room.code).emit('room:state', room.publicState());
+    if (room) nsp.to(room.code).emit('room:state', room.publicState());
   };
 
   /**
@@ -33,10 +45,10 @@ function attachSockets(io, { registry, setup }) {
    * promise that always resolved against local state.
    */
   const socketsIn = (room) => {
-    const ids = io.sockets.adapter.rooms.get(room.code) ?? [];
+    const ids = nsp.adapter.rooms.get(room.code) ?? [];
     const found = [];
     for (const id of ids) {
-      const s = io.sockets.sockets.get(id);
+      const s = nsp.sockets.get(id);
       if (s) found.push(s);
     }
     return found;
@@ -93,13 +105,14 @@ function attachSockets(io, { registry, setup }) {
   // disconnect keeps the seat.
   const abortSetupToLobby = (room, reason) => {
     if (room && (room.status === 'setup' || room.status === 'ready' || room.status === 'countdown')) {
+      turnEnded(room);
       if (room.countdownTimer) {
         clearTimeout(room.countdownTimer);
         room.countdownTimer = null;
       }
       room.status = 'lobby';
       room.game = null;
-      io.to(room.code).emit('setup:aborted', { reason });
+      nsp.to(room.code).emit('setup:aborted', { reason });
     }
   };
 
@@ -120,6 +133,7 @@ function attachSockets(io, { registry, setup }) {
     const duration = ms ?? game.turnSeconds * 1000;
     game.turnEndsAt = Date.now() + duration;
     room.turnTimer = setTimeout(() => {
+      if (variant.deferTimeout?.(room)) return; // the variant ends this turn itself
       const r = loop.timeout(game, game.currentPlayerId);
       if (r.ok) handleTurnResult(room, r, null);
     }, duration);
@@ -167,7 +181,7 @@ function attachSockets(io, { registry, setup }) {
     const now = Date.now();
     for (const s of socketsIn(room)) {
       if (room.game.turnOrder.includes(s.data.playerId)) {
-        s.emit('game:state', loop.buildGameView(room.game, s.data.playerId, names, now));
+        s.emit('game:state', variant.playerView(room, s.data.playerId, names, now));
       }
     }
     emitHost(room);
@@ -177,15 +191,19 @@ function attachSockets(io, { registry, setup }) {
   // arm the next turn and push fresh per-player state.
   function handleTurnResult(room, result, reveal) {
     const names = namesOf(room);
-    if (reveal) io.to(room.code).emit('game:reveal', { ...reveal, name: names[reveal.playerId] ?? 'Player' });
-    if (result.timedOut) io.to(room.code).emit('game:timeout', { name: names[result.finishingId] ?? 'Player' });
+    if (reveal) nsp.to(room.code).emit('game:reveal', { ...reveal, name: names[reveal.playerId] ?? 'Player' });
+    if (result.timedOut) nsp.to(room.code).emit('game:timeout', { name: names[result.finishingId] ?? 'Player' });
+
+    // Whatever the variant took for the turn that just ended goes with it -- unless the turn did
+    // not end (no nextPlayerId: somebody else left), in which case it is still that turn.
+    if (result.gameOver || result.nextPlayerId) turnEnded(room);
 
     if (result.gameOver) {
       clearTurnTimer(room);
       clearPause(room);
       room.game.turnEndsAt = null;
       room.status = 'finished';
-      io.to(room.code).emit('game:over', overView(room, names));
+      nsp.to(room.code).emit('game:over', overView(room, names));
       broadcastRoom(room);
       return;
     }
@@ -205,10 +223,11 @@ function attachSockets(io, { registry, setup }) {
     else emitGame(room);
   }
 
-  // Grace period: after everyone locks in, a synchronized countdown so players can raise their
-  // phones to their foreheads before their character appears -- the moment the whole format is
-  // built around. Configurable (WEB_GRACE_SECONDS); 0 skips straight to play (used by tests).
-  const GRACE_SECONDS = Number(process.env.WEB_GRACE_SECONDS ?? 10);
+  // Grace period: after everyone locks in, a synchronized countdown -- on phones, so players can
+  // raise them to their foreheads before their character appears, the moment that format is built
+  // around. The variant sets it (../party reads WEB_GRACE_SECONDS); 0 skips straight to play,
+  // which is what computers do and what the tests use.
+  const GRACE_SECONDS = variant.graceSeconds;
 
   const beginGame = (room) => {
     room.countdownTimer = null;
@@ -250,11 +269,12 @@ function attachSockets(io, { registry, setup }) {
   const watchdog = setInterval(() => {
     const now = Date.now();
     for (const room of registry.allRooms()) {
+      if (room.kind !== variant.kind) continue; // another game's rooms, on another namespace
       if (room.status === 'countdown' && room.countdownEndsAt && room.countdownEndsAt <= now) {
         beginGame(room);
       } else if (
         room.status === 'playing' && room.game && !room.game.pausedForDisconnect &&
-        room.game.turnEndsAt && room.game.turnEndsAt <= now
+        room.game.turnEndsAt && room.game.turnEndsAt <= now && !variant.deferTimeout?.(room)
       ) {
         const r = loop.timeout(room.game, room.game.currentPlayerId);
         if (r.ok) handleTurnResult(room, r, null);
@@ -263,14 +283,6 @@ function attachSockets(io, { registry, setup }) {
   }, WATCHDOG_MS);
   watchdog.unref?.();
 
-  // Abandoned-room sweep. Same role as GameManager.evictStaleLobbies on the Discord side.
-  const ROOM_TTL_MS = Number(process.env.WEB_ROOM_TTL_MS || 30 * 60 * 1000);
-  const sweeper = setInterval(() => {
-    const n = registry.sweepAbandoned(ROOM_TTL_MS);
-    if (n) console.log(`[web] swept ${n} abandoned room(s)`);
-  }, 5 * 60 * 1000);
-  sweeper.unref?.();
-
   // Nothing here is authenticated -- anyone with the link can open a socket -- so the two
   // unauthenticated actions that cost something are bounded per connection. Room codes are only
   // 32^4, which is guessable by machine but not by a person, so the join limit is what keeps a
@@ -278,7 +290,7 @@ function attachSockets(io, { registry, setup }) {
   const MAX_ROOMS_PER_SOCKET = 5;
   const MAX_FAILED_JOINS = 20;
 
-  io.on('connection', (socket) => {
+  nsp.on('connection', (socket) => {
     const playerId = socket.handshake.auth?.playerId;
     if (!playerId) {
       socket.emit('room:error', { error: 'Missing player id.' });
@@ -296,7 +308,7 @@ function attachSockets(io, { registry, setup }) {
       if (socket.data.created > MAX_ROOMS_PER_SOCKET) {
         return ack?.({ ok: false, error: 'Too many rooms from this device. Reload the page.' });
       }
-      const res = registry.createRoom({ hostPlayerId: playerId, nickname });
+      const res = registry.createRoom({ hostPlayerId: playerId, nickname, kind: variant.kind });
       if (!res.ok) return ack?.({ ok: false, error: res.error });
       socket.data.code = res.room.code;
       socket.join(res.room.code);
@@ -309,7 +321,7 @@ function attachSockets(io, { registry, setup }) {
       if ((socket.data.failedJoins || 0) >= MAX_FAILED_JOINS) {
         return ack?.({ ok: false, error: 'Too many failed attempts. Reload the page.' });
       }
-      const res = registry.joinRoom(code, { playerId, nickname });
+      const res = registry.joinRoom(code, { playerId, nickname, kind: variant.kind });
       if (!res.ok) {
         socket.data.failedJoins = (socket.data.failedJoins || 0) + 1;
         return ack?.({ ok: false, error: res.error });
@@ -338,7 +350,7 @@ function attachSockets(io, { registry, setup }) {
         const remaining = Math.max(0, Math.round(((res.room.countdownEndsAt ?? Date.now()) - Date.now()) / 1000));
         socket.emit('game:countdown', { seconds: remaining });
       } else if (res.room.status === 'playing' && g?.turnOrder.includes(playerId)) {
-        socket.emit('game:state', loop.buildGameView(g, playerId, namesOf(res.room), Date.now()));
+        socket.emit('game:state', variant.playerView(res.room, playerId, namesOf(res.room), Date.now()));
       } else if (res.room.status === 'finished' && g) {
         socket.emit('game:over', overView(res.room, namesOf(res.room)));
       }
@@ -431,21 +443,13 @@ function attachSockets(io, { registry, setup }) {
     // ZERO turns -- which is exactly what a phone tilting during the reroll stage produced.
     const playing = (r) => r && r.status === 'playing' && r.game;
 
-    socket.on('game:gotit', (_p, ack) => {
-      const r = room();
-      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
-      const res = loop.gotIt(r.game, playerId);
-      ack?.(res);
-      if (res.ok) handleTurnResult(r, res, res.reveal);
-    });
-
     // A tab that was hidden has been counting the turn down on throttled timers, so it comes
     // back with a clock that has drifted and nothing to correct it until the turn changes.
     // Answering on the way back costs one message and beats pushing to everyone on a schedule.
     socket.on('game:resync', (_p, ack) => {
       const r = room();
       if (!playing(r) || !r.game.turnOrder.includes(playerId)) return ack?.({ ok: false });
-      socket.emit('game:state', loop.buildGameView(r.game, playerId, namesOf(r), Date.now()));
+      socket.emit('game:state', variant.playerView(r, playerId, namesOf(r), Date.now()));
       ack?.({ ok: true });
     });
 
@@ -470,6 +474,7 @@ function attachSockets(io, { registry, setup }) {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can restart.' });
+      turnEnded(r);
       clearTurnTimer(r);
       clearCountdown(r);
       r.game = null;
@@ -498,6 +503,7 @@ function attachSockets(io, { registry, setup }) {
             'Get another person to join with the room code, then try again.',
         });
       }
+      turnEnded(r);
       clearTurnTimer(r);
       clearCountdown(r);
       const res = setup.start(r, r.lastSetup || {});
@@ -571,6 +577,10 @@ function attachSockets(io, { registry, setup }) {
       ack?.({ ok: true });
       broadcastRoom(after);
     });
+
+    // The events only this way of playing has. Handed what they need to act like the handlers
+    // above: the room, whether it is really playing, and the one path that resolves a turn.
+    variant.attachHandlers?.(socket, { playerId, room, playing, handleTurnResult, emitGame, namesOf });
 
     socket.on('disconnect', () => {
       const code = socket.data.code;

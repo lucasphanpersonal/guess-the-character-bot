@@ -9,12 +9,20 @@ The bot is the impartial host. It deals characters, DMs each player what they ne
 runs the turn clock, judges guesses, and keeps score — all the actual questions and answers
 happen live between humans in voice.
 
-> **There's also a phone/party version.** A second frontend turns this into a Heads Up–style
-> game where each player holds a phone to their forehead and tilts to answer — no Discord
-> needed. It shares this project's game core and content. See
-> [src/web/README.md](src/web/README.md) to run it (`npm run web:secure`), and
-> [docs/mobile-app-plan.md](docs/mobile-app-plan.md) for the design. Everything below this
-> point describes the Discord bot.
+> **It also runs in a browser, two ways — no Discord needed.** Both share this project's game
+> core and content, and run from one web server (`npm run web:secure`, see
+> [src/web/README.md](src/web/README.md)):
+>
+> - **On phones** (the site root): Heads Up–style. Each player holds a phone to their forehead,
+>   showing their character to the room, and tilts to answer. Design:
+>   [docs/mobile-app-plan.md](docs/mobile-app-plan.md).
+> - **On computers** (`/desk/`): every screen shows everyone's character but its owner's.
+>   Questions go out loud or over a call; on your turn you **type** who you think you are. A
+>   clear match counts and a clear miss is just a miss (as many as you like); anything close —
+>   a typo, a nickname — goes to the other players to rule on with one tap. See
+>   [Checking a typed guess](#checking-a-typed-guess).
+>
+> Everything below this point describes the Discord bot.
 
 ---
 
@@ -736,10 +744,11 @@ src/
     server.js             HTTP(S) + socket.io, static files, /img, browse API, QR; mounts each game
     content.js            The web's view of the compendium (scope 'web', pools, curation, dealing)
     rooms.js, publicCharacter.js, imageCache.js   Shared by every web game
-    party/                The phone game (foreheads + tilt), at the site root
-      index.js, socket.js   Its setup service and socket protocol
+    guess/                Guess the Character on the web, however it is played
       gameSetup.js, turnLoop.js   Dealing/confirm and the turn rules (pure, unit-tested)
-      public/               The phone client: index.html, app.js, tilt.js
+      service.js, socket.js       The setup service and the room/turn protocol, per variant
+    party/                Phones: forehead view, tilt, countdown. At the site root
+    desk/                 Computers: board view, typed guesses, rulings. At /desk/
 
 scripts/                Content tools (seeding, image fills, select-lists), sounds, the browser
   lib/compendiumArgs.js   Shared argument handling (drops a legacy leading server id)

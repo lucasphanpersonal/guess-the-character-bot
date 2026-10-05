@@ -321,12 +321,12 @@ recorded below, since the deviations are the useful part of a status update.
    rather than reusing the Discord `Lobby`, which models neither; seats are keyed by a persistent
    client `playerId` so a reconnect reclaims the same seat.
 2. **Setup flow — done.** Pool/difficulty picking, deal, and the confirm/reroll screen, in
-   `src/web/party/gameSetup.js` (pure, content injected) over the real core `Game`. The checker-target
+   `src/web/guess/gameSetup.js` (pure, content injected) over the real core `Game`. The checker-target
    rule and reroll-demotion are reused verbatim. The web deals from its own compendium scope
    (`'web'`, or `WEB_SCOPE`) with its own playable selection (`npm run select:lists`). It
    originally auto-resolved to the richest Discord guild, i.e. it played that server's
    selection; the compendium's scopes ended that (see "The compendium" in the README).
-3. **Turn loop — done.** `src/web/party/turnLoop.js` ports `engine.js`'s rules (rotation, fewest-turns
+3. **Turn loop — done.** `src/web/guess/turnLoop.js` ports `engine.js`'s rules (rotation, fewest-turns
    scoring, pass/give-up, resolve-once, out-of-contention) over the core `Game`, with a
    server-authoritative wall-clock turn timer.
 4. **Forehead mode + tilt — done.** Grace countdown → full-screen wearer's card → tilt to answer.

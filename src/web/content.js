@@ -28,6 +28,9 @@ const content = {
   randomCharacters: (listIds, n, excludeNames, difficulty, opts) =>
     characterLists.getRandomCharacters(listIds, n, excludeNames, difficulty, opts),
   countDistinct: (listIds, difficulty) => characterLists.countDistinctCharacters(listIds, difficulty),
+  // Every name a game was dealt from, for the guess-checker: one word of a name only counts as
+  // the whole of it when nobody else in the pool has that word (src/compendium/answers.js).
+  poolNames: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => c.name),
 };
 
 // `excluded` is the room's own opt-outs, applied on top of the web's selection rather than

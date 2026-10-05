@@ -1,8 +1,8 @@
-// Unit tests for the web setup/confirm/reroll orchestration (src/web/party/gameSetup.js). Uses the
+// Unit tests for the web setup/confirm/reroll orchestration (src/web/guess/gameSetup.js). Uses the
 // real core Game, with content access injected as fakes -- no socket.io, no seeded DB.
 
 const { assert } = require('./harness');
-const { createSetup, buildView, applyReroll, applyUndo, applyConfirm, applyUnlock, clampTurnSeconds } = require('../src/web/party/gameSetup');
+const { createSetup, buildView, applyReroll, applyUndo, applyConfirm, applyUnlock, clampTurnSeconds } = require('../src/web/guess/gameSetup');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 

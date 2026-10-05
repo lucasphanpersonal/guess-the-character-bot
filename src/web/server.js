@@ -10,7 +10,10 @@
 // code means one room whichever game it is). Each game is a module under this directory that
 // brings its own client and its own socket protocol:
 //
-//   party/   the phone game -- foreheads and tilt. Served at the site root.
+//   party/   Guess the Character on phones -- foreheads and tilt. Served at the site root.
+//   desk/    Guess the Character on computers -- a board and typed guesses. Served at /desk/.
+//
+// Both are ways of playing one game, whose rules and room protocol live in guess/.
 //
 // What a game needs from the content comes from ./content.js, never from the compendium
 // directly, so what the web deals from is decided in one place.
@@ -30,11 +33,14 @@ const { RoomRegistry } = require('./rooms');
 const { WEB_SCOPE } = require('./content');
 const imageCache = require('./imageCache');
 const party = require('./party');
+const desk = require('./desk');
 
 const PORT = process.env.WEB_PORT || 4180;
 // Party mode owns the site root: it was the only game when the links and QR codes out there were
-// made, and the client is unversioned.
-const PUBLIC_DIR = party.publicDir;
+// made, and the client is unversioned. Every other game lives under a path of its own.
+const MOUNTS = [{ prefix: '/desk/', dir: desk.publicDir }];
+// Where a room's join link points, by kind.
+const JOIN_PATH = { party: '/', desk: '/desk/' };
 
 const registry = new RoomRegistry();
 
@@ -80,7 +86,7 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body, null, 2));
 }
 
-// Serves a file from PUBLIC_DIR, guarding against path traversal outside it.
+// Serves a file from one game's public directory, guarding against path traversal outside it.
 //
 // The client is unversioned -- index.html and app.js keep the same URLs forever -- so without a
 // cache header browsers apply their own heuristic and a phone can keep running yesterday's app.js
@@ -88,12 +94,11 @@ function sendJson(res, status, body) {
 // browser deciding on its own that it need not ask.
 const NO_CACHE = new Set(['.html', '.js', '.css']);
 
-function serveStatic(res, urlPath) {
-  const rel = urlPath === '/' ? 'index.html' : urlPath.replace(/^\/+/, '');
-  const filePath = path.join(PUBLIC_DIR, rel);
+function serveStatic(res, dir, rel) {
+  const filePath = path.join(dir, rel || 'index.html');
   // The separator matters: a bare startsWith would also accept a sibling directory whose name
   // merely BEGINS with "public".
-  if (filePath !== PUBLIC_DIR && !filePath.startsWith(PUBLIC_DIR + path.sep)) {
+  if (filePath !== dir && !filePath.startsWith(dir + path.sep)) {
     res.writeHead(403, { 'Content-Type': 'text/plain' });
     return res.end('Forbidden');
   }
@@ -124,7 +129,10 @@ function requestHandler(req, res) {
       res.writeHead(400, { 'Content-Type': 'text/plain' });
       return res.end('Bad room code');
     }
-    const target = `${originFor(req)}/?room=${room}`;
+    // To the room's own game: a computer room's code is no use to the phone client, and the
+    // reverse. A code that names no room (yet) gets the phones' link, as it always did.
+    const joinPath = JOIN_PATH[registry.getRoom(room)?.kind] ?? '/';
+    const target = `${originFor(req)}${joinPath}?room=${room}`;
     return require('qrcode')
       .toString(target, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' })
       .then((svg) => {
@@ -271,7 +279,16 @@ function requestHandler(req, res) {
     });
   }
 
-  return serveStatic(res, url.pathname);
+  // A game under a path of its own. "/desk" without the slash would resolve the page's relative
+  // links against the site root -- the phones' files -- so it is sent to "/desk/" first.
+  for (const { prefix, dir } of MOUNTS) {
+    if (url.pathname === prefix.slice(0, -1)) {
+      res.writeHead(301, { Location: prefix + url.search });
+      return res.end();
+    }
+    if (url.pathname.startsWith(prefix)) return serveStatic(res, dir, url.pathname.slice(prefix.length));
+  }
+  return serveStatic(res, party.publicDir, url.pathname.replace(/^\/+/, ''));
 }
 
 // Mobile browsers only expose motion/orientation sensors (the tilt-to-win gestures) over a
@@ -325,6 +342,16 @@ function devTlsOptions() {
 const server = http.createServer(requestHandler);
 const io = new Server(server); // serves its browser client at /socket.io/socket.io.js
 party.attach(io, { registry });
+desk.attach(io, { registry });
+
+// Abandoned-room sweep, once for every game's rooms (they share the registry). Same role as
+// GameManager.evictStaleLobbies on the Discord side.
+const ROOM_TTL_MS = Number(process.env.WEB_ROOM_TTL_MS || 30 * 60 * 1000);
+const sweeper = setInterval(() => {
+  const n = registry.sweepAbandoned(ROOM_TTL_MS);
+  if (n) console.log(`[web] swept ${n} abandoned room(s)`);
+}, 5 * 60 * 1000);
+sweeper.unref?.();
 
 // The same io handles both servers, so players on http and https share rooms.
 const httpsServer = USE_HTTPS ? https.createServer(devTlsOptions(), requestHandler) : null;
