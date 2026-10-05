@@ -1,7 +1,7 @@
 // Per-client limits on the things a stranger can do in bulk (src/web/rateLimit.js).
 
 const { assert } = require('./harness');
-const { clientKey, createLimiter } = require('../src/web/rateLimit');
+const { clientKey, createLimiter, perSocket } = require('../src/web/rateLimit');
 
 module.exports = {
   'the client is who the proxy says, or the socket address without one'() {
@@ -23,6 +23,15 @@ module.exports = {
     assert.equal(limit.allows('a', t + 999), false);
     assert.equal(limit.take('b', t), true, 'another client is unaffected');
     assert.equal(limit.take('a', t + 1000), true, 'the next window starts over');
+  },
+
+  'a per-socket budget stops one spamming socket and nobody else'() {
+    const budget = perSocket({ max: 10, windowMs: 5000 });
+    const spammer = { id: 'sock-a' };
+    const neighbour = { id: 'sock-b' };
+    const results = Array.from({ length: 30 }, () => budget(spammer));
+    assert.equal(results.filter(Boolean).length, 10, 'ten through, the rest refused');
+    assert.equal(budget(neighbour), true, 'another socket in the same room is untouched');
   },
 
   'allows() looks without spending'() {

@@ -17,14 +17,20 @@ const { content } = require('../content');
 const guessing = require('./guessing');
 const { buildBoardView } = require('./view');
 const notes = require('./notes');
+const { poolIndex } = require('../../compendium/answers');
+const { perSocket, SLOW_DOWN } = require('../rateLimit');
+
+// Typed guesses: a fast typist manages one a second or so.
+const guessBudget = perSocket({ max: 8, windowMs: 4000 });
 
 // How long the others get to rule on a close guess before it lapses as a miss. Long enough to
 // read a name and tap; short enough that a table that has wandered off cannot hold a turn.
 const RULING_MS = Number(process.env.WEB_DESK_RULING_MS || 20000);
 
-// The pool's names, once per game: the checker needs them for every guess, and they cost a query.
+// The pool's names, once per game and indexed by word: the checker asks of every single-word guess
+// whether anyone else in the pool shares it, and scanning the names each time cost 14ms a guess.
 function othersFor(game) {
-  game.deskPool ??= [...new Set([...content.poolNames(game.lobby.listIds ?? []), ...game.turnOrder.map((id) => game.headByPlayer[id].name)])];
+  game.deskPool ??= poolIndex([...new Set([...content.poolNames(game.lobby.listIds ?? []), ...game.turnOrder.map((id) => game.headByPlayer[id].name)])]);
   return game.deskPool;
 }
 
@@ -69,6 +75,7 @@ const variant = {
       socket.nsp.to(r.code).emit('desk:guess', { name: namesOf(r)[playerId] ?? 'Player', text, verdict, ...extra });
 
     socket.on('game:guess', (payload = {}, ack) => {
+      if (!guessBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game) });

@@ -21,6 +21,10 @@
 
 const loop = require('./turnLoop');
 const access = require('../roomAccess');
+const { perSocket, SLOW_DOWN } = require('../rateLimit');
+
+// Dealing and rerolling read the pool; nobody deals or rerolls faster than this by hand.
+const dealBudget = perSocket({ max: 10, windowMs: 5000 });
 
 function namesOf(room) {
   const names = {};
@@ -375,6 +379,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
 
     // Host deals characters and moves the room into the confirm phase.
     socket.on('setup:start', (config = {}, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can start.' });
@@ -390,6 +395,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     });
 
     socket.on('setup:reroll', (_p, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
       if (!inSetup(r)) return ack?.(NOT_SETUP);
@@ -416,6 +422,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
 
     // Pick-for-each-other: choose the character of the player you check. Same fan-out as a reroll.
     socket.on('setup:pick', (payload = {}, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
       if (!inSetup(r)) return ack?.(NOT_SETUP);
@@ -495,6 +502,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     // Rematch: re-deal with the same pool/difficulty and the same roster, straight back into the
     // confirm phase, without the host reconfiguring.
     socket.on('game:rematch', (_p, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can rematch.' });

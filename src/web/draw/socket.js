@@ -15,6 +15,12 @@
 const access = require('../roomAccess');
 const draw = require('./game');
 const web = require('../content');
+const { perSocket, SLOW_DOWN } = require('../rateLimit');
+
+// What a player can repeat inside a room, at well above a person's pace: dealing (which reads the
+// pool) and guessing/chatting (which every screen in the room receives).
+const dealBudget = perSocket({ max: 10, windowMs: 5000 });
+const sayBudget = perSocket({ max: 8, windowMs: 4000 });
 const Game = require('../../core/game/Game');
 
 const ROUNDS = [1, 2, 3, 4, 5];
@@ -237,6 +243,7 @@ function attachDrawSockets(nsp, { registry }) {
     socket.on('setup:setLists', curate((p, r) => web.setListsPlaying(p.listIds, !!p.playing, r)));
 
     socket.on('draw:start', (config = {}, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (!isHost()) return ack?.({ ok: false, error: 'Only the host can start.' });
@@ -247,6 +254,7 @@ function attachDrawSockets(nsp, { registry }) {
 
     // Same settings, same roster, straight back in.
     socket.on('draw:rematch', (_p, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!r || !isHost()) return ack?.({ ok: false, error: 'Only the host can rematch.' });
       if (r.status !== 'finished') return ack?.({ ok: false, error: 'No finished game to rematch.' });
@@ -279,6 +287,7 @@ function attachDrawSockets(nsp, { registry }) {
 
     // Three new characters to choose from. Pictures preferred, as for the first three.
     socket.on('draw:reroll', (_p, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const g = r.game;
@@ -295,6 +304,7 @@ function attachDrawSockets(nsp, { registry }) {
     });
 
     socket.on('draw:say', ({ text } = {}, ack) => {
+      if (!sayBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = draw.say(r.game, playerId, text, Date.now());

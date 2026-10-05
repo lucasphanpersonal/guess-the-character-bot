@@ -48,7 +48,22 @@ function isVisibleTo(list, scope) {
 // thousands. A list somebody types out by hand is the opposite case -- that is a deliberate
 // choice, so it is playable straight away: `enabled` switches it on for its owning scope, and
 // `enabledFor` for any others (/list create names the server it was typed in, and the web).
+// ---------------------------------------------------------------------------
+// Content version: when a cached pool must be rebuilt
+// ---------------------------------------------------------------------------
+//
+// Building a pool is the expensive read here (every character of every list in it, each one's
+// identity keys computed), and it used to happen on EVERY deal and EVERY reroll: ~130ms of
+// blocked event loop for the web's whole selection, with rerolls unlimited -- one player holding
+// the button stalled every room on the server. So pools are cached, and a cached pool is good
+// for as long as the content is unchanged. Two things change it: a write through this module
+// (counted here), and a write by another process -- a seed script, the bot -- which SQLite
+// reports through data_version.
+let localWrites = 0;
+const contentVersion = () => `${localWrites}:${db.pragma('data_version', { simple: true })}`;
+
 function createList(scope, name, createdBy, category = null, { enabled = false, enabledFor = [] } = {}) {
+  localWrites++;
   const id = db.transaction(() => {
     const info = db
       .prepare(
@@ -83,10 +98,12 @@ function listLists(scope) {
 }
 
 function setListCategory(listId, category) {
+  localWrites++;
   return db.prepare('UPDATE character_lists SET category = ? WHERE id = ?').run(category, listId).changes > 0;
 }
 
 function addCharacter(listId, name, addedBy, imageUrl = null) {
+  localWrites++;
   const info = db
     .prepare('INSERT INTO characters (list_id, name, added_by, created_at, image_url) VALUES (?, ?, ?, ?, ?)')
     .run(listId, name, addedBy, Date.now(), imageUrl);
@@ -94,6 +111,7 @@ function addCharacter(listId, name, addedBy, imageUrl = null) {
 }
 
 function setCharacterFame(listId, name, fame) {
+  localWrites++;
   return (
     db
       .prepare('UPDATE characters SET fame = ? WHERE list_id = ? AND name = ? COLLATE NOCASE')
@@ -102,6 +120,7 @@ function setCharacterFame(listId, name, fame) {
 }
 
 function setCharacterImage(listId, name, imageUrl) {
+  localWrites++;
   const info = db
     .prepare('UPDATE characters SET image_url = ? WHERE list_id = ? AND name = ? COLLATE NOCASE')
     .run(imageUrl, listId, name);
@@ -109,6 +128,7 @@ function setCharacterImage(listId, name, imageUrl) {
 }
 
 function removeCharacter(listId, name) {
+  localWrites++;
   const info = db
     .prepare('DELETE FROM characters WHERE list_id = ? AND name = ? COLLATE NOCASE')
     .run(listId, name);
@@ -351,8 +371,40 @@ function countRerollers(characterId) {
 
 // The pool a random deal actually draws from: the enabled lists' characters, minus the deepest
 // cuts for this difficulty, one spelling per character.
+//
+// Cached per (lists, difficulty) while the content is unchanged -- see contentVersion. The pool
+// and its rows are frozen because they are shared by every caller until the next rebuild:
+// callers filter and copy (Game.head), and must never shuffle or edit it in place.
+const POOL_CACHE_MAX = 12;
+const poolCache = new Map(); // key -> { version, pool }, oldest first
+
 function drawablePool(listIds, difficulty) {
-  return dedupeByName(applyDifficulty(getCharactersForLists(listIds), difficulty));
+  const key = `${difficultyOf(difficulty).label}|${[...listIds].sort((a, b) => a - b).join(',')}`;
+  const version = contentVersion();
+  const hit = poolCache.get(key);
+  if (hit && hit.version === version) {
+    poolCache.delete(key); // most recently used goes to the back
+    poolCache.set(key, hit);
+    return hit.pool;
+  }
+  const pool = Object.freeze(dedupeByName(applyDifficulty(getCharactersForLists(listIds), difficulty).map(Object.freeze)));
+  poolCache.delete(key);
+  poolCache.set(key, { version, pool });
+  while (poolCache.size > POOL_CACHE_MAX) poolCache.delete(poolCache.keys().next().value);
+  return pool;
+}
+
+// A character row's identity keys, computed once per row object. Rows in a cached pool live as
+// long as the pool, so every draw from it reuses them instead of re-running the checker's forms
+// over every character in the pool.
+const keysByRow = new WeakMap();
+function keysOf(row) {
+  let keys = keysByRow.get(row);
+  if (!keys) {
+    keys = identityKeys(row.name);
+    keysByRow.set(row, keys);
+  }
+  return keys;
 }
 
 // Merging multiple lists can surface the same character under two different list_ids (e.g. two
@@ -370,7 +422,7 @@ function dedupeByName(characters) {
   const seen = new Set();
   const deduped = [];
   for (const c of characters) {
-    const keys = identityKeys(c.name);
+    const keys = keysOf(c);
     if (keys.some((k) => seen.has(k))) continue;
     for (const k of keys) seen.add(k);
     deduped.push(c);
@@ -385,7 +437,7 @@ function dedupeByName(characters) {
 // two heads -- which is the dedupe bug all over again, arriving by a different door.
 function notExcluded(excludeNames) {
   const excluded = new Set([...excludeNames].flatMap(identityKeys));
-  return (c) => !identityKeys(c.name).some((k) => excluded.has(k));
+  return (c) => !keysOf(c).some((k) => excluded.has(k));
 }
 
 // Counts what would actually be dealt, not what the lists hold -- the lobby board uses this

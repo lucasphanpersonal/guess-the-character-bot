@@ -3,7 +3,7 @@
 // these pin what must NOT be accepted outright; CLOSE is the safe place for anything uncertain.
 
 const { assert } = require('./harness');
-const { judgeGuess, editDistance, maskNameWords } = require('../src/compendium/answers');
+const { judgeGuess, editDistance, maskNameWords, poolIndex } = require('../src/compendium/answers');
 
 // The Naruto cast, trimmed: enough to make "Uzumaki" ambiguous and "Sasuke" not.
 const NARUTO = ['Naruto Uzumaki', 'Sasuke Uchiha', 'Itachi Uchiha', 'Kushina Uzumaki', 'Kakashi Hatake', 'Sakura Haruno'];
@@ -155,6 +155,20 @@ module.exports = {
     assert.equal(maskNameWords('Amélie', 'Amelie Poulain'), '______', 'accents decide nothing');
     assert.equal(maskNameWords('The Lord of the Rings', 'The Witch-king of Angmar'), 'The Lord of the Rings', 'filler is not a name');
     assert.equal(maskNameWords('Cowboy Bebop', 'Spike Spiegel'), 'Cowboy Bebop');
+  },
+
+  'a pool index gives exactly the verdicts the list of names does'() {
+    // Desk builds the index once per game rather than scanning every name per guess.
+    const pool = [...NARUTO, 'Pikachu', 'Ash Ketchum'];
+    const index = poolIndex(pool);
+    for (const [guess, name] of [['Sasuke', 'Sasuke Uchiha'], ['Uzumaki', 'Naruto Uzumaki'], ['Naruto', 'Naruto Uzumaki'], ['ash', 'Ash Ketchum'], ['Kakashi', 'Kakashi Hatake'], ['Uchiha', 'Itachi Uchiha']]) {
+      assert.deepEqual(
+        judgeGuess(guess, name, { others: index, singleWords: true }),
+        judgeGuess(guess, name, { others: pool, singleWords: true }),
+        `${guess} for ${name}`
+      );
+    }
+    assert.equal(judgeGuess('Sasuke', 'Sasuke Uchiha', { others: poolIndex([]), singleWords: true }).verdict, 'close', 'an empty pool decides nothing, as an empty list did');
   },
 
   'edit distance counts a swap of neighbours as one typo'() {

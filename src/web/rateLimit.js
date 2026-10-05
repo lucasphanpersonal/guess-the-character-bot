@@ -58,4 +58,18 @@ function createLimiter({ max, windowMs }) {
   };
 }
 
-module.exports = { clientKey, createLimiter };
+/**
+ * A budget for one kind of socket event, per connection: `(socket) => boolean`, false when spent.
+ *
+ * For what a player can do over and over inside a room -- reroll, guess, chat. Each is cheap
+ * once, and none has any business arriving faster than a person taps; set well above that pace,
+ * the budget only ever meets a script or a stuck key.
+ */
+function perSocket({ max, windowMs }) {
+  const limit = createLimiter({ max, windowMs });
+  return (socket) => limit.take(socket.id);
+}
+
+const SLOW_DOWN = { ok: false, error: 'Slow down a moment.' };
+
+module.exports = { clientKey, createLimiter, perSocket, SLOW_DOWN };

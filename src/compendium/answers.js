@@ -151,7 +151,8 @@ const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
  *   naming the character they are wearing types a name, while players guessing at a DRAWING type
  *   whatever they see, and "Combat" for "Combat Carl" or "Wild" for "Wild Horn" would hand them
  *   the round. Off, such a word is close.
- * @param {string[]} [opts.others]  other characters' names in the same pool. Even with
+ * @param {string[]|object} [opts.others]  other characters' names in the same pool, or a
+ *   poolIndex() of them (the same answer, without scanning every name per guess). Even with
  *   singleWords on, a word only counts when none of these shares it -- "Sasuke" names Sasuke
  *   Uchiha in a pool with no other Sasuke, "Uzumaki" names nobody. Without them, no single word
  *   is ever correct.
@@ -174,8 +175,10 @@ function judgeGuess(guess, name, { others = [], singleWords = false } = {}) {
   // One word of the name, standing for all of it -- only when nobody else in the pool has it.
   if (forms.words.includes(g)) {
     const own = key(name);
-    const shared = others.some((other) => key(other) !== own && wordsOf(other).includes(g));
-    if (singleWords && !shared && others.length) return { verdict: 'correct', as: g };
+    const index = Array.isArray(others) ? null : others;
+    const shared = index ? index.sharesWord(g, own) : others.some((other) => key(other) !== own && wordsOf(other).includes(g));
+    const anyOthers = index ? index.size > 0 : others.length > 0;
+    if (singleWords && !shared && anyOthers) return { verdict: 'correct', as: g };
     return { verdict: 'close', as: g };
   }
 
@@ -196,6 +199,32 @@ function judgeGuess(guess, name, { others = [], singleWords = false } = {}) {
   }
 
   return { verdict: 'wrong', as: null };
+}
+
+/**
+ * The pool's names, indexed by word, for judgeGuess's "does anybody else have this word?".
+ *
+ * A game judging many guesses against one pool builds this once. Scanning the list instead meant
+ * folding every name in it on every guess -- 25,000 names, 14ms a guess, on the event loop every
+ * room shares.
+ */
+function poolIndex(names) {
+  const owners = new Map(); // word key -> keys of the names that have it
+  for (const name of names) {
+    const nameKey = key(name);
+    for (const w of new Set(wordsOf(name))) {
+      if (!owners.has(w)) owners.set(w, new Set());
+      owners.get(w).add(nameKey);
+    }
+  }
+  return {
+    size: names.length,
+    /** Whether any name other than `ownKey` has this word. */
+    sharesWord(word, ownKey) {
+      const has = owners.get(word);
+      return !!has && has.size > (has.has(ownKey) ? 1 : 0);
+    },
+  };
 }
 
 /**
@@ -240,4 +269,4 @@ function maskNameWords(text, name) {
     .join('');
 }
 
-module.exports = { judgeGuess, answerForms, identityKeys, editDistance, wordsOf, maskNameWords };
+module.exports = { judgeGuess, answerForms, identityKeys, editDistance, wordsOf, maskNameWords, poolIndex };
