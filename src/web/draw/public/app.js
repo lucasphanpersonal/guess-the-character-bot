@@ -19,14 +19,11 @@ const sound = (cue) => window.GTCSound?.play(cue);
 $('soundToggle').hidden = !window.GTCSound;
 window.GTCSound?.mountToggle($('soundToggle'));
 
-// The palette and sizes the server accepts (src/web/draw/socket.js); anything else is refused.
-// Named, because a swatch is the one control where colour IS the content -- the names are what a
-// screen reader, or anyone who can't tell two of them apart, has to go on.
-const PALETTE = [
-  ['#1b1033', 'Black'], ['#9a9a9a', 'Grey'], ['#e21b3c', 'Red'], ['#ffa602', 'Orange'], ['#26890c', 'Green'],
-  ['#1368ce', 'Blue'], ['#7fd6ff', 'Sky blue'], ['#c13ac1', 'Purple'], ['#8b4513', 'Brown'], ['#ffffff', 'Eraser'],
-];
-const SIZES = [3, 8, 18, 36];
+// The palette ([colour, name] pairs) and brush sizes, as the server sends them in room state --
+// declared once, in src/web/draw/socket.js, which refuses anything else. Empty until a room is
+// joined, which is long before anyone can draw.
+let PALETTE = [];
+let SIZES = [];
 
 let roomState = null;
 let view = null;
@@ -52,8 +49,19 @@ function nickname() {
   return name;
 }
 
+// The drawing tools come with the room. Re-rendered only when they change, not on every update.
+function takeTools(state) {
+  if (!state?.palette || JSON.stringify([state.palette, state.sizes]) === JSON.stringify([PALETTE, SIZES])) return;
+  PALETTE = state.palette;
+  SIZES = state.sizes;
+  if (!PALETTE.some(([c]) => c === pen.color)) pen.color = PALETTE[0][0];
+  if (!SIZES.includes(pen.size)) pen.size = SIZES[Math.min(1, SIZES.length - 1)];
+  renderTools();
+}
+
 function enterRoom(state) {
   roomState = state;
+  takeTools(state);
   store.set('gtc_draw_room', state.code);
   history.replaceState(null, '', `?room=${encodeURIComponent(state.code)}`);
   $('landingErr').textContent = '';
@@ -141,6 +149,7 @@ GTC.homeTitle($('title'), {
 
 socket.on('room:state', (state) => {
   roomState = state;
+  takeTools(state);
   renderRoom();
   renderPlayers();
 });
@@ -290,7 +299,7 @@ socket.on('draw:canvas', ({ strokes: all }) => {
 });
 
 // The drawer's pen. Drawn here at once; sent in pieces every PIECE_MS.
-let pen = { color: PALETTE[0][0], size: SIZES[1] };
+let pen = { color: null, size: null }; // set by takeTools when the room arrives
 let live = null; // the stroke being drawn
 let pending = [];
 let seq = 0;
@@ -339,7 +348,7 @@ canvas.addEventListener('pointercancel', endStroke);
 
 function renderTools() {
   $('swatches').innerHTML = PALETTE.map(
-    ([c, name]) => `<button class="swatch${pen.color === c ? ' on' : ''}" style="background:${c}" data-color="${c}" title="${name}" aria-label="${name}" aria-pressed="${pen.color === c}"></button>`
+    ([c, name]) => `<button class="swatch${pen.color === c ? ' on' : ''}" style="background:${esc(c)}" data-color="${esc(c)}" title="${esc(name)}" aria-label="${esc(name)}" aria-pressed="${pen.color === c}"></button>`
   ).join('');
   $('sizes').innerHTML = SIZES.map(
     (s, i) => `<button class="size${pen.size === s ? ' on' : ''}" data-size="${s}" aria-label="Brush size ${i + 1} of ${SIZES.length}" aria-pressed="${pen.size === s}"><i style="width:${Math.min(28, 4 + s * 0.7)}px;height:${Math.min(28, 4 + s * 0.7)}px"></i></button>`
@@ -557,8 +566,10 @@ function localLine(cls, html) {
   renderChat();
 }
 
+// The one "got it" line, the guesser's own included: the ack to their guess says nothing, or the
+// guesser saw it twice -- "You got it!" from the ack, then their own name from this.
 socket.on('draw:correct', ({ playerId: who, name, points }) => {
-  localLine('sys', `✓ ${esc(name)} got it! +${points}`);
+  localLine('sys', who === playerId ? `✓ You got it! +${points}` : `✓ ${esc(name)} got it! +${points}`);
   // To everyone, the guesser included -- so the guesser's own cue is played here too, not on the
   // ack, or they would hear two.
   sound(who === playerId ? 'gotMine' : 'got');
@@ -578,7 +589,6 @@ $('chatForm').addEventListener('submit', (e) => {
       return ($('chatErr').textContent = res?.error || 'That did not send.');
     }
     if (res.verdict === 'close') localLine('close', `"${esc(text)}" is close!`);
-    if (res.verdict === 'correct') localLine('sys', `✓ You got it! +${res.points}`);
   });
 });
 

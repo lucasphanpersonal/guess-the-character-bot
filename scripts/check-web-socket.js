@@ -675,6 +675,10 @@ const connect = (playerId) => {
   const P = await connectDraw('rP');
   res = await P.emitWithAck('room:create', { nickname: 'Pia' });
   check(res.ok && res.state.kind === 'draw', 'a draw room is created');
+  // The palette is published, not re-declared: the client draws its swatches from this.
+  const { PALETTE: drawPalette } = require('../src/web/draw/socket');
+  check(JSON.stringify(res.state.palette) === JSON.stringify(drawPalette) && res.state.sizes?.length > 0,
+    `a draw room's state carries the palette and brush sizes (${res.state.palette?.length} colours)`);
   const drawCode = res.state.code;
   const Q = await connectDraw('rQ');
   res = await Q.emitWithAck('room:join', { code: drawCode, nickname: 'Quinn' });
@@ -722,6 +726,12 @@ const connect = (playerId) => {
   P.emit('draw:stroke', { id: 's1', color: '#e21b3c', size: 8, points: [[0.1, 0.1], [0.2, 0.25]] });
   const relayed = await strokeArrives;
   check(relayed.id === 's1' && relayed.points.length === 2, "the drawer's stroke reaches the guesser");
+  // Every colour on offer must also be one the server draws -- the last one, taken from the
+  // palette rather than named here, so a colour added later is covered too.
+  const lastColour = drawPalette[drawPalette.length - 2][0]; // the last before the eraser
+  const colourArrives = nextEvent(Q, 'draw:stroke');
+  P.emit('draw:stroke', { id: 's1b', color: lastColour, size: 8, points: [[0.4, 0.4]] });
+  check((await colourArrives).color === lastColour, `a stroke in any palette colour is drawn (${lastColour})`);
   P.emit('draw:stroke', { id: 's2', color: 'url(javascript:alert(1))', size: 8, points: [[0.3, 0.3]] });
   P.emit('draw:stroke', { id: 's3', color: '#e21b3c', size: 8, points: [[5, -2]] });
   Q.emit('draw:stroke', { id: 's4', color: '#e21b3c', size: 8, points: [[0.5, 0.5]] });
@@ -730,7 +740,8 @@ const connect = (playerId) => {
   const reconnecting = await connectDraw('rQ');
   const caughtUp = nextEvent(reconnecting, 'draw:canvas');
   await reconnecting.emitWithAck('room:join', { code: drawCode, nickname: 'Quinn' });
-  check((await caughtUp).strokes.length === 1, 'a reconnecting browser gets the picture so far');
+  const caughtIds = (await caughtUp).strokes.map((s) => s.id).join(',');
+  check(caughtIds === 's1,s1b', `a reconnecting browser gets the picture so far, and only the strokes that were drawn (${caughtIds})`);
   reconnecting.close();
 
   res = await Q.emitWithAck('draw:say', { text: 'Definitely Nobody' });

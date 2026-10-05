@@ -19,10 +19,24 @@ const Game = require('../../core/game/Game');
 
 const ROUNDS = [1, 2, 3, 4, 5];
 const DRAW_SECONDS = [60, 80, 100, 120];
-// The palette and brush sizes the client offers. Anything else is refused rather than drawn: a
-// stroke is relayed to every screen in the room, so it must be only what the client could make.
-const COLOURS = new Set(['#1b1033', '#ffffff', '#e21b3c', '#1368ce', '#ffa602', '#26890c', '#8b4513', '#c13ac1', '#7fd6ff', '#9a9a9a']);
-const SIZES = new Set([3, 8, 18, 36]);
+// The palette and brush sizes. Anything else is refused rather than drawn: a stroke is relayed to
+// every screen in the room, so it must be only what the client could make. Declared once, here,
+// and sent to the client in room state -- the client used to keep its own copy, so adding a colour
+// meant two edits, and missing one drew swatches the server silently dropped.
+// Named, because a swatch is the one control where colour IS the content -- the names are what a
+// screen reader, or anyone who can't tell two of them apart, has to go on. Two skin tones and the
+// browns are there because characters are mostly people.
+const PALETTE = [
+  ['#1b1033', 'Black'], ['#9a9a9a', 'Grey'], ['#e21b3c', 'Red'], ['#ffa602', 'Orange'], ['#ffd60a', 'Yellow'],
+  ['#8fd14f', 'Lime'], ['#26890c', 'Green'], ['#12a4a0', 'Teal'], ['#7fd6ff', 'Sky blue'], ['#1368ce', 'Blue'],
+  ['#1d2a6e', 'Navy'], ['#c13ac1', 'Purple'], ['#ff7eb6', 'Pink'], ['#f8c9a0', 'Peach'], ['#c68642', 'Tan'],
+  ['#8b4513', 'Brown'], ['#ffffff', 'Eraser'],
+];
+const COLOURS = new Set(PALETTE.map(([c]) => c));
+const SIZE_LIST = [3, 8, 18, 36];
+const SIZES = new Set(SIZE_LIST);
+// What a Draw client is told about its room: the shared room state, plus the tools on offer.
+const stateOf = (room) => ({ ...room.publicState(), palette: PALETTE, sizes: SIZE_LIST });
 const MAX_POINTS_PER_TURN = 30000; // generous for a sketch, bounded for a stranger
 const MAX_POINTS_PER_PIECE = 400;
 
@@ -51,7 +65,7 @@ function cleanPoints(points) {
 }
 
 function attachDrawSockets(nsp, { registry }) {
-  const broadcastRoom = (room) => room && nsp.to(room.code).emit('room:state', room.publicState());
+  const broadcastRoom = (room) => room && nsp.to(room.code).emit('room:state', stateOf(room));
 
   const socketsIn = (room) => {
     const ids = nsp.adapter.rooms.get(room.code) ?? [];
@@ -189,14 +203,14 @@ function attachDrawSockets(nsp, { registry }) {
     socket.on('room:create', ({ nickname } = {}, ack) => {
       const res = access.createRoom(socket, registry, 'draw', nickname);
       if (!res.ok) return ack?.(res);
-      ack?.({ ok: true, state: res.room.publicState() });
+      ack?.({ ok: true, state: stateOf(res.room) });
       broadcastRoom(res.room);
     });
 
     socket.on('room:join', ({ code, nickname } = {}, ack) => {
       const res = access.joinRoom(socket, registry, 'draw', code, nickname);
       if (!res.ok) return ack?.(res);
-      ack?.({ ok: true, state: res.room.publicState(), reconnected: res.reconnected });
+      ack?.({ ok: true, state: stateOf(res.room), reconnected: res.reconnected });
       broadcastRoom(res.room);
       // Rejoining mid-game: the view, and the picture so far.
       const g = res.room.game;
@@ -392,4 +406,4 @@ function attachDrawSockets(nsp, { registry }) {
   });
 }
 
-module.exports = { attachDrawSockets, COLOURS, SIZES };
+module.exports = { attachDrawSockets, PALETTE, COLOURS, SIZES };
