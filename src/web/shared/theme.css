@@ -45,6 +45,11 @@ h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
    way to stop them has to be. */
 .titlebar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 1.2rem; }
 .titlebar h1 { margin:0; }
+/* The dark-mode switch is pinned in the window's top corner (.themetoggle, below); the row keeps
+   its width clear so the Sound switch, at the row's end, can never slide under it. The title
+   inside needs no room of its own then. */
+.titlebar { padding-right:64px; }
+.titlebar h1 { padding-right:0; }
 .soundtoggle { flex:none; display:inline-flex; align-items:center; gap:8px; padding:8px 14px; font-size:.92rem;
                background:#fff; color:var(--brand); box-shadow:0 4px 0 rgba(0,0,0,.22); }
 .soundtoggle:active { box-shadow:0 1px 0 rgba(0,0,0,.22); transform:translateY(3px); }
