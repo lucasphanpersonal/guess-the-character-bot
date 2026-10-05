@@ -31,6 +31,15 @@ const content = {
   // Every name a game was dealt from, for the guess-checker: one word of a name only counts as
   // the whole of it when nobody else in the pool has that word (src/compendium/answers.js).
   poolNames: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => c.name),
+  // Where a dealt row is from, in parts ({ work, category } or null). A lookup failing is not
+  // worth losing a turn over -- it only feeds a hint.
+  originOf: (row) => {
+    try {
+      return characterLists.getCharacterOrigin(WEB_SCOPE, row.name, row.list_id ?? null);
+    } catch {
+      return null;
+    }
+  },
 };
 
 // Most categories a host can combine at once. Far more than the picker shows on one screen;

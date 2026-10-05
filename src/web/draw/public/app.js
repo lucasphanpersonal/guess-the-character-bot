@@ -441,6 +441,22 @@ function renderGame(turnChanged) {
     }
   } else $('mask').textContent = '';
 
+  // Where it is from. Rewritten only when it changes, so the live region announces the title
+  // once, at half time, rather than on every guess that sends a new view.
+  const clue = v.phase === 'drawing' ? v.clue : null;
+  const clueHtml = clue
+    ? [
+        clue.category ? `<span class="tag">${esc(clue.category)}</span>` : '',
+        clue.work ? `<span class="tag work" title="The title, with any word of the name blanked">${esc(clue.work)}</span>` : '',
+        clue.workLater ? '<span class="tag later">Title at half time</span>' : '',
+      ].join('')
+    : '';
+  // Compared by the string built here, not innerHTML: the browser re-serialises what it was given.
+  if ($('clueBar').dataset.key !== clueHtml) {
+    $('clueBar').dataset.key = clueHtml;
+    $('clueBar').innerHTML = clueHtml;
+  }
+
   // The drawer's reference picture, for as long as they draw. Repainted only when the character
   // changes: every guess sends a new view, and resetting the <img> each time would make it blink.
   const ref = v.phase === 'drawing' && v.isDrawer ? v.character : null;

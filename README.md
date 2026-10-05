@@ -28,8 +28,10 @@ happen live between humans in voice.
 > device's own setting decides).
 >
 > And a second game on the same server: **Draw the Character** (`/draw/`). One player draws a
-> character they picked from three; everyone else types guesses. Letter blanks fill in as hints,
-> faster guesses score more, and the drawer scores for everyone who gets it.
+> character they picked from three; everyone else types guesses. Everyone sees what kind of work
+> the character is from ("Anime") from the start and the work itself from half time, with any word
+> of it that names the character blanked. Letter blanks fill in as hints, faster guesses score
+> more, and the drawer scores for everyone who gets it.
 >
 > Everything below this point describes the Discord bot.
 

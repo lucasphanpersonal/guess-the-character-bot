@@ -218,4 +218,26 @@ function identityKeys(name) {
   return [...new Set([...answerForms(name).exact, ...(bag ? [bag] : [])])];
 }
 
-module.exports = { judgeGuess, answerForms, identityKeys, editDistance, wordsOf };
+/**
+ * `text` -- a work's title, say -- with every word that names this character blanked to
+ * underscores, punctuation kept: "Super Mario Bros." for Mario reads "Super _____ Bros.", and
+ * "The Simpsons" for Homer Simpson "The ________". A hint that spells the answer is not a hint.
+ *
+ * A word goes if it IS a word of the name (bar filler: "the", "of" stay), or if it CONTAINS a
+ * name-sized word of it -- the plural, the possessive, "Spider-Man:" with its colon. Compared
+ * through the same key as everything else here, so case and accents decide nothing.
+ */
+function maskNameWords(text, name) {
+  const named = wordsOf(name).filter((k) => !FILLER.has(k));
+  const long = named.filter(isNameWord);
+  return String(text)
+    .split(/(\s+)/)
+    .map((token) => {
+      const k = key(foldDiacritics(token));
+      if (!k || !(named.includes(k) || long.some((w) => k.includes(w)))) return token;
+      return token.replace(/[\p{L}\p{N}]/gu, '_');
+    })
+    .join('');
+}
+
+module.exports = { judgeGuess, answerForms, identityKeys, editDistance, wordsOf, maskNameWords };

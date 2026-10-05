@@ -17,10 +17,21 @@
     .topbar { display:flex; align-items:center; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
     .topbar .round { font-weight:900; white-space:nowrap; }
     /* The blanks are the clue: big, spaced, in the display face, with the gaps kept wide. */
+    .cluebox { flex:1; min-width:12rem; display:flex; flex-direction:column; align-items:center; gap:6px; }
     .mask { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:1.7rem; font-weight:900;
-            letter-spacing:.35em; white-space:pre-wrap; flex:1; min-width:12rem; text-align:center;
+            letter-spacing:.35em; white-space:pre-wrap; text-align:center; max-width:100%;
             text-shadow:0 2px 0 rgba(0,0,0,.25); }
+    /* A long word of blanks is wider than a narrow window and has no break of its own; let it
+       break anywhere rather than push the page sideways. The "(5 14)" after it keeps the shape. */
+    .mask { overflow-wrap:anywhere; }
     .mask .len { font-family:inherit; font-size:.9rem; letter-spacing:0; opacity:.8; }
+    /* Where the character is from: the kind of work all turn, the work itself from half time.
+       On the field, like the mask, so a translucent dark pill reads in both themes. */
+    .cluebar { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-weight:800; font-size:.95rem; }
+    .cluebar:empty { display:none; }
+    .cluebar .tag { background:rgba(0,0,0,.28); color:#fff; padding:3px 12px; border-radius:999px; overflow-wrap:anywhere; }
+    .cluebar .tag.work { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing:.08em; }
+    .cluebar .tag.later { background:none; border:2px dashed rgba(255,255,255,.55); padding:1px 10px; font-weight:700; }
     /* The canvas is paper: white in both themes, on purpose -- the colour swatches are judged
        against it, and a drawing should look the same on every screen in the room. */
     :root { --veil:rgba(255,255,255,.94); --got-bg:#e3f5dc; --insider-ink:#5a4b78; }
@@ -216,7 +227,10 @@
   <section id="game" class="screen">
     <div class="topbar">
       <div class="round" id="roundLabel"></div>
-      <div class="mask" id="mask" aria-live="polite"></div>
+      <div class="cluebox">
+        <div class="mask" id="mask" aria-live="polite"></div>
+        <div class="cluebar" id="clueBar" aria-live="polite"></div>
+      </div>
       <div class="clock" id="clock"><i id="clockFill"></i></div>
       <div class="secs" id="clockSecs"></div>
     </div>

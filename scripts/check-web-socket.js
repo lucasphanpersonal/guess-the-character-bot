@@ -712,6 +712,10 @@ const connect = (playerId) => {
   const drawAnswer = newChoices[0];
   check((await pDrawing).character?.name === drawAnswer, 'the drawer keeps the character (its reference picture) while drawing');
   check(qView.mask && qView.mask.length === drawAnswer.length && !qView.mask.includes(drawAnswer[0] + drawAnswer[1]), 'the guesser sees blanks the length of the name');
+  // Expected from the compendium, not restated: whatever the fixture says this character is from.
+  const drawOrigin = characterLists.getCharacterOrigin(process.env.WEB_SCOPE, drawAnswer);
+  check(drawOrigin?.category && qView.clue?.category === drawOrigin.category && qView.clue.work === null && qView.clue.workLater === !!drawOrigin.work,
+    `the guesser sees the kind of work from the start, and the work is held for half time (${JSON.stringify(qView.clue)})`);
 
   // Strokes: passed on when they are what the client could make, dropped when not.
   const strokeArrives = nextEvent(Q, 'draw:stroke');

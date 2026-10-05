@@ -7,8 +7,10 @@
 //
 //   choosing  the drawer picks one of three characters (CHOOSE_SECONDS, then the first is taken),
 //             or asks for three new ones -- as often as they like (CHOICE_REROLLS), each a fresh clock
-//   drawing   they draw it; everyone else types guesses. Letters of the name are revealed as
-//             hints part-way through. Ends when every guesser has it, or the clock runs out.
+//   drawing   they draw it; everyone else types guesses. Everyone sees the kind of work it is
+//             from ("Anime") from the start, and the work itself ("Naruto") from half time,
+//             with any word of it that names the character blanked. Letters of the name are
+//             revealed as hints part-way through. Ends when every guesser has it, or time is up.
 //   reveal    the answer and the turn's points, for REVEAL_SECONDS
 //
 // Guesses are judged by the compendium's checker (src/compendium/answers.js) with single words
@@ -17,7 +19,7 @@
 // to nobody else. Once you have it -- and for the drawer, always -- what you type goes only to
 // the others who know, because it may well contain the answer.
 
-const { judgeGuess } = require('../../compendium/answers');
+const { judgeGuess, maskNameWords } = require('../../compendium/answers');
 const { publicCharacter } = require('../publicCharacter');
 
 const CHOOSE_SECONDS = 15;
@@ -30,6 +32,8 @@ const CHOICES = 3;
 const CHOICE_REROLLS = -1;
 // Hints: a letter at half time, another at three quarters -- never more than a third of the name.
 const HINT_AT = [0.5, 0.75];
+// The work the character is from, at half time. The kind of work is shown from the start.
+const WORK_AT = 0.5;
 const CHAT_KEPT = 60;
 const TEXT_MAX = 80;
 // Points for a correct guess fall from GUESS_MAX to GUESS_MIN over the turn: speed is the skill.
@@ -56,6 +60,7 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80 }) {
     guessed: new Map(), // playerId -> points this turn, in the order they got it
     scores: new Map(order.map((id) => [id, 0])),
     revealed: [], // indexes into the character's name
+    workShown: false,
     strokes: [],
     chat: [],
     seq: 0,
@@ -86,6 +91,7 @@ function offerChoices(g, choices, now) {
   g.startedAt = null;
   g.guessed = new Map();
   g.revealed = [];
+  g.workShown = false;
   g.strokes = [];
   g.chat = [];
 }
@@ -179,8 +185,9 @@ function say(g, playerId, text, now) {
 
 const isLetter = (ch) => /[\p{L}\p{N}]/u.test(ch);
 
-/** When the hints fall due, in ms timestamps. */
-const hintTimes = (g) => (g.startedAt == null ? [] : HINT_AT.map((f) => g.startedAt + f * g.drawSeconds * 1000));
+/** When the hints fall due, in ms timestamps -- the letters and the work. */
+const hintTimes = (g) =>
+  g.startedAt == null ? [] : [...new Set([...HINT_AT, WORK_AT])].map((f) => g.startedAt + f * g.drawSeconds * 1000);
 
 /**
  * Reveal whatever hints are due. `pick` chooses among the candidate indexes (random in play, fixed
@@ -191,8 +198,13 @@ function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.
   const name = [...g.character.name];
   const letters = name.map((ch, i) => (isLetter(ch) ? i : -1)).filter((i) => i >= 0);
   const cap = Math.floor(letters.length / 3);
-  const due = hintTimes(g).filter((t) => t <= now).length;
+  const at = (f) => g.startedAt + f * g.drawSeconds * 1000;
   let changed = false;
+  if (!g.workShown && g.character.origin?.work && now >= at(WORK_AT)) {
+    g.workShown = true;
+    changed = true;
+  }
+  const due = HINT_AT.filter((f) => at(f) <= now).length;
   while (g.revealed.length < Math.min(due, cap)) {
     const left = letters.filter((i) => !g.revealed.includes(i));
     if (!left.length) break;
@@ -209,6 +221,19 @@ function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.
 function maskOf(g) {
   if (!g.character) return null;
   return [...g.character.name].map((ch, i) => (isLetter(ch) && !g.revealed.includes(i) ? '_' : ch)).join('');
+}
+
+/**
+ * Where the character is from, as far as the clock allows: `category` throughout, `work` once
+ * it is due (masked -- "Super _____ Bros." -- because a title can spell the answer), and
+ * `workLater` while there is one still to come, so the page can say it is on its way. The same
+ * for everyone, the drawer included: they see what the guessers are working with.
+ */
+function clueFor(g) {
+  const origin = g.character?.origin;
+  if (!origin) return null;
+  const work = origin.work ? maskNameWords(origin.work, g.character.name) : null;
+  return { category: origin.category ?? null, work: g.workShown ? work : null, workLater: !g.workShown && !!work };
 }
 
 // --- turn ends and advances ------------------------------------------------------------------
@@ -316,6 +341,7 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     rerollsLeft: isDrawer && g.phase === 'choosing' ? g.rerollsLeft : null,
     character: answerShown && g.character ? publicCharacter(g.character) : null,
     mask: g.phase === 'drawing' ? maskOf(g) : null,
+    clue: g.phase === 'drawing' ? clueFor(g) : null,
     guessedIt: g.guessed.has(viewerId),
     players: g.order.map((id) => ({
       playerId: id,
@@ -354,6 +380,7 @@ module.exports = {
   revealDueHints,
   hintTimes,
   maskOf,
+  clueFor,
   endTurn,
   advance,
   removePlayer,

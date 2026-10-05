@@ -177,6 +177,20 @@ function formatListLabel(list) {
  * nothing, e.g. a one-off list somebody typed by hand for a single character.
  */
 function getCharacterSource(scope, characterName, drawnListId = null) {
+  const origin = getCharacterOrigin(scope, characterName, drawnListId);
+  if (!origin?.work) return origin?.category ?? null;
+  return origin.category ? `${origin.work} (${origin.category})` : origin.work;
+}
+
+/**
+ * The same choice as getCharacterSource, in parts: `work` is the franchise list ("Cowboy Bebop"),
+ * or null when the best there is is a bare category list; `category` is the kind of work
+ * ("Anime"), or null for an uncategorised list. Null when getCharacterSource would say nothing.
+ *
+ * In parts because a game can hand them out separately -- Draw shows the category from the
+ * start of a turn and the work only from half time.
+ */
+function getCharacterOrigin(scope, characterName, drawnListId = null) {
   const rows = db
     .prepare(
       `SELECT cl.id, cl.name, cl.category, COUNT(c2.id) AS size
@@ -204,7 +218,7 @@ function getCharacterSource(scope, characterName, drawnListId = null) {
   // apart. Which list it came from can.
   const drawn = drawnListId != null && candidates.find((row) => row.id === drawnListId);
   const best = (drawn && isWork(drawn) && drawn) || candidates.find(isWork) || candidates[0];
-  return isWork(best) && best.category ? `${best.name} (${best.category})` : best.name;
+  return isWork(best) ? { work: best.name, category: best.category ?? null } : { work: null, category: best.name };
 }
 
 // How many lists a selection can name individually before it is summarised instead.
@@ -721,6 +735,7 @@ module.exports = {
   formatListLabel,
   getListLabelForIds,
   getCharacterSource,
+  getCharacterOrigin,
   countDistinctCharacters,
   getRandomPair,
   getRandomCharacters,

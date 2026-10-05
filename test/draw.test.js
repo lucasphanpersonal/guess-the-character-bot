@@ -139,6 +139,46 @@ function aShortNameGetsNoHintThatWouldGiveItAway() {
   assert.equal(g.revealed.length, 0, 'never more than a third of the letters');
 }
 
+function theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime() {
+  const g = started();
+  g.choices[0] = { ...head('Bowser Koopa'), origin: { work: 'Super Mario Bros.', category: 'Video Games' } };
+  draw.choose(g, 'p1', 0, T0);
+  for (const viewer of ['p1', 'p2']) {
+    assert.deepEqual(draw.viewFor(g, viewer, names, T0).clue, { category: 'Video Games', work: null, workLater: true }, `${viewer} at the start`);
+  }
+  assert.ok(draw.hintTimes(g).includes(T0 + 40_000), 'the room is woken at half time');
+  assert.equal(draw.revealDueHints(g, T0 + 39_000), false);
+  assert.equal(draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]), true);
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0 + 40_000).clue, { category: 'Video Games', work: 'Super Mario Bros.', workLater: false });
+}
+
+function theWorkHasTheNameBlankedOutOfIt() {
+  const g = started();
+  g.choices[0] = { ...head('Mario'), origin: { work: 'Super Mario Bros.', category: 'Video Games' } };
+  draw.choose(g, 'p1', 0, T0);
+  draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]);
+  const json = JSON.stringify(draw.viewFor(g, 'p2', names, T0 + 40_000));
+  assert.ok(json.includes('Super _____ Bros.'), json);
+  assert.ok(!/mario/i.test(json), 'a guesser never sees the name, title or no title');
+}
+
+function aShortNameStillGetsItsWorkAtHalfTime() {
+  // No letter is due for "Ed" (a third of two letters is none), so the work must be a change of
+  // its own -- or the room would not be told until some guess happened to send a view.
+  const g = started();
+  g.choices[0] = { ...head('Ed'), origin: { work: 'Cowboy Bebop', category: 'Anime' } };
+  draw.choose(g, 'p1', 0, T0);
+  assert.equal(draw.revealDueHints(g, T0 + 40_000), true);
+  assert.equal(draw.viewFor(g, 'p3', names, T0 + 40_000).clue.work, 'Cowboy Bebop');
+}
+
+function noOriginNoClue() {
+  const g = drawing();
+  assert.equal(draw.viewFor(g, 'p2', names, T0).clue, null);
+  g.character.origin = { work: null, category: 'Anime' };
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0).clue, { category: 'Anime', work: null, workLater: false }, 'nothing promised that is not coming');
+}
+
 // --- turns, rounds, leaving ----------------------------------------------------------------
 
 function everyoneDrawsOnceARoundThenItEnds() {
@@ -321,6 +361,10 @@ module.exports = {
   'the answer reaches only those who know it': theAnswerReachesOnlyThoseWhoKnowIt,
   'the mask shows the shape, and hints fill it in': theMaskShowsTheShapeAndHintsFillItIn,
   'a short name gets no hint that would give it away': aShortNameGetsNoHintThatWouldGiveItAway,
+  'the kind of work shows from the start, and the work from half time': theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime,
+  'the work has the name blanked out of it': theWorkHasTheNameBlankedOutOfIt,
+  'a short name still gets its work at half time': aShortNameStillGetsItsWorkAtHalfTime,
+  'no origin, no clue': noOriginNoClue,
   'everyone draws once a round, then it ends': everyoneDrawsOnceARoundThenItEnds,
   'the drawer leaving ends their turn': theDrawerLeavingEndsTheirTurn,
   'the last guesser leaving ends the turn for everyone who has it': theLastGuesserLeavingEndsTheTurnForEveryoneWhoHasIt,

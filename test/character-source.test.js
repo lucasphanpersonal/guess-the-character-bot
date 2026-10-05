@@ -104,6 +104,20 @@ module.exports = {
     assert.equal(lists.getCharacterSource(guildId, 'Nobody At All'), null);
   },
 
+  'the origin comes in parts: the work, and the kind of work'() {
+    const guildId = freshGuild();
+    seed(guildId, 'Television Shows', 'Television Shows', ['Patrick Star', 'SpongeBob SquarePants', 'Jack']);
+    seed(guildId, 'SpongeBob SquarePants', 'Television Shows', ['SpongeBob SquarePants', 'Patrick Star', 'Mr. Krabs']);
+    seed(guildId, 'Homebrew', null, ['Somebody']);
+
+    assert.deepEqual(lists.getCharacterOrigin(guildId, 'Patrick Star'), { work: 'SpongeBob SquarePants', category: 'Television Shows' });
+    assert.deepEqual(lists.getCharacterOrigin(guildId, 'SpongeBob SquarePants'), { work: null, category: 'Television Shows' }, 'a title character has only the kind');
+    assert.deepEqual(lists.getCharacterOrigin(guildId, 'Somebody'), { work: 'Homebrew', category: null });
+    assert.equal(lists.getCharacterOrigin(guildId, 'Nobody At All'), null);
+    // The joined line is still what it was.
+    assert.equal(lists.getCharacterSource(guildId, 'Somebody'), 'Homebrew');
+  },
+
   'lookup is case-insensitive, like every other name match in the bot'() {
     const guildId = freshGuild();
     seed(guildId, 'Cowboy Bebop', 'Anime', ['Spike Spiegel', 'Faye Valentine', 'Ed']);

@@ -3,7 +3,7 @@
 // these pin what must NOT be accepted outright; CLOSE is the safe place for anything uncertain.
 
 const { assert } = require('./harness');
-const { judgeGuess, editDistance } = require('../src/compendium/answers');
+const { judgeGuess, editDistance, maskNameWords } = require('../src/compendium/answers');
 
 // The Naruto cast, trimmed: enough to make "Uzumaki" ambiguous and "Sasuke" not.
 const NARUTO = ['Naruto Uzumaki', 'Sasuke Uchiha', 'Itachi Uchiha', 'Kushina Uzumaki', 'Kakashi Hatake', 'Sakura Haruno'];
@@ -145,6 +145,16 @@ module.exports = {
     assert.deepEqual(judgeGuess('tails', 'Miles "Tails" Prower'), { verdict: 'correct', as: 'tails' });
     assert.deepEqual(judgeGuess('Pikahcu', 'Pikachu'), { verdict: 'close', as: 'pikachu' });
     assert.deepEqual(judgeGuess('Batman', 'Superman'), { verdict: 'wrong', as: null });
+  },
+
+  'a title loses every word that names the character, and keeps its punctuation'() {
+    assert.equal(maskNameWords('Super Mario Bros.', 'Mario'), 'Super _____ Bros.');
+    assert.equal(maskNameWords('The Simpsons', 'Homer Simpson'), 'The ________', 'a plural still spells it');
+    assert.equal(maskNameWords('Spider-Man: Into the Spider-Verse', 'Spider-Man'), '______-___: Into the Spider-Verse');
+    assert.equal(maskNameWords('Ed, Edd n Eddy', 'Ed'), '__, Edd n Eddy', 'a short word goes when it IS the word');
+    assert.equal(maskNameWords('Amélie', 'Amelie Poulain'), '______', 'accents decide nothing');
+    assert.equal(maskNameWords('The Lord of the Rings', 'The Witch-king of Angmar'), 'The Lord of the Rings', 'filler is not a name');
+    assert.equal(maskNameWords('Cowboy Bebop', 'Spike Spiegel'), 'Cowboy Bebop');
   },
 
   'edit distance counts a swap of neighbours as one typo'() {

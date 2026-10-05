@@ -33,8 +33,9 @@ const namesOf = (room) => {
   return names;
 };
 
-// The DB row a deal returns, in the shape every game passes around (name, imageUrl, source, id).
-const headOf = (row) => Game.head({ guildId: web.WEB_SCOPE }, row);
+// The DB row a deal returns, in the shape every game passes around (name, imageUrl, source, id),
+// plus its origin in parts for the turn's clue (./game.js clueFor).
+const headOf = (row) => ({ ...Game.head({ guildId: web.WEB_SCOPE }, row), origin: web.content.originOf(row) });
 
 function cleanPoints(points) {
   if (!Array.isArray(points)) return null;
