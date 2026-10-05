@@ -226,7 +226,9 @@ function buildVoteBoardPayload(vote) {
     .setTitle('🗳️ Audience vote')
     .setColor(vote.closed ? 0x4f545c : 0xeb459e)
     .setDescription(
-      vote.closed
+      vote.cancelled
+        ? '🛑 The host ended the lobby, so this vote was called off.'
+        : vote.closed
         ? 'Voting is closed — characters locked in!'
         : `The audience decides what ${lobby.players.map((id) => `<@${id}>`).join(', ')} are wearing.\n` +
           '**Players can\'t vote** (and won\'t be shown the options).'

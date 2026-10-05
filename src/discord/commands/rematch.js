@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const GameManager = require('../../core/game/GameManager');
-const { createRematchLobby, rematchAnnouncement } = require('../game/rematch');
+const { createRematchLobby, rematchAnnouncement, rematchRefusal } = require('../game/rematch');
 const { buildLobbyBoardPayload, attachLobbyBoard } = require('../game/lobbyBoard');
 
 module.exports = {
@@ -15,6 +15,9 @@ module.exports = {
         flags: MessageFlags.Ephemeral,
       });
     }
+
+    const refusal = rematchRefusal(previous, interaction.user.id);
+    if (refusal) return interaction.reply({ content: refusal, flags: MessageFlags.Ephemeral });
 
     const { lobby, players } = createRematchLobby(previous, interaction.user.id);
     // The rematch reply doubles as the new lobby board.

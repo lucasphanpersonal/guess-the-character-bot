@@ -76,14 +76,17 @@ function standingsField(game, { turnOver = false } = {}) {
 // the answer rules on it, and the player guessing decides when to stop.
 function buildButtons(game, channelId) {
   const gameInstanceId = game.gameInstanceId;
+  // Whose turn, and which: a board that failed to be frozen or deleted keeps working buttons, and
+  // without this a click on it judged -- or passed -- whoever was up NOW.
+  const turnOf = `${game.currentPlayerId}:${game.turnsFor(game.currentPlayerId)}`;
   const judgeRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`turn:right:${channelId}:${gameInstanceId}`)
+      .setCustomId(`turn:right:${channelId}:${gameInstanceId}:${turnOf}`)
       .setLabel('They got it')
       .setEmoji('✅')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`turn:wrong:${channelId}:${gameInstanceId}`)
+      .setCustomId(`turn:wrong:${channelId}:${gameInstanceId}:${turnOf}`)
       .setLabel('Nope')
       .setEmoji('❌')
       .setStyle(ButtonStyle.Danger)
@@ -109,12 +112,12 @@ function buildButtons(game, channelId) {
   //   - Last one guessing: Give up only. There is nobody to pass to (a press would cycle
   //     straight back), so giving up -- which here ends the game -- is the only move left.
   const passButton = new ButtonBuilder()
-    .setCustomId(`turn:pass:${channelId}:${gameInstanceId}`)
+    .setCustomId(`turn:pass:${channelId}:${gameInstanceId}:${turnOf}`)
     .setLabel('Pass')
     .setEmoji('⏭️')
     .setStyle(ButtonStyle.Secondary);
   const giveUpButton = new ButtonBuilder()
-    .setCustomId(`turn:giveup:${channelId}:${gameInstanceId}`)
+    .setCustomId(`turn:giveup:${channelId}:${gameInstanceId}:${turnOf}`)
     .setLabel('Give up')
     .setEmoji('🏳️')
     .setStyle(ButtonStyle.Danger);

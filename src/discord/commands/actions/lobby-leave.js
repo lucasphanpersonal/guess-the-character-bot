@@ -30,7 +30,9 @@ module.exports = {
         components: [
           new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-              .setCustomId(`forfeit:${interaction.channelId}`)
+              // The game instance, so a confirmation left unanswered cannot forfeit you from the
+              // NEXT game in this channel (a rematch reuses the channel).
+              .setCustomId(`forfeit:${interaction.channelId}:${lobby.game.gameInstanceId}`)
               .setLabel('Leave the game')
               .setEmoji('🏳️')
               .setStyle(ButtonStyle.Danger)

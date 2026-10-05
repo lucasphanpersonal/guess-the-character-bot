@@ -448,7 +448,7 @@ second bot application with its own token; one bot cannot be in two voice channe
 | `/pass` | current player | End your turn (or use the turn board's button) |
 | `/lobby status` | anyone | Whose turn, time remaining, who has already finished |
 | `/lobby end` | host/admin | Cancel a stuck lobby or game |
-| `/rematch` | anyone | Replay the last finished game with the same players (or use the reveal's button) |
+| `/rematch` | that game's players | Replay the last finished game with the same players (or use the reveal's button) |
 | `/leaderboard` | anyone | Server standings, or one player's record |
 
 List and character name options have autocomplete — worth leaning on, since the bundled seed

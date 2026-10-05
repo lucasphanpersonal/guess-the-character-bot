@@ -1,13 +1,13 @@
 // Handlers for the turn board's controls.
 //
-// customIds:
-//   turn:right:<channelId>                            button -> judge starts to rule "correct"
-//   turn:yes:<channelId>:<playerId>:<turnNumber>      button -> and confirms it (ephemeral)
-//   turn:wrong:<channelId>                            button -> the judge rules it wrong
-//   turn:pass:<channelId>                             button -> the guesser hands the turn on
-//   turn:giveup:<channelId>                           button -> the guesser starts to bow out
-//   turn:giveupyes:<channelId>:<playerId>:<turnNumber> button -> and confirms it (ephemeral)
-//   turn:spectate:<channelId>                         button -> a NON-player asks to see them all
+// customIds (<game> is the game instance; <player>:<turn> the turn a board belongs to):
+//   turn:right:<channelId>:<game>:<player>:<turn>       judge starts to rule "correct"
+//   turn:yes:<channelId>:<player>:<turn>:<game>         ...and confirms it (ephemeral)
+//   turn:wrong:<channelId>:<game>:<player>:<turn>       the judge rules it wrong
+//   turn:pass:<channelId>:<game>:<player>:<turn>        the guesser hands the turn on
+//   turn:giveup:<channelId>:<game>:<player>:<turn>      the guesser starts to bow out
+//   turn:giveupyes:<channelId>:<player>:<turn>:<game>   ...and confirms it (ephemeral)
+//   turn:spectate:<channelId>:<game>                    a NON-player asks to see them all
 //
 // There is no "submit a guess" control here on purpose. Guesses are said out loud and ruled
 // on by the player who can see the answer; a second way to settle the same question would
@@ -77,12 +77,20 @@ async function handle(interaction) {
     targetTurn = parts[4];
     providedGameInstanceId = parts[5];
   } else {
-    // turn:right:channelId:gameInstanceId, etc.
+    // turn:right:channelId:gameInstanceId:playerId:turnNumber, etc.
     providedGameInstanceId = parts[3];
   }
 
   if (providedGameInstanceId && providedGameInstanceId !== expectedGameInstanceId) {
     return interaction.reply(ephemeral('That control is no longer available.'));
+  }
+
+  // A board's buttons name the turn they belong to. One from a turn that has ended -- a board that
+  // could not be frozen or deleted -- must not act on whoever is up now.
+  if (['right', 'wrong', 'pass', 'giveup'].includes(action) && parts[4]) {
+    if (parts[4] !== game.currentPlayerId || parts[5] !== String(game.turnsFor(parts[4]))) {
+      return interaction.reply(ephemeral('⌛ That board is from a turn that has already ended.'));
+    }
   }
 
   // The board carries two players' controls, so the ownership check depends on the button.
@@ -221,8 +229,11 @@ async function handle(interaction) {
  * themselves rather than to rule on somebody else.
  */
 async function handleForfeit(interaction) {
-  const [, channelId] = interaction.customId.split(':');
+  const [, channelId, gameInstanceId] = interaction.customId.split(':');
   const lobby = GameManager.getLobby(channelId);
+  if (gameInstanceId && gameInstanceId !== lobby?.game?.gameInstanceId) {
+    return interaction.update({ content: 'That was for an earlier game, so nothing changed.', components: [] });
+  }
   const result = await engine
     .submitForfeit(interaction.client, lobby, interaction.user.id)
     .catch((err) => {

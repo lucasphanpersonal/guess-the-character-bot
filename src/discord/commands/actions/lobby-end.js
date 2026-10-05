@@ -2,7 +2,8 @@ const { PermissionFlagsBits, MessageFlags } = require('discord.js');
 const GameManager = require('../../../core/game/GameManager');
 const { clearTimers, recordAbandonedGame } = require('../../game/engine');
 const { refreshTurnBoard } = require('../../game/turnBoard');
-const { clearVoteTimer } = require('../../game/audienceVote');
+const { clearVoteTimer, refreshVoteBoard } = require('../../game/audienceVote');
+const { cancelConfirmations } = require('../../game/characterDM');
 const { refreshLobbyBoard } = require('../../game/lobbyBoard');
 const voice = require('../../game/voice');
 
@@ -19,9 +20,22 @@ module.exports = {
       return interaction.reply({ content: 'Only the host or a server admin can end this.', flags: MessageFlags.Ephemeral });
     }
 
-    // An audience vote may be mid-flight with a pending auto-close timer.
+    // An audience vote may be mid-flight with a pending auto-close timer. Closed, and its board
+    // re-rendered, so the Vote button stops looking live.
+    if (lobby.vote && !lobby.vote.closed) {
+      clearVoteTimer(lobby.vote);
+      lobby.vote.closed = true;
+      lobby.vote.cancelled = true;
+      await refreshVoteBoard(lobby.vote);
+    }
     clearVoteTimer(lobby.vote);
     lobby.vote = null;
+
+    // Ended while players were still checking their characters: their DMs carry Good to go and
+    // Reroll buttons for a game that will never start.
+    if (lobby.status === 'CONFIRMING' && lobby.game?.confirmState) {
+      await cancelConfirmations(lobby.game, '🛑 The host ended this game before it began.');
+    }
 
     // Whoever already got their character keeps that result. Cancelling is the remedy for one
     // player going quiet, and it should not cost everybody else the game they finished.

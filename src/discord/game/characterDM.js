@@ -295,10 +295,11 @@ async function lockConfirmations(game, channelId) {
   return retireConfirmations(game, (playerId) => lockedCheckPayload(game, playerId, channelId));
 }
 
-async function cancelConfirmations(game) {
-  const cancelledContent =
-    '⚠️ The game did not start because a player could not receive their DMs. ' +
-    'Ask the host to try again once every player enables DMs from server members.';
+async function cancelConfirmations(
+  game,
+  cancelledContent = '⚠️ The game did not start because a player could not receive their DMs. ' +
+    'Ask the host to try again once every player enables DMs from server members.'
+) {
   await retireConfirmations(game, () => ({ content: cancelledContent, embeds: [], components: [] }));
   await Promise.all(
     game.turnOrder.flatMap((playerId) =>

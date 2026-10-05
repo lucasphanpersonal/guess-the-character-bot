@@ -130,6 +130,19 @@ module.exports = {
     GameManager.endLobby(ctx.channelId);
   },
 
+  async 'someone who was not in the game cannot start its rematch, or host it'() {
+    const ctx = await finishedGame();
+    await clickOver(ctx, 'passer-by', 'rematch');
+    assert.equal(GameManager.getLobby(ctx.channelId), ctx.lobby, 'the finished game is still there');
+    assert.match(ctx.recorder.textMatching('reply:passer-by'), /Only someone who played/);
+    const rematchCmd = require('../src/discord/commands/rematch');
+    await rematchCmd.execute(
+      createSlashInteraction({ client: ctx.client, userId: 'passer-by', guildId: ctx.guildId, channelId: ctx.channelId, recorder: ctx.recorder })
+    );
+    assert.equal(GameManager.getLobby(ctx.channelId), ctx.lobby, '...by command either');
+    GameManager.endLobby(ctx.channelId);
+  },
+
   async '/rematch and the button produce the same result'() {
     const ctx = await finishedGame();
     const rematchCmd = require('../src/discord/commands/rematch');

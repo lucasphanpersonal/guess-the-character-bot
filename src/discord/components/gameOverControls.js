@@ -3,7 +3,7 @@
 
 const { MessageFlags } = require('discord.js');
 const GameManager = require('../../core/game/GameManager');
-const { createRematchLobby, rematchAnnouncement } = require('../game/rematch');
+const { createRematchLobby, rematchAnnouncement, rematchRefusal } = require('../game/rematch');
 const { buildLobbyBoardPayload, attachLobbyBoard } = require('../game/lobbyBoard');
 const { getLeaderboard } = require('../../core/db/stats');
 
@@ -42,6 +42,9 @@ async function handle(interaction) {
         ephemeral('That game has already been replaced -- use `/lobby create` to start a new one.')
       );
     }
+
+    const refusal = rematchRefusal(previous, interaction.user.id);
+    if (refusal) return interaction.reply(ephemeral(refusal));
 
     const { lobby, players } = createRematchLobby(previous, interaction.user.id);
     // A fresh board is posted rather than editing the reveal, so the finished game's

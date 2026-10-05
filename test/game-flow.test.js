@@ -339,6 +339,62 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // The result is the one thing a finished game must not lose, and it used to be written LAST,
+  // after the reveal -- so a reveal that failed to send meant the game was never recorded.
+  async 'a reveal that fails to send still records the game'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    await guess(ctx, 'p1', true); // p1 finishes; p2 is alone
+    failNextChannelSend(ctx.client, (text) => /wins/.test(text));
+    await giveUp(ctx, 'p2').catch(() => {}); // the reveal's send throws
+    const recorded = db.prepare('SELECT COUNT(*) AS n FROM games WHERE guild_id = ?').get(ctx.guildId).n;
+    assert.equal(recorded, 1, 'the game is in the record');
+    cleanup(ctx);
+  },
+
+  // A board that could not be frozen or deleted keeps live buttons. They name their turn, so a
+  // press on one cannot rule on -- or pass -- whoever is up now.
+  async "a button from an ended turn's board does nothing to the current turn"() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+    const oldBoard = ctx.recorder.lastMatching(`channel:${ctx.channelId}`).payload;
+    const oldIds = oldBoard.components.flatMap((row) => row.toJSON().components.map((c) => c.custom_id));
+    const oldPass = oldIds.find((id) => id.startsWith('turn:pass:'));
+    await engine.submitPass(ctx.client, ctx.lobby, 'p1'); // p2's turn now
+    await engine.submitPass(ctx.client, ctx.lobby, 'p2'); // p1's turn 2
+    const { handleComponentInteraction } = require('../src/discord/components/router');
+    await handleComponentInteraction(
+      createButtonInteraction({ client: ctx.client, userId: 'p1', customId: oldPass, recorder: ctx.recorder })
+    );
+    assert.equal(game.currentPlayerId, 'p1', "turn 1's Pass did not pass turn 2");
+    assert.equal(game.turnsFor('p1'), 2);
+    assert.match(ctx.recorder.allText(), /already ended/);
+    cleanup(ctx);
+  },
+
+  async 'a leave confirmation from an earlier game cannot forfeit you from this one'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const turnControls = require('../src/discord/components/turnControls');
+    const stale = createButtonInteraction({ client: ctx.client, userId: 'p2', customId: `forfeit:${ctx.channelId}:oldgame`, recorder: ctx.recorder });
+    await turnControls.handleForfeit(stale);
+    assert.ok(ctx.lobby.game.isActive('p2'), 'still playing');
+    assert.match(ctx.recorder.allText(), /earlier game/);
+    cleanup(ctx);
+  },
+
+  async '/lobby end during the confirm phase retires the confirm DMs'() {
+    const ctx = await startedGame(); // CONFIRMING: nobody has pressed Good to go
+    const lobbyEnd = require('../src/discord/commands/actions/lobby-end');
+    await lobbyEnd.execute(
+      createSlashInteraction({ client: ctx.client, userId: 'p1', guildId: ctx.guildId, channelId: ctx.channelId, recorder: ctx.recorder })
+    );
+    const edits = ctx.recorder.sent.filter((m) => m.target.startsWith('dm:') && m.target.endsWith(':edit'));
+    assert.ok(edits.length >= 2 && edits.every((m) => (m.payload.components ?? []).length === 0), 'every check DM lost its buttons');
+    assert.match(edits.map((m) => m.content).join(' '), /ended this game before it began/);
+  },
+
   async 'the player who took fewer turns wins, and the loser is told what they needed'() {
     const ctx = await startedGame();
     await confirmBoth(ctx);

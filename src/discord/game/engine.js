@@ -31,11 +31,6 @@ async function getChannel(client, lobby) {
   return client.channels.fetch(lobby.channelId);
 }
 
-async function displayName(client, userId) {
-  const user = await client.users.fetch(userId);
-  return user.username;
-}
-
 // Remaining-time checkpoints (in seconds) for the in-turn countdown, spread across the
 // whole turn by repeated halving -- naturally spaced far apart early on and tight together
 // right before time runs out, for any turn length from 15s to 600s.
@@ -696,10 +691,16 @@ async function finalizeGame(client, lobby) {
   voice.playWinSound(game); // win/final sting, whether it's an outright win or a tie
   lobby.status = 'FINISHED';
   GameManager.markFinished(lobby.channelId);
+
+  // Recorded FIRST, before any Discord call. Everything below is presentation and can fail -- a
+  // rate limit, a channel that went away -- and recording used to come last, so a failed reveal
+  // meant the game was never written at all.
+  const standings = game.standings();
+  recordGame(lobby.guildId, standings);
+
   await refreshLobbyBoard(lobby);
   const channel = await getChannel(client, lobby);
 
-  const standings = game.standings();
   const winners = standings.filter((s) => s.outcome === 'won');
   const best = game.bestTurnCount;
   const turnWord = (n) => `**${n}** turn${n === 1 ? '' : 's'}`;
@@ -779,7 +780,8 @@ async function finalizeGame(client, lobby) {
   // who gave up was wearing -- unless they left mid-game, in which case submitForfeit already
   // showed it and marked them revealed, so it isn't repeated here.
   const unrevealed = game.turnOrder.filter((id) => !game.finishedBy.has(id) && !game.revealed.has(id));
-  const names = await Promise.all(unrevealed.map((id) => displayName(client, id)));
+  // The names resolved when the game started -- no fresh lookup that could fail at the last step.
+  const names = unrevealed.map((id) => game.nameOf(id));
   const reveal = await channel.send({
     ...characterMessage(
       voteLines.length ? `${resultLine}\n\n🗳️ **How the audience voted**\n${voteLines.join('\n')}` : resultLine,
@@ -793,8 +795,6 @@ async function finalizeGame(client, lobby) {
   // Rematch needs the FINISHED lobby that only exists in memory, so a restart has to retire
   // this row -- the sweep keeps the Leaderboard button, which reads from SQLite.
   trackBoard('gameover', reveal);
-
-  recordGame(lobby.guildId, standings);
 
   // Give the win sound time to finish before disconnecting, instead of cutting it off.
   if (wasInVoice) {
