@@ -1663,6 +1663,11 @@ function leaveRoom() {
   lastPlayView = null;
   socket.emit('room:leave', {}, () => {});
   currentRoom = null; lastState = null; store.del('gtc_lastRoom'); hideForehead(); show('landing');
+  // A join link's ?room=CODE would otherwise put them straight back in on the next reload -- the
+  // page resumes whatever room the URL names. history.state is kept: the back-button guard uses it.
+  if (new URLSearchParams(location.search).has('room')) {
+    try { history.replaceState(history.state, '', location.pathname); } catch { /* sandboxed: harmless */ }
+  }
 }
 
 // --- routing --------------------------------------------------------------------------------
@@ -1841,6 +1846,32 @@ $('browseBtn').addEventListener('click', openBrowse);
 // (Arial here, the system font on an iPhone) -- so the link takes whatever a real button got,
 // rather than guessing it in CSS and looking pasted in on the next browser.
 $('deskLink').style.fontFamily = getComputedStyle($('browseBtn')).fontFamily;
+$('drawLink').style.fontFamily = $('deskLink').style.fontFamily;
+
+// The title goes home. A real link (so it opens in a new tab), but a plain navigation would put a
+// player straight back in their room, which the page rejoins on load -- so in a room it asks first,
+// in words that say what leaving costs, and leaves properly. Out of a room it just shows the start
+// screen, which is also the way back from Browse and Test Tilt.
+$('homeTitle').addEventListener('click', (e) => {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  if (currentRoom) {
+    const status = lastState?.status;
+    const watching = document.getElementById('hosting')?.classList.contains('active');
+    const cost = watching
+      ? 'Leave the room? The game carries on without you.'
+      : status === 'playing' || status === 'countdown'
+      ? 'Leave the game? Your character is revealed and you drop out.'
+      : status === 'setup' || status === 'ready'
+        ? 'Leave the room? This deal is called off and everyone goes back to the lobby.'
+        : 'Leave this room and go back to the start?';
+    if (!confirm(cost)) return;
+    leaveRoom();
+  } else {
+    show('landing');
+  }
+  window.scrollTo(0, 0);
+});
 
 // Dark mode. <head> already applied the stored choice (or the phone's own setting) before first
 // paint; this is only the switch, and the label that says where it goes. The choice is per phone.
@@ -1886,7 +1917,7 @@ for (const ev of ['focus', 'click']) {
 // the first screen anyone sees is the one screen with no lean at all.
 retilt(document.querySelector('.screen.active'));
 scheduleEgg();
-wobble(document.querySelector('h1'), 'Guess the Character');
+wobble($('homeTitle'), 'Guess the Character');
 for (const el of document.querySelectorAll('[data-wobble]')) wobble(el, el.textContent, { colour: false });
 if (nickname) $('nickInput').value = nickname;
 

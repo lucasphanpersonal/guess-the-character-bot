@@ -94,6 +94,16 @@ function leave() {
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
 
+// The title goes home -- asking first when that means leaving a room, in words that say what it costs.
+GTC.homeTitle($('title'), {
+  leave,
+  leaving() {
+    if (!roomState) return null;
+    if (roomState.status === 'playing') return 'Leave the game? You stop drawing and guessing; your score stays on the board.';
+    return 'Leave this room and go back to the start?';
+  },
+});
+
 socket.on('room:state', (state) => {
   roomState = state;
   renderRoom();

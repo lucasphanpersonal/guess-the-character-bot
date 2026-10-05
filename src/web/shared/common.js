@@ -67,5 +67,23 @@
     while (feed.children.length > 4) feed.firstChild.remove();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, ANGLES };
+  /**
+   * The title is the way home: back to this game's start screen. A real link, so it can still be
+   * opened in a new tab -- but a plain navigation would be undone at once, because the page rejoins
+   * the last room on load. So in a room it asks first (`leaving()` says what leaving costs right
+   * now, or null for "not in a room"), then leaves properly.
+   */
+  function homeTitle(link, { leaving, leave }) {
+    link.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // a new tab: let it
+      e.preventDefault();
+      const cost = leaving();
+      if (cost && !confirm(cost)) return;
+      if (cost) leave();
+      else show('landing');
+      window.scrollTo(0, 0);
+    });
+  }
+
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, ANGLES };
 })();
