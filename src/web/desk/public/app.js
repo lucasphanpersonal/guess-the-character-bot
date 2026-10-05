@@ -130,22 +130,34 @@ function renderLobby() {
   }
 }
 
+// Built once per page, when the options first arrive: the server keeps this room's curation, so a
+// rebuild would only lose which sections the host had open.
+let poolPicker = null;
+const ask = (event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
+
 function loadOptions() {
   if (options) return;
   socket.emit('setup:options', {}, (res) => {
     options = res;
-    $('categorySelect').innerHTML = (res?.categories ?? [])
-      .map((c) => `<option value="${esc(c.category)}">${esc(c.category)} (${c.enabled} lists)</option>`)
-      .join('');
+    poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: res, request: ask });
     $('difficultySelect').innerHTML = (res?.difficulties ?? [])
       .map((d) => `<option value="${esc(d.key)}"${d.key === res.defaultDifficulty ? ' selected' : ''}>${esc(d.label)}: ${esc(d.blurb)}</option>`)
       .join('');
   });
 }
 
-for (const radio of document.querySelectorAll('input[name=pool]')) {
-  radio.addEventListener('change', () => ($('categoryRow').hidden = radio.value !== 'category' || !radio.checked));
+// Who picks: the hint and the button say what happens next, so the choice is never a guess.
+const pickMode = () => document.querySelector('input[name=mode]:checked')?.value || 'deal';
+function syncMode() {
+  const each = pickMode() === 'each';
+  $('modeHint').textContent = each
+    ? 'Nothing is dealt: each player chooses the character of the next player round the table.'
+    : "Everyone gets a random character, and checks the next player's.";
+  $('poolLabel').textContent = each ? 'Random picks come from' : 'Characters from';
+  $('startBtn').textContent = each ? 'Start Picking' : 'Deal the Characters';
 }
+for (const radio of document.querySelectorAll('input[name=mode]')) radio.addEventListener('change', syncMode);
+syncMode();
 
 $('copyBtn').addEventListener('click', async () => {
   try {
@@ -159,10 +171,10 @@ $('copyBtn').addEventListener('click', async () => {
 });
 
 $('startBtn').addEventListener('click', () => {
-  const poolType = document.querySelector('input[name=pool]:checked').value;
+  if (!poolPicker) return; // the options have not arrived yet
   const config = {
-    poolType,
-    category: poolType === 'category' ? $('categorySelect').value : null,
+    ...poolPicker.value(),
+    ...(pickMode() === 'each' ? { eachPicks: true } : {}),
     difficulty: $('difficultySelect').value || undefined,
     turnSeconds: Number($('turnSelect').value),
   };
@@ -174,36 +186,49 @@ $('startBtn').addEventListener('click', () => {
 });
 
 // --- setup: check and reroll --------------------------------------------------------------
-function cardHtml({ name, character, badge = '', current = false, mystery = false, done = false, turns = null }) {
+function cardHtml({ name, character, badge = '', current = false, mystery = false, empty = false, done = false, turns = null }) {
   let art;
   if (mystery) art = '<div class="art mystery">?</div>';
+  // A seat not picked for yet (pick-for-each-other). Not the mystery face: that one means "yours".
+  else if (empty) art = '<div class="art"><span class="noimg">Not picked yet</span></div>';
   else if (character?.imageUrl) art = `<div class="art"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
   else art = '<div class="art"><span class="noimg">No picture</span></div>';
   return `<div class="pcard${current ? ' current' : ''}${done ? ' done' : ''}">
       <div class="who">${esc(name)}${badge}${turns != null ? `<span class="turns">${turns} turn${turns === 1 ? '' : 's'}</span>` : ''}</div>
       ${art}
-      <div class="cname">${mystery ? 'Who are you?' : esc(character?.name)}</div>
-      <div class="src">${mystery ? '' : esc(character?.source)}</div>
+      <div class="cname">${mystery ? 'Who are you?' : empty ? '' : esc(character?.name)}</div>
+      <div class="src">${mystery || empty ? '' : esc(character?.source)}</div>
     </div>`;
 }
 
 socket.on('setup:state', (view) => {
   show('setup');
   gameView = null;
-  $('checkTitle').textContent = `You check ${view.checking.ownerName}'s character`;
-  $('checkCard').innerHTML = `<div class="cards" style="grid-template-columns:1fr">${cardHtml({ name: view.checking.ownerName, character: view.checking.character })}</div>`;
+  const picking = view.checkerPicks;
+  const target = view.checking.ownerName;
+  $('checkTitle').textContent = picking ? `You pick ${target}'s character` : `You check ${target}'s character`;
+  $('checkCard').innerHTML = `<div class="cards" style="grid-template-columns:1fr">${cardHtml({ name: target, character: view.checking.character, empty: !view.checking.character })}</div>`;
   const rerolls = view.rerollsLeft === -1 ? 'unlimited rerolls' : `${view.rerollsLeft} reroll${view.rerollsLeft === 1 ? '' : 's'} left`;
-  $('checkHint').textContent = view.rerollAllowed
-    ? `Is this a character ${view.checking.ownerName} has a fair chance of knowing? If not, reroll it (${rerolls}).`
-    : 'The host picked these characters, so there are no rerolls.';
+  $('checkHint').textContent = picking
+    ? `Choose someone ${target} would know: search the library, type any name, or pick at random. They have to guess it.`
+    : view.rerollAllowed
+      ? `Is this a character ${target} has a fair chance of knowing? If not, reroll it (${rerolls}).`
+      : 'The host picked these characters, so there are no rerolls.';
+  $('pickBox').hidden = !picking || view.confirmed;
+  $('pickSearch').setAttribute('aria-label', `Character for ${target}`);
+  $('rerollBtn').textContent = picking ? 'Pick at Random' : 'Reroll';
   $('rerollBtn').hidden = !view.rerollAllowed;
   $('rerollBtn').disabled = view.confirmed || view.rerollsLeft === 0;
   $('undoBtn').hidden = !view.rerollAllowed;
   $('undoBtn').disabled = view.confirmed || !view.canUndo;
-  $('confirmBtn').textContent = view.confirmed ? 'Locked in. Change my mind' : 'Looks good';
+  $('confirmBtn').textContent = view.confirmed ? 'Locked In — Change My Mind' : 'Looks Good';
   $('confirmBtn').className = view.confirmed ? 'ghost grow' : 'good grow';
   $('confirmBtn').dataset.confirmed = view.confirmed ? '1' : '';
-  $('referenceCards').innerHTML = view.reference.map((r) => cardHtml({ name: r.ownerName, character: r.character })).join('');
+  // The server refuses an empty seat too; this just says so before anyone clicks.
+  $('confirmBtn').disabled = !view.confirmed && view.canConfirm === false;
+  $('referenceCards').innerHTML = view.reference
+    .map((r) => cardHtml({ name: r.ownerName, character: r.character, empty: !r.character }))
+    .join('');
   // Two players: the one you check IS everyone else, and an empty panel reads as a fault.
   $('referenceCards').closest('.card').hidden = !view.reference.length;
   // Count, then name: "waiting on 1" tells nobody whose screen to go and look at.
@@ -220,6 +245,10 @@ $('rerollBtn').addEventListener('click', setupAction('setup:reroll'));
 $('undoBtn').addEventListener('click', setupAction('setup:undo'));
 $('confirmBtn').addEventListener('click', () => setupAction($('confirmBtn').dataset.confirmed ? 'setup:unlock' : 'setup:confirm')());
 $('cancelDealBtn').addEventListener('click', setupAction('setup:cancel'));
+GTCPickers.characterSearch($('pickSearch'), $('pickResults'), (pick) =>
+  socket.emit('setup:pick', pick.typed ? { name: pick.name } : { id: pick.id }, (res) => {
+    $('setupErr').textContent = res?.ok ? '' : res?.error || 'Could not pick that one.';
+  }));
 
 socket.on('setup:aborted', ({ reason } = {}) => {
   toast(`The deal was called off: ${esc(reason || 'it was cancelled')}.`);

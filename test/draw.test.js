@@ -191,6 +191,64 @@ function tiesShareAPlace() {
   assert.deepEqual(draw.standings(g, names).map((s) => [s.playerId, s.place]), [['p1', 1], ['p2', 1], ['p3', 3]]);
 }
 
+// --- new choices -----------------------------------------------------------------------------
+
+function theDrawerCanAskForNewChoicesAsOftenAsTheyLike() {
+  const g = started();
+  assert.equal(draw.CHOICE_REROLLS, -1, 'unlimited to start');
+  for (let i = 0; i < 5; i++) {
+    const r = draw.rerollChoices(g, 'p1', [head(`Fresh ${i}a`), head(`Fresh ${i}b`), head(`Fresh ${i}c`)], T0 + 1000 * (i + 1));
+    assert.equal(r.ok, true);
+  }
+  assert.deepEqual(g.choices.map((c) => c.name), ['Fresh 4a', 'Fresh 4b', 'Fresh 4c']);
+  assert.equal(draw.viewFor(g, 'p1', names, T0).rerollsLeft, -1);
+}
+
+function newChoicesNeverRepeatOnesAlreadyOfferedOrDrawn() {
+  const g = started();
+  g.used.push('Drawn Earlier');
+  draw.rerollChoices(g, 'p1', [head('Luigi'), head('Zelda'), head('Link')], T0);
+  const ex = draw.rerollExclusions(g);
+  for (const n of ['Pikachu', 'Bowser Koopa', 'Combat Carl', 'Luigi', 'Zelda', 'Link', 'Drawn Earlier']) {
+    assert.ok(ex.includes(n), `${n} must not be offered again this turn`);
+  }
+  // A new turn starts a fresh list of offers (drawn ones stay excluded through g.used).
+  draw.choose(g, 'p1', 0, T0);
+  draw.endTurn(g, T0, 'time');
+  draw.advance(g);
+  draw.offerChoices(g, [head('Mario')], T0);
+  assert.deepEqual(draw.rerollExclusions(g).sort(), ['Drawn Earlier', 'Luigi', 'Mario'].sort());
+}
+
+function newChoicesRestartTheChoosingClock() {
+  const g = started();
+  draw.rerollChoices(g, 'p1', [head('Luigi')], T0 + 12_000);
+  assert.equal(g.deadline, T0 + 12_000 + draw.CHOOSE_SECONDS * 1000);
+}
+
+function onlyTheDrawerAndOnlyWhileChoosingMayAskForNewChoices() {
+  const g = started();
+  assert.equal(draw.rerollChoices(g, 'p2', [head('Luigi')], T0).ok, false);
+  assert.equal(draw.rerollChoices(g, 'p1', [], T0).ok, false, 'nothing left to offer is refused, not an empty screen');
+  assert.equal(g.choices[0].name, 'Pikachu');
+  draw.choose(g, 'p1', 0, T0);
+  assert.equal(draw.rerollChoices(g, 'p1', [head('Luigi')], T0).ok, false);
+  assert.equal(draw.viewFor(g, 'p1', names, T0).rerollsLeft, null);
+}
+
+function aFiniteBudgetCountsDown() {
+  const g = started();
+  g.rerollsLeft = 1;
+  assert.equal(draw.rerollChoices(g, 'p1', [head('Luigi')], T0).ok, true);
+  assert.equal(g.rerollsLeft, 0);
+  assert.equal(draw.rerollChoices(g, 'p1', [head('Zelda')], T0).ok, false);
+}
+
+function onlyTheDrawerHearsAboutRerolls() {
+  const g = started();
+  assert.equal(draw.viewFor(g, 'p2', names, T0).rerollsLeft, null);
+}
+
 module.exports = {
   'only the drawer chooses, and only from the three': onlyTheDrawerChoosesAndOnlyFromTheThree,
   'a drawer who never chooses gets the first': aDrawerWhoNeverChoosesGetsTheFirst,
@@ -209,4 +267,10 @@ module.exports = {
   'a leaver is skipped as drawer': aLeaverIsSkippedAsDrawer,
   'one player left is the end': onePlayerLeftIsTheEnd,
   'ties share a place': tiesShareAPlace,
+  'the drawer can ask for new choices as often as they like': theDrawerCanAskForNewChoicesAsOftenAsTheyLike,
+  'new choices never repeat ones already offered or drawn': newChoicesNeverRepeatOnesAlreadyOfferedOrDrawn,
+  'new choices restart the choosing clock': newChoicesRestartTheChoosingClock,
+  'only the drawer, and only while choosing, may ask for new choices': onlyTheDrawerAndOnlyWhileChoosingMayAskForNewChoices,
+  'a finite budget counts down': aFiniteBudgetCountsDown,
+  'only the drawer hears about rerolls': onlyTheDrawerHearsAboutRerolls,
 };

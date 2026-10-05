@@ -11,12 +11,14 @@ without tangling into it. Two ways to play, from one server:
   close one (a typo, a stripped title, a shared surname) goes to the other players — the first
   to tap Yes or No (or press <kbd>Y</kbd>/<kbd>N</kbd>) settles it. Nobody ruling within 20 s
   (`WEB_DESK_RULING_MS`) counts as a miss, and a turn whose clock runs out mid-ruling waits for
-  it. No countdown, no motion sensors. Host-picks mode works on the server but has no picker in
-  the computer client yet.
+  it. No countdown, no motion sensors. Pick-for-each-other works here too; host-picks mode works
+  on the server but has no picker in the computer client yet.
 
 And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
-order: the drawer picks one of three characters (15 s, else the first), sees its picture, and
-draws it; everyone else types guesses into the chat. The checker judges them with single words
+order: the drawer picks one of three characters (15 s, else the first) — or asks for three new
+ones, as often as they like, each with a fresh 15 s and never repeating a face already offered —
+then draws it with the character's picture beside the canvas as a reference only they can see;
+everyone else types guesses into the chat. The checker judges them with single words
 OFF (people guessing at a drawing type what they see — "Combat" is not "Combat Carl"). A wrong
 guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
 100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Letters of the
@@ -30,6 +32,19 @@ everyone checks/rerolls their assigned character and taps **Good to go** → a g
 ("phone on your forehead!") → each phone shows its wearer's character full-screen, landscape,
 for the room → on your turn, **tilt up = got it, tilt down / time out = pass** → fewest turns
 wins (equal turns: most time left when they got it), and the end screen reveals who everyone was.
+
+**Where the characters come from** is one picker, shared by all three clients
+(`shared/pickers.js`): *Surprise Me*, *Everything*, or any number of category chips played together
+(`poolType: 'categories'`). A chosen category's lists can be switched off for this room under
+*Choose Lists*, one at a time or with All / None (`setup:setLists`, all or nothing); a live line
+says how many lists and up to how many characters that leaves. The host's last choice is
+remembered on that device.
+
+Or pick for each other: **Pick for each other** on the config screen deals nothing. Each player
+chooses the character of the player they check — searched, typed, or **Pick at Random** from the
+pool — and cannot lock in until they have. Everyone plays. A pick that clashes with a character
+the picker can see is refused; one that clashes only with their *own* (hidden) character is
+allowed, because refusing it would tell them who they are.
 
 Or the host picks: choosing **I'll pick them** on the config screen lets the host choose each
 player's character — searched from the library, or any name typed in — and sit the game out,
@@ -59,7 +74,8 @@ web/
   rooms.js             The room registry -- one for every game, so a code means one room.
   roomAccess.js        Identifying, creating and joining, with the limits on strangers.
   shared/              The computer games' look (theme.css), seasonal switch and client helpers,
-                       served at /shared/ so /desk/ and /draw/ cannot drift apart.
+                       served at /shared/ so /desk/ and /draw/ cannot drift apart. pickers.js
+                       (the pool picker and character search) is loaded by the phones too.
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
   guess/               Guess the Character on the web, however it is played.

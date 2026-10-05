@@ -1,6 +1,6 @@
-// Socket.io wiring for Guess the Character on the web: rooms, setup/confirm/reroll, the grace
-// countdown, the turn loop, and -- in host-picks mode -- the view of the host who picked and sits
-// out. Shared by both ways of playing; what differs between them is a VARIANT:
+// Socket.io wiring for Guess the Character on the web: rooms, setup/confirm/reroll (and the pick
+// of pick-for-each-other mode), the grace countdown, the turn loop, and -- in host-picks mode --
+// the view of the host who picked and sits out. Shared by both ways of playing; what differs between them is a VARIANT:
 //
 //   variant.kind           which rooms are theirs ('party' phones, 'desk' computers)
 //   variant.graceSeconds   the countdown before play (phones: time to raise them to foreheads)
@@ -351,6 +351,14 @@ function attachSockets(nsp, { registry, setup, variant }) {
       return ack?.(setup.toggleList(payload.listId, r));
     });
 
+    // The picker's "All" / "None" for one category: many lists in one go, all or nothing.
+    socket.on('setup:setLists', (payload = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can curate lists.' });
+      return ack?.(setup.setLists(payload.listIds, !!payload.playing, r));
+    });
+
     // Host deals characters and moves the room into the confirm phase.
     socket.on('setup:start', (config = {}, ack) => {
       const r = room();
@@ -389,6 +397,15 @@ function attachSockets(nsp, { registry, setup, variant }) {
       abortSetupToLobby(r, 'the host cancelled it');
       ack?.({ ok: true });
       broadcastRoom(r);
+    });
+
+    // Pick-for-each-other: choose the character of the player you check. Same fan-out as a reroll.
+    socket.on('setup:pick', (payload = {}, ack) => {
+      const r = room();
+      if (!r?.game || !['setup', 'ready'].includes(r.status)) return ack?.({ ok: false, error: 'No game to set up.' });
+      const res = setup.pick(r.game, playerId, payload);
+      ack?.(res);
+      if (res.ok) emitSetup(r);
     });
 
     socket.on('setup:undo', (_p, ack) => {

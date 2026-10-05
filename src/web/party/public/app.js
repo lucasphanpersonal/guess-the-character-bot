@@ -219,6 +219,7 @@ function renderLobby(state) {
 // --- config (host) ------------------------------------------------------------------------
 function openConfig({ pick } = {}) {
   if (pick !== undefined) pickMode = pick;
+  if (!['deal', 'each', 'host'].includes(pickMode)) pickMode = 'deal';
   socket.emit('setup:options', {}, (opts) => {
     options = opts;
     renderConfig(opts);
@@ -237,7 +238,9 @@ function openConfig({ pick } = {}) {
 //   playerId -> { id, name, list, imageUrl }   a character from the library
 //            -> { name, typed: true }           a name typed in, which has no picture
 const hostPicks = new Map();
-let pickMode = false;
+// Who picks the characters: 'deal' (at random), 'each' (every player picks for the one they
+// check, on the next screen), 'host' (the host picks them all and sits out).
+let pickMode = 'deal';
 
 const othersInRoom = () => (lastState?.players ?? []).filter((p) => p.playerId !== playerId);
 // Two, not one: each player checks the NEXT player's character, and a lone guesser's next
@@ -252,13 +255,14 @@ const rosterKey = () => othersInRoom().map((p) => `${p.playerId}:${p.nickname}`)
 
 function renderModeChoices() {
   pickerRosterKey = rosterKey();
-  if (!canPickForEveryone()) pickMode = false;
+  if (pickMode === 'host' && !canPickForEveryone()) pickMode = 'deal';
   const box = $('modeChoices');
   box.innerHTML = '';
   const modes = [
     { v: 'deal', label: 'Deal at random', sub: 'everyone plays, you included', shape: '▲' },
+    { v: 'each', label: 'Pick for each other', sub: 'everyone chooses who the next player is', shape: '●' },
     {
-      v: 'pick', label: "I'll pick them", shape: '◆', disabled: !canPickForEveryone(),
+      v: 'host', label: "I'll pick them", shape: '◆', disabled: !canPickForEveryone(),
       sub: canPickForEveryone() ? 'you choose, and sit this one out' : 'needs 2 players besides you',
     },
   ];
@@ -266,26 +270,28 @@ function renderModeChoices() {
     const l = document.createElement('label');
     l.className = `choice c${i}`;
     if (m.disabled) l.style.opacity = '.55';
-    const checked = (m.v === 'pick') === pickMode;
+    const checked = m.v === pickMode;
     l.innerHTML = `<input type="radio" name="mode" value="${m.v}" ${checked ? 'checked' : ''} ${m.disabled ? 'disabled' : ''}>
       <span class="shape">${m.shape}</span>
       <span><div>${escapeHtml(m.label)}</div><div class="sub">${escapeHtml(m.sub)}</div></span>`;
     box.appendChild(l);
   });
   box.onchange = () => {
-    pickMode = box.querySelector('input[name=mode]:checked')?.value === 'pick';
+    pickMode = box.querySelector('input[name=mode]:checked')?.value || 'deal';
     syncPickMode();
   };
   syncPickMode();
 }
 
 function syncPickMode() {
-  $('pickerBox').style.display = pickMode ? '' : 'none';
-  // The pool still matters in pick mode -- for anyone the host leaves blank -- so it stays, and
-  // says what it is now for.
-  $('poolLabel').textContent = pickMode ? 'Anyone left blank is drawn from' : 'Draw characters from';
-  $('dealBtn').textContent = pickMode ? 'Start With These Picks' : 'Deal Characters';
-  if (pickMode) renderPicker();
+  const host = pickMode === 'host';
+  $('pickerBox').style.display = host ? '' : 'none';
+  // The pool still matters in both picking modes -- for anyone the host leaves blank, and for a
+  // player who taps Random -- so it stays, and says what it is now for.
+  $('poolLabel').textContent =
+    host ? 'Anyone left blank is drawn from' : pickMode === 'each' ? 'Random picks come from' : 'Draw characters from';
+  $('dealBtn').textContent = host ? 'Start With These Picks' : pickMode === 'each' ? 'Start Picking' : 'Deal Characters';
+  if (host) renderPicker();
   retilt($('config'));
 }
 
@@ -316,7 +322,6 @@ function pickSlot(p) {
   input.autocomplete = 'off';
   input.setAttribute('aria-label', `Character for ${p.nickname}`);
   const results = document.createElement('div');
-  results.className = 'pickresults';
   li.append(head, input, results);
 
   const paint = () => {
@@ -343,88 +348,22 @@ function pickSlot(p) {
     clear.addEventListener('click', () => { hostPicks.delete(p.playerId); paint(); });
     current.append(label, clear);
   };
-  const choose = (pick) => {
+  // Search and the typed-name row are /shared/pickers.js, shared with the pick-for-each-other
+  // screen and the computers.
+  GTCPickers.characterSearch(input, results, (pick) => {
     hostPicks.set(p.playerId, pick);
-    input.value = '';
-    results.innerHTML = '';
     paint();
-  };
-
-  // Debounced, and every answer is checked against the latest question asked: typing "Zoro"
-  // fires four searches, and whichever lands last must not paint a list for "Zo" over "Zoro".
-  let asked = 0;
-  let timer = null;
-  input.addEventListener('input', () => {
-    clearTimeout(timer);
-    const q = input.value.trim();
-    if (!q) { results.innerHTML = ''; return; }
-    timer = setTimeout(async () => {
-      const mine = ++asked;
-      let found = [];
-      try {
-        if (q.length >= 2) found = (await fetch(`/api/browse/search?q=${encodeURIComponent(q)}`).then((r) => r.json())).characters;
-      } catch { /* offline: the typed-name row below still works */ }
-      if (mine !== asked) return;
-      results.innerHTML = '';
-      for (const c of found.slice(0, 8)) {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.className = 'rowbtn';
-        b.innerHTML = (c.imageUrl ? `<img class="pickthumb" src="${escapeHtml(c.imageUrl)}" alt="">` : '') +
-          `<span style="flex:1">${escapeHtml(c.name)}</span><span class="n">${escapeHtml(c.list || '')}</span>`;
-        b.addEventListener('click', () => choose({ id: c.id, name: c.name, list: c.list, imageUrl: c.imageUrl }));
-        results.appendChild(b);
-      }
-      // Always offered, not just on no results: "Grandma Jean" may well share letters with
-      // somebody in the library, and the host still means Grandma Jean.
-      const typed = document.createElement('button');
-      typed.type = 'button';
-      typed.className = 'rowbtn';
-      typed.innerHTML = `<span style="flex:1">Use “${escapeHtml(q)}” as Typed</span><span class="n">no picture</span>`;
-      typed.addEventListener('click', () => choose({ name: q.slice(0, 60), typed: true }));
-      results.appendChild(typed);
-    }, 200);
   });
   paint();
   return li;
 }
+// The host's last pool picker, read by deal(). Rebuilt each time the config screen opens, so it
+// starts from the server's current curation for this room.
+let poolPicker = null;
+const ask = (event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
+
 function renderConfig(opts) {
-  const pool = $('poolChoices');
-  pool.innerHTML = '';
-  // Shape + colour per choice, so they're told apart without relying on colour alone.
-  const poolOpts = [
-    { v: 'random', label: 'Surprise me', sub: 'a random category', shape: '▲' },
-    { v: 'everything', label: 'Everything', sub: 'the whole pool', shape: '◆' },
-    { v: 'category', label: 'Pick a category', sub: 'choose your own', shape: '●' },
-  ];
-  poolOpts.forEach((o, i) => {
-    const l = document.createElement('label');
-    l.className = `choice c${i}`;
-    l.innerHTML = `<input type="radio" name="pool" value="${o.v}" ${o.v === 'random' ? 'checked' : ''}>
-      <span class="shape">${o.shape}</span>
-      <span><div>${o.label}</div>${o.sub ? `<div class="sub">${o.sub}</div>` : ''}</span>`;
-    pool.appendChild(l);
-  });
-  const sel = $('categorySelect');
-  sel.innerHTML = '';
-  for (const c of opts.categories) {
-    const o = document.createElement('option');
-    o.value = c.category;
-    o.textContent = `${c.category} (${c.enabled} lists)`;
-    sel.appendChild(o);
-  }
-  // Curation only makes sense for "pick a category" -- "everything" and "random" span multiple
-  // categories, so there's no single browsable list to show here.
-  const curationBox = $('listCuration');
-  const syncCategoryUi = () => {
-    const isCategory = pool.querySelector('input[name=pool]:checked')?.value === 'category';
-    sel.style.display = isCategory ? '' : 'none';
-    curationBox.style.display = isCategory && sel.value ? '' : 'none';
-    if (isCategory && sel.value) loadListCuration(sel.value);
-  };
-  pool.addEventListener('change', syncCategoryUi);
-  sel.addEventListener('change', syncCategoryUi);
-  curationBox.style.display = 'none'; // default pool choice is 'random', not 'category'
+  poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: opts, request: ask });
 
   const diff = $('diffChoices');
   diff.innerHTML = '';
@@ -439,44 +378,14 @@ function renderConfig(opts) {
   });
 }
 
-// Lets the host drop lists they don't want for THIS game. Scoped to the room -- it does not
-// change the shared pool the Discord bot plays from.
-function loadListCuration(category) {
-  const ul = $('listCurationList');
-  ul.innerHTML = '<li class="seat"><span class="you">loading…</span></li>';
-  socket.emit('setup:categoryLists', { category }, (res) => {
-    if (!res?.ok) {
-      ul.innerHTML = `<li class="seat"><span class="you">${escapeHtml(res?.error || 'Could not load lists.')}</span></li>`;
-      return;
-    }
-    ul.innerHTML = '';
-    for (const l of res.lists) {
-      const li = document.createElement('li');
-      li.className = 'seat';
-      li.innerHTML = `<input type="checkbox" ${l.playing ? 'checked' : ''} style="width:auto">` +
-        `<span class="name" style="flex:1">${escapeHtml(l.name)}</span><span class="you">${l.count}</span>`;
-      const cb = li.querySelector('input');
-      cb.addEventListener('change', () => {
-        cb.disabled = true;
-        socket.emit('setup:toggleList', { listId: l.id }, (r) => {
-          cb.disabled = false;
-          if (r?.ok) cb.checked = r.playing;
-          else cb.checked = !cb.checked; // roll back a failed toggle
-        });
-      });
-      ul.appendChild(li);
-    }
-  });
-}
 function deal() {
-  const poolType = $('poolChoices').querySelector('input[name=pool]:checked')?.value || 'random';
-  const category = poolType === 'category' ? $('categorySelect').value : null;
   const difficulty = $('diffChoices').querySelector('input[name=diff]:checked')?.value;
   const turnSeconds = Number($('turnSecondsSelect').value) || 60;
   $('configErr').textContent = 'Dealing…';
   const preferImages = $('preferImagesInput').checked;
-  const config = { poolType, category, difficulty, turnSeconds, preferImages };
-  if (pickMode) {
+  const config = { ...poolPicker.value(), difficulty, turnSeconds, preferImages };
+  if (pickMode === 'each') config.eachPicks = true;
+  if (pickMode === 'host') {
     const inRoom = new Set(othersInRoom().map((p) => p.playerId));
     config.hostPicks = true;
     // Blank slots are simply absent: the server deals those at random.
@@ -561,17 +470,28 @@ function renderSetup(view) {
   $('rerollNote').textContent = ''; // a note about the last reroll must not outlive this render
   $('soundCheckNote').textContent = ''; // nor the result of the last sound test
   renderSoundCheck();
+  const picking = view.checkerPicks;
+  const target = escapeHtml(view.checking.ownerName);
   $('checkOwner').textContent = `${view.checking.ownerName}'s character`;
-  $('checkCard').innerHTML = charCardHtml(view.checking.character);
+  // An empty seat holds the same box a character would, so nothing jumps when the pick lands.
+  $('checkCard').innerHTML = view.checking.character
+    ? charCardHtml(view.checking.character)
+    : `<div class="charcard"><div class="charname" style="color:var(--muted)">Not picked yet</div><div class="charsrc"></div><div class="noimg">Search below, or pick at random</div></div>`;
   $('rerollBtn').style.display = view.rerollAllowed ? '' : 'none';
   // With rerolls off the host picked these, and "is it fair? Reroll if…" would ask the player to
   // judge something they can no longer change.
-  $('checkHint').innerHTML = view.rerollAllowed
-    ? 'Check this character — is it fair? <br>Reroll if nobody in the room would know them.'
-    : "The host picked everyone's characters. <br>Have a look — you'll be giving clues about this one.";
+  $('checkHint').innerHTML = picking
+    ? `You choose who <b>${target}</b> is. <br>Pick someone they'd know — they have to guess it.`
+    : view.rerollAllowed
+      ? 'Check this character — is it fair? <br>Reroll if nobody in the room would know them.'
+      : "The host picked everyone's characters. <br>Have a look — you'll be giving clues about this one.";
+  $('pickBox').style.display = picking && !view.confirmed ? '' : 'none';
+  $('pickSearch').setAttribute('aria-label', `Character for ${view.checking.ownerName}`);
+  $('rerollBtn').textContent = picking ? (view.checking.character ? 'Pick at Random Instead' : 'Pick at Random') : 'Reroll';
   $('rerollBtn').disabled = view.confirmed; // rerolls are unlimited, so only lock it once confirmed
   // Undo only appears once there is something to take back, so it never sits there dead.
   $('undoBtn').style.display = view.rerollAllowed && view.canUndo ? '' : 'none';
+  $('undoBtn').textContent = picking ? 'Undo Last Change' : 'Undo Last Reroll';
   $('undoBtn').disabled = view.confirmed;
 
   const ref = $('refList');
@@ -581,8 +501,10 @@ function renderSetup(view) {
     li.className = `seat tint${i % 4}`;
     li.innerHTML =
       `<span class="owner">${escapeHtml(r.ownerName)}</span>` +
-      `<span style="flex:1"><span class="name">${escapeHtml(r.character.name)}</span>` +
-      (r.character.source ? `<br><span class="you">${escapeHtml(r.character.source)}</span>` : '') +
+      (r.character
+        ? `<span style="flex:1"><span class="name">${escapeHtml(r.character.name)}</span>` +
+          (r.character.source ? `<br><span class="you">${escapeHtml(r.character.source)}</span>` : '')
+        : `<span style="flex:1"><span class="you">Still being picked…</span>`) +
       `</span>`;
     ref.appendChild(li);
   });
@@ -606,10 +528,12 @@ function renderSetup(view) {
   // Only the host can call off a deal; anyone can leave.
   $('setupCancelBtn').style.display = amHost() ? '' : 'none';
   $('goodBtn').style.display = view.confirmed || needsMotion ? 'none' : '';
+  // The server refuses an empty seat too; this just says so before anyone taps.
+  $('goodBtn').disabled = view.canConfirm === false;
   $('unlockBtn').style.display = view.confirmed ? '' : 'none';
   $('waitingNote').textContent = view.confirmed
     ? (view.allReady ? 'Everyone is in!' : `Locked in — waiting on ${view.waitingOn} more.`)
-    : '';
+    : view.canConfirm === false ? `Pick a character for ${view.checking.ownerName} to lock in.` : '';
   renderWaitingList(view);
   show('setup');
 }
@@ -1826,7 +1750,7 @@ $('rematchBtn').addEventListener('click', () => {
     // Back to the lobby first -- setup can only start from there -- which also shows the players
     // "the host is picking characters" while that is exactly what is happening.
     socket.emit('game:again', {}, (res) => {
-      if (res?.ok) openConfig({ pick: true });
+      if (res?.ok) openConfig({ pick: 'host' });
       else $('overErr').textContent = res?.error || 'Could not go back to picking.';
     });
     return;
@@ -1882,7 +1806,16 @@ $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (
 // No primeMotion here, though this is a user gesture and iOS wants one: the button only exists
 // once the gate has already turned tilt on, so by the time anyone can press it the phone is
 // listening. The gate's own button is where the permission is actually asked for.
-$('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, () => {}));
+$('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, (res) => {
+  if (!res?.ok) $('waitingNote').textContent = res?.error || 'Could not lock in.';
+}));
+// Pick-for-each-other: whatever is chosen here becomes the checked player's character. The view
+// that comes back from the server repaints the card; the note only carries a refusal.
+GTCPickers.characterSearch($('pickSearch'), $('pickResults'), (pick) => {
+  socket.emit('setup:pick', pick.typed ? { name: pick.name } : { id: pick.id }, (res) => {
+    $('rerollNote').textContent = res?.ok ? '' : res?.error || 'Could not pick that one.';
+  });
+});
 // The gate's own button is a user gesture, which is what iOS requires before handing over the
 // sensor -- so this is the request most likely to actually succeed.
 $('motionGateBtn').addEventListener('click', () => {

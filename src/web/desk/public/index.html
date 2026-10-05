@@ -64,16 +64,16 @@
       <div class="card stack" id="hostPanel">
         <h2>Game settings</h2>
         <div>
-          <label>Characters from</label>
-          <div class="choices" role="radiogroup">
-            <label class="choice c0"><input type="radio" name="pool" value="random" checked /><span class="shape">▲</span> Random category</label>
-            <label class="choice c1"><input type="radio" name="pool" value="all" /><span class="shape">◆</span> Everything</label>
-            <label class="choice c2"><input type="radio" name="pool" value="category" /><span class="shape">●</span> A category</label>
+          <label>Who picks the characters?</label>
+          <div class="choices two" role="radiogroup">
+            <label class="choice c0"><input type="radio" name="mode" value="deal" checked /><span class="shape">▲</span> Deal at random</label>
+            <label class="choice c1"><input type="radio" name="mode" value="each" /><span class="shape">●</span> Pick for each other</label>
           </div>
+          <p class="hint" id="modeHint">Everyone gets a random character, and checks the next player's.</p>
         </div>
-        <div id="categoryRow" hidden>
-          <label for="categorySelect">Category</label>
-          <select id="categorySelect"></select>
+        <div>
+          <label id="poolLabel">Characters from</label>
+          <div id="poolPicker"></div>
         </div>
         <div class="row">
           <div class="grow">
@@ -90,7 +90,7 @@
             </select>
           </div>
         </div>
-        <button id="startBtn" class="good wide">Deal the characters</button>
+        <button id="startBtn" class="good wide">Deal the Characters</button>
         <p class="err" id="lobbyErr" role="alert"></p>
       </div>
       <div class="card" id="guestPanel" hidden>
@@ -107,6 +107,11 @@
         <h2 id="checkTitle">You check this one</h2>
         <div id="checkCard"></div>
         <p class="hint" id="checkHint"></p>
+        <!-- Pick-for-each-other: you choose this character. -->
+        <div id="pickBox" hidden>
+          <input id="pickSearch" type="search" placeholder="Search, or type any name" autocomplete="off" />
+          <div id="pickResults" style="margin-top:8px"></div>
+        </div>
         <div class="row">
           <button id="rerollBtn" class="alt">Reroll</button>
           <button id="undoBtn" class="ghost">Undo</button>
@@ -192,6 +197,7 @@
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/shared/common.js"></script>
+<script src="/shared/pickers.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

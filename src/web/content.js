@@ -33,10 +33,24 @@ const content = {
   poolNames: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => c.name),
 };
 
+// Most categories a host can combine at once. Far more than the picker shows on one screen;
+// it only bounds what a stranger's client can make the server look up.
+const MAX_CATEGORIES = 40;
+
 // `excluded` is the room's own opt-outs, applied on top of the web's selection rather than
 // written back into it -- see the note on Room.excludedListIds.
-function resolvePool({ poolType, category, excluded = new Set() }) {
+//
+// `categories` (poolType 'categories') is one or more categories played together -- "Anime and
+// Video Games" -- and is what the pickers send. 'category' with a single `category` is the older
+// shape, kept because a rematch replays whatever a room last sent. Category names come from a
+// client: one that names nothing playable simply contributes no lists.
+function resolvePool({ poolType, category, categories, excluded = new Set() }) {
   const keep = (lists) => lists.map((l) => l.id).filter((id) => !excluded.has(id));
+  if (poolType === 'categories' && Array.isArray(categories) && categories.length) {
+    const names = [...new Set(categories.map(String))].slice(0, MAX_CATEGORIES);
+    const listIds = [...new Set(names.flatMap((c) => keep(characterLists.getEnabledListsByCategory(WEB_SCOPE, c))))];
+    return { listIds, label: names.length <= 3 ? names.join(' + ') : `${names.length} categories` };
+  }
   if (poolType === 'category' && category) {
     return { listIds: keep(characterLists.getEnabledListsByCategory(WEB_SCOPE, category)), label: category };
   }
@@ -77,11 +91,29 @@ function listsInCategory(category, room) {
 // The id arrives from a client, so it is NOT trusted -- it must name a list that really is in
 // this scope's playable selection before the room may act on it.
 function toggleList(listId, room) {
-  const [list] = characterLists.getListsByIds([listId], WEB_SCOPE);
-  if (!characterLists.isVisibleTo(list, WEB_SCOPE) || list.enabled !== 1) return { ok: false, error: 'Unknown list.' };
-  if (room.excludedListIds.has(list.id)) room.excludedListIds.delete(list.id);
-  else room.excludedListIds.add(list.id);
-  return { ok: true, playing: !room.excludedListIds.has(list.id) };
+  const res = setListsPlaying([listId], undefined, room);
+  return res.ok ? { ok: true, playing: res.playing[0] } : res;
+}
+
+/**
+ * Switch several of a room's lists on or off at once -- the picker's "All" and "None". `playing`
+ * undefined flips each one, which is what a single tick does.
+ *
+ * Every id arrives from a client, so every one must name a list in this scope's playable selection
+ * before any is changed: a request with one bad id changes nothing, rather than half of itself.
+ */
+function setListsPlaying(listIds, playing, room) {
+  const ids = [...new Set((Array.isArray(listIds) ? listIds : []).map(Number))].slice(0, 500);
+  if (!ids.length || ids.some((id) => !Number.isInteger(id))) return { ok: false, error: 'Unknown list.' };
+  const lists = characterLists.getListsByIds(ids, WEB_SCOPE);
+  const valid = lists.filter((l) => characterLists.isVisibleTo(l, WEB_SCOPE) && l.enabled === 1);
+  if (valid.length !== ids.length) return { ok: false, error: 'Unknown list.' };
+  for (const id of ids) {
+    const on = playing === undefined ? room.excludedListIds.has(id) : !!playing;
+    if (on) room.excludedListIds.delete(id);
+    else room.excludedListIds.add(id);
+  }
+  return { ok: true, playing: ids.map((id) => !room.excludedListIds.has(id)) };
 }
 
 module.exports = {
@@ -92,4 +124,5 @@ module.exports = {
   poolOptions,
   listsInCategory,
   toggleList,
+  setListsPlaying,
 };

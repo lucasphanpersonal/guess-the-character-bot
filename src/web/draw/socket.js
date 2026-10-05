@@ -141,12 +141,12 @@ function attachDrawSockets(nsp, { registry }) {
   watchdog.unref?.();
 
   function start(room, config) {
-    const { listIds, label } = web.resolvePool({ poolType: config.poolType, category: config.category, excluded: room.excludedListIds });
+    const { listIds, label } = web.resolvePool({ poolType: config.poolType, category: config.category, categories: config.categories, excluded: room.excludedListIds });
     if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
     const rounds = ROUNDS.includes(Number(config.rounds)) ? Number(config.rounds) : 3;
     const drawSeconds = DRAW_SECONDS.includes(Number(config.drawSeconds)) ? Number(config.drawSeconds) : 80;
     const difficulty = config.difficulty || web.DEFAULT_DIFFICULTY;
-    room.drawSettings = { listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category };
+    room.drawSettings = { listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category, categories: config.categories };
     room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds });
     if (!dealChoices(room, Date.now())) {
       room.game = null;
@@ -199,6 +199,18 @@ function attachDrawSockets(nsp, { registry }) {
 
     socket.on('draw:options', (_p, ack) => ack?.(web.poolOptions()));
 
+    // The pool picker's curation, the same events and rules as Guess the Character's: scoped to
+    // this room, never written to the web's selection, host only.
+    const curate = (fn) => (payload = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (!isHost()) return ack?.({ ok: false, error: 'Only the host can curate lists.' });
+      return ack?.(fn(payload, r));
+    };
+    socket.on('setup:categoryLists', curate((p, r) => (p.category ? { ok: true, lists: web.listsInCategory(p.category, r) } : { ok: false, error: 'No category given.' })));
+    socket.on('setup:toggleList', curate((p, r) => web.toggleList(p.listId, r)));
+    socket.on('setup:setLists', curate((p, r) => web.setListsPlaying(p.listIds, !!p.playing, r)));
+
     socket.on('draw:start', (config = {}, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
@@ -233,6 +245,23 @@ function attachDrawSockets(nsp, { registry }) {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = draw.choose(r.game, playerId, index, Date.now());
+      ack?.(res);
+      if (res.ok) {
+        emitViews(r);
+        schedule(r);
+      }
+    });
+
+    // Three new characters to choose from. Pictures preferred, as for the first three.
+    socket.on('draw:reroll', (_p, ack) => {
+      const r = room();
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      const g = r.game;
+      const s = r.drawSettings;
+      // Checked before dealing too, so a stranger's spam cannot make the server shuffle the pool.
+      if (g.phase !== 'choosing' || draw.drawerOf(g) !== playerId) return ack?.({ ok: false, error: "It's not your turn to choose." });
+      const rows = web.content.randomCharacters(s.listIds, draw.CHOICES, draw.rerollExclusions(g), s.difficulty, { preferImages: true });
+      const res = draw.rerollChoices(g, playerId, rows.map(headOf), Date.now());
       ack?.(res);
       if (res.ok) {
         emitViews(r);

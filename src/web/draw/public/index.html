@@ -25,19 +25,50 @@
                   aspect-ratio:4/3; position:relative; }
     canvas { width:100%; height:100%; display:block; touch-action:none; }
     canvas.can-draw { cursor:crosshair; }
-    .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
-               gap:14px; background:rgba(255,255,255,.94); color:var(--ink); padding:20px; text-align:center; }
+    /* `safe center` + auto overflow: on a canvas too short for its content the overlay scrolls
+       from the top, rather than centring the overflow off both edges where nothing reaches it. */
+    .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center;
+               overflow-y:auto; gap:14px; background:rgba(255,255,255,.94); color:var(--ink); padding:20px; text-align:center; }
     .overlay[hidden] { display:none; }
     .overlay h2 { font-size:1.6rem; }
     .pick { display:grid; grid-template-columns:repeat(3, minmax(0, 12rem)); gap:14px; }
     .pick button { background:#fff; color:var(--ink); box-shadow:0 6px 0 rgba(0,0,0,.18); border:3px solid var(--edge);
                    display:flex; flex-direction:column; gap:8px; padding:10px; font-family:var(--font-display); }
     .pick button:hover { border-color:var(--blue); }
-    .pick .art { height:9rem; border-radius:10px; background:#f3f0f8; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .choosehead { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
+    .choosehead h2 { margin:0; }
+    .choosehead button { padding:9px 14px; font-size:.92rem; }
+    /* The pictures give up height first: the canvas is 4:3 of whatever width the middle column
+       has (cqw), and everything else on this overlay needs about 15rem of it. */
+    .canvaswrap { container-type:inline-size; }
+    /* One line of source each: a wrapped "(Avatar: The Last Airbender)" took three lines from a
+       box that has none to spare. The title attribute (app.js) keeps the whole of it. */
+    .pick button .hint { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    /* A narrow canvas (the middle column just above the one-column breakpoint, or a phone): a
+       smaller heading keeps New Choices on its row, and the footer note gives its line up. */
+    @container (max-width: 30rem) {
+      .overlay { padding:12px; gap:10px; }
+      .overlay h2 { font-size:1.2rem; }
+      .pick { gap:8px; }
+      #chooseOverlay > p.hint { display:none; }
+    }
+    .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:#f3f0f8; display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .pick .art img { width:100%; height:100%; object-fit:contain; }
     .reveal-art { width:14rem; height:11rem; border-radius:12px; background:#f3f0f8; overflow:hidden; display:flex;
                   align-items:center; justify-content:center; }
     .reveal-art img { width:100%; height:100%; object-fit:contain; }
+    /* The left column: the drawer's reference above who is playing. */
+    .side { display:flex; flex-direction:column; gap:14px; }
+    .refcard { padding:12px; }
+    .refcard[hidden] { display:none; }
+    .refcard .hint { margin:6px 0 0; font-size:.8rem; }
+    /* A FIXED height: the picture arrives after the turn starts, and a box that grew when it landed
+       would shove the players list (and, in one column, the canvas) down mid-stroke. */
+    .refart { height:13rem; border-radius:12px; background:#f3f0f8; display:flex; align-items:center;
+              justify-content:center; overflow:hidden; }
+    .refart img { width:100%; height:100%; object-fit:contain; }
+    .refname { font-family:var(--font-display); font-weight:900; font-size:1.1rem; line-height:1.2; margin-top:8px; }
+    @media (max-width: 1000px) { .refart { height:11rem; } }
     .tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
     .tools[hidden] { display:none; }
     .swatch { width:2.4rem; height:2.4rem; padding:0; border-radius:50%; border:3px solid #fff;
@@ -127,15 +158,7 @@
         <h2>Game settings</h2>
         <div>
           <label>Characters from</label>
-          <div class="choices" role="radiogroup">
-            <label class="choice c0"><input type="radio" name="pool" value="random" checked /><span class="shape">▲</span> Random Category</label>
-            <label class="choice c1"><input type="radio" name="pool" value="all" /><span class="shape">◆</span> Everything</label>
-            <label class="choice c2"><input type="radio" name="pool" value="category" /><span class="shape">●</span> A Category</label>
-          </div>
-        </div>
-        <div id="categoryRow" hidden>
-          <label for="categorySelect">Category</label>
-          <select id="categorySelect"></select>
+          <div id="poolPicker"></div>
         </div>
         <div>
           <label for="difficultySelect">Difficulty</label>
@@ -181,12 +204,28 @@
       <div class="secs" id="clockSecs"></div>
     </div>
     <div class="drawgrid">
-      <ul class="players" id="players"></ul>
+      <div class="side">
+        <!-- The drawer's reference: the character's picture for the whole of their turn, so they
+             draw what it looks like rather than from memory. Only ever filled from the drawer's
+             own view, which is the only one that carries the character while drawing. -->
+        <div class="card refcard" id="refCard" hidden>
+          <div class="refart" id="refArt"></div>
+          <div class="refname" id="refName"></div>
+          <p class="hint">Your reference. Only you can see it.</p>
+        </div>
+        <ul class="players" id="players"></ul>
+      </div>
       <div>
         <div class="canvaswrap">
           <canvas id="canvas" width="1200" height="900" aria-label="The drawing"></canvas>
           <div class="overlay" id="chooseOverlay" hidden>
-            <h2>Pick one to draw</h2>
+            <!-- New Choices sits beside the heading rather than under the three: the overlay lives
+                 inside a 4:3 canvas, and a row of its own did not fit once the middle column got
+                 narrow. Lighter than the choices, because picking one is the point of the screen. -->
+            <div class="choosehead">
+              <h2>Pick one to draw</h2>
+              <button id="rerollChoicesBtn" class="alt">New Choices</button>
+            </div>
             <div class="pick" id="pick"></div>
             <p class="hint">Draw it, don't write it. You score for everyone who gets it.</p>
           </div>
@@ -241,6 +280,7 @@
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/shared/common.js"></script>
+<script src="/shared/pickers.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
