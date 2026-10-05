@@ -91,6 +91,10 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); }
 .dot.off { background:var(--off); }
 .crown { font-size:.62rem; letter-spacing:.1em; background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; border-radius:999px; }
+/* The host's Remove, on a player's row: the phones' small red pill, still a chunky button. */
+.rmbtn { padding:4px 10px; font-size:.74rem; border-radius:999px; background:var(--red);
+         box-shadow:0 3px 0 var(--red-d); }
+.rmbtn:active { transform:translateY(2px); box-shadow:0 1px 0 var(--red-d); }
 .choices { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
 .choice { display:flex; align-items:center; gap:10px; padding:12px; border-radius:14px; color:#fff;
           font-weight:800; cursor:pointer; box-shadow:0 5px 0 rgba(0,0,0,.25); }

@@ -767,6 +767,82 @@ const connect = (playerId) => {
   check((await httpGet('/shared/common.js')).type.includes('javascript'), 'GET /shared/common.js serves the common helpers');
   P.close(); Q.close();
 
+  // ---- Draw: the host removes a player ----------------------------------------------------------
+  // Someone who walks away keeps their seat, and every turn of theirs runs a full clock with nobody
+  // drawing. Mid-game a removal is a departure: the turn ends if it was theirs, and below two
+  // players the game ends. The removed browser is told -- and then hears nothing more, because a
+  // view arriving after it reached the start screen would put it straight back into the game.
+  console.log('\n# draw — the host removes a player');
+  {
+    const K1 = await connectDraw('kHost'); // the host, and the first to draw
+    res = await K1.emitWithAck('room:create', { nickname: 'Hana' });
+    const kCode = res.state.code;
+    const K2 = await connectDraw('kDev');
+    const K3 = await connectDraw('kGus');
+    await K2.emitWithAck('room:join', { code: kCode, nickname: 'Dev' });
+    await K3.emitWithAck('room:join', { code: kCode, nickname: 'Gus' });
+
+    check(!(await K2.emitWithAck('room:kick', { playerId: 'kGus' })).ok, 'draw kick: a non-host cannot remove anyone');
+    check(!(await K1.emitWithAck('room:kick', { playerId: 'kHost' })).ok, 'draw kick: the host cannot remove themselves');
+    check(!(await K1.emitWithAck('room:kick', { playerId: 'kNobody' })).ok, 'draw kick: only someone in the room can be removed');
+
+    // In the lobby: out, told, and free to come back -- a removal is not a ban.
+    let kicked = nextEvent(K3, 'room:kicked');
+    let roster = nextMatching(K1, 'room:state', (s) => s.players.length === 2);
+    res = await K1.emitWithAck('room:kick', { playerId: 'kGus' });
+    check(res.ok, 'draw kick: the host removes a player from the lobby');
+    check(typeof (await kicked).reason === 'string', 'draw kick: the removed player is told why');
+    check(!(await roster).players.some((p) => p.playerId === 'kGus'), 'draw kick: the roster drops them');
+    res = await K3.emitWithAck('room:join', { code: kCode, nickname: 'Gus' });
+    check(res.ok && res.state.players.length === 3, 'draw kick: a removed player can join the lobby again');
+
+    // Hana draws first; both others guess it, and Dev is choosing next.
+    const hanaChoosing = nextMatching(K1, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
+    res = await K1.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+    check(res.ok, 'draw kick: a three-player game starts');
+    const kAnswer = (await hanaChoosing).choices[0].name;
+    const gusSeesDrawing = nextMatching(K3, 'draw:state', (v) => v.phase === 'drawing');
+    await K1.emitWithAck('draw:choose', { index: 0 });
+    await gusSeesDrawing;
+    const devChoosing = nextMatching(K2, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
+    await K2.emitWithAck('draw:say', { text: kAnswer });
+    await K3.emitWithAck('draw:say', { text: kAnswer });
+    await devChoosing;
+
+    // The player whose turn it is: the turn ends, the board keeps their score, the next one draws.
+    kicked = nextEvent(K2, 'room:kicked');
+    const devLeftReveal = nextMatching(K3, 'draw:state', (v) => v.phase === 'reveal');
+    const gusChoosing = nextMatching(K3, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
+    const devMark = K2.received.length;
+    res = await K1.emitWithAck('room:kick', { playerId: 'kDev' });
+    check(res.ok, 'draw kick: the host removes the player who is choosing');
+    await kicked;
+    const devReveal = await devLeftReveal;
+    check(devReveal.lastTurn?.reason === 'drawer-left', 'draw kick: removing the drawer ends their turn');
+    const devRow = devReveal.players.find((p) => p.playerId === 'kDev');
+    check(devRow?.left === true && devRow.score > 0, 'draw kick: the board keeps their score, marked as left');
+    check((await gusChoosing).drawer.playerId === 'kGus', 'draw kick: the turn passes to the next player');
+
+    // Down to one: the game ends for the host, and the one removed is not shown the results.
+    kicked = nextEvent(K3, 'room:kicked');
+    const kOver = nextEvent(K1, 'draw:over');
+    const gusMark = K3.received.length;
+    res = await K1.emitWithAck('room:kick', { playerId: 'kGus' });
+    check(res.ok, 'draw kick: the host removes the next drawer too');
+    await kicked;
+    const kFinal = await kOver;
+    check(kFinal.standings.length === 3 && kFinal.standings.filter((s) => s.left).length === 2, 'draw kick: with one player left the game ends, standings keeping everyone');
+    await wait(150);
+    // Everything each removed browser was sent from the moment it was removed: the notice, and no
+    // game view or results. (The leave path had the same hole: a leaver was sent one more view.)
+    for (const [who, sock, mark] of [['Dev', K2, devMark], ['Gus', K3, gusMark]]) {
+      const after = sock.received.slice(mark).map((e) => e.event);
+      check(after.includes('room:kicked') && !after.some((e) => e === 'draw:state' || e === 'draw:over' || e === 'room:state'),
+        `draw kick: ${who} heard nothing more of the room after removal (${after.join(', ')})`);
+    }
+    K1.close(); K2.close(); K3.close();
+  }
+
   C2.close(); D.close();
   await wait(50);
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');

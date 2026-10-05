@@ -58,14 +58,17 @@ function attachDrawSockets(nsp, { registry }) {
   };
 
   // Every player gets their OWN view: the answer, the drawer's choices and insiders' lines differ
-  // per person, so this is never a room broadcast.
+  // per person, so this is never a room broadcast. Not to anyone gone: a leaver's or removed
+  // player's socket is still in the room when their departure is broadcast, and a view arriving
+  // after they reached the start screen would put them straight back into the game.
   const emitViews = (room) => {
     const g = room.game;
     if (!g) return;
     const names = namesOf(room);
     const now = Date.now();
     for (const s of socketsIn(room)) {
-      if (g.order.includes(s.data.playerId)) s.emit('draw:state', draw.viewFor(g, s.data.playerId, names, now));
+      const id = s.data.playerId;
+      if (g.order.includes(id) && !g.gone.has(id)) s.emit('draw:state', draw.viewFor(g, id, names, now));
     }
   };
 
@@ -167,6 +170,13 @@ function attachDrawSockets(nsp, { registry }) {
     if (!res.ok) return;
     emitViews(room);
     schedule(room);
+  }
+
+  // Below two players there is no game to keep going. Called once the one who went has left the
+  // socket room, so the results reach only those still in it.
+  function finishIfTooFew(room) {
+    const g = room?.game;
+    if (g && room.status === 'playing' && g.order.filter((id) => !g.gone.has(id)).length < 2) finish(room);
   }
 
   nsp.on('connection', (socket) => {
@@ -340,8 +350,33 @@ function attachDrawSockets(nsp, { registry }) {
       socket.data.code = null;
       ack?.({ ok: true });
       broadcastRoom(after);
-      // Below two players there is no game to keep going.
-      if (after?.game && after.status === 'playing' && after.game.order.filter((id) => !after.game.gone.has(id)).length < 2) finish(after);
+      finishIfTooFew(after);
+    });
+
+    // Removing a player, host only -- as in the guessing games. Without it, someone who walks away
+    // from the computer keeps their seat for the whole game: every turn of theirs runs its full
+    // clock with nobody drawing, and the room can only wait. Mid-game it is the same as leaving
+    // (departGame: their score stays, and if the turn was theirs it ends).
+    socket.on('room:kick', ({ playerId: targetId } = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (!isHost()) return ack?.({ ok: false, error: 'Only the host can remove someone.' });
+      if (!targetId || targetId === playerId) return ack?.({ ok: false, error: 'You cannot remove yourself.' });
+      if (!r.players.has(targetId)) return ack?.({ ok: false, error: 'They are not in this room.' });
+
+      departGame(r, targetId);
+      const { room: after } = registry.leaveRoom(r.code, targetId);
+      // Tell their own sockets before they stop hearing about the room, or they sit on a screen
+      // that has quietly stopped being real.
+      for (const s of socketsIn(r)) {
+        if (s.data.playerId !== targetId) continue;
+        s.emit('room:kicked', { reason: 'The host removed you from the room.' });
+        s.leave(r.code);
+        s.data.code = null;
+      }
+      ack?.({ ok: true });
+      broadcastRoom(after);
+      finishIfTooFew(after);
     });
 
     socket.on('disconnect', () => {

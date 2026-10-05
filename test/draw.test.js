@@ -185,6 +185,66 @@ function onePlayerLeftIsTheEnd() {
   assert.equal(draw.advance(g).over, true);
 }
 
+// --- the host removing someone (room:kick goes through removePlayer, as leaving does) -----------
+
+function removingTheDrawerWhileTheyChooseEndsTheTurn() {
+  const g = started();
+  const r = draw.removePlayer(g, 'p1', T0);
+  assert.equal(r.endTurn, true);
+  assert.equal(g.phase, 'reveal');
+  assert.equal(g.lastTurn.reason, 'drawer-left');
+  assert.equal(draw.advance(g).over, false);
+  assert.equal(draw.drawerOf(g), 'p2');
+}
+
+function removingOneOfSeveralGuessersLetsTheDrawingGoOn() {
+  const g = drawing({ order: ['p1', 'p2', 'p3', 'p4'] });
+  const r = draw.removePlayer(g, 'p3', T0);
+  assert.equal(r.ok, true);
+  assert.equal(r.endTurn, false, 'two people are still guessing');
+  assert.equal(g.phase, 'drawing');
+  assert.equal(draw.allGuessed(g), false);
+}
+
+function aRemovedPlayerCannotGuessButKeepsTheirScore() {
+  const g = drawing();
+  draw.say(g, 'p2', 'Pikachu', T0);
+  const scored = g.scores.get('p2');
+  draw.removePlayer(g, 'p2', T0);
+  assert.equal(draw.say(g, 'p2', 'hello', T0).ok, false);
+  const row = draw.standings(g, names).find((s) => s.playerId === 'p2');
+  assert.equal(row.score, scored);
+  assert.equal(row.left, true);
+  assert.equal(draw.viewFor(g, 'p3', names, T0).players.find((p) => p.playerId === 'p2').left, true);
+}
+
+function removingSomeoneTwiceIsANoOp() {
+  const g = drawing({ order: ['p1', 'p2', 'p3', 'p4'] });
+  assert.equal(draw.removePlayer(g, 'p3', T0).ok, true);
+  assert.equal(draw.removePlayer(g, 'p3', T0).ok, false);
+  assert.equal(draw.removePlayer(g, 'nobody', T0).ok, false);
+  assert.equal(g.phase, 'drawing');
+}
+
+function aRemovalDuringTheRevealLeavesTheRevealAlone() {
+  const g = drawing();
+  draw.endTurn(g, T0, 'time');
+  const shown = g.lastTurn;
+  assert.equal(draw.removePlayer(g, 'p2', T0).endTurn, false);
+  assert.equal(g.phase, 'reveal');
+  assert.equal(g.lastTurn, shown, 'the turn just shown is not rewritten');
+  draw.advance(g);
+  assert.equal(draw.drawerOf(g), 'p3', 'and they are skipped as the next drawer');
+}
+
+function removingAllButOneEndsTheTurnAndTheGame() {
+  const g = drawing();
+  assert.equal(draw.removePlayer(g, 'p2', T0).endTurn, false);
+  assert.equal(draw.removePlayer(g, 'p3', T0).endTurn, true, 'a drawer with nobody to draw for');
+  assert.equal(draw.advance(g).over, true);
+  assert.equal(g.phase, 'over');
+}
+
 function tiesShareAPlace() {
   const g = drawing();
   g.scores = new Map([['p1', 300], ['p2', 300], ['p3', 100]]);
@@ -266,6 +326,12 @@ module.exports = {
   'the last guesser leaving ends the turn for everyone who has it': theLastGuesserLeavingEndsTheTurnForEveryoneWhoHasIt,
   'a leaver is skipped as drawer': aLeaverIsSkippedAsDrawer,
   'one player left is the end': onePlayerLeftIsTheEnd,
+  'removing the drawer while they choose ends the turn': removingTheDrawerWhileTheyChooseEndsTheTurn,
+  'removing one of several guessers lets the drawing go on': removingOneOfSeveralGuessersLetsTheDrawingGoOn,
+  'a removed player cannot guess, but keeps their score': aRemovedPlayerCannotGuessButKeepsTheirScore,
+  'removing someone twice is a no-op': removingSomeoneTwiceIsANoOp,
+  'a removal during the reveal leaves the reveal alone': aRemovalDuringTheRevealLeavesTheRevealAlone,
+  'removing all but one ends the turn and the game': removingAllButOneEndsTheTurnAndTheGame,
   'ties share a place': tiesShareAPlace,
   'the drawer can ask for new choices as often as they like': theDrawerCanAskForNewChoicesAsOftenAsTheyLike,
   'new choices never repeat ones already offered or drawn': newChoicesNeverRepeatOnesAlreadyOfferedOrDrawn,

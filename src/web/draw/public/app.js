@@ -106,12 +106,19 @@ function leave() {
     socket.emit('room:leave', {}, resolve);
     setTimeout(resolve, 1500);
   });
+  backToStart();
+  return done;
+}
+
+// Out of the room, however that happened. The room is forgotten, link included, so neither a
+// reload nor a reconnect walks back in.
+function backToStart() {
   store.set('gtc_draw_room', '');
   roomState = null;
   view = null;
+  clearInterval(clockTimer);
   history.replaceState(null, '', location.pathname);
   show('landing');
-  return done;
 }
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
@@ -129,6 +136,7 @@ GTC.homeTitle($('title'), {
 socket.on('room:state', (state) => {
   roomState = state;
   renderRoom();
+  renderPlayers();
 });
 
 function renderRoom() {
@@ -138,7 +146,7 @@ function renderRoom() {
   $('shareLink').value = `${location.origin}/draw/?room=${roomState.code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === playerId ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === playerId ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
     .join('');
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
@@ -158,6 +166,34 @@ function renderRoom() {
     });
   }
 }
+
+// The host's way past someone who has walked away: in the lobby, and on the board mid-game, where
+// an absent player otherwise costs the room a full clock every time their turn to draw comes up.
+// Never on the host's own row, and never on someone who has already gone.
+function removeButton(id, name) {
+  if (!isHost() || id === playerId) return '';
+  return `<button class="rmbtn" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="Remove ${esc(name)}">Remove</button>`;
+}
+
+function kick(e) {
+  const b = e.target.closest('[data-kick]');
+  if (!b) return;
+  const mid = roomState?.status === 'playing';
+  const cost = mid ? ' Their score stays on the board; if they are drawing, the turn ends.' : '';
+  if (!confirm(`Remove ${b.dataset.name} from the ${mid ? 'game' : 'room'}?${cost}`)) return;
+  b.disabled = true;
+  socket.emit('room:kick', { playerId: b.dataset.kick }, (res) => {
+    b.disabled = false;
+    if (!res?.ok) toast(esc(res?.error || 'Could not remove them.'));
+  });
+}
+$('roster').addEventListener('click', kick);
+$('players').addEventListener('click', kick);
+
+socket.on('room:kicked', ({ reason } = {}) => {
+  backToStart();
+  $('landingErr').textContent = reason || 'You were removed from the room.';
+});
 
 // Built once, when the options first arrive: the server keeps this room's curation.
 let poolPicker = null;
@@ -381,12 +417,7 @@ function renderGame(turnChanged) {
     $('refName').textContent = ref ? ref.name : '';
   }
 
-  $('players').innerHTML = v.players
-    .map((p) => {
-      const tag = p.drawing ? '<span class="tag drawing">▲ Drawing</span>' : p.guessed ? '<span class="tag got">✓ Got it</span>' : '';
-      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${esc(p.name)}${p.playerId === playerId ? ' (you)' : ''} ${tag}<span class="score">${p.score}</span></li>`;
-    })
-    .join('');
+  renderPlayers();
 
   // Overlays on the picture: choosing, waiting for the drawer to choose, the reveal.
   $('chooseOverlay').hidden = !(v.phase === 'choosing' && v.isDrawer);
@@ -421,6 +452,22 @@ function renderGame(turnChanged) {
   $('chatInput').placeholder = v.phase === 'drawing' && !knows ? 'Type your guess' : 'Say something';
   renderChat();
   if (turnChanged && v.phase === 'drawing' && !v.isDrawer) $('chatInput').focus();
+}
+
+// Also from room:state, which is what says who the host is now: a host who leaves mid-game hands
+// the Remove buttons on, and the next view could be a whole drawing away.
+// Rewritten only when it changes: a view arrives with every guess, and replacing the list between
+// the press and release of a Remove button would swallow the click.
+let lastPlayersHtml = '';
+function renderPlayers() {
+  if (!view) return;
+  const html = view.players
+    .map((p) => {
+      const tag = p.drawing ? '<span class="tag drawing">▲ Drawing</span>' : p.guessed ? '<span class="tag got">✓ Got it</span>' : '';
+      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${esc(p.name)}${p.playerId === playerId ? ' (you)' : ''} ${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name)}</li>`;
+    })
+    .join('');
+  if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;
 }
 
 $('pick').addEventListener('click', (e) => {
