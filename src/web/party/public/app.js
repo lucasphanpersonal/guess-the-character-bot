@@ -894,7 +894,7 @@ function renderOver(result) {
   // picker instead -- and the old picks are forgotten, because by now everyone has seen them.
   lastOverHostPicked = !!result.hostPicked;
   if (result.hostPicked) hostPicks.clear();
-  $('rematchBtn').textContent = result.hostPicked ? 'Pick Characters Again' : 'Rematch (Same Settings)';
+  $('rematchBtn').textContent = result.hostPicked ? 'Pick Characters Again' : 'Rematch — Same Settings';
   // a little win sting
   beep(880, 160); setTimeout(() => beep(1320, 260), 170);
   show('over');

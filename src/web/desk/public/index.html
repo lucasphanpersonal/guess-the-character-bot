@@ -27,7 +27,7 @@
           <label for="nameInput">Your name</label>
           <input id="nameInput" maxlength="20" autocomplete="nickname" />
         </div>
-        <button id="createBtn" class="wide">Create a room</button>
+        <button id="createBtn" class="wide">Create a Room</button>
       </div>
       <div class="card stack">
         <h2>Join a room</h2>
@@ -35,12 +35,13 @@
           <label for="codeInput">Room code</label>
           <input id="codeInput" maxlength="4" autocomplete="off" />
         </div>
-        <button id="joinBtn" class="alt wide">Join</button>
+        <button id="joinBtn" class="alt wide">Join Room</button>
         <p class="hint">Playing with phones on foreheads instead? That's the
           <a href="/">phone version</a>. Or draw them: <a href="/draw/">Draw the Character</a>.</p>
       </div>
     </div>
     <p class="err light" id="landingErr" role="alert"></p>
+    <button class="ghost themebtn" type="button">Dark Mode</button>
   </section>
 
   <!-- Lobby -->
@@ -53,22 +54,23 @@
         </div>
         <div class="row">
           <input id="shareLink" readonly class="grow" aria-label="Link to this room" />
-          <button id="copyBtn" class="ghost">Copy link</button>
+          <button id="copyBtn" class="ghost">Copy Link</button>
         </div>
         <div>
           <label id="rosterLabel">Players</label>
           <ul class="roster" id="roster"></ul>
         </div>
-        <button id="leaveBtn" class="ghost">Leave room</button>
+        <button id="leaveBtn" class="ghost">Leave Room</button>
+        <button class="ghost themebtn" type="button">Dark Mode</button>
       </div>
       <div class="card stack" id="hostPanel">
         <h2>Game settings</h2>
         <div>
           <label>Who picks the characters?</label>
           <div class="choices" role="radiogroup">
-            <label class="choice c0"><input type="radio" name="mode" value="deal" checked /><span class="shape">▲</span> Deal at random</label>
-            <label class="choice c1"><input type="radio" name="mode" value="each" /><span class="shape">●</span> Pick for each other</label>
-            <label class="choice c2" id="hostModeChoice"><input type="radio" name="mode" value="host" /><span class="shape">◆</span> I'll pick them</label>
+            <label class="choice c0"><input type="radio" name="mode" value="deal" checked /><span class="shape">▲</span> Deal at Random</label>
+            <label class="choice c1"><input type="radio" name="mode" value="each" /><span class="shape">●</span> Pick for Each Other</label>
+            <label class="choice c2" id="hostModeChoice"><input type="radio" name="mode" value="host" /><span class="shape">◆</span> I'll Pick Them</label>
           </div>
           <p class="hint" id="modeHint">Everyone gets a random character, and checks the next player's.</p>
         </div>
@@ -122,7 +124,7 @@
         <div class="row">
           <button id="rerollBtn" class="alt">Reroll</button>
           <button id="undoBtn" class="ghost">Undo</button>
-          <button id="confirmBtn" class="good grow">Looks good</button>
+          <button id="confirmBtn" class="good grow">Looks Good</button>
         </div>
         <p class="err" id="setupErr" role="alert"></p>
       </div>
@@ -133,7 +135,7 @@
           <div class="cards" id="referenceCards"></div>
         </div>
         <p class="light" id="waitingNote"></p>
-        <button id="cancelDealBtn" class="ghost" hidden>Cancel this deal</button>
+        <button id="cancelDealBtn" class="ghost" hidden>Cancel This Deal</button>
       </div>
     </div>
   </section>
@@ -180,20 +182,29 @@
           <p class="hint" id="contentionNote" hidden></p>
           <div class="row">
             <button id="passBtn" class="ghost">Pass</button>
-            <button id="giveUpBtn" class="bad" hidden>Give up</button>
+            <button id="giveUpBtn" class="bad" hidden>Give Up</button>
           </div>
         </div>
         <div class="card ruling stack" id="rulingPanel" hidden>
           <div class="q" id="rulingQ"></div>
           <div id="rulingAnswer"></div>
           <div class="row" id="rulingButtons">
-            <button id="ruleYesBtn" class="good grow">✓ Yes, that's it <kbd>Y</kbd></button>
+            <button id="ruleYesBtn" class="good grow">✓ Yes <kbd>Y</kbd></button>
             <button id="ruleNoBtn" class="bad grow">✗ No <kbd>N</kbd></button>
           </div>
         </div>
         <div class="card" id="waitPanel" hidden>
           <h2 id="waitTitle"></h2>
           <p class="hint" id="waitHint"></p>
+        </div>
+        <div class="card stack">
+          <div>
+            <h2>Your Notes</h2>
+            <p class="hint">What you've worked out about yourself. Everyone sees these as you type,
+              so keep other people's characters out of them.</p>
+          </div>
+          <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
+          <p class="err" id="notesErr" role="alert"></p>
         </div>
         <div class="card">
           <h2 id="logTitle">Guesses</h2>
@@ -213,12 +224,12 @@
       </div>
       <div class="card stack">
         <div id="hostOver" class="stack">
-          <button id="rematchBtn" class="good wide">Rematch, same settings</button>
-          <button id="againBtn" class="ghost wide">Change settings</button>
+          <button id="rematchBtn" class="good wide">Rematch — Same Settings</button>
+          <button id="againBtn" class="ghost wide">Change Settings</button>
         </div>
         <p class="hint" id="guestOver">The host can start another game.</p>
         <p class="err" id="overErr" role="alert"></p>
-        <button id="leaveOverBtn" class="ghost wide">Leave room</button>
+        <button id="leaveOverBtn" class="ghost wide">Leave Room</button>
       </div>
     </div>
   </section>

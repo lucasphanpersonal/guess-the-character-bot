@@ -10,6 +10,7 @@
 const { publicCharacter } = require('../publicCharacter');
 const loop = require('../guess/turnLoop');
 const guessing = require('./guessing');
+const { notesOf } = require('./notes');
 
 // How many of the current player's guesses to show: enough to see what has been tried, few
 // enough to read at a glance.
@@ -31,6 +32,9 @@ function buildBoardView(game, viewerId, names, now = Date.now()) {
     status: statusOf.get(id)?.status ?? 'waiting',
     turns: statusOf.get(id)?.turns ?? 0,
     character: id === viewerId && !ownRevealed ? null : publicCharacter(game.headByPlayer[id]),
+    // Everyone's notes, to everyone -- ./notes.js refuses any that would name a character its
+    // reader is still guessing.
+    notes: notesOf(game, id),
   }));
 
   const ruling = guessing.pendingRuling(game);

@@ -16,6 +16,7 @@ const { $, esc, store, show, toast, wobble, roomCodeHtml } = GTC;
 const playerId = GTC.playerIdFor('gtc_desk_player');
 const socket = io('/desk', { auth: { playerId } });
 wobble($('title'), 'Guess the Character');
+GTC.bindThemeToggles();
 
 // --- state --------------------------------------------------------------------------------
 let roomState = null;
@@ -23,6 +24,9 @@ let options = null;
 let gameView = null;
 let clock = { remaining: null, total: 60, timer: null };
 let lastBoardHtml = '';
+// Everyone's notes, by player. Kept apart from the board's HTML and filled into it in place, so a
+// note arriving with every keystroke never rebuilds the cards (and reloads every picture).
+const notesBy = new Map();
 const isHost = () => roomState?.hostPlayerId === playerId;
 
 // --- landing ------------------------------------------------------------------------------
@@ -276,7 +280,7 @@ $('copyBtn').addEventListener('click', async () => {
     $('shareLink').select();
     $('copyBtn').textContent = 'Press Ctrl+C';
   }
-  setTimeout(() => ($('copyBtn').textContent = 'Copy link'), 1800);
+  setTimeout(() => ($('copyBtn').textContent = 'Copy Link'), 1800);
 });
 
 $('startBtn').addEventListener('click', () => {
@@ -306,7 +310,7 @@ $('startBtn').addEventListener('click', () => {
 });
 
 // --- setup: check and reroll --------------------------------------------------------------
-function cardHtml({ name, character, badge = '', current = false, mystery = false, empty = false, done = false, turns = null }) {
+function cardHtml({ name, character, badge = '', current = false, mystery = false, empty = false, done = false, turns = null, notesFor = null }) {
   let art;
   if (mystery) art = '<div class="art mystery">?</div>';
   // A seat not picked for yet (pick-for-each-other). Not the mystery face: that one means "yours".
@@ -318,12 +322,28 @@ function cardHtml({ name, character, badge = '', current = false, mystery = fals
       ${art}
       <div class="cname">${mystery ? 'Who are you?' : empty ? '' : esc(character?.name)}</div>
       <div class="src">${mystery || empty ? '' : esc(character?.source)}</div>
+      ${notesFor ? `<div class="notes" data-notes-for="${esc(notesFor)}"></div>` : ''}
     </div>`;
+}
+
+// Writes each player's notes into their card. textContent, never innerHTML: notes are typed by
+// other people.
+function fillNotes() {
+  for (const el of document.querySelectorAll('[data-notes-for]')) el.textContent = notesBy.get(el.dataset.notesFor) ?? '';
+}
+// Your own box shows what the server holds -- unless you are typing in it right now.
+function syncMyNotes() {
+  const box = $('notesInput');
+  if (document.activeElement !== box && !notesPending) box.value = notesBy.get(playerId) ?? '';
 }
 
 socket.on('setup:state', (view) => {
   show('setup');
   gameView = null;
+  // A new deal is a new game: last game's notes were about last game's characters.
+  notesBy.clear();
+  $('notesInput').value = '';
+  $('notesErr').textContent = '';
   const picking = view.checkerPicks;
   const target = view.checking.ownerName;
   $('checkTitle').textContent = picking ? `You pick ${target}'s character` : `You check ${target}'s character`;
@@ -412,6 +432,7 @@ function renderGame() {
         current: b.playerId === v.current.playerId && v.phase === 'playing',
         done: b.status === 'finished' || b.status === 'gave_up',
         turns: b.turns || null,
+        notesFor: b.playerId,
       })
     )
     .join('');
@@ -419,6 +440,9 @@ function renderGame() {
     $('board').innerHTML = boardHtml;
     lastBoardHtml = boardHtml;
   }
+  for (const b of v.board) notesBy.set(b.playerId, b.notes ?? '');
+  fillNotes();
+  syncMyNotes();
 
   $('myTurnPanel').hidden = !v.isMyTurn;
   const waitingOnRuling = v.ruling?.waiting;
@@ -591,6 +615,25 @@ $('hostLeaveBtn').addEventListener('click', () => {
 });
 
 // --- results ------------------------------------------------------------------------------
+// --- notes ---------------------------------------------------------------------------------
+// Sent when typing pauses, not per keystroke. If the server refuses a note (it named somebody
+// else's character), the reason shows under the box and the text stays, so it can be fixed.
+let notesPending = null;
+$('notesInput').addEventListener('input', () => {
+  clearTimeout(notesPending);
+  notesPending = setTimeout(() => {
+    notesPending = null;
+    socket.emit('desk:notes', { text: $('notesInput').value }, (res) => {
+      $('notesErr').textContent = res && !res.ok ? res.error || 'Your notes were not saved.' : '';
+    });
+  }, 400);
+});
+socket.on('desk:notes', ({ playerId: id, text }) => {
+  notesBy.set(id, text);
+  fillNotes();
+  if (id === playerId) syncMyNotes();
+});
+
 socket.on('game:over', (res) => {
   show('over');
   clearInterval(clock.timer);

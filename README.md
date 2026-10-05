@@ -20,7 +20,12 @@ happen live between humans in voice.
 >   Questions go out loud or over a call; on your turn you **type** who you think you are. A
 >   clear match counts and a clear miss is just a miss (as many as you like); anything close —
 >   a typo, a nickname — goes to the other players to rule on with one tap. See
->   [Checking a typed guess](#checking-a-typed-guess).
+>   [Checking a typed guess](#checking-a-typed-guess). Each player keeps notes on what they've
+>   worked out, shown live on their card to everyone; a note naming someone else's character is
+>   refused, so nobody can be handed their answer.
+>
+> Every web page has a **Dark Mode** toggle (remembered per browser; until it's pressed, the
+> device's own setting decides).
 >
 > And a second game on the same server: **Draw the Character** (`/draw/`). One player draws a
 > character they picked from three; everyone else types guesses. Letter blanks fill in as hints,

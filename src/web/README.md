@@ -14,6 +14,9 @@ without tangling into it. Two ways to play, from one server:
   it. No countdown, no motion sensors. Pick-for-each-other and **I'll pick them** work here too:
   the host fills one slot per player (or leaves it on Random) and watches every character and the
   clock while the players rule on close guesses.
+  Each player has notes, shown live under their card to everyone (`desk/notes.js`); a note that
+  names a character someone is still guessing is refused with the reason, because notes are the
+  one thing a player writes that the others read.
 
 And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
 order: the drawer picks one of three characters (15 s, else the first) — or asks for three new

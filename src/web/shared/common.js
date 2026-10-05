@@ -107,7 +107,7 @@
     if (root) {
       root.innerHTML =
         '<p class="pp-fallback">Part of this page did not load, so this is a plain list. Reload the page to get the category picker back.</p>' +
-        '<select aria-label="Characters from"><option value="random">Surprise me: a random category</option><option value="everything">Everything</option>' +
+        '<select aria-label="Characters from"><option value="random">Surprise Me — One Random Category</option><option value="everything">Everything</option>' +
         (opts?.options?.categories ?? []).map((c) => `<option value="cat:${esc(c.category)}">${esc(c.category)} (${esc(c.enabled)} lists)</option>`).join('') +
         '</select>';
     }
@@ -120,5 +120,29 @@
     };
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, ANGLES };
+  // Dark mode's switch. season.js already applied the saved choice (or the computer's setting)
+  // before first paint; this wires every .themebtn on the page to flip it, saves the choice in
+  // gtc_theme (shared with the phones' page), and labels each button with where it goes.
+  function bindThemeToggles() {
+    const root = document.documentElement;
+    const isDark = () => root.dataset.theme === 'dark';
+    const label = () => {
+      for (const b of document.querySelectorAll('.themebtn')) b.textContent = isDark() ? 'Light Mode' : 'Dark Mode';
+    };
+    for (const b of document.querySelectorAll('.themebtn')) {
+      b.addEventListener('click', () => {
+        const dark = !isDark();
+        if (dark) root.dataset.theme = 'dark';
+        else delete root.dataset.theme;
+        store.set('gtc_theme', dark ? 'dark' : 'light');
+        const spooky = root.dataset.season === 'spooky';
+        const meta = document.querySelector('meta[name=theme-color]');
+        if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
+        label();
+      });
+    }
+    label();
+  }
+
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, ANGLES };
 })();

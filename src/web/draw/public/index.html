@@ -21,6 +21,12 @@
             letter-spacing:.35em; white-space:pre-wrap; flex:1; min-width:12rem; text-align:center;
             text-shadow:0 2px 0 rgba(0,0,0,.25); }
     .mask .len { font-family:inherit; font-size:.9rem; letter-spacing:0; opacity:.8; }
+    /* The canvas is paper: white in both themes, on purpose -- the colour swatches are judged
+       against it, and a drawing should look the same on every screen in the room. */
+    :root { --veil:rgba(255,255,255,.94); --got-bg:#e3f5dc; --insider-ink:#5a4b78; }
+    :root[data-theme="dark"] { --veil:rgba(37,26,61,.96); --got-bg:#1d3420; --insider-ink:#c3b5e6; }
+    :root[data-theme="dark"] .chat li.sys { color:#55d43f; }
+    :root[data-theme="dark"] .chat li.close { color:#ffb52e; }
     .canvaswrap { background:#fff; border-radius:18px; box-shadow:0 6px 0 rgba(0,0,0,.22); overflow:hidden;
                   aspect-ratio:4/3; position:relative; }
     canvas { width:100%; height:100%; display:block; touch-action:none; }
@@ -28,11 +34,11 @@
     /* `safe center` + auto overflow: on a canvas too short for its content the overlay scrolls
        from the top, rather than centring the overflow off both edges where nothing reaches it. */
     .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:safe center;
-               overflow-y:auto; gap:14px; background:rgba(255,255,255,.94); color:var(--ink); padding:20px; text-align:center; }
+               overflow-y:auto; gap:14px; background:var(--veil); color:var(--ink); padding:20px; text-align:center; }
     .overlay[hidden] { display:none; }
     .overlay h2 { font-size:1.6rem; }
     .pick { display:grid; grid-template-columns:repeat(3, minmax(0, 12rem)); gap:14px; }
-    .pick button { background:#fff; color:var(--ink); box-shadow:0 6px 0 rgba(0,0,0,.18); border:3px solid var(--edge);
+    .pick button { background:var(--paper); color:var(--ink); box-shadow:0 6px 0 rgba(0,0,0,.18); border:3px solid var(--edge);
                    display:flex; flex-direction:column; gap:8px; padding:10px; font-family:var(--font-display); }
     .pick button:hover { border-color:var(--blue); }
     .choosehead { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
@@ -52,9 +58,9 @@
       .pick { gap:8px; }
       #chooseOverlay > p.hint { display:none; }
     }
-    .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:#f3f0f8; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .pick .art img { width:100%; height:100%; object-fit:contain; }
-    .reveal-art { width:14rem; height:11rem; border-radius:12px; background:#f3f0f8; overflow:hidden; display:flex;
+    .reveal-art { width:14rem; height:11rem; border-radius:12px; background:var(--chip); overflow:hidden; display:flex;
                   align-items:center; justify-content:center; }
     .reveal-art img { width:100%; height:100%; object-fit:contain; }
     /* The left column: the drawer's reference above who is playing. */
@@ -77,15 +83,15 @@
     /* The picked colour and size are marked with a ring AND a check -- never by colour alone. */
     .swatch.on, .size.on { outline:4px solid #fff; outline-offset:2px; }
     .swatch.on::after { content:"✓"; font-weight:900; color:#fff; text-shadow:0 0 3px #000; }
-    .size { width:2.6rem; height:2.6rem; padding:0; background:#fff; box-shadow:0 4px 0 rgba(0,0,0,.25);
+    .size { width:2.6rem; height:2.6rem; padding:0; background:var(--paper); box-shadow:0 4px 0 rgba(0,0,0,.25);
             display:flex; align-items:center; justify-content:center; }
     .size i { display:block; border-radius:50%; background:var(--ink); }
     .tools .gap { flex:1; }
     .players { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-    .players li { display:flex; align-items:center; gap:8px; background:#fff; color:var(--ink); border-radius:12px;
+    .players li { display:flex; align-items:center; gap:8px; background:var(--paper); color:var(--ink); border-radius:12px;
                   padding:10px 12px; box-shadow:0 4px 0 rgba(0,0,0,.18); font-weight:800; }
     .players li .score { margin-left:auto; font-family:var(--font-display); }
-    .players li.got { background:#e3f5dc; }
+    .players li.got { background:var(--got-bg); }
     .players li.left { opacity:.55; }
     .players .tag { font-size:.68rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase; border-radius:999px;
                     padding:1px 7px; }
@@ -96,7 +102,7 @@
     .chat li { line-height:1.35; overflow-wrap:anywhere; }
     .chat li .who { font-weight:800; }
     .chat li.sys { color:var(--green-d); font-weight:800; }
-    .chat li.insider { color:#5a4b78; font-style:italic; }
+    .chat li.insider { color:var(--insider-ink); font-style:italic; }
     .chat li.close { color:var(--amber-d); font-weight:800; }
     .chat form { display:flex; gap:8px; margin-top:10px; }
     .chat form input { font-size:1rem; padding:10px 12px; }
@@ -134,6 +140,7 @@
       </div>
     </div>
     <p class="err light" id="landingErr" role="alert"></p>
+    <button class="ghost themebtn" type="button">Dark Mode</button>
   </section>
 
   <!-- Lobby -->
@@ -153,6 +160,7 @@
           <ul class="roster" id="roster"></ul>
         </div>
         <button id="leaveBtn" class="ghost">Leave Room</button>
+        <button class="ghost themebtn" type="button">Dark Mode</button>
       </div>
       <div class="card stack" id="hostPanel">
         <h2>Game settings</h2>

@@ -13,6 +13,7 @@ const loop = require('../src/web/guess/turnLoop');
 const guessing = require('../src/web/desk/guessing');
 const { buildBoardView } = require('../src/web/desk/view');
 const { RoomRegistry } = require('../src/web/rooms');
+const notes = require('../src/web/desk/notes');
 
 const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 // Distinctive names, so finding one anywhere in a payload means exactly one thing.
@@ -195,6 +196,55 @@ function theLogShowsTheCurrentPlayersGuessesNewestFirst() {
   assert.deepEqual(buildBoardView(g, 'p3', names).guesses.map((x) => x.text), ['Superman', 'Batman']);
 }
 
+// --- notes ----------------------------------------------------------------------------------
+
+function notesAreSavedAndEveryoneSeesThem() {
+  const g = game();
+  assert.equal(notes.setNotes(g, 'p1', 'Not human. Has a sword?').ok, true);
+  for (const viewer of g.turnOrder) {
+    const mine = buildBoardView(g, viewer, names).board.find((b) => b.playerId === 'p1');
+    assert.equal(mine.notes, 'Not human. Has a sword?', `${viewer} sees p1's notes`);
+  }
+}
+
+// The one way a player's own answer could reach them: somebody else's notes. p2 can see p1 is
+// Zorblax Quintavius; writing it down would show it to p1.
+function notesThatNameAnotherPlayersCharacterAreRefused() {
+  const g = game();
+  for (const text of ['Alex is Zorblax Quintavius', 'alex = zorblax quintavius!', 'remember: Zorblax', 'Quintavius lol']) {
+    const r = notes.setNotes(g, 'p2', text);
+    assert.equal(r.ok, false, `refused: ${text}`);
+    assert.match(r.error, /everyone can see/);
+  }
+  assert.equal(notes.notesOf(g, 'p2'), '', 'nothing was stored');
+  assert.equal(JSON.stringify(buildBoardView(g, 'p1', names)).includes('Zorblax'), false);
+}
+
+function wholeWordsOnlySoAnInnocentNoteIsKept() {
+  const g = createSetup({ order: ['p1', 'p2'], guildId: 'web', listIds: [1], difficulty: 'normal', characters: [row(1, 'Leo'), row(2, 'Mirelle Okonkwo')], turnSeconds: 60 });
+  loop.startTurn(g);
+  assert.equal(notes.setNotes(g, 'p2', 'maybe a leopard?').ok, true, '"Leo" is not in "leopard"');
+  assert.equal(notes.setNotes(g, 'p2', 'Am I Leo?').ok, false, 'but Leo itself is');
+}
+
+function aGuessAtYourOwnCharacterIsFine() {
+  const g = game();
+  // p1 cannot know they are Zorblax, so naming it is a guess, not a leak -- and the check never
+  // looks at the writer's own character.
+  assert.equal(notes.setNotes(g, 'p1', 'Am I Zorblax Quintavius?').ok, true);
+}
+
+function onceTheyHaveItTheirNameIsFairGame() {
+  const g = game();
+  guessing.submitGuess(g, 'p1', 'Zorblax Quintavius', { others });
+  assert.equal(notes.setNotes(g, 'p2', 'Alex was Zorblax Quintavius').ok, true);
+}
+
+function notesAreCapped() {
+  const g = game();
+  assert.equal(notes.setNotes(g, 'p1', 'x'.repeat(2000)).text.length, notes.NOTES_MAX);
+}
+
 // --- rooms ----------------------------------------------------------------------------------
 
 // One registry, two games: a phone dealt into a computer game would be holding a client that
@@ -218,6 +268,12 @@ function phonesAndComputersCannotJoinEachOthersRooms() {
 }
 
 module.exports = {
+  'notes are saved and everyone sees them': notesAreSavedAndEveryoneSeesThem,
+  "notes that name another player's character are refused": notesThatNameAnotherPlayersCharacterAreRefused,
+  'whole words only, so an innocent note is kept': wholeWordsOnlySoAnInnocentNoteIsKept,
+  'a guess at your own character is fine': aGuessAtYourOwnCharacterIsFine,
+  'once they have it, their name is fair game': onceTheyHaveItTheirNameIsFairGame,
+  'notes are capped': notesAreCapped,
   'a correct guess ends the turn as got it': aCorrectGuessEndsTheTurnAsGotIt,
   'one word counts when nobody else has it': oneWordCountsWhenNobodyElseHasIt,
   'a wrong guess costs nothing and the turn goes on': aWrongGuessCostsNothingAndTheTurnGoesOn,

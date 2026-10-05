@@ -218,4 +218,4 @@ function identityKeys(name) {
   return [...new Set([...answerForms(name).exact, ...(bag ? [bag] : [])])];
 }
 
-module.exports = { judgeGuess, answerForms, identityKeys, editDistance };
+module.exports = { judgeGuess, answerForms, identityKeys, editDistance, wordsOf };

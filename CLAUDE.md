@@ -74,10 +74,15 @@ Both must pass before a commit. Beyond that:
   `getBoundingClientRect()` — don't eyeball a screenshot and don't assume a CSS rule applied.
   Several bugs here (the sheared card, the sideways pan, the tilt alternation) were invisible
   in description and obvious in numbers.
-- **The web client is unversioned.** `index.html` and `app.js` keep their URLs forever, so a
-  browser can serve you a stale copy while you test a fix. Navigate with a cache-buster
-  (`/?cb=2`) when verifying. The server sends `Cache-Control: no-cache` for html/js/css so
-  players don't hit this; your test tab still can.
+- **Page URLs are fixed; asset URLs are versioned by the server.** `/`, `/desk/` and `/draw/`
+  keep their URLs forever (links and QR codes point at them). `Cache-Control: no-cache` alone did
+  NOT keep players fresh: through the tunnel, Cloudflare rewrites it on .js/.css to
+  `max-age=14400`, so a player got today's HTML with a script up to 4 hours old -- a Dark Mode
+  button that rendered and did nothing. So `server.js` stamps every local script/stylesheet a
+  page loads with its file's mtime (`app.js?v=…`). Write plain `src="app.js"` in HTML; never
+  hand-version. Test through the public URL (`curl -I https://guess-the-character.com/app.js`)
+  when caching is the question -- localhost has no Cloudflare in the way. Your own test tab can
+  still hold a stale page: navigate with a cache-buster (`/?cb=2`).
 - **A check that only works once is not a check.** `check-web-socket` used to die on the
   second run against its own leftover seed DB. Make fixtures idempotent.
 - **Two sessions running `check:web-socket` at once collide.** Both use the same temp DB and
@@ -135,7 +140,8 @@ consistent — new UI should look like it was always there.
   place that lapsed was an image URL, reachable whenever a row falls back to an upstream URL.
 - **Every surface colour is a token, because dark mode redefines them.** `--paper`, `--ink`,
   `--soft`, `--input`, `--ghost-ink` and the field `--brand` change under
-  `:root[data-theme="dark"]`; a new rule with a hard-coded `#fff` or `#f6f4fa` is a white
+  `:root[data-theme="dark"]` (phones: `party/public/index.html`; computers: `shared/theme.css`,
+  which Desk and Draw inherit); a new rule with a hard-coded `#fff` or `#f6f4fa` is a white
   slab in the dark. The exceptions are deliberate: the forehead overlay (always black and white)
   and the QR code (a scanner needs it white).
 - **Button labels are Title Case.** Every word capitalised except a, an, the, and, or, but, of,

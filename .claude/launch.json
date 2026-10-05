@@ -17,6 +17,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["-e", "require('./src/web/server').server.listen(4191, '0.0.0.0', () => console.log('[web-dev] listening on 4191'))"],
       "port": 4191
+    },
+    {
+      "name": "web-dev-2",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-e", "require('./src/web/server').server.listen(4192, '0.0.0.0', () => console.log('[web-dev-2] listening on 4192'))"],
+      "port": 4192
     }
   ]
 }

@@ -11,6 +11,7 @@ const { $, esc, store, show, toast, wobble, roomCodeHtml } = GTC;
 const playerId = GTC.playerIdFor('gtc_draw_player');
 const socket = io('/draw', { auth: { playerId } });
 wobble($('title'), 'Draw the Character');
+GTC.bindThemeToggles();
 
 // The palette and sizes the server accepts (src/web/draw/socket.js); anything else is refused.
 // Named, because a swatch is the one control where colour IS the content -- the names are what a

@@ -16,6 +16,7 @@ const loop = require('../guess/turnLoop');
 const { content } = require('../content');
 const guessing = require('./guessing');
 const { buildBoardView } = require('./view');
+const notes = require('./notes');
 
 // How long the others get to rule on a close guess before it lapses as a miss. Long enough to
 // read a name and tap; short enough that a table that has wandered off cannot hold a turn.
@@ -89,6 +90,17 @@ const variant = {
         return emitGame(r);
       }
       return emitGame(r); // a miss: the log changed, the turn goes on
+    });
+
+    // A player's notes, sent as they type (the client waits for a pause). Stored on the game, so
+    // a rematch starts clean, and broadcast as they are -- only what ./notes.js lets through.
+    socket.on('desk:notes', (payload = {}, ack) => {
+      const r = room();
+      if (!playing(r)) return ack?.({ ok: false, error: 'Notes are for during a game.' });
+      if (String(payload.text ?? '') === notes.notesOf(r.game, playerId)) return ack?.({ ok: true });
+      const res = notes.setNotes(r.game, playerId, payload.text);
+      ack?.(res);
+      if (res.ok) socket.nsp.to(r.code).emit('desk:notes', { playerId, text: res.text });
     });
 
     socket.on('game:rule', (payload = {}, ack) => {
