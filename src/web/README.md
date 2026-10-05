@@ -230,7 +230,9 @@ Endpoints that prove the shared core is reachable from this frontend:
 - **1. Rooms + membership — done.** `rooms.js` (transport-agnostic, unit-tested in
   `test/web-rooms.test.js`) + `socket.js` (socket.io wiring) + a mobile lobby client in
   `public/`. Create/join by code, live roster, nickname identity, and seats keyed by a
-  persistent client `playerId` so a dropped connection reclaims its seat. Codes are 4 chars
+  persistent client secret (the browser's `playerId`) so a dropped connection reclaims its seat.
+  The secret is only ever sent in the handshake: seats, rosters and views use a public id the
+  server derives from it (`roomAccess.js`). Codes are 4 chars
   from an unambiguous alphabet (no O/0, I/1).
 - **2. Setup flow — done.** Host picks a pool (random category / everything / a category) and
   difficulty; the server deals via the shared core, then each player gets a confirm/reroll

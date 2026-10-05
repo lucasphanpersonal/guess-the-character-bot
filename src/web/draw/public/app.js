@@ -10,6 +10,13 @@
 const { $, esc, store, show, toast, wobble, roomCodeHtml } = GTC;
 const playerId = GTC.playerIdFor('gtc_draw_player');
 const socket = io('/draw', { auth: { playerId } });
+// `playerId` above is this browser's SECRET: it goes in the handshake and nowhere else. The server
+// seats us under a public id derived from it, and that is the id every roster and view uses -- so
+// "is this me?" is always asked of `me`, never of the secret.
+let me = null;
+socket.on('hello', ({ you }) => {
+  me = you;
+});
 wobble($('title'), 'Draw the Character');
 GTC.bindThemeToggles();
 
@@ -28,7 +35,7 @@ let SIZES = [];
 let roomState = null;
 let view = null;
 let options = null;
-const isHost = () => roomState?.hostPlayerId === playerId;
+const isHost = () => roomState?.hostPlayerId === me;
 
 // --- landing and lobby (the same flow as /desk/) ------------------------------------------
 $('nameInput').value = store.get('gtc_draw_name') || '';
@@ -161,7 +168,7 @@ function renderRoom() {
   $('shareLink').value = `${location.origin}/draw/?room=${roomState.code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === playerId ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
+    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
     .join('');
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
@@ -186,7 +193,7 @@ function renderRoom() {
 // an absent player otherwise costs the room a full clock every time their turn to draw comes up.
 // Never on the host's own row, and never on someone who has already gone.
 function removeButton(id, name) {
-  if (!isHost() || id === playerId) return '';
+  if (!isHost() || id === me) return '';
   return `<button class="rmbtn" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="Remove ${esc(name)}">Remove</button>`;
 }
 
@@ -303,6 +310,9 @@ let pen = { color: null, size: null }; // set by takeTools when the room arrives
 let live = null; // the stroke being drawn
 let pending = [];
 let seq = 0;
+// Prefixes this page's stroke ids, which every screen in the room receives -- random, so they
+// say nothing about the player id they used to be cut from.
+const STROKE_TAG = Math.random().toString(36).slice(2, 10);
 const PIECE_MS = 50;
 const canDraw = () => view?.isDrawer && view.phase === 'drawing';
 
@@ -325,7 +335,7 @@ canvas.addEventListener('pointerdown', (e) => {
   // Keeps the stroke when the pen leaves the canvas mid-line. Can refuse (a pointer the browser
   // no longer tracks), and a refusal must not cost the stroke.
   try { canvas.setPointerCapture(e.pointerId); } catch { /* draw without capture */ }
-  live = { id: `${playerId.slice(0, 8)}-${++seq}`, color: pen.color, size: pen.size, points: [pointOf(e)] };
+  live = { id: `${STROKE_TAG}-${++seq}`, color: pen.color, size: pen.size, points: [pointOf(e)] };
   strokes.push(live);
   pending = [...live.points];
   strokeSegment(live, 0);
@@ -524,7 +534,7 @@ function renderPlayers() {
   const html = view.players
     .map((p) => {
       const tag = p.drawing ? '<span class="tag drawing">▲ Drawing</span>' : p.guessed ? '<span class="tag got">✓ Got it</span>' : '';
-      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${esc(p.name)}${p.playerId === playerId ? ' (you)' : ''} ${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name)}</li>`;
+      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${esc(p.name)}${p.playerId === me ? ' (you)' : ''} ${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name)}</li>`;
     })
     .join('');
   if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;
@@ -569,10 +579,10 @@ function localLine(cls, html) {
 // The one "got it" line, the guesser's own included: the ack to their guess says nothing, or the
 // guesser saw it twice -- "You got it!" from the ack, then their own name from this.
 socket.on('draw:correct', ({ playerId: who, name, points }) => {
-  localLine('sys', who === playerId ? `✓ You got it! +${points}` : `✓ ${esc(name)} got it! +${points}`);
+  localLine('sys', who === me ? `✓ You got it! +${points}` : `✓ ${esc(name)} got it! +${points}`);
   // To everyone, the guesser included -- so the guesser's own cue is played here too, not on the
   // ack, or they would hear two.
-  sound(who === playerId ? 'gotMine' : 'got');
+  sound(who === me ? 'gotMine' : 'got');
 });
 
 // Sent the moment Enter is pressed, and the box emptied at once: a fast typist is already on the
@@ -603,7 +613,7 @@ socket.on('draw:over', ({ standings }) => {
   view = null;
   localLines = [];
   heardPhase = '';
-  const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === playerId ? 'You' : s.name));
+  const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === me ? 'You' : s.name));
   $('overTitle').textContent = top.length ? `${top.join(' and ')} won!` : 'Game over';
   $('standings').innerHTML = standings
     .map((s) => `<li><span class="place">${s.place}</span><div><strong>${esc(s.name)}</strong>${s.left ? ' <span class="hint">(left)</span>' : ''}<div class="hint">${s.score} points</div></div></li>`)

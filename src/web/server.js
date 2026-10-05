@@ -34,6 +34,7 @@ const { TurnRotationMode } = require('../core/game/roundMode');
 const { RoomRegistry } = require('./rooms');
 const { WEB_SCOPE } = require('./content');
 const imageCache = require('./imageCache');
+const { clientKey, createLimiter } = require('./rateLimit');
 const party = require('./party');
 const desk = require('./desk');
 const drawGame = require('./draw');
@@ -51,6 +52,17 @@ const MOUNTS = [
 const JOIN_PATH = { party: '/', desk: '/desk/', draw: '/draw/' };
 
 const registry = new RoomRegistry();
+
+// Room-code lookups, per client. /api/room answers whether a code exists and /api/qr's link
+// changes with the room's kind, so each is an oracle for codes -- and 32^4 codes take minutes to
+// walk unthrottled. A person types a handful; a host's phone fetches one QR per room.
+const lookupsByClient = createLimiter({ max: 30, windowMs: 60 * 1000 });
+const tooManyLookups = (req, res) => {
+  if (lookupsByClient.take(clientKey(req.headers, req.socket.remoteAddress))) return false;
+  res.writeHead(429, { 'Content-Type': 'application/json; charset=utf-8', 'Retry-After': '60' });
+  res.end(JSON.stringify({ error: 'Too many lookups. Wait a minute and try again.' }));
+  return true;
+};
 
 // At module load, not inside the run-as-script guard: the socket check requires this file
 // rather than spawning it, and an uninitialised cache silently redirects everything upstream.
@@ -164,6 +176,7 @@ function requestHandler(req, res) {
   // URL is now built here from the request's own host, so the code can only ever point back at
   // this server.
   if (url.pathname === '/api/qr') {
+    if (tooManyLookups(req, res)) return undefined;
     const room = String(url.searchParams.get('room') || '').toUpperCase();
     if (!/^[A-Z0-9]{2,8}$/.test(room)) {
       res.writeHead(400, { 'Content-Type': 'text/plain' });
@@ -309,6 +322,7 @@ function requestHandler(req, res) {
   // three games, and a code only works on its own game's page. Says no more than a join attempt
   // already would (that the room exists, and which game it is) -- no names, no counts.
   if (url.pathname === '/api/room') {
+    if (tooManyLookups(req, res)) return undefined;
     const code = String(url.searchParams.get('code') || '').toUpperCase();
     const room = /^[A-Z0-9]{2,8}$/.test(code) ? registry.getRoom(code) : null;
     if (!room) return sendJson(res, 404, { error: 'No room with that code. Check it with the host.' });

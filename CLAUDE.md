@@ -200,6 +200,13 @@ consistent — new UI should look like it was always there.
 - *A "no-op" result is not the same as an advance.* `forfeit` returns without a `nextPlayerId`
   when the player who left wasn't the guesser. Treating every non-gameover result as an advance
   restarted a turn clock that was still running.
+- *An id you publish cannot also be the credential.* The web seat was keyed by the browser's
+  own `playerId`, and that same id was in every roster -- so anyone in a room could connect as
+  the host, or as the next player on a computer and read their board, which shows your own
+  character. The browser's id is now a secret that only rides the handshake; everything
+  published uses the public id derived from it (`roomAccess.publicIdOf`). Limits on what a
+  stranger can do in bulk are per client address (`rateLimit.js`), never per socket: a new
+  socket is free.
 - *Behind a TLS-terminating proxy, `req.socket.encrypted` is false.* Trust
   `X-Forwarded-Proto`/`-Host` when present. Getting this wrong made the join QR encode
   `http://`, which silently disabled motion sensors for everyone who scanned it while anyone

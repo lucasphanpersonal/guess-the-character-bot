@@ -355,9 +355,17 @@ recorded below, since the deviations are the useful part of a status update.
    player dropping **pauses** their turn clock and reconnecting **resumes** it (bounded at 30s so
    a no-show doesn't freeze the game). A 3s wall-clock **watchdog** sweeps turn/countdown
    deadlines so a suspended process doesn't hang a turn — the same role as the Discord bot's
-   `timerWatchdog`. Session tokens were deemed unnecessary for a LAN party: the client `playerId`
-   is the identity, and seat-hijacking isn't a realistic threat here. Server-restart persistence
-   stays out of scope, the same call the Discord side made.
+   `timerWatchdog`. Server-restart persistence stays out of scope, the same call the Discord side
+   made.
+
+   **Revised: the seat secret is no longer published.** This first shipped with the client
+   `playerId` as both the identity AND the id in every roster, on the reasoning that seat-hijacking
+   wasn't a realistic threat at a LAN party. Once the site was public that reasoning failed: anyone
+   in a room could read the host's id off the roster and connect with it, and on the computers,
+   joining as the next player shows you their board -- your own character on it. The browser's id
+   is now a secret that only travels in the handshake; seats are keyed by a public id derived from
+   it with a server-side key (`src/web/roomAccess.js`), so reconnects still reclaim the exact seat.
+   Room-code lookups and failed joins are limited per client address, not per socket.
 6. **Polish — mostly done.** Shipped: **rematch** with the same settings (redeal to the same
    roster, straight back to the confirm phase); **QR-code joins** (an `/api/qr` SVG endpoint, a
    scannable code on the lobby); **preferring characters with artwork** (`preferImages` on the

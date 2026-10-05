@@ -15,6 +15,13 @@ const { $, esc, store, show, toast, wobble, roomCodeHtml } = GTC;
 // A persistent id, so a reload or a dropped connection reclaims the same seat.
 const playerId = GTC.playerIdFor('gtc_desk_player');
 const socket = io('/desk', { auth: { playerId } });
+// `playerId` above is this browser's SECRET: it goes in the handshake and nowhere else. The server
+// seats us under a public id derived from it, and that is the id every roster and view uses -- so
+// "is this me?" is always asked of `me`, never of the secret.
+let me = null;
+socket.on('hello', ({ you }) => {
+  me = you;
+});
 wobble($('title'), 'Guess the Character');
 GTC.bindThemeToggles();
 
@@ -34,7 +41,7 @@ let lastBoardHtml = '';
 // Everyone's notes, by player. Kept apart from the board's HTML and filled into it in place, so a
 // note arriving with every keystroke never rebuilds the cards (and reloads every picture).
 const notesBy = new Map();
-const isHost = () => roomState?.hostPlayerId === playerId;
+const isHost = () => roomState?.hostPlayerId === me;
 
 // --- landing ------------------------------------------------------------------------------
 $('nameInput').value = store.get('gtc_desk_name') || '';
@@ -163,7 +170,7 @@ function renderLobby() {
   $('shareLink').value = `${location.origin}/desk/?room=${code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === playerId ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
@@ -218,7 +225,7 @@ for (const radio of document.querySelectorAll('input[name=mode]')) radio.addEven
 //   playerId -> { id, name, list, imageUrl }   a character from the library
 //            -> { name, typed: true }           a name typed in, which has no picture
 const hostPicks = new Map();
-const others = () => (roomState?.players ?? []).filter((p) => p.playerId !== playerId);
+const others = () => (roomState?.players ?? []).filter((p) => p.playerId !== me);
 // Two, not one: each player checks the NEXT player's character, and a lone guesser's next player
 // is themselves. The server refuses it too; this says so before the host bothers.
 const canPickForEveryone = () => others().length >= 2;
@@ -341,7 +348,7 @@ function fillNotes() {
 // Your own box shows what the server holds -- unless you are typing in it right now.
 function syncMyNotes() {
   const box = $('notesInput');
-  if (document.activeElement !== box && !notesPending) box.value = notesBy.get(playerId) ?? '';
+  if (document.activeElement !== box && !notesPending) box.value = notesBy.get(me) ?? '';
 }
 
 socket.on('setup:state', (view) => {
@@ -383,7 +390,7 @@ socket.on('setup:state', (view) => {
   // Count, then name: "waiting on 1" tells nobody whose screen to go and look at.
   $('waitingNote').textContent = view.allReady
     ? 'Everyone is in. Starting...'
-    : `Waiting on ${view.waitingPlayers.map((p) => (p.playerId === playerId ? 'you' : p.name)).join(', ')}.`;
+    : `Waiting on ${view.waitingPlayers.map((p) => (p.playerId === me ? 'you' : p.name)).join(', ')}.`;
   $('cancelDealBtn').hidden = !isHost();
   $('setupErr').textContent = '';
 });
@@ -595,9 +602,9 @@ socket.on('desk:ruled', ({ accepted, by, lapsed }) => {
   toast(lapsed ? 'Nobody ruled in time, so it counts as a miss.' : `${esc(by)} ruled: ${accepted ? '✓ it counts' : '✗ not it'}`);
 });
 socket.on('game:reveal', (r) => {
-  const who = r.playerId === playerId ? 'You' : esc(r.name);
+  const who = r.playerId === me ? 'You' : esc(r.name);
   const what = `<strong>${esc(r.character?.name)}</strong>`;
-  if (r.kind === 'got') sound(r.playerId === playerId ? 'gotMine' : 'got');
+  if (r.kind === 'got') sound(r.playerId === me ? 'gotMine' : 'got');
   if (r.kind === 'got') toast(`${who} got it: ${what}, in ${r.turns} turn${r.turns === 1 ? '' : 's'}.`, 7000);
   else if (r.kind === 'gaveup') toast(`${who} gave up. They were ${what}.`, 7000);
   else toast(`${who} left. They were ${what}.`, 7000);
@@ -667,7 +674,7 @@ $('notesInput').addEventListener('input', () => {
 socket.on('desk:notes', ({ playerId: id, text }) => {
   notesBy.set(id, text);
   fillNotes();
-  if (id === playerId) syncMyNotes();
+  if (id === me) syncMyNotes();
 });
 
 socket.on('game:over', (res) => {
@@ -676,7 +683,7 @@ socket.on('game:over', (res) => {
   gameView = null;
   heardTurn = '';
   heardRuling = null;
-  const winners = res.winners.map((w) => (w.playerId === playerId ? 'You' : w.name));
+  const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
   $('standings').innerHTML = res.standings
     .map((s) => {

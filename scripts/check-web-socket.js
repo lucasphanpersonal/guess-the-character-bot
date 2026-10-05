@@ -48,6 +48,9 @@ seedContent();
 
 const { io } = require('socket.io-client');
 const { server, registry } = require('../src/web/server');
+// Seats are published under a public id derived from the secret each client connects with
+// (src/web/roomAccess.js), so every id this check compares or targets goes through it.
+const { publicIdOf: pub } = require('../src/web/roomAccess');
 
 const PORT = Number(process.env.WEB_PORT);
 const URL = `http://localhost:${PORT}`;
@@ -71,6 +74,48 @@ const connect = (playerId) => {
 (async () => {
   await new Promise((r) => server.listen(PORT, r));
 
+  // ---- Seat identity: the secret a browser connects with is never published ---------------
+  console.log('\n# seat identity');
+  {
+    // Long, unmistakable secrets, so a substring search can only find them if they were sent.
+    const HOST_SECRET = 'host-secret-7f3a9c1e5d';
+    const GUEST_SECRET = 'guest-secret-2b8d4f6a0c';
+    const listen = (secret) => new Promise((r) => {
+      const sock = io(URL, { auth: { playerId: secret } });
+      sock.heard = [];
+      sock.onAny((ev, payload) => sock.heard.push({ ev, json: JSON.stringify(payload ?? null) }));
+      sock.on('connect', () => r(sock));
+    });
+    const hello = (sock) => new Promise((r) => (sock.heard.find((h) => h.ev === 'hello') ? r(JSON.parse(sock.heard.find((h) => h.ev === 'hello').json)) : sock.once('hello', r)));
+    const H = await listen(HOST_SECRET);
+    const G = await listen(GUEST_SECRET);
+    check((await hello(H)).you === pub(HOST_SECRET), 'identity: a browser is told its public seat id');
+    let r = await H.emitWithAck('room:create', { nickname: 'Hana' });
+    const idCode = r.state.code;
+    r = await G.emitWithAck('room:join', { code: idCode, nickname: 'Gil' });
+    check(r.ok && r.state.hostPlayerId === pub(HOST_SECRET), 'identity: rosters name seats by public id');
+    await new Promise((res) => setTimeout(res, 100));
+    const everything = [...H.heard, ...G.heard].map((h) => h.json).join('\n');
+    check(!everything.includes(HOST_SECRET) && !everything.includes(GUEST_SECRET), 'identity: no payload to anyone carries a secret');
+
+    // Connecting with the host's PUBLIC id -- the thing everyone can see -- is just a new person.
+    const impostor = await listen(pub(HOST_SECRET));
+    r = await impostor.emitWithAck('room:join', { code: idCode, nickname: 'Hana' });
+    const seats = registry.getRoom(idCode).players;
+    check(r.ok && r.reconnected === false && seats.size === 3 && r.state.hostPlayerId === pub(HOST_SECRET),
+      "identity: the host's public id gets an impostor a new seat, never the host's");
+    const kick = await impostor.emitWithAck('room:kick', { playerId: pub(GUEST_SECRET) });
+    check(!kick.ok, 'identity: ...and no host powers');
+
+    // Room-code lookups are limited per client (the proxy's client address), not per socket.
+    const asClient = (ip) => fetch(`${URL}/api/room?code=ZZZZ`, { headers: { 'cf-connecting-ip': ip } }).then((x) => x.status);
+    const statuses = [];
+    for (let i = 0; i < 31; i++) statuses.push(await asClient('203.0.113.7'));
+    check(statuses.slice(0, 30).every((s) => s === 404) && statuses[30] === 429, `lookups: the 31st in a minute from one client is refused (${statuses[30]})`);
+    check((await asClient('203.0.113.8')) === 404, 'lookups: ...while another client is unaffected');
+    [H, G, impostor].forEach((s) => s.close());
+  }
+
   // ---- Stage 1: membership + reconnect --------------------------------------------------
   console.log('\n# stage 1 — rooms & reconnect');
   const A = await connect('pA');
@@ -86,7 +131,7 @@ const connect = (playerId) => {
 
   const aSeesOffline = nextEvent(A, 'room:state');
   B.close();
-  const off = (await aSeesOffline).players.find((p) => p.playerId === 'pB');
+  const off = (await aSeesOffline).players.find((p) => p.playerId === pub('pB'));
   check(off && off.connected === false, 'B disconnect keeps the seat, marked offline');
 
   const B2 = await connect('pB');
@@ -239,14 +284,14 @@ const connect = (playerId) => {
     check(view.waitingPlayers?.length === 2, 'kick: the confirm view names who it is waiting on');
 
     // Only the host, and never yourself.
-    r = await S.emitWithAck('room:kick', { playerId: 'pKickHost' });
+    r = await S.emitWithAck('room:kick', { playerId: pub('pKickHost') });
     check(!r.ok, 'kick: a non-host cannot remove anyone');
-    r = await H.emitWithAck('room:kick', { playerId: 'pKickHost' });
+    r = await H.emitWithAck('room:kick', { playerId: pub('pKickHost') });
     check(!r.ok, 'kick: the host cannot remove themselves');
 
     const kicked = nextEvent(S, 'room:kicked');
     const backToLobby = nextMatching(H, 'room:state', (st) => st.status === 'lobby');
-    r = await H.emitWithAck('room:kick', { playerId: 'pKickStuck' });
+    r = await H.emitWithAck('room:kick', { playerId: pub('pKickStuck') });
     check(r.ok, 'kick: the host removes the player who never confirmed');
     await kicked;
     check(true, 'kick: the removed player is told, not silently cut off');
@@ -280,7 +325,7 @@ const connect = (playerId) => {
     await wait(50);
 
     const game = registry.getRoom(code).game;
-    check(game.currentPlayerId === 'pPauseA', 'pause: the first turn belongs to the host');
+    check(game.currentPlayerId === pub('pPauseA'), 'pause: the first turn belongs to the host');
 
     // A hidden tab counts the clock down on throttled timers and drifts; this is how it asks
     // for the truth on the way back, so it has to answer with a real remaining time.
@@ -306,13 +351,13 @@ const connect = (playerId) => {
     await wait(100);
     await P2.emitWithAck('game:pass', {}); // hand the turn to Quinn, who is not the host
     await wait(100);
-    check(game.currentPlayerId === 'pPauseB', 'pause: the turn is handed to a non-host');
+    check(game.currentPlayerId === pub('pPauseB'), 'pause: the turn is handed to a non-host');
     Q.disconnect();
     await wait(150);
     check(game.pausedForDisconnect === true, 'pause: the new guesser dropping freezes the clock');
-    await P2.emitWithAck('room:kick', { playerId: 'pPauseB' });
+    await P2.emitWithAck('room:kick', { playerId: pub('pPauseB') });
     await wait(150);
-    check(game.currentPlayerId !== 'pPauseB', 'pause: removing the paused guesser advances the turn');
+    check(game.currentPlayerId !== pub('pPauseB'), 'pause: removing the paused guesser advances the turn');
     check(game.pausedForDisconnect === false, 'pause: the pause does not outlive the turn it belonged to');
     check(!!game.turnEndsAt, 'pause: the new turn gets a real deadline');
     P2.close(); Q.close(); R.close();
@@ -341,9 +386,9 @@ const connect = (playerId) => {
     check(!!aang && Number.isInteger(aang.id) && !!aang.list, 'host-picks: search finds a listed character, with its id and list');
     check((await fetch(`${URL}/api/browse/search?q=A`).then((res) => res.json())).characters.length === 0, 'host-picks: a one-letter search returns nothing rather than the library');
 
-    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { pPickHost: { id: aang.id } } });
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { [pub('pPickHost')]: { id: aang.id } } });
     check(!r.ok, 'host-picks: a pick for the host themselves is refused');
-    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { pPickX: { id: aang.id }, pPickY: { name: 'aang' } } });
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { [pub('pPickX')]: { id: aang.id }, [pub('pPickY')]: { name: 'aang' } } });
     check(!r.ok && /Xia/.test(r.error) && /Yuri/.test(r.error), 'host-picks: two spellings of one character are refused, naming both players');
 
     const playerEvents = { X: [], Y: [] };
@@ -354,10 +399,10 @@ const connect = (playerId) => {
 
     const hostSetup = nextMatching(H, 'host:state', (v) => v.phase === 'setup');
     const xSetup = nextEvent(X, 'setup:state');
-    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { pPickX: { id: aang.id }, pPickY: { name: 'Grandma Jean' } } });
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { [pub('pPickX')]: { id: aang.id }, [pub('pPickY')]: { name: 'Grandma Jean' } } });
     check(r.ok, 'host-picks: deal starts with one listed pick and one typed name');
     const hv = await hostSetup;
-    check(hv.players.length === 2 && !hv.players.some((p) => p.playerId === 'pPickHost'), 'host-picks: the host is not dealt in');
+    check(hv.players.length === 2 && !hv.players.some((p) => p.playerId === pub('pPickHost')), 'host-picks: the host is not dealt in');
     check(hv.players.find((p) => p.name === 'Xia')?.character.name === 'Aang', 'host-picks: the listed pick lands on its player');
     check(hv.players.find((p) => p.name === 'Yuri')?.character.name === 'Grandma Jean', 'host-picks: the typed name lands on its player');
     const xv = await xSetup;
@@ -386,7 +431,7 @@ const connect = (playerId) => {
     check(!!(await rejoined), 'host-picks: a reconnecting host is handed their view back');
 
     const over = nextEvent(H2, 'game:over');
-    const first = hp.current.playerId === 'pPickX' ? X : Y;
+    const first = hp.current.playerId === pub('pPickX') ? X : Y;
     const second = first === X ? Y : X;
     await first.emitWithAck('game:gotit', {});
     await wait(50);
@@ -450,7 +495,7 @@ const connect = (playerId) => {
     check(!!(await playing), 'each-picks: once every seat is filled and everyone is in, play begins');
 
     const leaks = Object.keys(socks).filter((id) => {
-      const own = JSON.stringify(finalOf(id)).slice(1, -1);
+      const own = JSON.stringify(finalOf(pub(id))).slice(1, -1);
       const beforePlay = got[id].slice(0, got[id].findIndex((j) => j.includes('"status":"countdown"')));
       return beforePlay.some((j) => j.includes(own));
     });
@@ -580,8 +625,8 @@ const connect = (playerId) => {
   check(wView.phase === 'playing' && wView.board.length === 2, 'play starts straight away, with a board of two');
   const guesser = wView.isMyTurn ? W : X;
   const ruler = guesser === W ? X : W;
-  const guesserId = guesser === W ? 'dW' : 'dX';
-  const rulerId = guesser === W ? 'dX' : 'dW';
+  const guesserId = guesser === W ? pub('dW') : pub('dX');
+  const rulerId = guesser === W ? pub('dX') : pub('dW');
   const rulerView = guesser === W ? xView : wView;
   const guesserView = guesser === W ? wView : xView;
   const answer = rulerView.board.find((b) => b.playerId === guesserId).character.name;
@@ -665,7 +710,7 @@ const connect = (playerId) => {
     const D2 = await connectDesk('dPick2');
     await D2.emitWithAck('room:join', { code, nickname: 'Jon' });
     const hostSetup = nextMatching(DH, 'host:state', (v) => v.phase === 'setup');
-    r = await DH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { dPick1: { name: 'Grandma Jean' } } });
+    r = await DH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { [pub('dPick1')]: { name: 'Grandma Jean' } } });
     check(r.ok, "desk host-picks: the host deals one typed pick and one random");
     const hv = await hostSetup;
     check(hv.players.length === 2 && hv.players.find((p) => p.name === 'Ivy')?.character.name === 'Grandma Jean', 'desk host-picks: the host sees the picks, and is not dealt in');
@@ -771,7 +816,7 @@ const connect = (playerId) => {
   const reveal1 = nextMatching(P, 'draw:state', (v) => v.phase === 'reveal');
   res = await Q.emitWithAck('draw:say', { text: drawAnswer.toUpperCase() });
   check(res.ok && res.verdict === 'correct' && res.points > 0, 'the right name scores');
-  check((await qGotIt).playerId === 'rQ', "draw:correct says who got it, so the guesser's own page can tell");
+  check((await qGotIt).playerId === pub('rQ'), "draw:correct says who got it, so the guesser's own page can tell");
   check((await reveal1).lastTurn.character.name === drawAnswer, 'everyone guessed, so the turn ends with the reveal');
   const guesserLeaks = (() => {
     const until = Q.received.findIndex((e) => e.event === 'draw:correct');
@@ -783,7 +828,7 @@ const connect = (playerId) => {
   // The second turn: Quinn draws, and the game ends after it (one round).
   const qChoosing = nextMatching(Q, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
   const second = await qChoosing;
-  check(second.drawer.playerId === 'rQ', 'after the reveal, the next player draws');
+  check(second.drawer.playerId === pub('rQ'), 'after the reveal, the next player draws');
   const pDrawing2 = nextMatching(P, 'draw:state', (v) => v.phase === 'drawing');
   await Q.emitWithAck('draw:choose', { index: 0 });
   await pDrawing2;
@@ -820,17 +865,17 @@ const connect = (playerId) => {
     await K2.emitWithAck('room:join', { code: kCode, nickname: 'Dev' });
     await K3.emitWithAck('room:join', { code: kCode, nickname: 'Gus' });
 
-    check(!(await K2.emitWithAck('room:kick', { playerId: 'kGus' })).ok, 'draw kick: a non-host cannot remove anyone');
-    check(!(await K1.emitWithAck('room:kick', { playerId: 'kHost' })).ok, 'draw kick: the host cannot remove themselves');
-    check(!(await K1.emitWithAck('room:kick', { playerId: 'kNobody' })).ok, 'draw kick: only someone in the room can be removed');
+    check(!(await K2.emitWithAck('room:kick', { playerId: pub('kGus') })).ok, 'draw kick: a non-host cannot remove anyone');
+    check(!(await K1.emitWithAck('room:kick', { playerId: pub('kHost') })).ok, 'draw kick: the host cannot remove themselves');
+    check(!(await K1.emitWithAck('room:kick', { playerId: pub('kNobody') })).ok, 'draw kick: only someone in the room can be removed');
 
     // In the lobby: out, told, and free to come back -- a removal is not a ban.
     let kicked = nextEvent(K3, 'room:kicked');
     let roster = nextMatching(K1, 'room:state', (s) => s.players.length === 2);
-    res = await K1.emitWithAck('room:kick', { playerId: 'kGus' });
+    res = await K1.emitWithAck('room:kick', { playerId: pub('kGus') });
     check(res.ok, 'draw kick: the host removes a player from the lobby');
     check(typeof (await kicked).reason === 'string', 'draw kick: the removed player is told why');
-    check(!(await roster).players.some((p) => p.playerId === 'kGus'), 'draw kick: the roster drops them');
+    check(!(await roster).players.some((p) => p.playerId === pub('kGus')), 'draw kick: the roster drops them');
     res = await K3.emitWithAck('room:join', { code: kCode, nickname: 'Gus' });
     check(res.ok && res.state.players.length === 3, 'draw kick: a removed player can join the lobby again');
 
@@ -852,20 +897,20 @@ const connect = (playerId) => {
     const devLeftReveal = nextMatching(K3, 'draw:state', (v) => v.phase === 'reveal');
     const gusChoosing = nextMatching(K3, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
     const devMark = K2.received.length;
-    res = await K1.emitWithAck('room:kick', { playerId: 'kDev' });
+    res = await K1.emitWithAck('room:kick', { playerId: pub('kDev') });
     check(res.ok, 'draw kick: the host removes the player who is choosing');
     await kicked;
     const devReveal = await devLeftReveal;
     check(devReveal.lastTurn?.reason === 'drawer-left', 'draw kick: removing the drawer ends their turn');
-    const devRow = devReveal.players.find((p) => p.playerId === 'kDev');
+    const devRow = devReveal.players.find((p) => p.playerId === pub('kDev'));
     check(devRow?.left === true && devRow.score > 0, 'draw kick: the board keeps their score, marked as left');
-    check((await gusChoosing).drawer.playerId === 'kGus', 'draw kick: the turn passes to the next player');
+    check((await gusChoosing).drawer.playerId === pub('kGus'), 'draw kick: the turn passes to the next player');
 
     // Down to one: the game ends for the host, and the one removed is not shown the results.
     kicked = nextEvent(K3, 'room:kicked');
     const kOver = nextEvent(K1, 'draw:over');
     const gusMark = K3.received.length;
-    res = await K1.emitWithAck('room:kick', { playerId: 'kGus' });
+    res = await K1.emitWithAck('room:kick', { playerId: pub('kGus') });
     check(res.ok, 'draw kick: the host removes the next drawer too');
     await kicked;
     const kFinal = await kOver;

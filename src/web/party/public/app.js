@@ -29,6 +29,13 @@ let options = null;              // setup options (categories/difficulties), fet
 let abortNote = '';
 
 const socket = io({ auth: { playerId } });
+// `playerId` above is this browser's SECRET: it goes in the handshake and nowhere else. The server
+// seats us under a public id derived from it, and that is the id every roster and view uses -- so
+// "is this me?" is always asked of `me`, never of the secret.
+let me = null;
+socket.on('hello', ({ you }) => {
+  me = you;
+});
 
 // Sets text one character at a time, each at its own angle and colour, so headings read as
 // hand-placed rather than typed. Written with textContent per span, so the source string is
@@ -81,7 +88,7 @@ function retilt(root) {
     i++;
   }
 }
-const amHost = () => lastState && lastState.hostPlayerId === playerId;
+const amHost = () => lastState && lastState.hostPlayerId === me;
 
 // --- easter eggs ----------------------------------------------------------------------------
 //
@@ -201,7 +208,7 @@ function renderLobby(state) {
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = p.nickname;
-    if (p.playerId === playerId) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
+    if (p.playerId === me) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
     li.append(dot, name);
     if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
     roster.appendChild(li);
@@ -242,7 +249,7 @@ const hostPicks = new Map();
 // check, on the next screen), 'host' (the host picks them all and sits out).
 let pickMode = 'deal';
 
-const othersInRoom = () => (lastState?.players ?? []).filter((p) => p.playerId !== playerId);
+const othersInRoom = () => (lastState?.players ?? []).filter((p) => p.playerId !== me);
 // Two, not one: each player checks the NEXT player's character, and a lone guesser's next
 // player is themselves. The server refuses it too; this just says so before the host bothers.
 const canPickForEveryone = () => othersInRoom().length >= 2;
@@ -548,7 +555,7 @@ function renderSetup(view) {
 function renderWaitingList(view) {
   const ul = $('waitingList');
   ul.innerHTML = '';
-  const waiting = (view.waitingPlayers ?? []).filter((p) => p.playerId !== playerId);
+  const waiting = (view.waitingPlayers ?? []).filter((p) => p.playerId !== me);
   // Only worth showing once you are waiting on someone else -- before that it is just a list of
   // people who are doing nothing wrong.
   if (!waiting.length || !(view.confirmed || amHost())) return;
