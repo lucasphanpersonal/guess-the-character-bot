@@ -480,6 +480,13 @@ const connect = (playerId) => {
     .find((c) => c.image_url);
   const page = await httpGet('/');
   check(page.status === 200 && page.type.includes('text/html'), 'GET / serves the client');
+  // Cloudflare turns no-cache on scripts into a 4-hour max-age, so a page's scripts and styles
+  // carry their file's version in the URL -- or a player runs today's page on yesterday's script.
+  const pageHtml = await fetch(`${URL}/`).then((r) => r.text());
+  const deskHtml = await fetch(`${URL}/desk/`).then((r) => r.text());
+  check(/src="\/?app\.js\?v=\d+"/.test(pageHtml) && /src="\/?tilt\.js\?v=\d+"/.test(pageHtml), "the phones' page loads its scripts by version");
+  check(/href="\/shared\/theme\.css\?v=\d+"/.test(deskHtml) && /src="app\.js\?v=\d+"/.test(deskHtml), 'the computer page loads its shared styles and script by version');
+  check(/src="\/socket\.io\/socket\.io\.js"/.test(pageHtml), "socket.io's own client is left alone");
   const app = await httpGet('/app.js');
   check(app.status === 200 && app.type.includes('javascript'), 'GET /app.js serves the client script');
   const health = await httpGet('/api/health');

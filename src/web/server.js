@@ -102,6 +102,38 @@ function sendJson(res, status, body) {
 // browser deciding on its own that it need not ask.
 const NO_CACHE = new Set(['.html', '.js', '.css']);
 
+// The file a page's script/stylesheet reference points at, or null. An absolute reference goes
+// through the same mounts as a request would; a relative one is beside the page.
+function assetFile(ref, pageDir) {
+  if (!ref.startsWith('/')) return path.join(pageDir, ref);
+  const mount = MOUNTS.find((m) => ref.startsWith(m.prefix));
+  return mount ? path.join(mount.dir, ref.slice(mount.prefix.length)) : path.join(party.publicDir, ref);
+}
+
+/**
+ * Stamps each local script and stylesheet a page loads with its file's modified time:
+ * src="app.js" -> src="app.js?v=1791167424491".
+ *
+ * Because `no-cache` is not what browsers actually get. Through the Cloudflare tunnel, the edge
+ * rewrites it on .js/.css to `max-age=14400`, while the HTML passes through untouched -- so a
+ * player got today's page and a script up to four hours old. That is how a Dark Mode button
+ * rendered and did nothing: the page had it, the cached script had no idea. A version in the URL
+ * means a changed file is a different URL, which no cache can serve stale, whatever any proxy or
+ * zone setting does to the headers. The page itself never needs it: it is always fetched fresh.
+ *
+ * The time of the FILE, not of the server's start, so an edit reaches players without a restart
+ * (the server reads files from disk per request) -- and an unchanged file keeps its URL, cached.
+ */
+function versionAssets(html, pageDir) {
+  return html.replace(/(<(?:script|link)\b[^>]*?\s(?:src|href)=")([^"?#:]+\.(?:js|css))(")/g, (whole, pre, ref, post) => {
+    try {
+      return `${pre}${ref}?v=${Math.floor(fs.statSync(assetFile(ref, pageDir)).mtimeMs)}${post}`;
+    } catch {
+      return whole; // not a file of ours (socket.io serves its own client): leave it be
+    }
+  });
+}
+
 function serveStatic(res, dir, rel) {
   const filePath = path.join(dir, rel || 'index.html');
   // The separator matters: a bare startsWith would also accept a sibling directory whose name
@@ -119,7 +151,7 @@ function serveStatic(res, dir, rel) {
     const headers = { 'Content-Type': CONTENT_TYPES[ext] || 'application/octet-stream' };
     if (NO_CACHE.has(ext)) headers['Cache-Control'] = 'no-cache';
     res.writeHead(200, headers);
-    res.end(data);
+    res.end(ext === '.html' ? versionAssets(data.toString('utf8'), path.dirname(filePath)) : data);
   });
 }
 
