@@ -18,7 +18,13 @@
   <span class="knob" aria-hidden="true">◐</span>
 </button>
 <main>
-  <h1><a id="title" href="/">Guess the Character</a></h1>
+  <div class="titlebar">
+    <h1><a id="title" href="/">Guess the Character</a></h1>
+    <!-- Sound On / Off: wired and painted by /shared/sound.js. -->
+    <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
+      <span class="note" aria-hidden="true">♪</span><span class="label">Sound On</span>
+    </button>
+  </div>
 
   <!-- Landing -->
   <section id="landing" class="screen active">
@@ -240,6 +246,7 @@
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/shared/common.js"></script>
+<script src="/shared/sound.js"></script>
 <script src="/shared/pickers.js"></script>
 <script src="app.js"></script>
 </body>

@@ -18,6 +18,13 @@ const socket = io('/desk', { auth: { playerId } });
 wobble($('title'), 'Guess the Character');
 GTC.bindThemeToggles();
 
+// Sound (/shared/sound.js): short cues for your turn, a result, and a call to rule. Optional-
+// chained like the pickers: a missing sound script costs the cues, never the game -- and hides the
+// switch rather than leave one that does nothing.
+const sound = (cue) => window.GTCSound?.play(cue);
+$('soundToggle').hidden = !window.GTCSound;
+window.GTCSound?.mountToggle($('soundToggle'));
+
 // --- state --------------------------------------------------------------------------------
 let roomState = null;
 let options = null;
@@ -344,6 +351,8 @@ socket.on('setup:state', (view) => {
   notesBy.clear();
   $('notesInput').value = '';
   $('notesErr').textContent = '';
+  heardTurn = '';
+  heardRuling = null;
   const picking = view.checkerPicks;
   const target = view.checking.ownerName;
   $('checkTitle').textContent = picking ? `You pick ${target}'s character` : `You check ${target}'s character`;
@@ -405,12 +414,29 @@ const STATUS_BADGE = {
   waiting: '',
 };
 
+// What this page has already sounded a cue for, so the many states of one turn (every guess,
+// every clock correction) sound it once. Dropped with the game (setup:state, game:over).
+let heardTurn = '';     // `${playerId}:${turnNumber}` of the turn last seen
+let heardRuling = null; // id of the ruling on screen
+
 socket.on('game:state', (view) => {
   const wasMyTurn = gameView?.isMyTurn;
   gameView = view;
   show('game');
   renderGame();
   if (view.isMyTurn && !wasMyTurn) $('guessInput').focus();
+
+  // By turn number, not by isMyTurn flipping: the last player still guessing takes turn after
+  // turn of their own, and each is a new turn.
+  const turn = view.phase === 'playing' ? `${view.current.playerId}:${view.current.turnNumber}` : '';
+  if (turn !== heardTurn) {
+    heardTurn = turn;
+    if (view.isMyTurn && !view.paused) sound('turn');
+  }
+  // A close guess wants a ruling, against a clock -- but only from those who can give one.
+  const r = view.ruling;
+  if (r && !r.waiting && r.canRule && r.id !== heardRuling) sound('ask');
+  heardRuling = r?.id ?? null;
 });
 
 function renderGame() {
@@ -525,7 +551,14 @@ $('guessForm').addEventListener('submit', (e) => {
       if (!$('guessInput').value) $('guessInput').value = text;
       return ($('guessErr').textContent = res?.error || 'That guess did not go through.');
     }
-    if (res.verdict === 'wrong') $('guessErr').textContent = `"${text}" isn't it. Keep asking.`;
+    // Only the guesser hears their own miss or close call: misses are free and come by the dozen,
+    // and a room of computers each sounding every one would be the room's loudest thing.
+    if (res.verdict === 'wrong') {
+      $('guessErr').textContent = `"${text}" isn't it. Keep asking.`;
+      sound('miss');
+    }
+    if (res.verdict === 'close') sound('close');
+    // A right one sounds from game:reveal, which also covers one the others rule in.
   });
 });
 
@@ -557,11 +590,14 @@ socket.on('desk:guess', ({ name, text, verdict }) => {
   toast(`${mark} ${esc(name)} guessed "${esc(text)}"`);
 });
 socket.on('desk:ruled', ({ accepted, by, lapsed }) => {
+  // Arrives before the state that clears the ruling, so `waiting` still says whose guess it was.
+  if (!accepted && gameView?.ruling?.waiting) sound('miss');
   toast(lapsed ? 'Nobody ruled in time, so it counts as a miss.' : `${esc(by)} ruled: ${accepted ? '✓ it counts' : '✗ not it'}`);
 });
 socket.on('game:reveal', (r) => {
   const who = r.playerId === playerId ? 'You' : esc(r.name);
   const what = `<strong>${esc(r.character?.name)}</strong>`;
+  if (r.kind === 'got') sound(r.playerId === playerId ? 'gotMine' : 'got');
   if (r.kind === 'got') toast(`${who} got it: ${what}, in ${r.turns} turn${r.turns === 1 ? '' : 's'}.`, 7000);
   else if (r.kind === 'gaveup') toast(`${who} gave up. They were ${what}.`, 7000);
   else toast(`${who} left. They were ${what}.`, 7000);
@@ -638,6 +674,8 @@ socket.on('game:over', (res) => {
   show('over');
   clearInterval(clock.timer);
   gameView = null;
+  heardTurn = '';
+  heardRuling = null;
   const winners = res.winners.map((w) => (w.playerId === playerId ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
   $('standings').innerHTML = res.standings

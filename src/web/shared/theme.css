@@ -39,6 +39,20 @@ h1 .wob.w0 { color:var(--red); } h1 .wob.w1 { color:#fff; } h1 .wob.w2 { color:v
 :root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
 :root[data-season="spooky"] h1 .wob.w1, :root[data-season="spooky"] h1 .wob.w3 { color:var(--ink); text-shadow:0 3px 0 rgba(255,255,255,.2); }
 h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
+/* The title row: the title, and the Sound switch at the end of it (/shared/sound.js). A flex row
+   rather than a corner overlay, so a long title wraps beside the switch instead of under it. The
+   switch stays on every screen, play included: the cues happen during play, so that is where the
+   way to stop them has to be. */
+.titlebar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 1.2rem; }
+.titlebar h1 { margin:0; }
+.soundtoggle { flex:none; display:inline-flex; align-items:center; gap:8px; padding:8px 14px; font-size:.92rem;
+               background:#fff; color:var(--brand); box-shadow:0 4px 0 rgba(0,0,0,.22); }
+.soundtoggle:active { box-shadow:0 1px 0 rgba(0,0,0,.22); transform:translateY(3px); }
+.soundtoggle .note { font-size:1.1rem; line-height:1; }
+/* Off says so in words; the struck-through note is a second signal, not the only one. */
+.soundtoggle[aria-checked="false"] { background:rgba(0,0,0,.28); color:#fff; box-shadow:0 4px 0 rgba(0,0,0,.3); }
+.soundtoggle[aria-checked="false"] .note { text-decoration:line-through; opacity:.8; }
+.soundtoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 .screen { display:none; }
 .screen.active { display:block; }
 .card { background:var(--paper); color:var(--ink); border-radius:18px; padding:20px;

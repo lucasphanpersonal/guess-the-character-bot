@@ -13,6 +13,12 @@ const socket = io('/draw', { auth: { playerId } });
 wobble($('title'), 'Draw the Character');
 GTC.bindThemeToggles();
 
+// Sound (/shared/sound.js): your turn to draw, someone getting it, time nearly up, the reveal.
+// Optional-chained: a missing sound script costs the cues, never the game, and hides the switch.
+const sound = (cue) => window.GTCSound?.play(cue);
+$('soundToggle').hidden = !window.GTCSound;
+window.GTCSound?.mountToggle($('soundToggle'));
+
 // The palette and sizes the server accepts (src/web/draw/socket.js); anything else is refused.
 // Named, because a swatch is the one control where colour IS the content -- the names are what a
 // screen reader, or anyone who can't tell two of them apart, has to go on.
@@ -363,14 +369,18 @@ document.addEventListener('keydown', (e) => {
 
 // --- the game --------------------------------------------------------------------------------
 let clockTimer = null;
-function setClock(seconds, total) {
+// "Nearly out of time": the clock bar turns colour here, and the hurry cue sounds as it does.
+const CRIT_SECONDS = 10;
+// `onTick(left)`: told each second's value, for the cue below.
+function setClock(seconds, total, onTick = null) {
   clearInterval(clockTimer);
   let left = seconds;
   const draw = () => {
     $('clockSecs').textContent = left == null ? '' : `${left}s`;
     $('clockFill').style.width = left == null ? '100%' : `${Math.max(0, (left / (total || 80)) * 100)}%`;
     // The colour carries "nearly out of time" without anything moving.
-    $('clock').classList.toggle('crit', left != null && left <= 10);
+    $('clock').classList.toggle('crit', left != null && left <= CRIT_SECONDS);
+    onTick?.(left);
   };
   draw();
   if (left == null) return;
@@ -384,18 +394,43 @@ function characterArt(c) {
   return c?.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="" referrerpolicy="no-referrer" />` : '<span class="hint">No picture</span>';
 }
 
+// The cue for each phase of each turn, sounded once however many states that phase sends (every
+// guess sends one). Keyed by round and drawer as well as phase, so a turn is never mistaken for
+// the last one.
+let heardPhase = '';
+// The hurry cue sounds once per drawing turn, as the clock is SEEN to cross into the last ten
+// seconds -- so a reload with nine seconds left does not knock the moment it arrives.
+let hurry = { turn: '', above: false, done: false };
+function hurryWatch(turn) {
+  if (hurry.turn !== turn) hurry = { turn, above: false, done: false };
+  return (left) => {
+    if (left == null) return;
+    if (left > CRIT_SECONDS) hurry.above = true;
+    else if (left > 0 && hurry.above && !hurry.done) {
+      hurry.done = true;
+      sound('hurry');
+    }
+  };
+}
+
 socket.on('draw:state', (v) => {
   const turnChanged = !view || view.drawer.playerId !== v.drawer.playerId || view.phase !== v.phase;
   view = v;
   show('game');
   renderGame(turnChanged);
+  const phase = `${v.round}:${v.drawer.playerId}:${v.phase}`;
+  if (phase !== heardPhase) {
+    heardPhase = phase;
+    if (v.phase === 'choosing' && v.isDrawer) sound('turn');
+    if (v.phase === 'reveal') sound('reveal');
+  }
 });
 
 function renderGame(turnChanged) {
   const v = view;
   $('roundLabel').textContent = `Round ${v.round} of ${v.rounds}`;
   const total = v.phase === 'choosing' ? 15 : v.phase === 'reveal' ? 6 : v.drawSeconds;
-  setClock(v.secondsLeft, total);
+  setClock(v.secondsLeft, total, v.phase === 'drawing' ? hurryWatch(`${v.round}:${v.drawer.playerId}`) : null);
 
   // The clue: the drawer and anyone who has it see the name; everyone else the blanks.
   if (v.phase === 'drawing') {
@@ -506,8 +541,11 @@ function localLine(cls, html) {
   renderChat();
 }
 
-socket.on('draw:correct', ({ name, points }) => {
+socket.on('draw:correct', ({ playerId: who, name, points }) => {
   localLine('sys', `✓ ${esc(name)} got it! +${points}`);
+  // To everyone, the guesser included -- so the guesser's own cue is played here too, not on the
+  // ack, or they would hear two.
+  sound(who === playerId ? 'gotMine' : 'got');
 });
 
 // Sent the moment Enter is pressed, and the box emptied at once: a fast typist is already on the
@@ -538,6 +576,7 @@ socket.on('draw:over', ({ standings }) => {
   clearInterval(clockTimer);
   view = null;
   localLines = [];
+  heardPhase = '';
   const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === playerId ? 'You' : s.name));
   $('overTitle').textContent = top.length ? `${top.join(' and ')} won!` : 'Game over';
   $('standings').innerHTML = standings

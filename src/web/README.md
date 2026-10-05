@@ -31,6 +31,14 @@ when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEA
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
 The host sets rounds (1–5) and drawing time (60–120 s).
 
+**Sound on the computers** (`shared/sound.js`) is a handful of short, quiet cues, never a bed:
+everyone can see the screen, so sound is only for the moments worth looking up for — often from
+another tab. Guess the Character: your turn starting, a right guess (yours sounds different), and
+— for the guesser alone — a miss or a close call; a call to rule goes only to those who can rule.
+Draw the Character: your turn to draw, someone getting it, the last ten seconds (once), and the
+reveal. Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
+screen, play included; the choice is the phones' own `gtc_muted`, one per browser.
+
 **The home page** (`/`) asks one question first: *Phone* or *Computer* (with a hint from
 `pointer: coarse` as to which this is). A phone gets the forehead game's create / join, Browse and
 Test Tilt; a computer gets create — choosing *Guess the Character* or *Draw the Character* — join,
@@ -85,9 +93,10 @@ web/
                        curation, dealing. Games use this, never the compendium directly.
   rooms.js             The room registry -- one for every game, so a code means one room.
   roomAccess.js        Identifying, creating and joining, with the limits on strangers.
-  shared/              The computer games' look (theme.css), seasonal switch and client helpers,
-                       served at /shared/ so /desk/ and /draw/ cannot drift apart. pickers.js
-                       (the pool picker and character search) is loaded by the phones too.
+  shared/              The computer games' look (theme.css), seasonal switch, client helpers and
+                       sound (sound.js), served at /shared/ so /desk/ and /draw/ cannot drift
+                       apart. pickers.js (the pool picker and character search) is loaded by the
+                       phones too.
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
   guess/               Guess the Character on the web, however it is played.

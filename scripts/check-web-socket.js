@@ -740,7 +740,7 @@ const connect = (playerId) => {
   const reveal1 = nextMatching(P, 'draw:state', (v) => v.phase === 'reveal');
   res = await Q.emitWithAck('draw:say', { text: drawAnswer.toUpperCase() });
   check(res.ok && res.verdict === 'correct' && res.points > 0, 'the right name scores');
-  await qGotIt;
+  check((await qGotIt).playerId === 'rQ', "draw:correct says who got it, so the guesser's own page can tell");
   check((await reveal1).lastTurn.character.name === drawAnswer, 'everyone guessed, so the turn ends with the reveal');
   const guesserLeaks = (() => {
     const until = Q.received.findIndex((e) => e.event === 'draw:correct');
@@ -765,6 +765,13 @@ const connect = (playerId) => {
   check(drawPage.status === 200 && drawPage.type.includes('text/html'), 'GET /draw/ serves the drawing client');
   check((await httpGet('/shared/theme.css')).type.includes('css'), 'GET /shared/theme.css serves the common look');
   check((await httpGet('/shared/common.js')).type.includes('javascript'), 'GET /shared/common.js serves the common helpers');
+  // Positively: the static handler 404s a missing file too, so look for what the file defines.
+  const soundJs = await fetch(`${URL}/shared/sound.js`).then(async (r) => ({ ok: r.ok, body: await r.text() }));
+  check(soundJs.ok && soundJs.body.includes('window.GTCSound'), 'GET /shared/sound.js serves the computer games\' sound');
+  for (const game of ['/desk/', '/draw/']) {
+    const html = await fetch(`${URL}${game}`).then((r) => r.text());
+    check(html.includes('/shared/sound.js') && html.includes('id="soundToggle"'), `${game} loads the sound and has its switch`);
+  }
   P.close(); Q.close();
 
   // ---- Draw: the host removes a player ----------------------------------------------------------

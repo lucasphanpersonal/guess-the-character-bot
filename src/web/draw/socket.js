@@ -286,7 +286,8 @@ function attachDrawSockets(nsp, { registry }) {
       ack?.(res.ok ? { ok: true, verdict: res.verdict, points: res.points } : res);
       if (!res.ok || res.verdict === 'close') return; // close is for the guesser's ack alone
       if (res.verdict === 'correct') {
-        nsp.to(r.code).emit('draw:correct', { name: namesOf(r)[playerId] ?? 'Player', points: res.points });
+        // The playerId lets the guesser's own page tell this apart from someone else getting it.
+        nsp.to(r.code).emit('draw:correct', { playerId, name: namesOf(r)[playerId] ?? 'Player', points: res.points });
         if (res.allGuessed) draw.endTurn(r.game, Date.now(), 'all');
         emitViews(r);
         return schedule(r);
