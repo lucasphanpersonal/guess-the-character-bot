@@ -83,13 +83,19 @@ socket.on('connect', () => {
   if (last && name && (!linked || linked === last)) join(last, name, { quiet: true });
 });
 
+// Resolves once the server has the leave (or after a moment without an answer), so a caller that is
+// about to navigate away -- the title -- does not cut the request off and leave the seat held.
 function leave() {
-  socket.emit('room:leave', {}, () => {});
+  const done = new Promise((resolve) => {
+    socket.emit('room:leave', {}, resolve);
+    setTimeout(resolve, 1500);
+  });
   store.set('gtc_draw_room', '');
   roomState = null;
   view = null;
   history.replaceState(null, '', location.pathname);
   show('landing');
+  return done;
 }
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
