@@ -607,8 +607,41 @@
     :root[data-theme="dark"] .seat.tint3 { background:#1d3420; }
     :root[data-theme="dark"] .seat.rank1, :root[data-theme="dark"] .seat.rank2,
     :root[data-theme="dark"] .seat.rank3 { color:#1b1033; }
-    /* The theme switch: a quiet ghost button, the same in both themes. */
-    .themebtn { font-size:.9rem; padding:12px; }
+    /* The theme switch: a small track in the top corner with a knob that slides, the same in both
+       themes. Absolute, not fixed: fixed would ride over content as the page scrolls. */
+    .themetoggle { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
+                   right:calc(14px + env(safe-area-inset-right, 0px)); width:56px; height:30px; padding:0;
+                   border-radius:999px; background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
+                   border:2px solid rgba(255,255,255,.4); }  /* the outline keeps it visible on the dark field */
+    .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
+    .themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px; border-radius:50%;
+                         background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center;
+                         box-shadow:0 2px 0 rgba(0,0,0,.25); transition:left .18s ease; }
+    .themetoggle[aria-checked="true"] .knob { left:27px; background:#251a3d; color:#eee9f8; }
+    .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+    body.at-play .themetoggle { display:none; }
+    /* Room for the switch: the title must never run under it. */
+    h1 { padding-right:64px; }
+    @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
+    /* The device question: two big slabs, colour AND shape, a line under each saying what it means. */
+    .devicebtn { display:flex; align-items:center; gap:14px; text-align:left; padding:20px 18px; border-radius:18px;
+                 font-size:1.3rem; position:relative; }
+    .devicebtn .shape { font-size:1.6rem; flex:none; }
+    .devicebtn b { display:block; font-family:var(--font-display); font-size:1.5rem; }
+    .devicebtn small { display:block; font-size:.88rem; font-weight:700; opacity:.9; }
+    .devicebtn.c0 { background:var(--red); box-shadow:0 6px 0 var(--red-d); }
+    .devicebtn.c0:active { box-shadow:0 2px 0 var(--red-d); }
+    .devicebtn.c1 { background:var(--blue); box-shadow:0 6px 0 var(--blue-d); }
+    .devicebtn.c1:active { box-shadow:0 2px 0 var(--blue-d); }
+    .devicebtn .likely { position:absolute; top:-10px; right:12px; font-size:.68rem; font-weight:900; letter-spacing:.05em;
+                         background:var(--amber); color:#2b1c00; padding:3px 9px; border-radius:999px; }
+    /* Back to the device question: quiet, above the screen it leaves. */
+    .backlink { width:auto; align-self:flex-start; padding:6px 2px; background:none; box-shadow:none;
+                color:rgba(255,255,255,.88); font-size:.92rem; font-weight:800; }
+    .backlink:active { transform:none; box-shadow:none; opacity:.7; }
+    #pcGameChoices { margin-bottom:6px; }
+    /* Empty until something goes wrong; a paragraph's default margins left a gap the size of a card. */
+    #pcErr { margin:0; }
   </style>
 </head>
 <body>
@@ -622,11 +655,66 @@
     <i style="left:86%;font-size:1.6rem;animation-duration:33s;animation-delay:-21s">●</i>
     <i style="left:94%;font-size:2.2rem;animation-duration:28s;animation-delay:-15s">■</i>
   </div>
+  <!-- Dark mode: a small switch in the corner, on every screen but play (body.at-play hides it --
+       nobody should be reaching for a phone on a forehead). <head> applied the choice already. -->
+  <button id="themeToggle" class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
+    <span class="knob" aria-hidden="true">◐</span>
+  </button>
   <main>
     <h1><a id="homeTitle" href="/">Guess the Character</a></h1>
 
-    <!-- Landing -->
-    <section id="landing" class="screen active">
+    <!-- The first question: which device is in your hand. It decides everything below it -- a phone
+         gets the forehead game and Test Tilt, a computer gets the computer game and Draw -- so it
+         comes before any of them. Skipped when a room link or a rejoin already answers it. -->
+    <section id="splash" class="screen active">
+      <div class="card">
+        <div class="gatetitle" data-wobble>How Are You Playing?</div>
+        <p class="hint center">Pick the device you're holding. You can change it later.</p>
+      </div>
+      <button id="pickPhone" class="devicebtn c0" type="button">
+        <span class="shape" aria-hidden="true">▲</span>
+        <span><b>Phone</b><small>Phones on foreheads. Tilt to answer.</small></span>
+        <span class="likely" id="likelyPhone" hidden>This Looks Like One</span>
+      </button>
+      <button id="pickComputer" class="devicebtn c1" type="button">
+        <span class="shape" aria-hidden="true">◆</span>
+        <span><b>Computer</b><small>Everyone at a screen. Type your guesses, or draw.</small></span>
+        <span class="likely" id="likelyComputer" hidden>This Looks Like One</span>
+      </button>
+    </section>
+
+    <!-- Computer: the same create / join as the phones, for the two computer games. Each game has
+         a page of its own (/desk/, /draw/), so this hands off to it rather than playing here. -->
+    <section id="computer" class="screen">
+      <button class="backlink" type="button" data-splash>‹ Phone or Computer</button>
+      <div class="card">
+        <label for="pcNickInput">Your name</label>
+        <input id="pcNickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />
+      </div>
+      <div class="card">
+        <label>Which game?</label>
+        <div id="pcGameChoices">
+          <label class="choice c0"><input type="radio" name="pcGame" value="desk" checked>
+            <span class="shape">▲</span><span><div>Guess the Character</div><div class="sub">everyone sees everyone's character but their own</div></span></label>
+          <label class="choice c1"><input type="radio" name="pcGame" value="draw">
+            <span class="shape">◆</span><span><div>Draw the Character</div><div class="sub">one draws, everyone else guesses</div></span></label>
+        </div>
+        <button id="pcCreateBtn">Create a Room</button>
+      </div>
+      <div class="divider">or join one</div>
+      <div class="card">
+        <label for="pcCodeInput">Room code</label>
+        <input id="pcCodeInput" maxlength="4" placeholder="ABCD" autocomplete="off" />
+        <div style="height:12px"></div>
+        <button id="pcJoinBtn" class="alt">Join Room</button>
+      </div>
+      <p class="err" id="pcErr"></p>
+      <button id="pcBrowseBtn" class="ghost">Browse the Characters</button>
+    </section>
+
+    <!-- Landing: the phone's start screen -->
+    <section id="landing" class="screen">
+      <button class="backlink" type="button" data-splash>‹ Phone or Computer</button>
       <div class="card">
         <label for="nickInput">Your name</label>
         <input id="nickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />
@@ -640,13 +728,8 @@
         <button id="joinBtn" class="alt">Join Room</button>
       </div>
       <p class="err" id="landingErr"></p>
-      <!-- A link, not a button: it is somewhere to go, and a computer player may well want it in a
-           new tab. Styled as the ghost button beside it. -->
-      <a id="deskLink" class="ghost linkbtn" href="/desk/">Play on a Computer Instead</a>
-      <a id="drawLink" class="ghost linkbtn" href="/draw/">Play Draw the Character</a>
       <button id="browseBtn" class="ghost">Browse the Characters</button>
       <button id="tiltTestBtn" class="ghost" style="margin-top:4px">Test Tilt on This Phone</button>
-      <button class="ghost themebtn" type="button">Dark Mode</button>
     </section>
 
     <!-- Compendium: read-only browsing, category -> list -> character -->
@@ -701,7 +784,6 @@
       <button id="setupBtn">Set Up Game →</button>
       <p class="hint center" id="lobbyHint"></p>
       <button id="leaveBtn" class="ghost">Leave Room</button>
-      <button class="ghost themebtn" type="button">Dark Mode</button>
       <p class="hint center" id="connState"></p>
     </section>
 

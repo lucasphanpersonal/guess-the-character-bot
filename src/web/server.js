@@ -273,6 +273,16 @@ function requestHandler(req, res) {
     return sendJson(res, 404, { error: 'Unknown browse endpoint.' });
   }
 
+  // Which page a room code belongs to, for the home page's computer start screen: one join box,
+  // three games, and a code only works on its own game's page. Says no more than a join attempt
+  // already would (that the room exists, and which game it is) -- no names, no counts.
+  if (url.pathname === '/api/room') {
+    const code = String(url.searchParams.get('code') || '').toUpperCase();
+    const room = /^[A-Z0-9]{2,8}$/.test(code) ? registry.getRoom(code) : null;
+    if (!room) return sendJson(res, 404, { error: 'No room with that code. Check it with the host.' });
+    return sendJson(res, 200, { kind: room.kind, path: JOIN_PATH[room.kind] ?? '/' });
+  }
+
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,

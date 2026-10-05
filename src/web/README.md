@@ -28,6 +28,14 @@ when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEA
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
 The host sets rounds (1–5) and drawing time (60–120 s).
 
+**The home page** (`/`) asks one question first: *Phone* or *Computer* (with a hint from
+`pointer: coarse` as to which this is). A phone gets the forehead game's create / join, Browse and
+Test Tilt; a computer gets create — choosing *Guess the Character* or *Draw the Character* — join,
+and Browse, and is handed off to `/desk/` or `/draw/` (`?create=1&name=` or `?room=CODE&name=`,
+wiped from the address once acted on). A computer's join box asks `GET /api/room?code=` which game
+a code belongs to; it answers with the game's path and nothing else. A room link or a rejoin skips
+the question. Dark mode is a small switch in the corner, hidden during play.
+
 Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
 ("phone on your forehead!") → each phone shows its wearer's character full-screen, landscape,
