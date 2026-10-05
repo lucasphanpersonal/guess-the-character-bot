@@ -12,6 +12,11 @@
   <link rel="stylesheet" href="/shared/theme.css" />
 </head>
 <body>
+<!-- Dark mode: the corner switch, the same as the phones' page (styles in /shared/theme.css,
+     wired by GTC.bindThemeToggles). season.js applied the choice before first paint. -->
+<button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
+  <span class="knob" aria-hidden="true">◐</span>
+</button>
 <main>
   <h1><a id="title" href="/">Guess the Character</a></h1>
 
@@ -41,7 +46,6 @@
       </div>
     </div>
     <p class="err light" id="landingErr" role="alert"></p>
-    <button class="ghost themebtn" type="button">Dark Mode</button>
   </section>
 
   <!-- Lobby -->
@@ -61,7 +65,6 @@
           <ul class="roster" id="roster"></ul>
         </div>
         <button id="leaveBtn" class="ghost">Leave Room</button>
-        <button class="ghost themebtn" type="button">Dark Mode</button>
       </div>
       <div class="card stack" id="hostPanel">
         <h2>Game settings</h2>

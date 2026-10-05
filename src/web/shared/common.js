@@ -121,15 +121,16 @@
   }
 
   // Dark mode's switch. season.js already applied the saved choice (or the computer's setting)
-  // before first paint; this wires every .themebtn on the page to flip it, saves the choice in
-  // gtc_theme (shared with the phones' page), and labels each button with where it goes.
+  // before first paint; this wires the corner switch (.themetoggle, role="switch" -- the same as
+  // the phones' page) to flip it, saves the choice in gtc_theme (shared with the phones' page),
+  // and keeps aria-checked true to the theme, which is also what slides the knob.
   function bindThemeToggles() {
     const root = document.documentElement;
     const isDark = () => root.dataset.theme === 'dark';
     const label = () => {
-      for (const b of document.querySelectorAll('.themebtn')) b.textContent = isDark() ? 'Light Mode' : 'Dark Mode';
+      for (const b of document.querySelectorAll('.themetoggle')) b.setAttribute('aria-checked', String(isDark()));
     };
-    for (const b of document.querySelectorAll('.themebtn')) {
+    for (const b of document.querySelectorAll('.themetoggle')) {
       b.addEventListener('click', () => {
         const dark = !isDark();
         if (dark) root.dataset.theme = 'dark';
