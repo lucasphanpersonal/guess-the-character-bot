@@ -11,8 +11,9 @@ without tangling into it. Two ways to play, from one server:
   close one (a typo, a stripped title, a shared surname) goes to the other players — the first
   to tap Yes or No (or press <kbd>Y</kbd>/<kbd>N</kbd>) settles it. Nobody ruling within 20 s
   (`WEB_DESK_RULING_MS`) counts as a miss, and a turn whose clock runs out mid-ruling waits for
-  it. No countdown, no motion sensors. Pick-for-each-other works here too; host-picks mode works
-  on the server but has no picker in the computer client yet.
+  it. No countdown, no motion sensors. Pick-for-each-other and **I'll pick them** work here too:
+  the host fills one slot per player (or leaves it on Random) and watches every character and the
+  clock while the players rule on close guesses.
 
 And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
 order: the drawer picks one of three characters (15 s, else the first) — or asks for three new

@@ -65,11 +65,18 @@
         <h2>Game settings</h2>
         <div>
           <label>Who picks the characters?</label>
-          <div class="choices two" role="radiogroup">
+          <div class="choices" role="radiogroup">
             <label class="choice c0"><input type="radio" name="mode" value="deal" checked /><span class="shape">▲</span> Deal at random</label>
             <label class="choice c1"><input type="radio" name="mode" value="each" /><span class="shape">●</span> Pick for each other</label>
+            <label class="choice c2" id="hostModeChoice"><input type="radio" name="mode" value="host" /><span class="shape">◆</span> I'll pick them</label>
           </div>
           <p class="hint" id="modeHint">Everyone gets a random character, and checks the next player's.</p>
+        </div>
+        <!-- I'll pick them: one slot per player, built in app.js. Anyone left blank is dealt at
+             random from the pool below, so the host can decide for two and let chance have the rest. -->
+        <div id="hostPickBox" hidden>
+          <label>Their characters</label>
+          <ul class="pickslots" id="pickSlots"></ul>
         </div>
         <div>
           <label id="poolLabel">Characters from</label>
@@ -128,6 +135,28 @@
         <p class="light" id="waitingNote"></p>
         <button id="cancelDealBtn" class="ghost" hidden>Cancel this deal</button>
       </div>
+    </div>
+  </section>
+
+  <!-- The host who picked everyone's character and sits out: watch-only. Fed by host:state, which
+       the server sends to this host alone because it carries every character in play. -->
+  <section id="hosting" class="screen">
+    <div class="turnbar" id="hostTurnbar">
+      <div class="who" id="hostWho"></div>
+      <div class="clock" id="hostClock"><i id="hostClockFill"></i></div>
+      <div class="secs" id="hostClockSecs"></div>
+    </div>
+    <div class="card stack">
+      <div>
+        <h2 id="hostTitle"></h2>
+        <p class="hint" id="hostNote"></p>
+      </div>
+      <div class="cards" id="hostBoard"></div>
+      <div class="row">
+        <button id="hostCancelBtn" class="ghost">Cancel This Deal</button>
+        <button id="hostLeaveBtn" class="ghost">Leave Room</button>
+      </div>
+      <p class="err" id="hostErr" role="alert"></p>
     </div>
   </section>
 

@@ -16,6 +16,9 @@
 }
 :root[data-season="spooky"] { --brand:#cc4a0c; --blue:#6d28d9; --blue-d:#4c1d95; }
 * { box-sizing:border-box; }
+/* `hidden` must win over any display rule: .row and .turnbar are flex, and a flex rule beats the
+   browser's own [hidden] style -- so `hidden` on one silently did nothing. */
+[hidden] { display:none !important; }
 html { overflow-x:clip; }
 body { margin:0; min-height:100vh; font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
        background:var(--brand); color:#fff; display:flex; justify-content:center; }
@@ -82,8 +85,21 @@ kbd { font:700 .8rem ui-monospace, monospace; background:#f3f0f8; border:1px sol
 .choice input { width:auto; accent-color:#fff; margin:0; }
 .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); } .choice.c2 { background:var(--green); }
 .choice .shape { font-size:1.1rem; }
-.choices.two { grid-template-columns:repeat(2, minmax(0,1fr)); }
-@media (max-width: 520px) { .choices, .choices.two { grid-template-columns:1fr; } }
+@media (max-width: 520px) { .choices { grid-template-columns:1fr; } }
+/* A choice that cannot be taken yet says why beside it (the hint under the row), and looks it. */
+.choice.disabled { opacity:.5; cursor:not-allowed; }
+
+/* I'll pick them (desk): one slot per player -- who, what they have now, and a search under it. */
+.pickslots { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(17rem, 1fr)); gap:10px; }
+.pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:#f6f4fa; border-radius:14px; }
+.pickhead { display:flex; align-items:center; gap:10px; min-height:36px; }
+.pickhead .name { font-weight:900; }
+.pickcurrent { margin-left:auto; display:flex; align-items:center; gap:8px; font-weight:800; min-width:0; }
+.pickcurrent.random { color:var(--muted); font-weight:700; }
+.pickcurrent .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px; flex:none; }
+.pickclear { flex:none; padding:4px 10px; font-size:.8rem; border-radius:999px; background:#fff; color:var(--ink); box-shadow:0 2px 0 #d9d3e6; }
+.pickslot .cs-row { background:#fff; }
 
 /* The pool picker (/shared/pickers.js poolPicker). The phones style the same classes in their own
    page; this is the same design at desk width. Selected = filled blue AND a tick, never colour alone. */

@@ -623,6 +623,34 @@ const connect = (playerId) => {
   //
   // One draws, the other guesses. What must never happen: the answer -- or the other two
   // characters the drawer was offered -- reaching a guesser before they have it.
+  // ---- Desk: I'll pick them. The same protocol as the phones, through the desk namespace and its
+  // board view -- which must never carry the host's view to a player.
+  console.log("\n# desk — I'll pick them");
+  {
+    const DH = await connectDesk('dPickHost');
+    let r = await DH.emitWithAck('room:create', { nickname: 'Hal' });
+    const code = r.state.code;
+    const D1 = await connectDesk('dPick1');
+    await D1.emitWithAck('room:join', { code, nickname: 'Ivy' });
+    const D2 = await connectDesk('dPick2');
+    await D2.emitWithAck('room:join', { code, nickname: 'Jon' });
+    const hostSetup = nextMatching(DH, 'host:state', (v) => v.phase === 'setup');
+    r = await DH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { dPick1: { name: 'Grandma Jean' } } });
+    check(r.ok, "desk host-picks: the host deals one typed pick and one random");
+    const hv = await hostSetup;
+    check(hv.players.length === 2 && hv.players.find((p) => p.name === 'Ivy')?.character.name === 'Grandma Jean', 'desk host-picks: the host sees the picks, and is not dealt in');
+    const playing = nextMatching(DH, 'host:state', (v) => v.phase === 'playing');
+    await D1.emitWithAck('setup:confirm', {});
+    await D2.emitWithAck('setup:confirm', {});
+    const hp = await playing;
+    check(hp.players.every((p) => p.character?.name) && typeof hp.turnRemaining === 'number', 'desk host-picks: the host watches every character and the clock');
+    const sentToPlayers = [...D1.received, ...D2.received].filter((e) => e.event === 'host:state').length;
+    check(sentToPlayers === 0, `desk host-picks: no player received the host's view (${sentToPlayers})`);
+    check(!DH.received.some((e) => e.event === 'setup:state' || e.event === 'game:state'), "desk host-picks: the host never got a player's view");
+    check(!D1.received.some((e) => e.event === 'game:state' && e.json.includes('Grandma Jean')), 'desk host-picks: Ivy is never shown her own pick');
+    DH.close(); D1.close(); D2.close();
+  }
+
   console.log('\n# draw — one draws, everyone else guesses');
   const connectDraw = (pid) => {
     const sock = io(`${URL}/draw`, { auth: { playerId: pid } });
