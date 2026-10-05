@@ -240,6 +240,9 @@ function attachSockets(nsp, { registry, setup, variant }) {
   };
 
   const startPlaying = (room) => {
+    // Only from the check screen. A game already counting down or under way must never be begun
+    // again: beginGame starts a turn, which charges the current player one -- and turns are the score.
+    if (!inSetup(room)) return;
     if (GRACE_SECONDS <= 0) return beginGame(room);
     room.status = 'countdown';
     room.countdownEndsAt = Date.now() + GRACE_SECONDS * 1000;
@@ -253,6 +256,17 @@ function attachSockets(nsp, { registry, setup, variant }) {
     emitHost(room);
     room.countdownTimer = setTimeout(() => beginGame(room), GRACE_SECONDS * 1000);
   };
+
+  /**
+   * The check-and-lock-in phase, when setup:* actions mean something. `room.game` existing is NOT
+   * this: the Game is built at the deal and lives on through play, so a check on it alone let
+   * setup:unlock + setup:confirm re-run startPlaying mid-game (charging the guesser a turn and
+   * resetting their clock), and unlock + reroll swap the character someone was wearing mid-turn.
+   */
+  function inSetup(room) {
+    return !!room?.game && (room.status === 'setup' || room.status === 'ready');
+  }
+  const NOT_SETUP = { ok: false, error: 'Characters are locked in once the game starts.' };
 
   const clearCountdown = (room) => {
     if (room?.countdownTimer) {
@@ -378,6 +392,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('setup:reroll', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
+      if (!inSetup(r)) return ack?.(NOT_SETUP);
       const res = setup.reroll(r.game, playerId);
       ack?.(res);
       if (res.ok) emitSetup(r); // fan out: everyone else's reference view changed too
@@ -402,7 +417,8 @@ function attachSockets(nsp, { registry, setup, variant }) {
     // Pick-for-each-other: choose the character of the player you check. Same fan-out as a reroll.
     socket.on('setup:pick', (payload = {}, ack) => {
       const r = room();
-      if (!r?.game || !['setup', 'ready'].includes(r.status)) return ack?.({ ok: false, error: 'No game to set up.' });
+      if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
+      if (!inSetup(r)) return ack?.(NOT_SETUP);
       const res = setup.pick(r.game, playerId, payload);
       ack?.(res);
       if (res.ok) emitSetup(r);
@@ -411,6 +427,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('setup:undo', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
+      if (!inSetup(r)) return ack?.(NOT_SETUP);
       const res = setup.undo(r.game, playerId);
       ack?.(res);
       if (res.ok) emitSetup(r); // everyone else's reference card changed back too
@@ -419,6 +436,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('setup:confirm', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
+      if (!inSetup(r)) return ack?.(NOT_SETUP);
       const res = setup.confirm(r.game, playerId);
       ack?.(res);
       if (res.ok && res.allReady) startPlaying(r); // everyone in -> the turn loop begins
@@ -508,6 +526,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('setup:unlock', (_p, ack) => {
       const r = room();
       if (!r?.game) return ack?.({ ok: false, error: 'No game to set up.' });
+      if (!inSetup(r)) return ack?.(NOT_SETUP);
       const res = setup.unlock(r.game, playerId);
       ack?.(res);
       emitSetup(r);

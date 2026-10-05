@@ -589,6 +589,22 @@ const connect = (playerId) => {
   check(guesserView.board.find((b) => b.isMe).character === null, "the guesser's own card is face down");
   check(guesserView.buttons && guesserView.buttons.gotIt === false, 'a computer has no got-it button, only typing');
 
+  // Setup actions are over once play begins. Unlock + confirm used to re-run the start of play --
+  // charging the guesser a turn and resetting their clock -- and unlock + reroll swapped the
+  // character they were wearing mid-turn. Sent by the player NOT guessing, who is the one with a motive.
+  const turnBefore = guesserView.current.turnNumber;
+  const lateUnlock = await ruler.emitWithAck('setup:unlock', {});
+  const lateConfirm = await ruler.emitWithAck('setup:confirm', {});
+  const lateReroll = await ruler.emitWithAck('setup:reroll', {});
+  const afterLate = await new Promise((resolve) => ruler.emit('game:resync', {}, () => resolve(ruler.received.filter((e) => e.event === 'game:state').at(-1))));
+  const lateView = JSON.parse(afterLate.json);
+  check(
+    !lateUnlock.ok && !lateConfirm.ok && !lateReroll.ok &&
+      lateView.current.turnNumber === turnBefore &&
+      lateView.board.find((b) => b.playerId === guesserId).character.name === answer,
+    `mid-game setup actions are refused: no extra turn, no swapped character (${[lateUnlock, lateConfirm, lateReroll].map((r) => r.ok).join('/')})`
+  );
+
   // A miss: costs nothing, the turn goes on, and everyone sees it in the log.
   const rulerSeesMiss = nextMatching(ruler, 'game:state', (v) => v.guesses.length === 1);
   res = await guesser.emitWithAck('game:guess', { text: 'Definitely Nobody' });
