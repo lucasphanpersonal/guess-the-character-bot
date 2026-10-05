@@ -114,6 +114,17 @@ const connect = (playerId) => {
     check(statuses.slice(0, 30).every((s) => s === 404) && statuses[30] === 429, `lookups: the 31st in a minute from one client is refused (${statuses[30]})`);
     check((await asClient('203.0.113.8')) === 404, 'lookups: ...while another client is unaffected');
     [H, G, impostor].forEach((s) => s.close());
+
+    // A socket that hops rooms lets go of the one it left, so an abandoned room can be swept. It
+    // used to keep a live-connection mark there forever.
+    const hopper = await listen('room-hopper-secret');
+    const first = await hopper.emitWithAck('room:create', { nickname: 'Hop' });
+    const second = await hopper.emitWithAck('room:create', { nickname: 'Hop' });
+    const stillHeld = registry.isConnected(first.state.code, pub('room-hopper-secret'));
+    hopper.close();
+    await new Promise((res) => setTimeout(res, 150));
+    check(!stillHeld && !registry.isConnected(second.state.code, pub('room-hopper-secret')),
+      'rooms: a socket that moves on lets go of the room it left, so it can be swept');
   }
 
   // ---- Stage 1: membership + reconnect --------------------------------------------------

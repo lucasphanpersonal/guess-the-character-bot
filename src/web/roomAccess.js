@@ -60,7 +60,18 @@ function identify(socket) {
 }
 
 // Seat the socket: its socket.io room, and the registry's live-connection count for the seat.
+//
+// A socket holds ONE room. One that creates or joins a second lets go of the first here -- its
+// broadcasts and its live-connection mark -- because a disconnect only ever detaches the room it
+// is in now. Without this the first room kept a connection that was never coming back, so the
+// abandoned-room sweep (which only takes rooms with nobody connected) could never take it: four
+// rooms per socket leaked for good, and sockets are free.
 function seat(socket, registry, room) {
+  const previous = socket.data.code;
+  if (previous && previous !== room.code) {
+    socket.leave(previous);
+    registry.detachConnection(previous, socket.data.playerId, socket.id);
+  }
   socket.data.code = room.code;
   socket.join(room.code);
   registry.attachConnection(room.code, socket.data.playerId, socket.id);
