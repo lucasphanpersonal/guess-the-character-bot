@@ -78,6 +78,11 @@ Both must pass before a commit. Beyond that:
   players don't hit this; your test tab still can.
 - **A check that only works once is not a check.** `check-web-socket` used to die on the
   second run against its own leftover seed DB. Make fixtures idempotent.
+- **Two sessions running `check:web-socket` at once collide.** Both use the same temp DB and
+  port; on Windows the first run's open handle leaves the file "delete pending", so the second's
+  unlink fails silently and it seeds on top of leftovers ("UNIQUE constraint failed" at seeding,
+  nothing to do with your change). Give a concurrent run its own `BOT_DB_PATH` (a fresh path)
+  and `WEB_PORT`.
 - **Run a check several times before believing it.** The same script failed one run in seven
   because an assertion kept its own hand-written copy of the fixture's cast list, and the
   fixture had grown a character. Derive expectations from the fixture, never restate them --
@@ -126,6 +131,14 @@ consistent — new UI should look like it was always there.
   looks pasted in next to plain-text buttons. The favicon is the one deliberate exception.
 - **Escape every interpolated value**, including URLs going into a `src` attribute. The one
   place that lapsed was an image URL, reachable whenever a row falls back to an upstream URL.
+- **Every surface colour is a token, because dark mode redefines them.** `--paper`, `--ink`,
+  `--soft`, `--input`, `--ghost-ink` and the field `--brand` change under
+  `:root[data-theme="dark"]`; a new rule with a hard-coded `#fff` or `#f6f4fa` is a white
+  slab in the dark. The exceptions are deliberate: the forehead overlay (always black and white)
+  and the QR code (a scanner needs it white).
+- **Button labels are Title Case.** Every word capitalised except a, an, the, and, or, but, of,
+  to, in, on, at, by, for, as (unless first); no full stops; " — " is the one separator. Rows
+  that list characters, lists or categories are content and keep their own case.
 - **Publish constants, don't re-declare them.** The client had its own copy of "8" for the
   roster cap while `MAX_PLAYERS` lived in core. Send it in room state instead.
 

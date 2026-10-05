@@ -19,6 +19,20 @@
         "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎃</text></svg>";
     }
   </script>
+  <!-- Dark mode, decided before first paint for the same reason as the season: a dark page must
+       not flash white on its way there. The toggle's choice (gtc_theme) wins; until someone has
+       pressed it, the phone's own light/dark setting does. Storage can be blocked, hence the try. -->
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('gtc_theme'); } catch (e) { /* follow the phone */ }
+      var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (!dark) return;
+      document.documentElement.dataset.theme = 'dark';
+      document.querySelector('meta[name=theme-color]').content =
+        document.documentElement.dataset.season === 'spooky' ? '#2a1307' : '#170d2b';
+    })();
+  </script>
   <style>
     /* Game-show palette: saturated violet field, white slabs, four shape-paired choice colours.
        Deliberately NOT applied to forehead mode below -- that overlay is a display surface read
@@ -30,6 +44,9 @@
       --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
       --ok:#26890c; --off:#b9b3c7; --warn:#ffa602;
       --card:var(--paper);
+      /* Surfaces dark mode redefines: the pale rows inside cards, form fields, and the text of a
+         ghost button (the field colour on white, which would vanish on a dark card). */
+      --soft:#f6f4fa; --input:#fff; --ghost-ink:var(--brand);
       --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
                       'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
     }
@@ -52,7 +69,7 @@
     label { display:block; font-size:.8rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
             color:var(--muted); margin:0 0 8px; }
     input, select { width:100%; padding:14px; font-size:1.05rem; font-weight:600; border-radius:12px;
-            border:3px solid var(--edge); background:#fff; color:var(--ink); }
+            border:3px solid var(--edge); background:var(--input); color:var(--ink); }
     input:focus, select:focus { outline:none; border-color:var(--blue); }
     #codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.4rem; }
     /* Chunky tactile slabs: the hard bottom shadow + press-down is most of the feel.
@@ -67,7 +84,11 @@
              touch-action:manipulation; -webkit-tap-highlight-color:transparent;
              transition:transform .05s, box-shadow .05s; }
     button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
-    button.ghost { background:#fff; color:var(--brand); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    button.ghost, a.linkbtn { background:var(--paper); color:var(--ghost-ink); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    /* The computer-version link, dressed as the ghost button beside it. */
+    a.linkbtn { display:block; padding:16px; border-radius:14px; text-align:center; font-weight:900; line-height:normal;
+                font-size:1.05rem; text-decoration:none; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+    a.linkbtn:active { transform:translateY(4px); box-shadow:0 2px 0 rgba(0,0,0,.22); }
     button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
     button.alt { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); }
     button.alt:active { box-shadow:0 2px 0 var(--amber-d); }
@@ -86,7 +107,7 @@
     .roomcode .ch:nth-child(3) { color:var(--amber-d); } .roomcode .ch:nth-child(4) { color:var(--green); }
     .share { text-align:center; color:var(--muted); font-size:.8rem; word-break:break-all; }
     .roster { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-    .seat { display:flex; align-items:center; gap:10px; padding:12px; background:#f6f4fa;
+    .seat { display:flex; align-items:center; gap:10px; padding:12px; background:var(--soft);
             border-radius:12px; color:var(--ink); }
     /* Joined players read as pills that pop in, not as list rows. */
     #roster { flex-direction:row; flex-wrap:wrap; gap:8px; }
@@ -126,7 +147,7 @@
        whatever shape the image turns out to be, so nothing moves. The same height on .noimg keeps
        the card stable when a reroll swaps an illustrated character for a text-only one. */
     .charcard img { width:100%; height:230px; object-fit:contain; border-radius:14px; margin:6px auto;
-                    display:block; background:#f6f4fa; }
+                    display:block; background:var(--soft); }
     .charcard .noimg { display:flex; align-items:center; justify-content:center; height:230px;
                        color:var(--muted); font-size:.9rem; margin:6px 0; padding:12px;
                        border:3px dashed var(--edge); border-radius:14px; }
@@ -234,12 +255,12 @@
     .tile:active { transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
     /* Rows are buttons, so the whole strip is the tap target rather than the text. */
     .rowbtn { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px;
-              border:none; border-radius:12px; background:#f6f4fa; color:var(--ink); font-weight:800;
+              border:none; border-radius:12px; background:var(--soft); color:var(--ink); font-weight:800;
               box-shadow:none; margin-bottom:8px; cursor:pointer; }
     .rowbtn:active { transform:translateY(2px); }
     .rowbtn .n { margin-left:auto; color:var(--muted); font-weight:700; font-size:.8rem; flex:none; }
     /* Host-picks: one slot per player -- who, what they have now, and a search under it. */
-    .pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:#f6f4fa;
+    .pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--soft);
                 border-radius:14px; color:var(--ink); }
     .pickhead { display:flex; align-items:center; gap:10px; min-height:36px; }
     .pickcurrent { margin-left:auto; display:flex; align-items:center; gap:8px; font-weight:800;
@@ -251,12 +272,12 @@
     .pickclear { width:auto; flex:none; padding:4px 10px; font-size:.8rem; border-radius:999px;
                  background:var(--edge); color:var(--ink); box-shadow:0 2px 0 rgba(0,0,0,.15); }
     /* White, not the slot's grey, or the results would disappear into the slot behind them. */
-    .pickresults .rowbtn { background:#fff; margin-bottom:6px; }
+    .pickresults .rowbtn { background:var(--paper); margin-bottom:6px; }
     .off-pool { font-size:.6rem; font-weight:900; letter-spacing:.08em; background:var(--edge);
                 color:var(--muted); padding:2px 6px; border-radius:999px; flex:none; }
     /* A grid of faces. Fixed tile heights so nothing reflows as thumbnails arrive. */
     .chargrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; }
-    .chartile { background:#f6f4fa; border-radius:12px; overflow:hidden; text-align:center; }
+    .chartile { background:var(--soft); border-radius:12px; overflow:hidden; text-align:center; }
     /* `cover` crops to fill, and the default centre crop takes the MIDDLE of the image -- which
        on a standing portrait is a torso and a pair of legs. Biasing the crop toward the top puts
        the face in the tile instead. 20% rather than 0% leaves a little headroom, so hats, hair
@@ -287,7 +308,7 @@
                         -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
                         mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
     .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem; border-radius:999px;
-               background:#fff; color:var(--brand); box-shadow:0 4px 0 rgba(0,0,0,.25); }
+               background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.25); }
     .backbtn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
     #browseCrumb { color:#fff; font-size:.85rem; font-weight:800; line-height:1.25; flex:1;
                    overflow:hidden; text-overflow:ellipsis; }
@@ -504,6 +525,38 @@
     /* Tilt test */
     .tiltbig { font-size:2.6rem; font-weight:900; text-align:center; min-height:3rem; }
     .tiltvals { font:0.95rem monospace; text-align:center; color:var(--muted); }
+
+    /* Dark mode: the same game show with the house lights down. Chosen by the toggle (stored per
+       phone as gtc_theme), or by the phone's own setting until somebody touches the toggle; set
+       in <head> before first paint. Token-based, so nothing above needs to know it exists -- the
+       field goes deep violet (deep pumpkin in spooky season), the white slabs go dark, and the
+       accent letters are lifted so they still clear contrast on dark.
+       The forehead overlay is untouched: it is already black and white, read across a room. */
+    :root[data-theme="dark"] {
+      --brand:#170d2b; --paper:#251a3d; --card:var(--paper);
+      --ink:#eee9f8; --muted:#aca3c4; --edge:#41355f;
+      --soft:#31264c; --input:#1b1330; --ghost-ink:var(--ink);
+    }
+    :root[data-theme="dark"][data-season="spooky"] { --brand:#2a1307; }
+    :root[data-theme="dark"] .wob.w0 { color:#ff5a73; }
+    :root[data-theme="dark"] .wob.w1 { color:#6aa8ff; }
+    :root[data-theme="dark"] .wob.w2, :root[data-theme="dark"] .card .wob.w2 { color:#ffb52e; }
+    :root[data-theme="dark"] .wob.w3 { color:#55d43f; }
+    :root[data-theme="dark"][data-season="spooky"] .wob.w1 { color:#b49bff; }
+    :root[data-theme="dark"][data-season="spooky"] h1 .wob.w1,
+    :root[data-theme="dark"][data-season="spooky"] h1 .wob.w3 { color:#ff9a4d; text-shadow:0 3px 0 rgba(0,0,0,.3); }
+    :root[data-theme="dark"] .roomcode .ch:nth-child(1) { color:#ff5a73; }
+    :root[data-theme="dark"] .roomcode .ch:nth-child(2) { color:#6aa8ff; }
+    :root[data-theme="dark"] .roomcode .ch:nth-child(3) { color:#ffb52e; }
+    :root[data-theme="dark"] .roomcode .ch:nth-child(4) { color:#55d43f; }
+    :root[data-theme="dark"] .seat.tint0 { background:#3b1c2a; }
+    :root[data-theme="dark"] .seat.tint1 { background:#1c2a46; }
+    :root[data-theme="dark"] .seat.tint2 { background:#3a2c14; }
+    :root[data-theme="dark"] .seat.tint3 { background:#1d3420; }
+    :root[data-theme="dark"] .seat.rank1, :root[data-theme="dark"] .seat.rank2,
+    :root[data-theme="dark"] .seat.rank3 { color:#1b1033; }
+    /* The theme switch: a quiet ghost button, the same in both themes. */
+    .themebtn { font-size:.9rem; padding:12px; }
   </style>
 </head>
 <body>
@@ -526,17 +579,21 @@
         <label for="nickInput">Your name</label>
         <input id="nickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />
       </div>
-      <div class="card"><button id="createBtn">Create a room</button></div>
+      <div class="card"><button id="createBtn">Create a Room</button></div>
       <div class="divider">or join one</div>
       <div class="card">
         <label for="codeInput">Room code</label>
         <input id="codeInput" maxlength="4" placeholder="ABCD" autocomplete="off" />
         <div style="height:12px"></div>
-        <button id="joinBtn" class="alt">Join room</button>
+        <button id="joinBtn" class="alt">Join Room</button>
       </div>
       <p class="err" id="landingErr"></p>
-      <button id="browseBtn" class="ghost">Browse the characters</button>
-      <button id="tiltTestBtn" class="ghost" style="margin-top:4px">Test tilt on this phone</button>
+      <!-- A link, not a button: it is somewhere to go, and a computer player may well want it in a
+           new tab. Styled as the ghost button beside it. -->
+      <a id="deskLink" class="ghost linkbtn" href="/desk/">Play on a Computer Instead</a>
+      <button id="browseBtn" class="ghost">Browse the Characters</button>
+      <button id="tiltTestBtn" class="ghost" style="margin-top:4px">Test Tilt on This Phone</button>
+      <button class="ghost themebtn" type="button">Dark Mode</button>
     </section>
 
     <!-- Compendium: read-only browsing, category -> list -> character -->
@@ -547,7 +604,7 @@
       </div>
       <input id="browseFilter" placeholder="Filter…" autocomplete="off" style="display:none" />
       <div class="card flat"><div id="browseBody"></div></div>
-      <button id="browseMore" class="ghost" style="display:none">Load more</button>
+      <button id="browseMore" class="ghost" style="display:none">Load More</button>
     </section>
 
     <!-- Tilt calibration / diagnostics -->
@@ -555,7 +612,7 @@
       <div class="card">
         <div class="hint center">Hold the phone horizontally like you would on your forehead, then tilt it up and down.</div>
         <div style="height:10px"></div>
-        <button id="ttEnable" class="enable-motion">Enable motion</button>
+        <button id="ttEnable" class="enable-motion">Enable Motion</button>
         <div style="height:14px"></div>
         <div class="tiltbig" id="ttResult">—</div>
         <div class="tiltvals" id="ttVals">enable motion to see values</div>
@@ -587,10 +644,11 @@
           <li><b>Fewest turns wins</b><span>Getting yours ends your turn, not the game — everyone plays on. Same number of turns? Most time left on the clock wins.</span></li>
         </ol>
       </div>
-      <button id="howtoToggle">Hide how to play</button>
-      <button id="setupBtn">Set up game →</button>
+      <button id="howtoToggle">Hide How to Play</button>
+      <button id="setupBtn">Set Up Game →</button>
       <p class="hint center" id="lobbyHint"></p>
-      <button id="leaveBtn" class="ghost">Leave room</button>
+      <button id="leaveBtn" class="ghost">Leave Room</button>
+      <button class="ghost themebtn" type="button">Dark Mode</button>
       <p class="hint center" id="connState"></p>
     </section>
 
@@ -641,7 +699,7 @@
         <label>Difficulty</label>
         <div id="diffChoices"></div>
       </div>
-      <button id="dealBtn">Deal characters</button>
+      <button id="dealBtn">Deal Characters</button>
       <button id="cfgBackBtn" class="ghost">Back</button>
       <p class="err" id="configErr"></p>
     </section>
@@ -660,7 +718,7 @@
              belong, under what they act on and above the one button that commits. -->
         <div id="checkCard"></div>
         <button id="rerollBtn" class="alt" style="margin-top:14px">Reroll</button>
-        <button id="undoBtn" class="undo" style="display:none">Undo last reroll</button>
+        <button id="undoBtn" class="undo" style="display:none">Undo Last Reroll</button>
         <p class="hint center" id="rerollNote"></p>
       </div>
       <div class="card">
@@ -677,7 +735,7 @@
       <div class="card" id="motionGate" style="display:none">
         <div class="gatetitle" data-wobble>Tilt is required to lock in</div>
         <p class="hint center" id="motionGateWhy"></p>
-        <button id="motionGateBtn" class="alt">Turn on tilt to lock in</button>
+        <button id="motionGateBtn" class="alt">Turn On Tilt to Lock In</button>
       </div>
       <!-- The wearer cannot see their own screen, so the turn clock reaches them as sound -- and
            a phone on silent loses that channel entirely and only finds out mid-turn. A nudge,
@@ -691,18 +749,18 @@
         <div style="height:8px"></div>
         <p class="hint center">The clock plays on your phone while you guess, and it will be on
           your forehead — take it off silent and turn the volume up.</p>
-        <button id="soundCheckBtn" class="ghost">Test sound</button>
-        <button id="muteBtn" class="undo">Turn game sounds off</button>
+        <button id="soundCheckBtn" class="ghost">Test Sound</button>
+        <button id="muteBtn" class="undo">Turn Game Sounds Off</button>
         <p class="hint center" id="soundCheckNote"></p>
       </div>
-      <button id="goodBtn" class="good">Good to go</button>
+      <button id="goodBtn" class="good">Good to Go</button>
       <button id="unlockBtn" class="ghost" style="display:none">Unlock</button>
       <p class="hint center" id="waitingNote"></p>
       <!-- Who is holding things up, by name, with a way for the host to move on without them.
            A count alone ("waiting on 1 more") gives a room of eight nothing to act on. -->
       <ul class="roster" id="waitingList"></ul>
-      <button id="setupCancelBtn" class="ghost" style="display:none">Cancel — back to lobby</button>
-      <button id="setupLeaveBtn" class="ghost">Leave room</button>
+      <button id="setupCancelBtn" class="ghost" style="display:none">Cancel — Back to Lobby</button>
+      <button id="setupLeaveBtn" class="ghost">Leave Room</button>
     </section>
 
     <!-- Grace countdown before the reveal -->
@@ -725,7 +783,7 @@
         <ul class="roster" id="standings"></ul>
       </div>
       <div id="revealLog"></div>
-      <button id="playLeaveBtn" class="ghost">Leave game</button>
+      <button id="playLeaveBtn" class="ghost">Leave Game</button>
     </section>
 
     <!-- The host who picked everyone's character and sits the game out. Watch-only: every
@@ -738,8 +796,8 @@
         <div style="height:8px"></div>
         <ul class="roster" id="hostList"></ul>
       </div>
-      <button id="hostCancelBtn" class="ghost">Call off this deal</button>
-      <button id="hostLeaveBtn" class="ghost">Leave room</button>
+      <button id="hostCancelBtn" class="ghost">Call Off This Deal</button>
+      <button id="hostLeaveBtn" class="ghost">Leave Room</button>
     </section>
 
     <!-- Forehead mode overlay (motion enabled): shows YOUR character full-screen for the room.
@@ -755,7 +813,7 @@
         <div id="foreheadDebug"></div>
         <div id="foreheadTimeBar"><div></div></div>
         <div id="foreheadGiveUpBar"><div></div></div>
-        <button id="foreheadLeave">✕ leave</button>
+        <button id="foreheadLeave">✕ Leave</button>
       </div>
     </div>
 
@@ -772,9 +830,9 @@
       </div>
       <p class="err" id="overErr"></p>
       <p class="hint center" id="overCode"></p>
-      <button id="rematchBtn">Rematch (same settings)</button>
-      <button id="changeBtn" class="ghost">Change settings</button>
-      <button id="overLeaveBtn" class="ghost">Leave room</button>
+      <button id="rematchBtn">Rematch (Same Settings)</button>
+      <button id="changeBtn" class="ghost">Change Settings</button>
+      <button id="overLeaveBtn" class="ghost">Leave Room</button>
     </section>
   </main>
 

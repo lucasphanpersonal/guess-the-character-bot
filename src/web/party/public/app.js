@@ -284,7 +284,7 @@ function syncPickMode() {
   // The pool still matters in pick mode -- for anyone the host leaves blank -- so it stays, and
   // says what it is now for.
   $('poolLabel').textContent = pickMode ? 'Anyone left blank is drawn from' : 'Draw characters from';
-  $('dealBtn').textContent = pickMode ? 'Start with these picks' : 'Deal characters';
+  $('dealBtn').textContent = pickMode ? 'Start With These Picks' : 'Deal Characters';
   if (pickMode) renderPicker();
   retilt($('config'));
 }
@@ -380,7 +380,7 @@ function pickSlot(p) {
       const typed = document.createElement('button');
       typed.type = 'button';
       typed.className = 'rowbtn';
-      typed.innerHTML = `<span style="flex:1">Use “${escapeHtml(q)}” as typed</span><span class="n">no picture</span>`;
+      typed.innerHTML = `<span style="flex:1">Use “${escapeHtml(q)}” as Typed</span><span class="n">no picture</span>`;
       typed.addEventListener('click', () => choose({ name: q.slice(0, 60), typed: true }));
       results.appendChild(typed);
     }, 200);
@@ -600,7 +600,7 @@ function renderSetup(view) {
     // A missing sensor or an http:// link has nothing to tap -- the button would only fail.
     const canRetry = problem.fix === 'ask' || problem.fix === 'settings';
     $('motionGateBtn').style.display = canRetry ? '' : 'none';
-    $('motionGateBtn').textContent = problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt to lock in';
+    $('motionGateBtn').textContent = problem.fix === 'settings' ? 'I Turned It On — Try Again' : 'Turn On Tilt to Lock In';
   }
 
   // Only the host can call off a deal; anyone can leave.
@@ -785,7 +785,7 @@ function renderPlaying(view) {
   if (problem.fix === 'ask' || problem.fix === 'settings') {
     // Same shape as the setup gate's button, naming what tilt unlocks HERE: mid-game there is
     // nothing left to lock in, there is a turn to answer.
-    addBtn(btns, problem.fix === 'settings' ? 'I turned it on - try again' : 'Turn on tilt to answer', 'alt',
+    addBtn(btns, problem.fix === 'settings' ? 'I Turned It On — Try Again' : 'Turn On Tilt to Answer', 'alt',
       () => enableMotion().then(() => lastPlayView && renderPlaying(lastPlayView)));
   }
   renderStandings($('standings'), view.standings);
@@ -966,7 +966,7 @@ function renderOver(result) {
   // picker instead -- and the old picks are forgotten, because by now everyone has seen them.
   lastOverHostPicked = !!result.hostPicked;
   if (result.hostPicked) hostPicks.clear();
-  $('rematchBtn').textContent = result.hostPicked ? 'Pick characters again' : 'Rematch (same settings)';
+  $('rematchBtn').textContent = result.hostPicked ? 'Pick Characters Again' : 'Rematch (Same Settings)';
   // a little win sting
   beep(880, 160); setTimeout(() => beep(1320, 260), 170);
   show('over');
@@ -1236,7 +1236,7 @@ function playSoundCheck() {
 // Reflects the stored preference rather than a toggle's own memory, so it is still right after a
 // reload -- which, on this app, happens more than you would think.
 function renderSoundCheck() {
-  $('muteBtn').textContent = muted ? 'Turn game sounds back on' : 'Turn game sounds off';
+  $('muteBtn').textContent = muted ? 'Turn Game Sounds Back On' : 'Turn Game Sounds Off';
   $('soundCheckBtn').disabled = muted;
 }
 
@@ -1847,7 +1847,7 @@ const howtoHidden = () => store.get('gtc_howto') === 'hidden';
 function syncHowto() {
   const hidden = howtoHidden();
   $('howtoCard').style.display = hidden ? 'none' : '';
-  $('howtoToggle').textContent = hidden ? 'How to play' : 'Hide how to play';
+  $('howtoToggle').textContent = hidden ? 'How to Play' : 'Hide How to Play';
   retilt($('lobby')); // one fewer card changes the alternation below it
 }
 $('howtoToggle').addEventListener('click', () => {
@@ -1902,6 +1902,31 @@ $('muteBtn').addEventListener('click', () => {
 });
 $('unlockBtn').addEventListener('click', () => socket.emit('setup:unlock', {}, () => {}));
 $('browseBtn').addEventListener('click', openBrowse);
+
+// The computer-version link is a real link (somewhere to go, maybe in a new tab) dressed as the
+// ghost button below it. Buttons don't inherit the page font -- each browser gives them its own
+// (Arial here, the system font on an iPhone) -- so the link takes whatever a real button got,
+// rather than guessing it in CSS and looking pasted in on the next browser.
+$('deskLink').style.fontFamily = getComputedStyle($('browseBtn')).fontFamily;
+
+// Dark mode. <head> already applied the stored choice (or the phone's own setting) before first
+// paint; this is only the switch, and the label that says where it goes. The choice is per phone.
+const themeIsDark = () => document.documentElement.dataset.theme === 'dark';
+function labelThemeButtons() {
+  for (const b of document.querySelectorAll('.themebtn')) b.textContent = themeIsDark() ? 'Light Mode' : 'Dark Mode';
+}
+for (const b of document.querySelectorAll('.themebtn')) {
+  b.addEventListener('click', () => {
+    const dark = !themeIsDark();
+    if (dark) document.documentElement.dataset.theme = 'dark';
+    else delete document.documentElement.dataset.theme;
+    store.set('gtc_theme', dark ? 'dark' : 'light');
+    const spooky = document.documentElement.dataset.season === 'spooky';
+    document.querySelector('meta[name=theme-color]').content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
+    labelThemeButtons();
+  });
+}
+labelThemeButtons();
 $('browseBack').addEventListener('click', browseBack);
 $('browseMore').addEventListener('click', () => { if (!browseState.loading) { browseState.loading = true; loadCharacterPage(false); } });
 $('browseFilter').addEventListener('input', (e) => {
