@@ -120,6 +120,7 @@ kbd { font:700 .8rem ui-monospace, monospace; background:#f3f0f8; border:1px sol
 .pp-or { color:var(--muted); font-size:.8rem; font-weight:700; margin:12px 0 8px; }
 .pp-summary { margin:12px 0 0; font-weight:700; font-size:.92rem; }
 .pp-summary.warn { color:var(--red); }
+.pp-fallback { color:var(--red); font-weight:700; font-size:.88rem; margin:0 0 8px; }
 .pp-cat { background:#f6f4fa; border-radius:12px; margin-top:8px; }
 .pp-cat summary { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; list-style:none; }
 .pp-cat summary::-webkit-details-marker { display:none; }

@@ -126,12 +126,13 @@ function renderRoom() {
   if (!options) {
     socket.emit('draw:options', {}, (res) => {
       options = res;
-      // Its own memory: what a room likes to draw is not what it likes to wear.
-      poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: res, request: ask, storageKey: 'gtc_draw_pool' });
-      // Easy first: a character has to be recognisable from a sketch.
+      // Difficulty first: it must never depend on the picker below having loaded. Easy by default:
+      // a character has to be recognisable from a sketch.
       $('difficultySelect').innerHTML = (res?.difficulties ?? [])
         .map((d) => `<option value="${esc(d.key)}"${d.key === 'easy' ? ' selected' : ''}>${esc(d.label)}: ${esc(d.blurb)}</option>`)
         .join('');
+      // Its own memory: what a room likes to draw is not what it likes to wear.
+      poolPicker = GTC.mountPoolPicker($('poolPicker'), { options: res, request: ask, storageKey: 'gtc_draw_pool' });
     });
   }
 }

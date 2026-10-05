@@ -302,6 +302,7 @@
     .pp-or { color:var(--muted); font-size:.8rem; font-weight:700; margin:14px 0 8px; }
     .pp-summary { margin:14px 0 0; font-weight:700; color:var(--ink); font-size:.92rem; }
     .pp-summary.warn { color:var(--red); }
+    .pp-fallback { color:var(--red); font-weight:700; font-size:.88rem; margin:0 0 8px; }
     .pp-cat { background:var(--soft); border-radius:12px; margin-top:8px; }
     .pp-cat summary { display:flex; align-items:center; gap:10px; padding:12px; cursor:pointer;
                       list-style:none; -webkit-tap-highlight-color:transparent; }
@@ -895,6 +896,8 @@
   <script src="/tilt.js"></script>
   <!-- The pool picker and character search, shared with the computer games. Before app.js. -->
   <script src="/shared/pickers.js"></script>
+  <!-- For GTC.mountPoolPicker: the plain dropdown that stands in if pickers.js fails to load. -->
+  <script src="/shared/common.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

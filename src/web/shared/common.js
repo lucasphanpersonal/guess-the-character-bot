@@ -85,5 +85,39 @@
     });
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, ANGLES };
+  /**
+   * The pool picker (/shared/pickers.js), or -- when that script did not arrive or threw -- a plain
+   * dropdown that still deals. Lives here, not in pickers.js, because it is for when pickers.js is
+   * the part that failed: a cached page from before the picker, a blocked or half-deployed file.
+   * Without it, one missing script left "Characters from" empty AND the difficulty list blank
+   * (the same callback filled both), and the host had no way to start a game.
+   *
+   * The note saying so sits inside the picker's own box: a lobby's error line is rewritten on
+   * every roster update, and would wipe it.
+   *
+   * @returns {{ value(): object }}
+   */
+  function mountPoolPicker(root, opts) {
+    try {
+      if (window.GTCPickers && root) return window.GTCPickers.poolPicker(root, opts);
+    } catch (err) {
+      console.error('pool picker failed, using the plain dropdown', err);
+    }
+    if (root) {
+      root.innerHTML =
+        '<p class="pp-fallback">Part of this page did not load, so this is a plain list. Reload the page to get the category picker back.</p>' +
+        '<select aria-label="Characters from"><option value="random">Surprise me: a random category</option><option value="everything">Everything</option>' +
+        (opts?.options?.categories ?? []).map((c) => `<option value="cat:${esc(c.category)}">${esc(c.category)} (${esc(c.enabled)} lists)</option>`).join('') +
+        '</select>';
+    }
+    const select = root?.querySelector('select');
+    return {
+      value() {
+        const v = select?.value || 'random';
+        return v.startsWith('cat:') ? { poolType: 'categories', categories: [v.slice(4)] } : { poolType: v };
+      },
+    };
+  }
+
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, ANGLES };
 })();

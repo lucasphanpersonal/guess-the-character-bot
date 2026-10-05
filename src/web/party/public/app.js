@@ -350,7 +350,7 @@ function pickSlot(p) {
   };
   // Search and the typed-name row are /shared/pickers.js, shared with the pick-for-each-other
   // screen and the computers.
-  GTCPickers.characterSearch(input, results, (pick) => {
+  window.GTCPickers?.characterSearch(input, results, (pick) => {
     hostPicks.set(p.playerId, pick);
     paint();
   });
@@ -363,7 +363,11 @@ let poolPicker = null;
 const ask = (event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
 function renderConfig(opts) {
-  poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: opts, request: ask });
+  // Through the fallback: if the picker script is missing or throws, a plain dropdown stands in
+  // rather than the config screen never opening at all (this runs before show('config')).
+  poolPicker = window.GTC?.mountPoolPicker
+    ? GTC.mountPoolPicker($('poolPicker'), { options: opts, request: ask })
+    : GTCPickers.poolPicker($('poolPicker'), { options: opts, request: ask });
 
   const diff = $('diffChoices');
   diff.innerHTML = '';
@@ -1816,7 +1820,9 @@ $('goodBtn').addEventListener('click', () => socket.emit('setup:confirm', {}, (r
 }));
 // Pick-for-each-other: whatever is chosen here becomes the checked player's character. The view
 // that comes back from the server repaints the card; the note only carries a refusal.
-GTCPickers.characterSearch($('pickSearch'), $('pickResults'), (pick) => {
+// Optional-chained: if /shared/pickers.js did not load, a throw HERE, at the top level, stopped
+// every handler below it -- the whole game. Without it the search box is inert; Random still works.
+window.GTCPickers?.characterSearch($('pickSearch'), $('pickResults'), (pick) => {
   socket.emit('setup:pick', pick.typed ? { name: pick.name } : { id: pick.id }, (res) => {
     $('rerollNote').textContent = res?.ok ? '' : res?.error || 'Could not pick that one.';
   });
