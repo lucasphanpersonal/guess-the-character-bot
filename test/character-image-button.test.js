@@ -1,5 +1,7 @@
 // The Add/Replace image button on the check DM.
 //
+// Saving one writes to the shared compendium, so it takes Manage Server, like /list image.
+//
 // Only the checker of a character may set its image (the same one-checker-each rule that
 // gates reroll and "never deal this show"), it has to be a real list row to save to, and the
 // fix has to show up immediately -- on the checker's own message in the same response, and on
@@ -21,7 +23,7 @@ const db = require('../src/core/db/connection');
 
 let counter = 0;
 
-async function startedGame({ playerCount = 2, p2Freeform = false } = {}) {
+async function startedGame({ playerCount = 2, p2Freeform = false, canManageGuild = true } = {}) {
   const n = ++counter;
   const guildId = `img-guild-${n}`;
   const channelId = `img-chan-${n}`;
@@ -32,6 +34,10 @@ async function startedGame({ playerCount = 2, p2Freeform = false } = {}) {
 
   const recorder = createRecorder();
   const client = createFakeClient(recorder);
+  // In a DM there are no member permissions on the interaction, so the check fetches the member.
+  client.guilds.fetch = async () => ({
+    members: { fetch: async () => ({ permissions: { has: () => canManageGuild } }) },
+  });
   const lobby = new Lobby({
     guildId,
     channelId,
@@ -77,6 +83,19 @@ const submit = (ctx, userId, gameInstanceId, url) =>
   );
 
 module.exports = {
+  async 'a player without Manage Server cannot set an image, by the button or by submitting directly'() {
+    const ctx = await startedGame({ canManageGuild: false });
+    const game = ctx.lobby.game;
+    const ownerId = game.checkTargetOf('p1');
+    await click(ctx, 'p1', game.gameInstanceId);
+    assert.ok(!ctx.recorder.sent.some((m) => m.target === 'modal:p1'), 'no modal opens');
+    assert.match(ctx.recorder.allText(), /Manage Server/);
+    await submit(ctx, 'p1', game.gameInstanceId, 'https://example.com/evil.svg');
+    assert.equal(game.headByPlayer[ownerId].imageUrl, null, 'nothing changes in the game');
+    const row = db.prepare('SELECT image_url FROM characters WHERE list_id = ? AND name = ?').get(ctx.listId, game.headByPlayer[ownerId].name);
+    assert.equal(row.image_url, null, 'nothing is written to the shared compendium');
+  },
+
   async "submitting a URL saves it and updates the checker's own DM in the same response"() {
     const ctx = await startedGame();
     const game = ctx.lobby.game;

@@ -244,9 +244,14 @@ function buildImageModal(channelId, gameInstanceId, character) {
   return modal;
 }
 
+// Saving an image writes to the SHARED compendium: every server and the website show that
+// character with it. So it needs what /list image needs -- Manage Server -- rather than just being
+// a player. Without that, any player in any server could repoint a character's art for everyone,
+// and the website fetches and serves whatever URL it is given.
 async function handleImageButton(interaction) {
   const resolved = resolveCheckerCharacter(interaction);
   if (resolved.error) return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+  if (!(await requireManageGuild(interaction, resolved.lobby.guildId))) return undefined;
   // showModal has to be the FIRST response to the interaction -- it can't follow a defer.
   return interaction.showModal(buildImageModal(resolved.channelId, resolved.gameInstanceId, resolved.character));
 }
@@ -254,6 +259,9 @@ async function handleImageButton(interaction) {
 async function handleImageModalSubmit(interaction) {
   const resolved = resolveCheckerCharacter(interaction);
   if (resolved.error) return interaction.reply({ content: resolved.error, flags: MessageFlags.Ephemeral });
+  // Checked again on submit: the modal's customId is all a submission needs, so the button's
+  // check alone is not a gate.
+  if (!(await requireManageGuild(interaction, resolved.lobby.guildId))) return undefined;
   const { lobby, game, channelId, playerId, character } = resolved;
 
   const url = interaction.fields.getTextInputValue('url').trim();

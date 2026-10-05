@@ -59,7 +59,82 @@ function initIsSafeAndReportsSize() {
   assert.ok(s.dir);
 }
 
+// The server fetches these URLs from the machine it runs on, and people can set them (/list image,
+// the DM image button) -- so it must never be steered at that machine or its network.
+function onlyPublicAddressesAreFetchable() {
+  for (const url of [
+    'http://127.0.0.1/x', 'http://localhost:4180/', 'http://192.168.1.1/', 'http://10.0.0.5/a.png',
+    'http://172.20.0.1/', 'http://169.254.169.254/latest/meta-data', 'http://0.0.0.0/', 'http://[::1]/',
+    'http://[fe80::1]/', 'http://[::ffff:10.0.0.1]/', 'http://[64:ff9b::7f00:1]/', 'http://2130706433/', 'ftp://x/y',
+  ]) {
+    assert.equal(cache.isPublicUrl(url), false, url);
+  }
+  for (const url of ['https://upload.wikimedia.org/a.png', 'https://s4.anilist.co/x.jpg', 'http://[::ffff:8.8.8.8]/']) {
+    assert.equal(cache.isPublicUrl(url), true, url);
+  }
+}
+
+// Swaps in a fake fetch for one test, recording every URL asked for.
+async function withFetch(respond, run) {
+  const real = globalThis.fetch;
+  const asked = [];
+  // Follows redirects itself when asked to, as the real fetch does -- otherwise a test of "every
+  // hop is checked" would pass for code that never looks past the first.
+  const fake = async (url, opts = {}) => {
+    asked.push(String(url));
+    const res = await respond(String(url), asked.length);
+    const location = res.status >= 300 && res.status < 400 && res.headers.get('location');
+    if (location && opts.redirect !== 'manual' && asked.length < 10) return fake(new URL(location, url).toString(), opts);
+    return res;
+  };
+  globalThis.fetch = fake;
+  try {
+    return await run(asked);
+  } finally {
+    globalThis.fetch = real;
+  }
+}
+
+async function aPrivateAddressIsNeverRequested() {
+  await withFetch(() => new Response('x', { status: 200, headers: { 'content-type': 'image/png' } }), async (asked) => {
+    assert.equal(await cache.get('http://127.0.0.1:4180/api/health'), null);
+    assert.equal(await cache.get('http://192.168.1.1/admin'), null);
+    assert.deepEqual(asked, [], 'no request was made at all');
+  });
+}
+
+async function aRedirectToAPrivateAddressStopsThere() {
+  // Public at first sight, then sent home. Every hop is checked, not just the first.
+  await withFetch(
+    () => new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/secret.png' } }),
+    async (asked) => {
+      assert.equal(await cache.get('https://93.184.216.34/start.png'), null);
+      assert.deepEqual(asked, ['https://93.184.216.34/start.png'], 'the private hop was never requested');
+    }
+  );
+}
+
+async function svgIsNeverStoredButOtherArtIs() {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>';
+  await withFetch(
+    (url) =>
+      url.endsWith('.svg')
+        ? new Response(svg, { status: 200, headers: { 'content-type': 'image/svg+xml' } })
+        : new Response(Buffer.from([0x89, 0x50, 0x4e, 0x47]), { status: 200, headers: { 'content-type': 'image/png' } }),
+    async () => {
+      assert.equal(await cache.get('https://93.184.216.34/evil.svg'), null, 'an SVG is not cached (so /img redirects instead)');
+      const png = await cache.get('https://93.184.216.34/fine.png');
+      assert.equal(png?.contentType, 'image/png', 'ordinary art still is');
+      assert.ok(!fs.readdirSync(cache.CACHE_DIR).some((f) => f.endsWith('.svg')), 'no .svg on disk');
+    }
+  );
+}
+
 module.exports = {
+  'only public http(s) addresses are fetchable': onlyPublicAddressesAreFetchable,
+  'a private address is never requested': aPrivateAddressIsNeverRequested,
+  'a redirect to a private address stops there': aRedirectToAPrivateAddressStopsThere,
+  'an SVG is never stored, but other art is': svgIsNeverStoredButOtherArtIs,
   'the cache key is the URL, not the character': theKeyIsTheUrlNotTheCharacter,
   'non-http urls are never fetched': nonHttpUrlsAreNeverFetched,
   'characters with a database row are proxied': charactersWithARowAreProxied,

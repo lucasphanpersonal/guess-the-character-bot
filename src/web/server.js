@@ -198,10 +198,13 @@ function requestHandler(req, res) {
       });
   }
 
-  // Character artwork, served from the local cache. The id names a database row, so the URL
-  // actually fetched is always one we stored -- a client can never point this at an arbitrary
-  // host. A miss that cannot be filled redirects upstream, which is exactly the pre-cache
-  // behaviour, so the cache can degrade without breaking a game in progress.
+  // Character artwork, served from the local cache. The id names a database row, so a web client
+  // cannot choose the URL -- but the URL in that row is not necessarily benign: /list image and
+  // the DM image button let people set it. So the cache only fetches public addresses and never
+  // stores SVG (see imageCache.js), what it serves carries headers that stop it ever running as a
+  // page on this origin, and a URL that is not a public http(s) one is not redirected to either.
+  // A miss that cannot be filled redirects upstream, which is exactly the pre-cache behaviour, so
+  // the cache can degrade without breaking a game in progress.
   if (url.pathname.startsWith('/img/')) {
     const id = Number(url.pathname.slice(5));
     if (!Number.isInteger(id) || id <= 0) {
@@ -213,20 +216,29 @@ function requestHandler(req, res) {
       res.writeHead(404, { 'Content-Type': 'text/plain' });
       return res.end('No image');
     }
+    const upstream = () => {
+      if (!imageCache.isPublicUrl(row.image_url)) {
+        res.writeHead(404, { 'Content-Type': 'text/plain' });
+        return res.end('No image');
+      }
+      res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
+      return res.end();
+    };
     return imageCache
       .get(row.image_url)
       .then((hit) => {
-        if (!hit) {
-          res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
-          return res.end();
-        }
-        res.writeHead(200, { 'Content-Type': hit.contentType, 'Cache-Control': 'public, max-age=604800, immutable' });
+        if (!hit) return upstream();
+        res.writeHead(200, {
+          'Content-Type': hit.contentType,
+          'Cache-Control': 'public, max-age=604800, immutable',
+          // Opened directly, this is an image and nothing else: no sniffing it into HTML, and a
+          // sandbox with no permissions in case anything ever does render as a document.
+          'X-Content-Type-Options': 'nosniff',
+          'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox",
+        });
         fs.createReadStream(hit.path).pipe(res);
       })
-      .catch(() => {
-        res.writeHead(302, { Location: row.image_url, 'Cache-Control': 'no-store' });
-        res.end();
-      });
+      .catch(upstream);
   }
 
   // --- compendium: read-only browsing of the whole library ------------------------------
