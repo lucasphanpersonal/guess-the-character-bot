@@ -86,13 +86,19 @@ function enterRoom(state) {
   renderRoom();
 }
 
+// Resolves once the server has the leave (or after a moment without an answer), so a caller that is
+// about to navigate away -- the title -- does not cut the request off and leave the seat held.
 function leave() {
-  socket.emit('room:leave', {}, () => {});
+  const done = new Promise((resolve) => {
+    socket.emit('room:leave', {}, resolve);
+    setTimeout(resolve, 1500);
+  });
   store.set('gtc_desk_room', '');
   roomState = null;
   gameView = null;
   history.replaceState(null, '', location.pathname);
   show('landing');
+  return done;
 }
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
@@ -152,10 +158,11 @@ function loadOptions() {
   if (options) return;
   socket.emit('setup:options', {}, (res) => {
     options = res;
-    poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: res, request: ask });
+    // Difficulty first: it must never depend on the picker below having loaded.
     $('difficultySelect').innerHTML = (res?.difficulties ?? [])
       .map((d) => `<option value="${esc(d.key)}"${d.key === res.defaultDifficulty ? ' selected' : ''}>${esc(d.label)}: ${esc(d.blurb)}</option>`)
       .join('');
+    poolPicker = GTC.mountPoolPicker($('poolPicker'), { options: res, request: ask });
   });
 }
 
@@ -236,7 +243,7 @@ function pickSlot(p) {
       `<button type="button" class="pickclear" aria-label="${esc(`Back to random for ${p.nickname}`)}">✕</button>`;
     current.querySelector('.pickclear').addEventListener('click', () => { hostPicks.delete(p.playerId); paint(); });
   };
-  GTCPickers.characterSearch(li.querySelector('input'), li.querySelector('div:last-child'), (pick) => {
+  window.GTCPickers?.characterSearch(li.querySelector('input'), li.querySelector('div:last-child'), (pick) => {
     hostPicks.set(p.playerId, pick);
     paint();
   });
@@ -343,7 +350,9 @@ $('rerollBtn').addEventListener('click', setupAction('setup:reroll'));
 $('undoBtn').addEventListener('click', setupAction('setup:undo'));
 $('confirmBtn').addEventListener('click', () => setupAction($('confirmBtn').dataset.confirmed ? 'setup:unlock' : 'setup:confirm')());
 $('cancelDealBtn').addEventListener('click', setupAction('setup:cancel'));
-GTCPickers.characterSearch($('pickSearch'), $('pickResults'), (pick) =>
+// Optional-chained: if /shared/pickers.js did not load, a throw HERE, at the top level, stopped
+// every handler below it -- the whole game. Without it the search box is inert; Random still works.
+window.GTCPickers?.characterSearch($('pickSearch'), $('pickResults'), (pick) =>
   socket.emit('setup:pick', pick.typed ? { name: pick.name } : { id: pick.id }, (res) => {
     $('setupErr').textContent = res?.ok ? '' : res?.error || 'Could not pick that one.';
   }));
