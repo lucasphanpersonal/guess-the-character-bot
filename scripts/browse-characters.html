@@ -163,9 +163,9 @@ function characterCard(c) {
   tags.append(el('span', 'tag ' + (c.enabled ? 'on' : 'off'), c.enabled ? 'in pool' : 'not in pool'));
   if (c.fame != null) tags.append(el('span', 'tag', 'fame ' + fmt(c.fame)));
   if (c.rerolls > 0) {
-    // Three different people rerolling retires a character from random draws (see the bot's
-    // REROLL_DEMOTE_THRESHOLD), so this is the number that decides whether it still gets dealt.
-    const t = el('span', 'tag warn', 'rerolled ×' + c.rerolls + (c.rerolls >= 3 ? ' · retired' : ''));
+    // How many different people have rerolled them: a hint about who a table didn't know, for
+    // whoever curates. It never stops a character being dealt.
+    const t = el('span', 'tag warn', 'rerolled ×' + c.rerolls);
     t.title = c.rerolls >= 3 ? 'Enough people rejected this that the bot no longer deals it' : 'Rejected during the confirm step';
     tags.append(t);
   }

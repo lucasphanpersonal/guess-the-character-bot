@@ -15,7 +15,6 @@ function fakeContent(pool = [row(10, 'Luigi'), row(11, 'Zelda')]) {
   const rejected = [];
   return {
     rejected,
-    demoteThreshold: 3,
     characterById: (id) => LIBRARY[id] ?? null,
     freeform: (name) => ({ name, id: null, list_id: null, image_url: null }),
     rerollOne: (_listIds, exclude) => pool.find((c) => !exclude.has(c.name)) ?? null,

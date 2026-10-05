@@ -147,7 +147,7 @@ module.exports = {
     GameManager.endLobby(channelId);
   },
 
-  async 'the drop is recorded as a reroll, so it feeds the retirement threshold too'() {
+  async 'the drop is recorded as a reroll'() {
     const { lobby, client, recorder, channelId } = await startedGame();
     const rejected = lobby.game.headByPlayer.p2;
     await press({ client, recorder, channelId, userId: 'p1', action: 'droplist' });

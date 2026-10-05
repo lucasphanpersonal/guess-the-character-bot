@@ -19,7 +19,6 @@ const {
   getCharacterById,
   getCharacterSource,
   countRerollers,
-  REROLL_DEMOTE_THRESHOLD,
 } = require('../../compendium/characterLists');
 
 // Discord caps an autocomplete label at 100 characters.
@@ -47,13 +46,9 @@ function describe(guildId, character) {
   // Fame is only ever comparable inside one list (AniList favourites vs Wikipedia
   // sitelinks), so it is shown as a raw number rather than dressed up as a ranking.
   if (character.fame != null) facts.push(`⭐ fame ${character.fame.toLocaleString()}`);
-  if (rerolls > 0) {
-    facts.push(
-      rerolls >= REROLL_DEMOTE_THRESHOLD
-        ? `🚮 rerolled by ${rerolls} people — no longer dealt`
-        : `🔁 rerolled by ${rerolls}`
-    );
-  }
+  // How many people have rerolled them: a hint for whoever curates, nothing more -- it never
+  // stops a character being dealt.
+  if (rerolls > 0) facts.push(`🔁 rerolled by ${rerolls}`);
   if (!character.image_url) facts.push('🖼️ no artwork — they reveal as text');
 
   embed.addFields({ name: '​', value: facts.join('\n') });

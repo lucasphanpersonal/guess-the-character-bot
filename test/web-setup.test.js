@@ -10,7 +10,6 @@ const row = (id, name) => ({ id, name, list_id: null, image_url: null });
 function fakeContent(queue = [], { rejectCounts = {} } = {}) {
   const rejected = [];
   return {
-    demoteThreshold: 3,
     rejected,
     rerollOne(_listIds, excludeNames, _difficulty) {
       const i = queue.findIndex((c) => !excludeNames.has(c.name));
@@ -105,12 +104,14 @@ function rerollIsRefusedWhenTheBudgetIsSpent() {
   assert.match(second.error, /out of rerolls/i);
 }
 
-function rerollReportsWhenAcharacterGetsDemoted() {
+function aRerollIsRecordedAndNothingMore() {
+  // Recorded for curation, however many times it has happened before -- and nothing about it
+  // comes back to the room: a reroll never retires anyone.
   const { game } = setup3();
-  const content = fakeContent([row(4, 'Zelda')], { rejectCounts: { 2: 3 } }); // Bulma hits threshold
+  const content = fakeContent([row(4, 'Zelda')], { rejectCounts: { 2: 99 } });
   const res = applyReroll(game, 'p1', { content, listIds: [10], difficulty: 'normal' });
-  assert.equal(res.ok, true);
-  assert.equal(res.demotedName, 'Bulma');
+  assert.deepEqual(res, { ok: true });
+  assert.deepEqual(content.rejected, [[2, 'p1']]);
 }
 
 // Undo: "actually the last one was better" is the obvious second thought after a snap reroll,
@@ -231,7 +232,7 @@ module.exports = {
   'reroll swaps the check target (unlimited by default)': rerollSwapsTheCheckTargetAndSpendsFromTheBudget,
   'reroll excludes every character already in play': rerollExcludesEveryCharacterAlreadyInPlay,
   'reroll is refused when the budget is spent': rerollIsRefusedWhenTheBudgetIsSpent,
-  'reroll reports when a character gets demoted': rerollReportsWhenAcharacterGetsDemoted,
+  'a reroll is recorded, and nothing more': aRerollIsRecordedAndNothingMore,
   'undo puts the previous character back': undoPutsThePreviousCharacterBack,
   'undo retracts the rejection': undoRetractsTheRejectionSoItIsNotHeldAgainstTheCharacter,
   'undo unwinds repeated rerolls one at a time': undoUnwindsRepeatedRerollsOneAtATime,

@@ -16,7 +16,6 @@ const {
   setListsEnabled,
   getListsByIds,
   setCharacterImage,
-  REROLL_DEMOTE_THRESHOLD,
 } = require('../../compendium/characterLists');
 const { buildUnlockRow, checkMessagePayload, checkStatePayload, fanOutReference } = require('./characterDM');
 const { requireManageGuild } = require('../util/permissions');
@@ -176,10 +175,10 @@ async function handleConfirmationButton(interaction) {
       });
     }
 
-    // Recorded before the swap, while we still know what was rejected. Enough different
-    // people rejecting the same character retires it from random draws for good.
+    // Recorded before the swap, while we still know what was rejected -- a curation signal only;
+    // it never stops anyone being dealt (see recordReroll).
     const rejected = game.headByPlayer[otherPlayerId];
-    const rejectedBy = recordReroll(rejected.id, playerId);
+    recordReroll(rejected.id, playerId);
 
     state.rejectedNames.add(currentName);
     if (!unlimited) state.rerollsLeft -= 1;
@@ -190,17 +189,6 @@ async function handleConfirmationButton(interaction) {
     await interaction.editReply(checkMessagePayload(game, playerId, channelId));
     // Everyone else is holding a card that just changed under them.
     await fanOutReference(game, otherPlayerId);
-
-    // Told only at the moment it takes effect, so the feature explains itself once rather
-    // than needing documentation nobody reads.
-    if (rejectedBy >= REROLL_DEMOTE_THRESHOLD) {
-      return interaction.followUp({
-        content:
-          `🚮 **${rejected.name}** has now been rerolled by ${rejectedBy} different people, ` +
-          'so the bot will stop dealing them.',
-        flags: MessageFlags.Ephemeral,
-      });
-    }
     return undefined;
   }
 }

@@ -1815,9 +1815,7 @@ $('undoBtn').addEventListener('click', () => socket.emit('setup:undo', {}, (res)
   $('rerollNote').textContent = res?.ok ? `Put ${res.restored} back.` : res?.error || '';
 }));
 $('rerollBtn').addEventListener('click', () => socket.emit('setup:reroll', {}, (res) => {
-  if (res?.demotedName) $('rerollNote').textContent = `${res.demotedName} has been rerolled by enough people to retire.`;
-  else if (!res?.ok) $('rerollNote').textContent = res?.error || '';
-  else $('rerollNote').textContent = '';
+  $('rerollNote').textContent = res?.ok ? '' : res?.error || '';
 }));
 // No primeMotion here, though this is a user gesture and iOS wants one: the button only exists
 // once the gate has already turned tilt on, so by the time anyone can press it the phone is

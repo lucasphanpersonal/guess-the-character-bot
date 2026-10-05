@@ -18,7 +18,6 @@ const { WEB_SCOPE } = characterLists;
 // The dealing calls a game's setup makes, injected rather than imported there so the game logic
 // stays testable with fakes.
 const content = {
-  demoteThreshold: characterLists.REROLL_DEMOTE_THRESHOLD,
   rerollOne: (listIds, excludeNames, difficulty, opts) =>
     characterLists.getRandomCharacterExcluding(listIds, [...excludeNames], difficulty, opts),
   recordReject: (characterId, playerId) => characterLists.recordReroll(characterId, playerId),

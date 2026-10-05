@@ -68,7 +68,7 @@ Worth stating plainly, because it changes how big this project actually is. Havi
 | `db/` (schema, `characterLists.js`, `stats.js`) | **Reusable as-is** | Pure SQLite queries. Nothing in here knows Discord exists. |
 | `game/Game.js` | **Reusable almost as-is** | Turn order, `finishedBy`/`surrendered`/`standings()`, `isOutOfContention` — all plain state and arithmetic, no I/O. |
 | `game/GameManager.js`, `Lobby.js`, `lobbySettings.js` | **Reusable as-is** | A `Map` keyed by an ID with TTL eviction, and bounds-checking for settings. The key becomes a room code instead of a channel ID; nothing else changes. |
-| `util/characterImages.js`, the difficulty cut, reroll-demotion, list curation, seed scripts, `npm run browse` | **Untouched** | Entirely about content, not delivery. Same lists, same fame-based difficulty, same curation tools, regardless of client. |
+| `util/characterImages.js`, the difficulty cut, reroll recording, list curation, seed scripts, `npm run browse` | **Untouched** | Entirely about content, not delivery. Same lists, same fame-based difficulty, same curation tools, regardless of client. |
 | `game/engine.js` | **Rules reusable, I/O rewritten** | The turn-resolution *logic* (the resolved-turns lock, `nextActiveIndex`, pass-vs-give-up, the out-of-contention check) is exactly what a phone version needs too. But every call in it — `channel.send`, `ButtonBuilder`, `users.fetch`, DMs — is Discord API and gets replaced by WebSocket events to specific rooms/sockets. |
 | `components/*`, `game/turnBoard.js`, `lobbyBoard.js`, `characterDM.js`, `audienceVote.js` (rendering), `voice.js`, `index.js` | **Replaced** | This is the entire Discord presentation layer: embeds, buttons, DM routing, voice-channel joins. A phone app has its own UI and its own transport (WebSocket, not gateway events), so this layer is rewritten wholesale, not ported. |
 
@@ -243,7 +243,7 @@ So standings need a different delivery point than the Discord turn board:
 | Turn timer, countdown chime, amber last-chance state | Same timer semantics, per-player local audio/haptic instead of a shared board turning amber | Every player's device can always play sound — the bot's "one voice connection per server" constraint doesn't exist for a phone app at all |
 | Public completion reveal | Audio/haptic cue to the room + standings shown to that player on lowering their phone | |
 | Fewest-turns scoring, ties, standings | Unchanged (`Game.standings()`, `bestTurnCount`, `isOutOfContention`) | Reused as-is |
-| Reroll teaching (`REROLL_DEMOTE_THRESHOLD`), 🚫 Never deal this show | Unchanged | Server-side, content-side, no client dependency |
+| Reroll recording, 🚫 Never deal this show | Unchanged | Server-side, content-side, no client dependency |
 | Audience-vote mode | Same feature, opt-in; non-playing phones in the room vote from their own screen | Lower priority — the format already puts the "audience" in the room able to just look, unlike a text channel |
 | Sound effects, one voice connection per server | Every phone plays its own local audio, always | Strict improvement — the bot's "text-only fallback for a second concurrent game" limitation has no phone-app equivalent |
 | Rematch / Leaderboard buttons | Rematch = redeal same room/roster/settings; leaderboard = TBD scope | See [Identity and leaderboard scope](#identity-and-leaderboard-scope) below |
@@ -322,7 +322,7 @@ recorded below, since the deviations are the useful part of a status update.
    client `playerId` so a reconnect reclaims the same seat.
 2. **Setup flow — done.** Pool/difficulty picking, deal, and the confirm/reroll screen, in
    `src/web/guess/gameSetup.js` (pure, content injected) over the real core `Game`. The checker-target
-   rule and reroll-demotion are reused verbatim. The web deals from its own compendium scope
+   rule and reroll recording are reused verbatim (rerolls no longer retire anyone -- see the README). The web deals from its own compendium scope
    (`'web'`, or `WEB_SCOPE`) with its own playable selection (`npm run select:lists`). It
    originally auto-resolved to the richest Discord guild, i.e. it played that server's
    selection; the compendium's scopes ended that (see "The compendium" in the README).

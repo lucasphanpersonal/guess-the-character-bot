@@ -64,13 +64,12 @@ CREATE TABLE IF NOT EXISTS characters (
   UNIQUE(list_id, name COLLATE NOCASE)
 );
 
--- Every reroll, so the pool can learn from them. A character nobody recognises gets
--- rerolled by one person after another, and that is a better signal about what people
--- know than any amount of up-front curation. Once REROLL_DEMOTE_THRESHOLD *different*
--- people have rejected the same character, random draws stop offering it.
+-- Every reroll, as a curation signal: a character nobody recognises gets rerolled by one
+-- person after another, which the browse tool (Most rerolled) and /character show to whoever
+-- curates. It never changes what is dealt -- see recordReroll in characterLists.js for why
+-- rerolls stopped retiring characters.
 --
--- Keyed per (character, user) so one person rerolling the same unlucky draw twice is not
--- mistaken for a consensus.
+-- Keyed per (character, user) so one person rerolling the same unlucky draw twice counts once.
 CREATE TABLE IF NOT EXISTS character_rerolls (
   id INTEGER PRIMARY KEY,
   character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,

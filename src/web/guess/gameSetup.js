@@ -11,7 +11,7 @@
 //   - Each player CHECKS exactly one character: the next player's, round the rotation
 //     (Game.checkTargetOf). That one player, and only that one, may reroll it.
 //   - A reroll excludes every character already in play (nobody should wear a duplicate) plus
-//     the names this checker has personally rejected, and feeds the reroll-demotion counter.
+//     the names this checker has personally rejected, and is recorded (a curation signal only).
 //   - "Good to go" is per player and means "I've seen everyone else's and I'm happy with mine".
 //     Play begins once every player has pressed it; a player may unlock until the last one is in.
 //
@@ -215,7 +215,7 @@ function buildHostSetupView(game, names) {
 /**
  * Reroll the character this viewer checks (the next player's). Mirrors confirmPhase.js.
  *
- * @returns {{ok:boolean, error?:string, demotedName?:string, rejectedBy?:number}}
+ * @returns {{ok:boolean, error?:string}}
  */
 function applyReroll(game, viewerId, { content, listIds, difficulty, preferImages = false }) {
   const state = game.confirmState[viewerId];
@@ -245,14 +245,14 @@ function applyReroll(game, viewerId, { content, listIds, difficulty, preferImage
     return { ok: true };
   }
   // Only a dealt character is a judgement on the pool. One the checker chose themselves and then
-  // replaced is just them changing their mind -- it does not count toward demoting it.
-  const rejectedBy = current.picked ? 0 : content.recordReject(current.id, viewerId);
+  // replaced is just them changing their mind, so it is not recorded as a reroll.
+  if (!current.picked) content.recordReject(current.id, viewerId);
   state.rejectedNames.add(current.name);
   state.history.push(current); // so applyUndo can put it back
   if (!unlimited) state.rerollsLeft -= 1;
   game.headByPlayer[targetId] = Game.head(game.lobby, replacement);
 
-  return { ok: true, rejectedBy, demotedName: rejectedBy >= content.demoteThreshold ? current.name : undefined };
+  return { ok: true };
 }
 
 /**
@@ -315,9 +315,8 @@ function applyPick(game, viewerId, pick, { content }) {
  *
  * The retraction is honest rather than cosmetic: the name comes back out of `rejectedNames`, so
  * this checker is no longer recorded as having turned it down, and a finite reroll budget is
- * refunded. The reroll-demotion tally (which needs three DIFFERENT people) is deliberately left
- * alone -- it is a slow, shared signal about the pool, not part of this room's bookkeeping, and
- * reaching into it from here would let one player edit a server-wide count by tapping twice.
+ * refunded. The recorded reroll is deliberately left alone -- it is a shared curation signal about
+ * the pool, not part of this room's bookkeeping.
  */
 function applyUndo(game, viewerId) {
   const state = game.confirmState[viewerId];

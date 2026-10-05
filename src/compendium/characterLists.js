@@ -321,13 +321,17 @@ function applyDifficulty(characters, difficulty) {
 }
 
 // ---------------------------------------------------------------------------
-// Learning from rerolls
+// Rerolls: recorded, never acted on
 // ---------------------------------------------------------------------------
-
-// How many DIFFERENT people have to reject a character before the bot stops dealing it.
-// Three is a consensus rather than one person's blind spot, and it is reversible: the row
-// is per (character, user), so clearing the table restores everything.
-const REROLL_DEMOTE_THRESHOLD = 3;
+//
+// Every reroll is kept, per (character, user), as a signal for whoever curates: the browse tool
+// sorts by it and /character reports it. It does NOT decide what is dealt. It used to: three
+// different people rerolling a character retired it from every random draw. That was wrong in
+// two ways. A reroll says "this table didn't know them", not "nobody should get them" -- and a
+// character one party skips is another party's favourite. And the count was global across every
+// server and the website while the website's "people" are ids a browser makes up, so one visitor
+// could retire characters for everyone. Curation is a person's call, made with /list toggle and
+// `npm run select:lists`.
 
 function recordReroll(characterId, userId) {
   if (!characterId) return 0;
@@ -345,30 +349,10 @@ function countRerollers(characterId) {
   );
 }
 
-// The characters this server has collectively given up on, within the given lists.
-function demotedCharacterIds(listIds) {
-  if (!listIds.length) return new Set();
-  const placeholders = listIds.map(() => '?').join(',');
-  const rows = db
-    .prepare(
-      `SELECT r.character_id AS id
-         FROM character_rerolls r
-         JOIN characters c ON c.id = r.character_id
-        WHERE c.list_id IN (${placeholders})
-        GROUP BY r.character_id
-       HAVING COUNT(DISTINCT r.user_id) >= ?`
-    )
-    .all(...listIds, REROLL_DEMOTE_THRESHOLD);
-  return new Set(rows.map((r) => r.id));
-}
-
-// The pool a random deal actually draws from: the enabled lists' characters, minus the
-// deepest cuts for this difficulty, minus what the server has rerolled into the ground.
+// The pool a random deal actually draws from: the enabled lists' characters, minus the deepest
+// cuts for this difficulty, one spelling per character.
 function drawablePool(listIds, difficulty) {
-  const demoted = demotedCharacterIds(listIds);
-  return dedupeByName(
-    applyDifficulty(getCharactersForLists(listIds), difficulty).filter((c) => !demoted.has(c.id))
-  );
+  return dedupeByName(applyDifficulty(getCharactersForLists(listIds), difficulty));
 }
 
 // Merging multiple lists can surface the same character under two different list_ids (e.g. two
@@ -747,9 +731,7 @@ module.exports = {
   drawablePool,
   recordReroll,
   countRerollers,
-  demotedCharacterIds,
   setCharacterFame,
-  REROLL_DEMOTE_THRESHOLD,
   searchListNames,
   isVisibleTo,
   WEB_SCOPE,

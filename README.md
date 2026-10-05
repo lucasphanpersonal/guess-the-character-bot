@@ -273,15 +273,15 @@ The seeder applies it going forward. For a database seeded before it existed:
 node scripts/clean-character-images.js --dry-run
 ```
 
-### Rerolls teach the pool
+### Rerolls, and dropping a show
 
-Two things happen when somebody rerolls, both aimed at making the next game better than the
-last:
-
-**The bot remembers.** Once `REROLL_DEMOTE_THRESHOLD` (3) *different* people have rerolled
-the same character, it stops being dealt. Rows are per (character, user), so one person
-rerolling the same unlucky draw twice isn't mistaken for a consensus, and deleting from
-`character_rerolls` undoes it completely.
+**A reroll is recorded, and that is all.** Each one is kept per (character, person) in
+`character_rerolls`, so the browse tool can sort by **Most rerolled** and `/character` can say how
+many people have rerolled someone -- a hint for whoever curates. It never stops a character being
+dealt. It used to: three different people rerolling a character retired it from every random
+draw. But a reroll says *this table didn't know them*, not *nobody should get them*, and one
+party's skip is another's favourite -- so whether a character stays in play is a person's call,
+made with the tools below, not a counter's.
 
 **🚫 Never deal this show** sits next to Reroll on the confirmation DM. It drops that list
 from the server's selection *and* rerolls, in one press — the alternative is rerolling now
@@ -635,8 +635,8 @@ It looks through one scope's eyes — the web app's by default; `--scope=<server
 server's private lists and its own playable pool instead.
 
 Two views worth knowing about: **Missing artwork** finds the characters that will reveal as
-plain text, and sorting by **Most rerolled** shows what people keep rejecting, with anything
-past three different rerollers marked *retired* -- the bot has already stopped dealing those.
+plain text, and sorting by **Most rerolled** shows what people keep rejecting -- the place to
+start if you want to switch a list off by hand.
 
 `--port=` and `--db=` override the defaults.
 

@@ -84,61 +84,30 @@ module.exports = {
   },
 
   // ---------------------------------------------------------------------------
-  // Learning from rerolls
+  // Rerolls are recorded, never acted on
   // ---------------------------------------------------------------------------
 
-  'a character is retired once enough different people reject it'() {
+  'a character stays in every draw however many people reroll them'() {
+    // Rerolls used to retire a character after three different people. They no longer decide
+    // anything: one table not knowing someone is no reason to stop dealing them to every table.
     const guildId = freshGuild();
-    const id = seedList(guildId, 'Show', { Famous: 900, Nobody: 800, Filler: 700, Extra: 600 });
-    const nobody = lists.drawablePool([id], 'everything').find((c) => c.name === 'Nobody');
+    const id = seedList(guildId, 'Show', { A: 900, B: 800 });
+    const b = lists.drawablePool([id], 'everything').find((c) => c.name === 'B');
+    for (const user of ['p1', 'p2', 'p3', 'p4', 'p5', 'web-visitor']) lists.recordReroll(b.id, user);
 
-    assert.equal(lists.recordReroll(nobody.id, 'p1'), 1);
-    assert.equal(lists.recordReroll(nobody.id, 'p2'), 2);
-    assert.ok(
-      lists.drawablePool([id], 'everything').some((c) => c.name === 'Nobody'),
-      'still dealt below the threshold'
-    );
-
-    assert.equal(lists.recordReroll(nobody.id, 'p3'), lists.REROLL_DEMOTE_THRESHOLD);
-    assert.ok(
-      !lists.drawablePool([id], 'everything').some((c) => c.name === 'Nobody'),
-      'retired once the threshold is met'
-    );
+    assert.equal(lists.countRerollers(b.id), 6, 'every reroller is recorded');
+    assert.ok(lists.drawablePool([id], 'everything').some((c) => c.name === 'B'), 'still in the pool');
+    // The reroll path and the vote's candidate draw both go through the same pool.
+    assert.deepEqual(lists.getRandomCharacters([id], 5, [], 'everything').map((c) => c.name).sort(), ['A', 'B']);
+    assert.equal(lists.getRandomCharacterExcluding([id], new Set(['A']), 'everything').name, 'B');
   },
 
-  'one person rerolling repeatedly is not mistaken for a consensus'() {
+  'one person rerolling repeatedly is recorded once'() {
     const guildId = freshGuild();
     const id = seedList(guildId, 'Show', { A: 900, B: 800, C: 700 });
     const b = lists.drawablePool([id], 'everything').find((c) => c.name === 'B');
 
     for (let i = 0; i < 5; i++) lists.recordReroll(b.id, 'same-person');
     assert.equal(lists.countRerollers(b.id), 1, 'deduped per user');
-    assert.ok(lists.drawablePool([id], 'everything').some((c) => c.name === 'B'), 'still in the pool');
-  },
-
-  'a retired character is excluded from every random draw, not just the deal'() {
-    const guildId = freshGuild();
-    const id = seedList(guildId, 'Show', { A: 900, B: 800 });
-    const b = lists.drawablePool([id], 'everything').find((c) => c.name === 'B');
-    for (const user of ['p1', 'p2', 'p3']) lists.recordReroll(b.id, user);
-
-    assert.deepEqual(lists.demotedCharacterIds([id]), new Set([b.id]));
-    // The reroll path and the vote's candidate draw both go through the same pool.
-    assert.equal(lists.getRandomCharacterExcluding([id], new Set(), 'everything').name, 'A');
-    assert.deepEqual(
-      lists.getRandomCharacters([id], 5, [], 'everything').map((c) => c.name),
-      ['A']
-    );
-  },
-
-  'retiring is reversible -- the rows are the whole state'() {
-    const guildId = freshGuild();
-    const id = seedList(guildId, 'Show', { A: 900, B: 800 });
-    const b = lists.drawablePool([id], 'everything').find((c) => c.name === 'B');
-    for (const user of ['p1', 'p2', 'p3']) lists.recordReroll(b.id, user);
-    assert.equal(lists.drawablePool([id], 'everything').length, 1);
-
-    db.prepare('DELETE FROM character_rerolls WHERE character_id = ?').run(b.id);
-    assert.equal(lists.drawablePool([id], 'everything').length, 2);
   },
 };

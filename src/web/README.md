@@ -236,7 +236,7 @@ Endpoints that prove the shared core is reachable from this frontend:
   from an unambiguous alphabet (no O/0, I/1).
 - **2. Setup flow — done.** Host picks a pool (random category / everything / a category) and
   difficulty; the server deals via the shared core, then each player gets a confirm/reroll
-  screen showing the one character they check (unlimited rerolls, demotion) plus everyone else's as
+  screen showing the one character they check (unlimited rerolls, each recorded for curation) plus everyone else's as
   reference — never their own. `gameSetup.js` is pure and unit-tested in
   `test/web-setup.test.js`; content is injected so it needs no DB. The pool is the web's own
   compendium scope (`'web'`, or `WEB_SCOPE`), curated with `npm run select:lists`. It used to
