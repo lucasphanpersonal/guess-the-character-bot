@@ -132,8 +132,38 @@ function failNextChannelSend(client, predicate) {
   return client;
 }
 
+// Discord's acknowledgement rules, which the fakes used to ignore -- so a handler that replied twice,
+// or followed up before replying, passed here and failed against Discord. Exactly one of reply /
+// update / deferReply / deferUpdate / showModal may come first (a second throws, as discord.js
+// does), and followUp / editReply need one of them to have happened.
+const FIRST_RESPONSES = ['reply', 'update', 'deferReply', 'deferUpdate', 'showModal'];
+const NEEDS_ACK = ['followUp', 'editReply', 'fetchReply'];
+function strictAcks(interaction) {
+  let acked = false;
+  for (const name of FIRST_RESPONSES) {
+    const real = interaction[name];
+    if (!real) continue;
+    interaction[name] = async (...args) => {
+      if (acked) throw new Error(`InteractionAlreadyReplied: ${name}() after the interaction was already acknowledged`);
+      acked = true;
+      if (name.startsWith('defer')) interaction.deferred = true;
+      else if (name !== 'showModal') interaction.replied = true;
+      return real(...args);
+    };
+  }
+  for (const name of NEEDS_ACK) {
+    const real = interaction[name];
+    if (!real) continue;
+    interaction[name] = async (...args) => {
+      if (!acked) throw new Error(`InteractionNotReplied: ${name}() before the interaction was acknowledged`);
+      return real(...args);
+    };
+  }
+  return interaction;
+}
+
 function createSlashInteraction({ client, userId, guildId, channelId, options = {}, recorder, canManageGuild = false }) {
-  return {
+  return strictAcks({
     client,
     user: { id: userId },
     guildId,
@@ -160,10 +190,10 @@ function createSlashInteraction({ client, userId, guildId, channelId, options = 
     editReply: async (payload) => recorder.record(`editreply:${userId}`, payload),
     followUp: async (payload) => recorder.record(`followup:${userId}`, payload),
     respond: async (choices) => recorder.record(`autocomplete:${userId}`, JSON.stringify(choices)),
-  };
+  });
 }
 
-function createButtonInteraction({ client, userId, customId, recorder, guildId, channelId }) {
+function buttonFields({ client, userId, customId, recorder, guildId, channelId }) {
   return {
     client,
     user: { id: userId },
@@ -181,15 +211,21 @@ function createButtonInteraction({ client, userId, customId, recorder, guildId, 
     followUp: async (payload) => recorder.record(`followup:${userId}`, payload),
     deferUpdate: async () => recorder.record(`defer:${userId}`, ''),
     showModal: async (modal) => recorder.record(`modal:${userId}`, JSON.stringify(modal.toJSON())),
+    replied: false,
+    deferred: false,
   };
+}
+
+function createButtonInteraction(args) {
+  return strictAcks(buttonFields(args));
 }
 
 // A submitted modal. `fields` holds what the user typed, keyed by the text inputs' customIds.
 // isFromMessage() is true because every modal the bot shows is opened from a button on a
 // board, which is what makes interaction.update() valid on the submission.
 function createModalInteraction({ client, userId, customId, fields = {}, recorder, guildId, channelId }) {
-  return {
-    ...createButtonInteraction({ client, userId, customId, recorder, guildId, channelId }),
+  return strictAcks({
+    ...buttonFields({ client, userId, customId, recorder, guildId, channelId }),
     isFromMessage: () => true,
     fields: {
       getTextInputValue: (key) => {
@@ -197,7 +233,7 @@ function createModalInteraction({ client, userId, customId, fields = {}, recorde
         return fields[key];
       },
     },
-  };
+  });
 }
 
 // Stand-in for a live voice connection, so tests can assert which sounds would play
