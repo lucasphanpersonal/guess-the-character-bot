@@ -325,7 +325,9 @@ function requestHandler(req, res) {
         });
       }
     } catch (err) {
-      return sendJson(res, 500, { error: err.message });
+      // Logged here, not sent: these endpoints are public, and an exception's message is SQL.
+      console.error('[web] browse failed:', err);
+      return sendJson(res, 500, { error: 'Something went wrong reading the library.' });
     }
     return sendJson(res, 404, { error: 'Unknown browse endpoint.' });
   }

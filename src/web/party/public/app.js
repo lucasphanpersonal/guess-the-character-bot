@@ -1567,7 +1567,7 @@ async function loadCharacterPage(first) {
       // miss makes the server fetch upstream. Only what scrolls into view is paid for.
       tile.innerHTML =
         (c.imageUrl
-          ? `<img src="${c.imageUrl}" alt="" loading="lazy" decoding="async">`
+          ? `<img src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" decoding="async">`
           : '<div class="noimg">no picture</div>') +
         `<span class="cname">${escapeHtml(c.name)}</span>`;
       grid.appendChild(tile);
