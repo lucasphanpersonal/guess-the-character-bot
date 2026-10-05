@@ -38,7 +38,8 @@ const CHAT_KEPT = 60;
 const TEXT_MAX = 80;
 // Points for a correct guess fall from GUESS_MAX to GUESS_MIN over the turn: speed is the skill.
 // The drawer earns DRAWER_PER_GUESS for each person who gets it -- a drawing nobody can read
-// scores nothing, which is the incentive to draw the character rather than spell it.
+// scores nothing. Note what that does NOT do: writing the name in letters is the most readable
+// drawing of all, so this scoring rewards it; nothing here stops it but the table's own rule.
 const GUESS_MAX = 400;
 const GUESS_MIN = 100;
 const DRAWER_PER_GUESS = 60;

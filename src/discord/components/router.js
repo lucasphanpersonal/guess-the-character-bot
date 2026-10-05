@@ -26,7 +26,7 @@ const HANDLERS = {
   'image-submit': (interaction) => confirmPhase.handleImageModalSubmit(interaction),
   // Lobby board buttons.
   lobby: (interaction) => lobbyButtons.handle(interaction),
-  // Turn board buttons and the guess modal.
+  // Turn board buttons, and the ✅ / Give up confirmations they raise.
   turn: (interaction) => turnControls.handle(interaction),
   // Confirming that you really do want to leave a game already under way.
   forfeit: (interaction) => turnControls.handleForfeit(interaction),

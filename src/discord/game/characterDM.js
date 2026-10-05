@@ -220,8 +220,9 @@ async function sendConfirmDMs(recipientUser, game, channelId) {
     return false;
   }
 
-  // Best-effort: the check message is the one that gates the game starting, so a reference
-  // message that fails to send is not worth refusing to play over.
+  // Not best-effort, though it once said so: the reference cards are how a player answers questions
+  // about everyone they are not checking, so a player missing one cannot judge half the game. A
+  // failure here refuses the start, exactly like a failed check message (startGame says who).
   state.referenceMessages = [];
   const others = referenceHeadsFor(game, recipientUser.id);
   if (others.length) {

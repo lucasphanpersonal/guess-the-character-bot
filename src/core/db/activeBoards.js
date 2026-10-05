@@ -1,5 +1,5 @@
 // Storage for the active_boards table: which button-bearing messages are live right now.
-// The rows describe messages, never game state -- see src/game/boards.js for why.
+// The rows describe messages, never game state -- see src/discord/game/boards.js for why.
 
 const db = require('./connection');
 

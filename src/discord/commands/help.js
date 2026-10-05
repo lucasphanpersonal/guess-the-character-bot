@@ -8,7 +8,7 @@ module.exports = {
       .setDescription(
         'Every player is secretly assigned a character only the *others* (and ' +
           "spectators) can see. Ask yes/no questions out loud in voice to figure out who you " +
-          'are, then guess. The bot only tracks turns, timers, and guesses -- all the Q&A ' +
+          'are, then guess. The bot only runs the turns and the clock -- all the Q&A ' +
           'happens live in voice chat. If the players share a voice channel, the bot joins in ' +
           'and plays sound effects for the countdown, correct/wrong guesses, and the final win.'
       )

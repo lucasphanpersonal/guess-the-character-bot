@@ -162,11 +162,13 @@ means the player chose to stop, and someone the host cut off made no such choice
 is written at all unless somebody got their character, since a game abandoned in the first
 round has no result worth keeping.
 
-### Consequence: you can't quit early
+### Consequence: you can't quit early (superseded)
 
-Because players only leave the rotation by finishing, surrender is unreachable until everyone
-else is done. A player who wants out of a six-way game must keep taking turns until they are
-last. Accepted; `/lobby end` is the escape hatch.
+*As first built:* because players only left the rotation by finishing, surrender was unreachable
+until everyone else was done, and `/lobby end` was the escape hatch. **No longer true:** `/lobby
+leave` works mid-game (a forfeit, recorded as given up), and a player out of contention gets 🏳️
+Give up beside Pass -- see [Correction: Pass and Give up are separate
+buttons](#correction-pass-and-give-up-are-separate-buttons).
 
 ---
 
@@ -305,7 +307,8 @@ separate DMs each with their own button row, which grows quadratically with the 
 `Good to go` keeps its current meaning of "I've read all of these and I'm happy with mine",
 and play still begins once every player has pressed it.
 
-Rerolls remain budgeted per player (`maxRerolls`).
+Rerolls were budgeted per player (`maxRerolls`) at first; they are unlimited now in both
+frontends, since the budget was only friction. The field survives, unset.
 
 ---
 

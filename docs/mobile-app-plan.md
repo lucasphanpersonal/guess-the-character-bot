@@ -346,8 +346,12 @@ recorded below, since the deviations are the useful part of a status update.
      worth.
    - **HTTPS.** Motion sensors need a secure context, so `npm run web:secure` serves HTTPS on
      `:4443` *alongside* HTTP on `:4180` (one Socket.io across both), via a self-signed cert.
-   - **Always-on tilt**, requested on the first user gesture — no opt-in button. Tap fallback
-     covers refusal / no sensor.
+   - **Tilt is required, and asked for where the reason is on screen.** Android has no prompt, so
+     tilt turns on at the first tap. iOS prompts once per origin, ever, so it is asked at the gate
+     on the check screen, beside the explanation -- not on "Create a room", where a refusal was
+     common and then permanent. There is no tap fallback any more (on-screen Got it / Pass only
+     looked like one); a player who cannot tilt is removed by the host, which is the override that
+     keeps the requirement from deadlocking a room.
    - **Rerolls are unlimited** in both frontends (the budget was pure friction); the reroll
      button shows no count.
 5. **Reconnection hardening — done.** Seats now track a *set* of live socket ids (not a single
@@ -375,5 +379,8 @@ recorded below, since the deviations are the useful part of a status update.
    compendium** (category -> list -> character, over plain HTTP). Still open: an optional read-only **scoreboard device** (a spectator join that
    shows live standings for a propped-up tablet or a cast TV) and richer haptics.
 
-`RoundMode` (`src/core/game/roundMode.js`) exists as planned even though only `TurnRotationMode`
-ships, so a simultaneous mode stays additive.
+`RoundMode` (`src/core/game/roundMode.js`) exists as planned, but **neither frontend uses it
+yet**: the bot (`engine.js`) and the web (`src/web/guess/turnLoop.js`) each run the rotation
+directly, so a simultaneous mode is not yet additive. Making it so means both calling one shared
+set of turn rules -- the web's `turnLoop.js` is already pure and is the natural one to move into
+core.

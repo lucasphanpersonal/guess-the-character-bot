@@ -29,7 +29,6 @@ const { Server } = require('socket.io');
 
 const GameManager = require('../core/game/GameManager');
 const characterLists = require('../compendium/characterLists');
-const { TurnRotationMode } = require('../core/game/roundMode');
 
 const { RoomRegistry } = require('./rooms');
 const { WEB_SCOPE } = require('./content');
@@ -348,12 +347,10 @@ function requestHandler(req, res) {
       ok: true,
       rooms: registry.rooms.size,
       lobbies: GameManager.allLobbies().length,
-      roundModes: ['turn-rotation'],
       imageCache: { files: imageCache.stats().files },
       // What the join QR will encode. Handy for confirming through a proxy that it says https:
       // a QR that says http silently disables tilt controls for whoever scans it.
       joinUrlBase: originFor(req),
-      turnRotationWired: typeof TurnRotationMode === 'function',
     });
   }
 

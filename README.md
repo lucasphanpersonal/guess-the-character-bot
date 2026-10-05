@@ -210,8 +210,10 @@ their own games concurrently.
 
 ### Who decides a guess is right
 
-The player who *can see* your character. There is no text matching anywhere in the game:
-guesses are called out in voice, and the other player hits **✅ They got it** or **❌ Nope**.
+The player who *can see* your character. There is no text matching anywhere in the bot (or on
+the phones): guesses are called out in voice, and the other player hits **✅ They got it** or
+**❌ Nope**. Only the computer games, where guesses are typed, have a checker -- see
+[Checking a typed guess](#checking-a-typed-guess).
 
 That's the same thing a human does at a real table, and it beats what the bot used to do —
 normalise, fold accents, and allow a Levenshtein distance scaled to name length. All of that
@@ -260,7 +262,7 @@ routinely resolves to the actor, a cosplayer, a wax figure, or a period illustra
 | Woody | a Toy Story Land mascot, photographed |
 | Santa Claus | an 1837 painting |
 
-The rule (`src/util/characterImages.js`) is about **medium**, not about guessing which files
+The rule (`src/compendium/characterImages.js`) is about **medium**, not about guessing which files
 are bad: for live action a photo of the actor genuinely is the character's canonical look, so
 it stays; for animation and games no photograph can be right, so Commons images are dropped
 there outright. It costs some legitimate Commons-hosted game art, which is the accepted price
@@ -385,7 +387,7 @@ dealt, so nobody is dealt "Noelle Silva" while somebody else wears "Silva Noelle
 ### Audience-vote mode
 
 Add `audience-vote:true` to `/lobby create` — or hit the **🗳️ Audience vote** toggle on the
-lobby board — and the audience decides what both players are wearing, instead of the bot
+lobby board — and the audience decides what every player is wearing, instead of the bot
 dealing at random.
 
 A vote board appears with a **Vote** button. Clicking it opens a **private ballot** listing
@@ -415,7 +417,7 @@ can no longer show you whether you are done. Five or fewer renders exactly as it
 
 ### Sound effects
 
-If both players are in the same voice channel when the game starts, the bot joins and plays
+If the players share a voice channel when the game starts, the bot joins and plays
 a countdown chime at decreasing intervals, plus stings for correct guesses, wrong guesses,
 and the final win. Otherwise everything falls back to the text countdown. The sounds are
 short tones synthesized by `npm run generate:sounds` — no audio files are downloaded.
@@ -720,7 +722,8 @@ src/
       Lobby.js            Pre-game state: host, players, spectators, settings
       lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
       Game.js             Active-game state: turn counts, who has finished, standings
-      roundMode.js        The who-may-act / how-to-advance seam (TurnRotationMode today)
+      roundMode.js        A who-may-act / how-to-advance seam -- planned, not yet used: the bot
+                          (engine.js) and the web (web/guess/turnLoop.js) each run rotation directly
 
   discord/              The Discord bot. Imports from core/.
     index.js              Client bootstrap, interaction routing, graceful shutdown
@@ -730,7 +733,7 @@ src/
     components/
       router.js           Routes button/select/modal events by customId namespace
       lobbyButtons.js     Lobby board button handlers + the settings modal
-      turnControls.js     Turn board buttons + the guess modal
+      turnControls.js     Turn board buttons + the ✅ and Give up confirmations
       voteControls.js     Audience ballot + host close button
       gameOverControls.js Rematch / Leaderboard buttons on the reveal
       listBrowser.js      Paginated category/list/character browsing for /list show
@@ -798,7 +801,7 @@ a backstop: in the normal case the `setTimeout` fires first and the pass finds n
 ## Development
 
 ```bash
-npm test                 # 398 tests, no network or Discord needed
+npm test                 # the unit suite, no network or Discord needed
 npm run generate:sounds  # regenerate the WAV sound effects
 ```
 
