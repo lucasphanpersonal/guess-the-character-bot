@@ -16,6 +16,9 @@
 }
 :root[data-season="spooky"] { --brand:#cc4a0c; --blue:#6d28d9; --blue-d:#4c1d95; }
 * { box-sizing:border-box; }
+/* `hidden` must win over any display rule: .row and .turnbar are flex, and a flex rule beats the
+   browser's own [hidden] style -- so `hidden` on one silently did nothing. */
+[hidden] { display:none !important; }
 html { overflow-x:clip; }
 body { margin:0; min-height:100vh; font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
        background:var(--brand); color:#fff; display:flex; justify-content:center; }
@@ -23,6 +26,9 @@ main { width:100%; max-width:72rem; padding:28px 28px 48px; }
 h1 { font-family:var(--font-display); font-size:2.6rem; font-weight:900; letter-spacing:-.02em;
      margin:0 0 1.2rem; text-shadow:0 3px 0 rgba(0,0,0,.28); }
 h1 .wob-word { white-space:nowrap; }
+/* The title is the way home. A link that looks like the title, not like a link. */
+h1 a { color:inherit; text-decoration:none; }
+h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; border-radius:8px; }
 h1 .wob { display:inline-block; transform:rotate(var(--rot)); }
 h1 .wob.w0 { color:var(--red); } h1 .wob.w1 { color:#fff; } h1 .wob.w2 { color:var(--amber); } h1 .wob.w3 { color:#7fd6ff; }
 :root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
@@ -82,6 +88,65 @@ kbd { font:700 .8rem ui-monospace, monospace; background:#f3f0f8; border:1px sol
 .choice input { width:auto; accent-color:#fff; margin:0; }
 .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); } .choice.c2 { background:var(--green); }
 .choice .shape { font-size:1.1rem; }
+@media (max-width: 520px) { .choices { grid-template-columns:1fr; } }
+/* A choice that cannot be taken yet says why beside it (the hint under the row), and looks it. */
+.choice.disabled { opacity:.5; cursor:not-allowed; }
+
+/* I'll pick them (desk): one slot per player -- who, what they have now, and a search under it. */
+.pickslots { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(17rem, 1fr)); gap:10px; }
+.pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:#f6f4fa; border-radius:14px; }
+.pickhead { display:flex; align-items:center; gap:10px; min-height:36px; }
+.pickhead .name { font-weight:900; }
+.pickcurrent { margin-left:auto; display:flex; align-items:center; gap:8px; font-weight:800; min-width:0; }
+.pickcurrent.random { color:var(--muted); font-weight:700; }
+.pickcurrent .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px; flex:none; }
+.pickclear { flex:none; padding:4px 10px; font-size:.8rem; border-radius:999px; background:#fff; color:var(--ink); box-shadow:0 2px 0 #d9d3e6; }
+.pickslot .cs-row { background:#fff; }
+
+/* The pool picker (/shared/pickers.js poolPicker). The phones style the same classes in their own
+   page; this is the same design at desk width. Selected = filled blue AND a tick, never colour alone. */
+.pp-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.pp-chip { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:999px;
+           background:#f3f0f8; color:var(--ink); font-weight:800; font-size:.95rem; text-align:left;
+           box-shadow:0 4px 0 #d9d3e6; }
+.pp-chip:active { transform:translateY(3px); box-shadow:0 1px 0 #d9d3e6; }
+.pp-chip.on { background:var(--blue); color:#fff; box-shadow:0 4px 0 var(--blue-d); }
+.pp-chip.on:active { box-shadow:0 1px 0 var(--blue-d); }
+.pp-tick:empty { display:none; }
+.pp-n { font-size:.75rem; font-weight:700; opacity:.7; }
+.pp-quick .pp-chip { flex:1 1 0; border-radius:14px; padding:11px 14px; }
+.pp-quick .pp-n { margin-left:auto; }
+.pp-or { color:var(--muted); font-size:.8rem; font-weight:700; margin:12px 0 8px; }
+.pp-summary { margin:12px 0 0; font-weight:700; font-size:.92rem; }
+.pp-summary.warn { color:var(--red); }
+.pp-cat { background:#f6f4fa; border-radius:12px; margin-top:8px; }
+.pp-cat summary { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; list-style:none; }
+.pp-cat summary::-webkit-details-marker { display:none; }
+.pp-catname { font-weight:900; }
+.pp-count { color:var(--muted); font-size:.82rem; font-weight:700; }
+.pp-cat.off .pp-count { color:var(--red); }
+.pp-edit { margin-left:auto; font-size:.8rem; font-weight:900; color:var(--brand); background:#fff;
+           padding:4px 11px; border-radius:999px; box-shadow:0 2px 0 #d9d3e6; }
+.pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
+.pp-bulk { display:flex; gap:8px; padding:0 12px; }
+.pp-bulk button { padding:6px 14px; font-size:.85rem; background:#fff; color:var(--ink); box-shadow:0 3px 0 #d9d3e6; }
+.pp-bulk button:active { box-shadow:0 1px 0 #d9d3e6; }
+.pp-rows { max-height:260px; overflow-y:auto; padding:6px 12px 12px; display:grid;
+           grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); column-gap:16px; }
+label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; margin:0; cursor:pointer;
+               text-transform:none; letter-spacing:0; font-size:.95rem; font-weight:700; color:var(--ink); }
+.pp-row input { width:18px; height:18px; padding:0; margin:0; flex:none; accent-color:var(--blue); }
+.pp-rowname { flex:1; min-width:0; overflow-wrap:anywhere; }
+.pp-row .pp-n { opacity:1; color:var(--muted); }
+
+/* Character search (/shared/pickers.js characterSearch). */
+.cs-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:8px 12px;
+          background:#f6f4fa; color:var(--ink); font-weight:800; box-shadow:0 3px 0 #e3dcf0; margin-bottom:6px; }
+.cs-row:active { transform:translateY(2px); box-shadow:0 1px 0 #e3dcf0; }
+.cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px; flex:none; background:#fff; }
+.cs-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+.cs-list { color:var(--muted); font-weight:700; font-size:.78rem; flex:none; max-width:40%; text-align:right; }
 
 /* Character cards. FIXED image height: artwork arrives asynchronously, and a box that grows
    when it lands shoves everything below it -- here, the guess box being typed into. */

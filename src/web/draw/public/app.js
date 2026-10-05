@@ -94,6 +94,16 @@ function leave() {
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
 
+// The title goes home -- asking first when that means leaving a room, in words that say what it costs.
+GTC.homeTitle($('title'), {
+  leave,
+  leaving() {
+    if (!roomState) return null;
+    if (roomState.status === 'playing') return 'Leave the game? You stop drawing and guessing; your score stays on the board.';
+    return 'Leave this room and go back to the start?';
+  },
+});
+
 socket.on('room:state', (state) => {
   roomState = state;
   renderRoom();
@@ -116,7 +126,8 @@ function renderRoom() {
   if (!options) {
     socket.emit('draw:options', {}, (res) => {
       options = res;
-      $('categorySelect').innerHTML = (res?.categories ?? []).map((c) => `<option value="${esc(c.category)}">${esc(c.category)} (${c.enabled} lists)</option>`).join('');
+      // Its own memory: what a room likes to draw is not what it likes to wear.
+      poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: res, request: ask, storageKey: 'gtc_draw_pool' });
       // Easy first: a character has to be recognisable from a sketch.
       $('difficultySelect').innerHTML = (res?.difficulties ?? [])
         .map((d) => `<option value="${esc(d.key)}"${d.key === 'easy' ? ' selected' : ''}>${esc(d.label)}: ${esc(d.blurb)}</option>`)
@@ -125,9 +136,9 @@ function renderRoom() {
   }
 }
 
-for (const radio of document.querySelectorAll('input[name=pool]')) {
-  radio.addEventListener('change', () => ($('categoryRow').hidden = radio.value !== 'category' || !radio.checked));
-}
+// Built once, when the options first arrive: the server keeps this room's curation.
+let poolPicker = null;
+const ask = (event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
 $('copyBtn').addEventListener('click', async () => {
   try {
@@ -141,13 +152,12 @@ $('copyBtn').addEventListener('click', async () => {
 });
 
 $('startBtn').addEventListener('click', () => {
-  const poolType = document.querySelector('input[name=pool]:checked').value;
+  if (!poolPicker) return; // the options have not arrived yet
   $('startBtn').disabled = true;
   socket.emit(
     'draw:start',
     {
-      poolType,
-      category: poolType === 'category' ? $('categorySelect').value : null,
+      ...poolPicker.value(),
       difficulty: $('difficultySelect').value || undefined,
       rounds: Number($('roundsSelect').value),
       drawSeconds: Number($('timeSelect').value),
@@ -337,6 +347,17 @@ function renderGame(turnChanged) {
     }
   } else $('mask').textContent = '';
 
+  // The drawer's reference picture, for as long as they draw. Repainted only when the character
+  // changes: every guess sends a new view, and resetting the <img> each time would make it blink.
+  const ref = v.phase === 'drawing' && v.isDrawer ? v.character : null;
+  $('refCard').hidden = !ref;
+  const refKey = ref ? `${ref.name}|${ref.imageUrl ?? ''}` : '';
+  if ($('refCard').dataset.key !== refKey) {
+    $('refCard').dataset.key = refKey;
+    $('refArt').innerHTML = ref ? characterArt(ref) : '';
+    $('refName').textContent = ref ? ref.name : '';
+  }
+
   $('players').innerHTML = v.players
     .map((p) => {
       const tag = p.drawing ? '<span class="tag drawing">▲ Drawing</span>' : p.guessed ? '<span class="tag got">✓ Got it</span>' : '';
@@ -348,8 +369,10 @@ function renderGame(turnChanged) {
   $('chooseOverlay').hidden = !(v.phase === 'choosing' && v.isDrawer);
   if (v.phase === 'choosing' && v.isDrawer) {
     $('pick').innerHTML = v.choices
-      .map((c, i) => `<button data-i="${i}"><div class="art">${characterArt(c)}</div><span>${esc(c.name)}</span><span class="hint">${esc(c.source)}</span></button>`)
+      .map((c, i) => `<button data-i="${i}"><div class="art">${characterArt(c)}</div><span>${esc(c.name)}</span><span class="hint" title="${esc(c.source)}">${esc(c.source)}</span></button>`)
       .join('');
+    $('rerollChoicesBtn').disabled = v.rerollsLeft === 0;
+    $('rerollChoicesBtn').textContent = v.rerollsLeft > 0 ? `New Choices (${v.rerollsLeft} Left)` : 'New Choices';
   }
   $('waitOverlay').hidden = !(v.phase === 'choosing' && !v.isDrawer);
   $('waitText').textContent = `${v.drawer.name} is choosing a character...`;
@@ -381,6 +404,15 @@ $('pick').addEventListener('click', (e) => {
   const b = e.target.closest('[data-i]');
   if (!b) return;
   socket.emit('draw:choose', { index: Number(b.dataset.i) }, (res) => { if (res && !res.ok) toast(esc(res.error)); });
+});
+
+$('rerollChoicesBtn').addEventListener('click', () => {
+  const b = $('rerollChoicesBtn');
+  b.disabled = true; // one request at a time; the new view re-enables it
+  socket.emit('draw:reroll', {}, (res) => {
+    b.disabled = false;
+    if (res && !res.ok) toast(esc(res.error));
+  });
 });
 
 // The server's chat, plus lines only this player sees: their own close calls, and the "got it"

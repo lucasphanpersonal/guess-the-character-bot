@@ -5,7 +5,8 @@
 //
 // A game is ROUNDS rounds; in each, every player draws once, in seat order. A turn is:
 //
-//   choosing  the drawer picks one of three characters (CHOOSE_SECONDS, then the first is taken)
+//   choosing  the drawer picks one of three characters (CHOOSE_SECONDS, then the first is taken),
+//             or asks for three new ones -- as often as they like (CHOICE_REROLLS), each a fresh clock
 //   drawing   they draw it; everyone else types guesses. Letters of the name are revealed as
 //             hints part-way through. Ends when every guesser has it, or the clock runs out.
 //   reveal    the answer and the turn's points, for REVEAL_SECONDS
@@ -23,6 +24,10 @@ const CHOOSE_SECONDS = 15;
 // WEB_DRAW_REVEAL_SECONDS shortens it for the socket check, the way WEB_GRACE_SECONDS does the phones' countdown.
 const REVEAL_SECONDS = Number(process.env.WEB_DRAW_REVEAL_SECONDS ?? 6);
 const CHOICES = 3;
+// New choices per turn: -1 is unlimited, which is where it starts. Three faces nobody can draw is
+// the commonest reason a turn goes nowhere, and the cost of another look is only the drawer's own
+// time. A finite number stays representable (rerollsLeft counts down) for when a limit is wanted.
+const CHOICE_REROLLS = -1;
 // Hints: a letter at half time, another at three quarters -- never more than a third of the name.
 const HINT_AT = [0.5, 0.75];
 const CHAT_KEPT = 60;
@@ -43,6 +48,8 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80 }) {
     drawerIndex: 0,
     phase: 'choosing',
     choices: [],
+    offered: [], // every name offered this turn, so new choices are new
+    rerollsLeft: CHOICE_REROLLS,
     character: null,
     deadline: null,
     startedAt: null,
@@ -72,6 +79,8 @@ const allGuessed = (g) => {
 function offerChoices(g, choices, now) {
   g.phase = 'choosing';
   g.choices = choices.slice(0, CHOICES);
+  g.offered = g.choices.map((c) => c.name);
+  g.rerollsLeft = CHOICE_REROLLS;
   g.character = null;
   g.deadline = now + CHOOSE_SECONDS * 1000;
   g.startedAt = null;
@@ -92,6 +101,29 @@ function choose(g, playerId, index, now) {
   g.phase = 'drawing';
   g.startedAt = now;
   g.deadline = now + g.drawSeconds * 1000;
+  return { ok: true };
+}
+
+/**
+ * What new choices must avoid: everything drawn this game, and everything already offered this
+ * turn -- otherwise "new choices" could hand back the very faces the drawer just turned down.
+ */
+const rerollExclusions = (g) => [...new Set([...g.used, ...g.offered])];
+
+/**
+ * The drawer turns down all three and gets new ones. `choices` are dealt by the caller with
+ * rerollExclusions(g); fewer than three is fine (a small pool), none is refused. The choosing clock
+ * starts again, because it measured time to decide among the old three.
+ */
+function rerollChoices(g, playerId, choices, now) {
+  if (g.phase !== 'choosing') return { ok: false, error: 'Nothing to choose right now.' };
+  if (playerId !== drawerOf(g)) return { ok: false, error: "It's not your turn to draw." };
+  if (g.rerollsLeft === 0) return { ok: false, error: 'No new choices left this turn.' };
+  if (!choices?.length) return { ok: false, error: 'There are no other characters left to offer.' };
+  g.choices = choices.slice(0, CHOICES);
+  g.offered.push(...g.choices.map((c) => c.name));
+  if (g.rerollsLeft > 0) g.rerollsLeft -= 1;
+  g.deadline = now + CHOOSE_SECONDS * 1000;
   return { ok: true };
 }
 
@@ -280,6 +312,8 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     secondsLeft: g.deadline ? Math.max(0, Math.round((g.deadline - now) / 1000)) : null,
     drawSeconds: g.drawSeconds,
     choices: isDrawer && g.phase === 'choosing' ? g.choices.map(publicCharacter) : null,
+    // -1 unlimited. Only the drawer has anything to reroll.
+    rerollsLeft: isDrawer && g.phase === 'choosing' ? g.rerollsLeft : null,
     character: answerShown && g.character ? publicCharacter(g.character) : null,
     mask: g.phase === 'drawing' ? maskOf(g) : null,
     guessedIt: g.guessed.has(viewerId),
@@ -313,6 +347,8 @@ module.exports = {
   createDrawGame,
   offerChoices,
   choose,
+  rerollChoices,
+  rerollExclusions,
   autoChoose,
   say,
   revealDueHints,
@@ -329,5 +365,6 @@ module.exports = {
   CHOOSE_SECONDS,
   REVEAL_SECONDS,
   CHOICES,
+  CHOICE_REROLLS,
   TEXT_MAX,
 };

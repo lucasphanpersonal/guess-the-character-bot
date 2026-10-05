@@ -97,6 +97,18 @@ function leave() {
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
 
+// The title goes home -- asking first when that means leaving a room, in words that say what it costs.
+GTC.homeTitle($('title'), {
+  leave,
+  leaving() {
+    if (!roomState) return null;
+    if ($('hosting').classList.contains('active')) return 'Leave the room? The game carries on without you.';
+    if (roomState.status === 'playing') return 'Leave the game? Your character is revealed and you drop out.';
+    if (roomState.status === 'setup' || roomState.status === 'ready') return 'Leave the room? This deal is called off and everyone goes back to the lobby.';
+    return 'Leave this room and go back to the start?';
+  },
+});
+
 // --- lobby --------------------------------------------------------------------------------
 socket.on('room:state', (state) => {
   roomState = state;
@@ -127,25 +139,112 @@ function renderLobby() {
     $('startBtn').disabled = roomState.players.length < 2;
     $('lobbyErr').textContent = roomState.players.length < 2 ? 'Waiting for at least one more player to join.' : '';
     loadOptions();
+    syncHostMode();
   }
 }
+
+// Built once per page, when the options first arrive: the server keeps this room's curation, so a
+// rebuild would only lose which sections the host had open.
+let poolPicker = null;
+const ask = (event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
 
 function loadOptions() {
   if (options) return;
   socket.emit('setup:options', {}, (res) => {
     options = res;
-    $('categorySelect').innerHTML = (res?.categories ?? [])
-      .map((c) => `<option value="${esc(c.category)}">${esc(c.category)} (${c.enabled} lists)</option>`)
-      .join('');
+    poolPicker = GTCPickers.poolPicker($('poolPicker'), { options: res, request: ask });
     $('difficultySelect').innerHTML = (res?.difficulties ?? [])
       .map((d) => `<option value="${esc(d.key)}"${d.key === res.defaultDifficulty ? ' selected' : ''}>${esc(d.label)}: ${esc(d.blurb)}</option>`)
       .join('');
   });
 }
 
-for (const radio of document.querySelectorAll('input[name=pool]')) {
-  radio.addEventListener('change', () => ($('categoryRow').hidden = radio.value !== 'category' || !radio.checked));
+// Who picks: the hint and the button say what happens next, so the choice is never a guess.
+const pickMode = () => document.querySelector('input[name=mode]:checked')?.value || 'deal';
+const MODE_TEXT = {
+  deal: { hint: "Everyone gets a random character, and checks the next player's.", pool: 'Characters from', start: 'Deal the Characters' },
+  each: { hint: 'Nothing is dealt: each player chooses the character of the next player round the table.', pool: 'Random picks come from', start: 'Start Picking' },
+  host: { hint: "You choose everyone's character, and sit this one out to watch.", pool: 'Anyone left blank is drawn from', start: 'Start With These Picks' },
+};
+function syncMode() {
+  const text = MODE_TEXT[pickMode()] ?? MODE_TEXT.deal;
+  $('modeHint').textContent = text.hint;
+  $('poolLabel').textContent = text.pool;
+  $('startBtn').textContent = text.start;
+  $('hostPickBox').hidden = pickMode() !== 'host';
+  if (pickMode() === 'host') renderPickSlots();
 }
+for (const radio of document.querySelectorAll('input[name=mode]')) radio.addEventListener('change', syncMode);
+
+// --- I'll pick them ------------------------------------------------------------------------
+//
+// The host chooses everyone's character and sits the game out. Picks live here, keyed by
+// playerId, not in the slots: the slots are rebuilt when the roster changes, and a deal that gets
+// called off should come back to the host's choices, not an empty form. They are dropped when a
+// game ends -- by then everyone has seen them.
+//   playerId -> { id, name, list, imageUrl }   a character from the library
+//            -> { name, typed: true }           a name typed in, which has no picture
+const hostPicks = new Map();
+const others = () => (roomState?.players ?? []).filter((p) => p.playerId !== playerId);
+// Two, not one: each player checks the NEXT player's character, and a lone guesser's next player
+// is themselves. The server refuses it too; this says so before the host bothers.
+const canPickForEveryone = () => others().length >= 2;
+
+// Every room:state re-renders the lobby, including a connection dot flickering. Rebuilding the
+// slots on those would wipe a half-typed search, so only a change of people rebuilds them.
+let slotsFor = '';
+const rosterKey = () => others().map((p) => `${p.playerId}:${p.nickname}`).join('|');
+
+function syncHostMode() {
+  const ok = canPickForEveryone();
+  const radio = document.querySelector('input[name=mode][value=host]');
+  radio.disabled = !ok;
+  $('hostModeChoice').classList.toggle('disabled', !ok);
+  $('hostModeChoice').title = ok ? '' : 'Needs 2 players besides you';
+  if (!ok && radio.checked) {
+    document.querySelector('input[name=mode][value=deal]').checked = true;
+    syncMode();
+  }
+  if (pickMode() === 'host' && rosterKey() !== slotsFor) renderPickSlots();
+}
+
+function renderPickSlots() {
+  slotsFor = rosterKey();
+  const people = others();
+  // A pick for somebody who has left can't be dealt, and the server refuses the whole deal rather
+  // than quietly drop it -- so forget it here, where the host can see it go.
+  for (const id of [...hostPicks.keys()]) if (!people.some((p) => p.playerId === id)) hostPicks.delete(id);
+  const ul = $('pickSlots');
+  ul.innerHTML = '';
+  for (const p of people) ul.appendChild(pickSlot(p));
+}
+
+function pickSlot(p) {
+  const li = document.createElement('li');
+  li.className = 'pickslot';
+  li.innerHTML = `<div class="pickhead"><span class="name">${esc(p.nickname)}</span><span class="pickcurrent"></span></div>
+    <input type="search" placeholder="Search, or type any name" autocomplete="off" aria-label="${esc(`Character for ${p.nickname}`)}" />
+    <div></div>`;
+  const current = li.querySelector('.pickcurrent');
+  const paint = () => {
+    const pick = hostPicks.get(p.playerId);
+    current.classList.toggle('random', !pick);
+    if (!pick) return void (current.textContent = 'Random');
+    current.innerHTML =
+      (pick.imageUrl ? `<img class="pickthumb" src="${esc(pick.imageUrl)}" alt="" />` : '') +
+      `<span class="lbl" title="${esc(pick.typed ? 'Typed in, so no picture' : pick.list || '')}">${esc(pick.typed ? `“${pick.name}”` : pick.name)}</span>` +
+      `<button type="button" class="pickclear" aria-label="${esc(`Back to random for ${p.nickname}`)}">✕</button>`;
+    current.querySelector('.pickclear').addEventListener('click', () => { hostPicks.delete(p.playerId); paint(); });
+  };
+  GTCPickers.characterSearch(li.querySelector('input'), li.querySelector('div:last-child'), (pick) => {
+    hostPicks.set(p.playerId, pick);
+    paint();
+  });
+  paint();
+  return li;
+}
+// Once everything above exists: a browser restoring the form on reload can hand back any mode.
+syncMode();
 
 $('copyBtn').addEventListener('click', async () => {
   try {
@@ -159,10 +258,21 @@ $('copyBtn').addEventListener('click', async () => {
 });
 
 $('startBtn').addEventListener('click', () => {
-  const poolType = document.querySelector('input[name=pool]:checked').value;
+  if (!poolPicker) return; // the options have not arrived yet
   const config = {
-    poolType,
-    category: poolType === 'category' ? $('categorySelect').value : null,
+    ...poolPicker.value(),
+    ...(pickMode() === 'each' ? { eachPicks: true } : {}),
+    // Blank slots are simply absent: the server deals those at random.
+    ...(pickMode() === 'host'
+      ? {
+          hostPicks: true,
+          picks: Object.fromEntries(
+            [...hostPicks]
+              .filter(([id]) => others().some((p) => p.playerId === id))
+              .map(([id, pk]) => [id, pk.typed ? { name: pk.name } : { id: pk.id }])
+          ),
+        }
+      : {}),
     difficulty: $('difficultySelect').value || undefined,
     turnSeconds: Number($('turnSelect').value),
   };
@@ -174,36 +284,49 @@ $('startBtn').addEventListener('click', () => {
 });
 
 // --- setup: check and reroll --------------------------------------------------------------
-function cardHtml({ name, character, badge = '', current = false, mystery = false, done = false, turns = null }) {
+function cardHtml({ name, character, badge = '', current = false, mystery = false, empty = false, done = false, turns = null }) {
   let art;
   if (mystery) art = '<div class="art mystery">?</div>';
+  // A seat not picked for yet (pick-for-each-other). Not the mystery face: that one means "yours".
+  else if (empty) art = '<div class="art"><span class="noimg">Not picked yet</span></div>';
   else if (character?.imageUrl) art = `<div class="art"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
   else art = '<div class="art"><span class="noimg">No picture</span></div>';
   return `<div class="pcard${current ? ' current' : ''}${done ? ' done' : ''}">
       <div class="who">${esc(name)}${badge}${turns != null ? `<span class="turns">${turns} turn${turns === 1 ? '' : 's'}</span>` : ''}</div>
       ${art}
-      <div class="cname">${mystery ? 'Who are you?' : esc(character?.name)}</div>
-      <div class="src">${mystery ? '' : esc(character?.source)}</div>
+      <div class="cname">${mystery ? 'Who are you?' : empty ? '' : esc(character?.name)}</div>
+      <div class="src">${mystery || empty ? '' : esc(character?.source)}</div>
     </div>`;
 }
 
 socket.on('setup:state', (view) => {
   show('setup');
   gameView = null;
-  $('checkTitle').textContent = `You check ${view.checking.ownerName}'s character`;
-  $('checkCard').innerHTML = `<div class="cards" style="grid-template-columns:1fr">${cardHtml({ name: view.checking.ownerName, character: view.checking.character })}</div>`;
+  const picking = view.checkerPicks;
+  const target = view.checking.ownerName;
+  $('checkTitle').textContent = picking ? `You pick ${target}'s character` : `You check ${target}'s character`;
+  $('checkCard').innerHTML = `<div class="cards" style="grid-template-columns:1fr">${cardHtml({ name: target, character: view.checking.character, empty: !view.checking.character })}</div>`;
   const rerolls = view.rerollsLeft === -1 ? 'unlimited rerolls' : `${view.rerollsLeft} reroll${view.rerollsLeft === 1 ? '' : 's'} left`;
-  $('checkHint').textContent = view.rerollAllowed
-    ? `Is this a character ${view.checking.ownerName} has a fair chance of knowing? If not, reroll it (${rerolls}).`
-    : 'The host picked these characters, so there are no rerolls.';
+  $('checkHint').textContent = picking
+    ? `Choose someone ${target} would know: search the library, type any name, or pick at random. They have to guess it.`
+    : view.rerollAllowed
+      ? `Is this a character ${target} has a fair chance of knowing? If not, reroll it (${rerolls}).`
+      : 'The host picked these characters, so there are no rerolls.';
+  $('pickBox').hidden = !picking || view.confirmed;
+  $('pickSearch').setAttribute('aria-label', `Character for ${target}`);
+  $('rerollBtn').textContent = picking ? 'Pick at Random' : 'Reroll';
   $('rerollBtn').hidden = !view.rerollAllowed;
   $('rerollBtn').disabled = view.confirmed || view.rerollsLeft === 0;
   $('undoBtn').hidden = !view.rerollAllowed;
   $('undoBtn').disabled = view.confirmed || !view.canUndo;
-  $('confirmBtn').textContent = view.confirmed ? 'Locked in. Change my mind' : 'Looks good';
+  $('confirmBtn').textContent = view.confirmed ? 'Locked In — Change My Mind' : 'Looks Good';
   $('confirmBtn').className = view.confirmed ? 'ghost grow' : 'good grow';
   $('confirmBtn').dataset.confirmed = view.confirmed ? '1' : '';
-  $('referenceCards').innerHTML = view.reference.map((r) => cardHtml({ name: r.ownerName, character: r.character })).join('');
+  // The server refuses an empty seat too; this just says so before anyone clicks.
+  $('confirmBtn').disabled = !view.confirmed && view.canConfirm === false;
+  $('referenceCards').innerHTML = view.reference
+    .map((r) => cardHtml({ name: r.ownerName, character: r.character, empty: !r.character }))
+    .join('');
   // Two players: the one you check IS everyone else, and an empty panel reads as a fault.
   $('referenceCards').closest('.card').hidden = !view.reference.length;
   // Count, then name: "waiting on 1" tells nobody whose screen to go and look at.
@@ -220,6 +343,10 @@ $('rerollBtn').addEventListener('click', setupAction('setup:reroll'));
 $('undoBtn').addEventListener('click', setupAction('setup:undo'));
 $('confirmBtn').addEventListener('click', () => setupAction($('confirmBtn').dataset.confirmed ? 'setup:unlock' : 'setup:confirm')());
 $('cancelDealBtn').addEventListener('click', setupAction('setup:cancel'));
+GTCPickers.characterSearch($('pickSearch'), $('pickResults'), (pick) =>
+  socket.emit('setup:pick', pick.typed ? { name: pick.name } : { id: pick.id }, (res) => {
+    $('setupErr').textContent = res?.ok ? '' : res?.error || 'Could not pick that one.';
+  }));
 
 socket.on('setup:aborted', ({ reason } = {}) => {
   toast(`The deal was called off: ${esc(reason || 'it was cancelled')}.`);
@@ -314,14 +441,15 @@ function renderGame() {
 
 // The clock is the server's: it sends seconds remaining, and this only counts down between
 // updates. A tab that was hidden asks for a fresh one on the way back (game:resync).
-function setClock(remaining, total, paused) {
+// `ids`: the players' turn bar by default; the watching host has a bar of their own.
+function setClock(remaining, total, paused, ids = { bar: 'clock', fill: 'clockFill', secs: 'clockSecs' }) {
   clearInterval(clock.timer);
   clock = { remaining, total, timer: null };
   const draw = () => {
     const secs = clock.remaining;
-    $('clockSecs').textContent = paused ? 'paused' : secs == null ? '' : `${secs}s`;
-    $('clockFill').style.width = secs == null ? '100%' : `${Math.max(0, (secs / (clock.total || 60)) * 100)}%`;
-    $('clock').classList.toggle('crit', secs != null && secs <= 10);
+    $(ids.secs).textContent = paused ? 'paused' : secs == null ? '' : `${secs}s`;
+    $(ids.fill).style.width = secs == null ? '100%' : `${Math.max(0, (secs / (clock.total || 60)) * 100)}%`;
+    $(ids.bar).classList.toggle('crit', secs != null && secs <= 10);
   };
   draw();
   if (remaining == null || paused) return;
@@ -392,6 +520,52 @@ socket.on('game:reveal', (r) => {
 });
 socket.on('game:timeout', ({ name }) => toast(`Time's up for ${esc(name)}.`));
 
+// --- the host who sits out (I'll pick them) -------------------------------------------------
+//
+// Watch-only, as on the phones: every character, who is locked in, whose turn it is and the clock.
+// Rulings stay with the players -- the server only lets players in the game rule.
+let lastHostHtml = '';
+socket.on('host:state', (view) => {
+  show('hosting');
+  gameView = null;
+  $('hostErr').textContent = '';
+  const playing = view.phase === 'playing';
+  $('hostTurnbar').hidden = !playing;
+  $('hostCancelBtn').hidden = playing;
+  if (view.phase === 'setup') {
+    $('hostTitle').textContent = view.allReady ? 'Everyone is in. Starting...' : `Waiting on ${view.waitingOn} to lock in`;
+    $('hostNote').textContent = 'Everyone is checking the character of the next player. You sit this one out and watch.';
+  } else if (view.phase === 'countdown') {
+    $('hostTitle').textContent = 'Starting...';
+  } else if (playing) {
+    $('hostWho').textContent = view.paused ? `Waiting for ${view.current.name} to reconnect` : `${view.current.name} is guessing, turn ${view.current.turnNumber}`;
+    setClock(view.paused ? null : view.turnRemaining, view.turnSeconds, view.paused, { bar: 'hostClock', fill: 'hostClockFill', secs: 'hostClockSecs' });
+    $('hostTitle').textContent = 'You picked these';
+    $('hostNote').textContent = 'Close guesses are ruled by the players. You are watching.';
+  }
+  const html = (view.players ?? [])
+    .map((p) =>
+      cardHtml({
+        name: p.name,
+        character: p.character,
+        badge: view.phase === 'setup'
+          ? (p.confirmed ? '<span class="badge got">✓ Locked in</span>' : '<span class="badge">Checking</span>')
+          : STATUS_BADGE[p.status] ?? '',
+        current: playing && p.playerId === view.current.playerId,
+        done: p.status === 'finished' || p.status === 'gave_up',
+        turns: playing ? p.turns || null : null,
+      })
+    )
+    .join('');
+  // Redrawn only on change, for the same reason as the board: every clock correction is a new view.
+  if (html !== lastHostHtml) { $('hostBoard').innerHTML = html; lastHostHtml = html; }
+});
+$('hostCancelBtn').addEventListener('click', () =>
+  socket.emit('setup:cancel', {}, (res) => { if (!res?.ok) $('hostErr').textContent = res?.error || 'Could not cancel.'; }));
+$('hostLeaveBtn').addEventListener('click', () => {
+  if (confirm('Leave the room? The game carries on without you.')) leave();
+});
+
 // --- results ------------------------------------------------------------------------------
 socket.on('game:over', (res) => {
   show('over');
@@ -409,6 +583,9 @@ socket.on('game:over', (res) => {
   $('hostOver').hidden = !isHost();
   $('guestOver').hidden = isHost();
   $('rematchBtn').hidden = !!res.hostPicked;
+  // Everyone has seen them now; picking again starts from blank slots.
+  if (res.hostPicked) { hostPicks.clear(); slotsFor = ''; }
+  lastHostHtml = '';
   $('overErr').textContent = '';
 });
 $('rematchBtn').addEventListener('click', () =>

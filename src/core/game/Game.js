@@ -36,8 +36,11 @@ class Game {
     this.turnOrder = [...lobby.players];
     // Each player's "head" is what THEY must guess -- and what every OTHER player was DM'd.
     this.headByPlayer = {};
+    // A null character is a seat nobody has chosen for yet: the web's pick-for-each-other mode
+    // deals empty and fills each one as its checker picks. Play cannot begin until every seat
+    // holds someone (see the web's gameSetup.applyConfirm), so only the setup phase sees a null.
     this.turnOrder.forEach((playerId, i) => {
-      this.headByPlayer[playerId] = Game.head(lobby, characters[i]);
+      this.headByPlayer[playerId] = characters[i] ? Game.head(lobby, characters[i]) : null;
     });
     this.turnSeconds = turnSeconds;
     this.currentTurnIndex = 0;

@@ -127,6 +127,15 @@ const connect = (playerId) => {
   const stillEnabled = characterLists.getEnabledLists(process.env.WEB_SCOPE).some((l) => l.id === listId);
   check(stillEnabled, 'the shared pool is NOT modified by a room-level exclusion');
   await C.emitWithAck('setup:toggleList', { listId }); // restore for the deal below
+  // The picker's All / None: many at once, host only, and every id must check out.
+  check((await D.emitWithAck('setup:setLists', { listIds: [listId], playing: false })).ok === false, 'a non-host cannot switch lists in bulk');
+  res = await C.emitWithAck('setup:setLists', { listIds: [listId], playing: false });
+  check(res.ok && res.playing[0] === false, 'host switches a category\'s lists off in one go');
+  res = await C.emitWithAck('setup:setLists', { listIds: [listId, 987654321], playing: true });
+  check(res.ok === false && (await C.emitWithAck('setup:categoryLists', { category: 'TestToons' })).lists[0].playing === false,
+    'one unknown id in a bulk request changes nothing');
+  res = await C.emitWithAck('setup:setLists', { listIds: [listId], playing: true });
+  check(res.ok && res.playing[0] === true, 'and back on');
 
   // Host can call off a deal from the reroll phase; a non-host cannot.
   const notHostCancel = await D.emitWithAck('setup:cancel', {});
@@ -393,6 +402,64 @@ const connect = (playerId) => {
     H2.close(); X.close(); Y.close();
   }
 
+  // ---- Pick for each other: nothing dealt, every player picks for the one they check --------
+  // Everyone sees every character but their own, so the leak to guard is a player being sent
+  // the character someone else picked for them. Every payload each player receives before play
+  // is searched for their own final character.
+  console.log('\n# pick for each other');
+  {
+    const E1 = await connect('pEach1');
+    let r = await E1.emitWithAck('room:create', { nickname: 'Uma' });
+    const code = r.state.code;
+    const E2 = await connect('pEach2');
+    await E2.emitWithAck('room:join', { code, nickname: 'Vic' });
+    const E3 = await connect('pEach3');
+    await E3.emitWithAck('room:join', { code, nickname: 'Wes' });
+    const socks = { pEach1: E1, pEach2: E2, pEach3: E3 };
+    const got = { pEach1: [], pEach2: [], pEach3: [] };
+    for (const [id, sock] of Object.entries(socks)) sock.onAny((ev, payload) => got[id].push(JSON.stringify(payload ?? null)));
+
+    const firstViews = Object.fromEntries(Object.entries(socks).map(([id, sock]) => [id, nextEvent(sock, 'setup:state')]));
+    r = await E1.emitWithAck('setup:start', { poolType: 'categories', categories: ['TestToons'], difficulty: 'everything', eachPicks: true });
+    check(r.ok && r.label === 'Picked for each other', 'each-picks: the host starts a game where everyone picks');
+    const v1 = await firstViews.pEach1;
+    check(v1.checkerPicks === true && v1.checking.character === null && v1.canConfirm === false, 'each-picks: every seat starts empty');
+    const refused = await E1.emitWithAck('setup:confirm', {});
+    check(!refused.ok && /Pick a character/.test(refused.error), 'each-picks: nobody locks in with an empty seat');
+
+    // Who checks whom, from the server's own views.
+    const targetOf = {};
+    for (const [id, p] of Object.entries(firstViews)) targetOf[id] = (await p).checking.ownerId;
+
+    const found = await fetch(`${URL}/api/browse/search?q=Bulma`).then((res) => res.json());
+    const bulma = found.characters.find((c) => c.name === 'Bulma');
+    r = await E1.emitWithAck('setup:pick', { id: bulma.id });
+    check(r.ok, 'each-picks: a library character is picked by id');
+    r = await E2.emitWithAck('setup:pick', { name: 'Grandma Jean' });
+    check(r.ok, 'each-picks: any typed name is picked');
+    r = await E3.emitWithAck('setup:reroll', {});
+    check(r.ok, 'each-picks: Random fills an empty seat from the pool');
+
+    const room = registry.getRoom(code);
+    const finalOf = (id) => room.game.headByPlayer[id]?.name;
+    check(finalOf(targetOf.pEach1) === 'Bulma' && finalOf(targetOf.pEach2) === 'Grandma Jean' && SEEDED_NAMES.includes(finalOf(targetOf.pEach3)),
+      'each-picks: every pick lands on the player its picker checks');
+
+    const playing = roomStatus(E1, 'countdown');
+    for (const sock of Object.values(socks)) await sock.emitWithAck('setup:confirm', {});
+    check(!!(await playing), 'each-picks: once every seat is filled and everyone is in, play begins');
+
+    const leaks = Object.keys(socks).filter((id) => {
+      const own = JSON.stringify(finalOf(id)).slice(1, -1);
+      const beforePlay = got[id].slice(0, got[id].findIndex((j) => j.includes('"status":"countdown"')));
+      return beforePlay.some((j) => j.includes(own));
+    });
+    check(leaks.length === 0, `each-picks: nobody was sent the character picked for them${leaks.length ? ` (${leaks.join(', ')})` : ''}`);
+    check(room.lastSetup.eachPicks === true && room.lastSetup.categories[0] === 'TestToons', 'each-picks: remembered for a rematch, with its categories');
+    await E1.emitWithAck('setup:cancel', {});
+    E1.close(); E2.close(); E3.close();
+  }
+
   console.log('\n# stage 6 — rematch');
   const c2Setup = nextEvent(C2, 'setup:state');
   res = await C2.emitWithAck('game:rematch', {});
@@ -556,6 +623,34 @@ const connect = (playerId) => {
   //
   // One draws, the other guesses. What must never happen: the answer -- or the other two
   // characters the drawer was offered -- reaching a guesser before they have it.
+  // ---- Desk: I'll pick them. The same protocol as the phones, through the desk namespace and its
+  // board view -- which must never carry the host's view to a player.
+  console.log("\n# desk — I'll pick them");
+  {
+    const DH = await connectDesk('dPickHost');
+    let r = await DH.emitWithAck('room:create', { nickname: 'Hal' });
+    const code = r.state.code;
+    const D1 = await connectDesk('dPick1');
+    await D1.emitWithAck('room:join', { code, nickname: 'Ivy' });
+    const D2 = await connectDesk('dPick2');
+    await D2.emitWithAck('room:join', { code, nickname: 'Jon' });
+    const hostSetup = nextMatching(DH, 'host:state', (v) => v.phase === 'setup');
+    r = await DH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', hostPicks: true, picks: { dPick1: { name: 'Grandma Jean' } } });
+    check(r.ok, "desk host-picks: the host deals one typed pick and one random");
+    const hv = await hostSetup;
+    check(hv.players.length === 2 && hv.players.find((p) => p.name === 'Ivy')?.character.name === 'Grandma Jean', 'desk host-picks: the host sees the picks, and is not dealt in');
+    const playing = nextMatching(DH, 'host:state', (v) => v.phase === 'playing');
+    await D1.emitWithAck('setup:confirm', {});
+    await D2.emitWithAck('setup:confirm', {});
+    const hp = await playing;
+    check(hp.players.every((p) => p.character?.name) && typeof hp.turnRemaining === 'number', 'desk host-picks: the host watches every character and the clock');
+    const sentToPlayers = [...D1.received, ...D2.received].filter((e) => e.event === 'host:state').length;
+    check(sentToPlayers === 0, `desk host-picks: no player received the host's view (${sentToPlayers})`);
+    check(!DH.received.some((e) => e.event === 'setup:state' || e.event === 'game:state'), "desk host-picks: the host never got a player's view");
+    check(!D1.received.some((e) => e.event === 'game:state' && e.json.includes('Grandma Jean')), 'desk host-picks: Ivy is never shown her own pick');
+    DH.close(); D1.close(); D2.close();
+  }
+
   console.log('\n# draw — one draws, everyone else guesses');
   const connectDraw = (pid) => {
     const sock = io(`${URL}/draw`, { auth: { playerId: pid } });
@@ -584,11 +679,24 @@ const connect = (playerId) => {
   check(qState.choices === null && qState.character === null, "the guesser sees neither the choices nor the answer");
   const offered = pState.choices.map((c) => c.name);
 
+  // New choices: the drawer only, and never the faces just turned down. The seed has seven
+  // characters, so three offered leaves four to offer anew.
+  check(!(await Q.emitWithAck('draw:reroll', {})).ok, 'a guesser cannot ask for new choices');
+  const pRerolled = nextMatching(P, 'draw:state', (v) => v.phase === 'choosing' && v.choices?.[0]?.name !== offered[0]);
+  res = await P.emitWithAck('draw:reroll', {});
+  check(res.ok, 'the drawer asks for new choices');
+  const newChoices = (await pRerolled).choices.map((c) => c.name);
+  check(newChoices.length >= 1 && newChoices.every((n) => !offered.includes(n)), 'the new choices are all new');
+  check((await pRerolled).rerollsLeft === -1, 'new choices are unlimited');
+  offered.push(...newChoices); // the guesser must see none of these either
+
   const qDrawing = nextMatching(Q, 'draw:state', (v) => v.phase === 'drawing');
+  const pDrawing = nextMatching(P, 'draw:state', (v) => v.phase === 'drawing');
   res = await P.emitWithAck('draw:choose', { index: 0 });
   check(res.ok, 'the drawer chooses');
   const qView = await qDrawing;
-  const drawAnswer = offered[0];
+  const drawAnswer = newChoices[0];
+  check((await pDrawing).character?.name === drawAnswer, 'the drawer keeps the character (its reference picture) while drawing');
   check(qView.mask && qView.mask.length === drawAnswer.length && !qView.mask.includes(drawAnswer[0] + drawAnswer[1]), 'the guesser sees blanks the length of the name');
 
   // Strokes: passed on when they are what the client could make, dropped when not.
