@@ -8,60 +8,14 @@
 //   - Always surface the server's error string. A button that "does nothing" is usually a server
 //     explaining itself to a client that threw the reason away.
 
-const $ = (id) => document.getElementById(id);
-const esc = (v) =>
-  String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-
-// Per-browser conveniences only. Storage can be blocked or empty (private windows, cleared site
-// data), so every access is guarded and the page works without it.
-const store = {
-  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem(k, v); } catch { /* fine */ } },
-};
+// The helpers every computer game shares -- $, esc, guarded storage, the hand-set title, toasts
+// -- are /shared/common.js (src/web/shared), loaded first.
+const { $, esc, store, show, toast, wobble, roomCodeHtml } = GTC;
 
 // A persistent id, so a reload or a dropped connection reclaims the same seat.
-let playerId = store.get('gtc_desk_player');
-if (!playerId) {
-  playerId = (crypto.randomUUID?.() ?? `p${Date.now()}${Math.random().toString(36).slice(2)}`);
-  store.set('gtc_desk_player', playerId);
-}
-
+const playerId = GTC.playerIdFor('gtc_desk_player');
 const socket = io('/desk', { auth: { playerId } });
-
-// The title is hand-set, like the phones': a per-character angle, words kept whole.
-const ANGLES = [-6, 4, -3, 5, -5, 3, -4, 6];
-function wobble(el, text) {
-  el.innerHTML = '';
-  let i = 0;
-  String(text).split(' ').forEach((word, w, words) => {
-    const holder = document.createElement('span');
-    holder.className = 'wob-word';
-    for (const ch of word) {
-      const s = document.createElement('span');
-      s.className = `wob w${i % 4}`;
-      s.style.setProperty('--rot', `${ANGLES[i % ANGLES.length]}deg`);
-      s.textContent = ch;
-      holder.appendChild(s);
-      i++;
-    }
-    el.appendChild(holder);
-    if (w < words.length - 1) el.appendChild(document.createTextNode(' '));
-  });
-}
 wobble($('title'), 'Guess the Character');
-
-function show(id) {
-  for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
-}
-
-function toast(html, ms = 4500) {
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.innerHTML = html;
-  $('feed').appendChild(t);
-  setTimeout(() => t.remove(), ms);
-  while ($('feed').children.length > 4) $('feed').firstChild.remove();
-}
 
 // --- state --------------------------------------------------------------------------------
 let roomState = null;
@@ -161,7 +115,7 @@ function renderRoom() {
 
 function renderLobby() {
   const code = roomState.code;
-  $('roomCode').innerHTML = [...code].map((ch, i) => `<span class="ch" style="--rot:${ANGLES[i]}deg">${esc(ch)}</span>`).join('');
+  $('roomCode').innerHTML = roomCodeHtml(code);
   $('shareLink').value = `${location.origin}/desk/?room=${code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   $('roster').innerHTML = roomState.players

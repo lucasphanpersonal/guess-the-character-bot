@@ -14,6 +14,7 @@ const path = require('path');
 process.env.WEB_PORT = process.env.WEB_PORT || '4199';
 process.env.WEB_SCOPE = process.env.WEB_SCOPE || 'gtc-check-scope';
 process.env.WEB_GRACE_SECONDS = process.env.WEB_GRACE_SECONDS || '1'; // short grace so the check stays quick
+process.env.WEB_DRAW_REVEAL_SECONDS = process.env.WEB_DRAW_REVEAL_SECONDS || '1'; // and a short reveal between drawings
 const OWN_DB = !process.env.BOT_DB_PATH; // did we pick the path, or did the caller?
 process.env.BOT_DB_PATH = process.env.BOT_DB_PATH || path.join(os.tmpdir(), 'gtc-ws-check.sqlite');
 
@@ -550,6 +551,99 @@ const connect = (playerId) => {
   check((await httpGet('/desk/app.js')).type.includes('javascript'), 'GET /desk/app.js serves its script');
   check((await httpGet('/desk')).status === 301, 'GET /desk redirects to /desk/, so relative links resolve');
   W.close(); X.close();
+
+  // ---- Draw the Character (/draw namespace) ------------------------------------------------
+  //
+  // One draws, the other guesses. What must never happen: the answer -- or the other two
+  // characters the drawer was offered -- reaching a guesser before they have it.
+  console.log('\n# draw — one draws, everyone else guesses');
+  const connectDraw = (pid) => {
+    const sock = io(`${URL}/draw`, { auth: { playerId: pid } });
+    sock.received = [];
+    sock.onAny((event, payload) => sock.received.push({ event, json: JSON.stringify(payload ?? null) }));
+    return new Promise((r) => sock.on('connect', () => r(sock)));
+  };
+  const P = await connectDraw('rP');
+  res = await P.emitWithAck('room:create', { nickname: 'Pia' });
+  check(res.ok && res.state.kind === 'draw', 'a draw room is created');
+  const drawCode = res.state.code;
+  const Q = await connectDraw('rQ');
+  res = await Q.emitWithAck('room:join', { code: drawCode, nickname: 'Quinn' });
+  check(res.ok, 'a second player joins');
+  const deskSock = await connectDesk('dZ');
+  res = await deskSock.emitWithAck('room:join', { code: drawCode, nickname: 'Z' });
+  check(!res.ok && /Draw the Character/.test(res.error), 'the guessing game cannot join a drawing room');
+  deskSock.close();
+
+  const pFirst = nextEvent(P, 'draw:state');
+  const qFirst = nextEvent(Q, 'draw:state');
+  res = await P.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+  check(res.ok, 'the host starts a one-round game');
+  const [pState, qState] = await Promise.all([pFirst, qFirst]);
+  check(pState.phase === 'choosing' && pState.isDrawer && pState.choices.length >= 1, 'the first drawer is offered characters');
+  check(qState.choices === null && qState.character === null, "the guesser sees neither the choices nor the answer");
+  const offered = pState.choices.map((c) => c.name);
+
+  const qDrawing = nextMatching(Q, 'draw:state', (v) => v.phase === 'drawing');
+  res = await P.emitWithAck('draw:choose', { index: 0 });
+  check(res.ok, 'the drawer chooses');
+  const qView = await qDrawing;
+  const drawAnswer = offered[0];
+  check(qView.mask && qView.mask.length === drawAnswer.length && !qView.mask.includes(drawAnswer[0] + drawAnswer[1]), 'the guesser sees blanks the length of the name');
+
+  // Strokes: passed on when they are what the client could make, dropped when not.
+  const strokeArrives = nextEvent(Q, 'draw:stroke');
+  P.emit('draw:stroke', { id: 's1', color: '#e21b3c', size: 8, points: [[0.1, 0.1], [0.2, 0.25]] });
+  const relayed = await strokeArrives;
+  check(relayed.id === 's1' && relayed.points.length === 2, "the drawer's stroke reaches the guesser");
+  P.emit('draw:stroke', { id: 's2', color: 'url(javascript:alert(1))', size: 8, points: [[0.3, 0.3]] });
+  P.emit('draw:stroke', { id: 's3', color: '#e21b3c', size: 8, points: [[5, -2]] });
+  Q.emit('draw:stroke', { id: 's4', color: '#e21b3c', size: 8, points: [[0.5, 0.5]] });
+  await wait(150);
+  check(!Q.received.some((e) => e.event === 'draw:stroke' && /"s[234]"/.test(e.json)), 'a bad colour, an off-canvas point and a non-drawer\'s stroke are all dropped');
+  const reconnecting = await connectDraw('rQ');
+  const caughtUp = nextEvent(reconnecting, 'draw:canvas');
+  await reconnecting.emitWithAck('room:join', { code: drawCode, nickname: 'Quinn' });
+  check((await caughtUp).strokes.length === 1, 'a reconnecting browser gets the picture so far');
+  reconnecting.close();
+
+  res = await Q.emitWithAck('draw:say', { text: 'Definitely Nobody' });
+  check(res.ok && res.verdict === 'wrong', 'a wrong guess is wrong, and shown');
+  const typoDraw = drawAnswer.slice(0, -1) + (drawAnswer.endsWith('x') ? 'y' : 'x');
+  res = await Q.emitWithAck('draw:say', { text: typoDraw });
+  check(res.ok && res.verdict === 'close', 'a typo is close -- told only to the guesser');
+  check(!P.received.some((e) => e.json.includes(typoDraw)), 'the drawer never sees a close guess');
+
+  const qGotIt = nextEvent(Q, 'draw:correct');
+  const reveal1 = nextMatching(P, 'draw:state', (v) => v.phase === 'reveal');
+  res = await Q.emitWithAck('draw:say', { text: drawAnswer.toUpperCase() });
+  check(res.ok && res.verdict === 'correct' && res.points > 0, 'the right name scores');
+  await qGotIt;
+  check((await reveal1).lastTurn.character.name === drawAnswer, 'everyone guessed, so the turn ends with the reveal');
+  const guesserLeaks = (() => {
+    const until = Q.received.findIndex((e) => e.event === 'draw:correct');
+    const before = Q.received.slice(0, until);
+    return offered.filter((name) => before.some((e) => e.json.includes(JSON.stringify(name).slice(1, -1))));
+  })();
+  check(guesserLeaks.length === 0, `the guesser was never sent the answer or the other choices${guesserLeaks.length ? `: ${guesserLeaks.join(', ')}` : ''}`);
+
+  // The second turn: Quinn draws, and the game ends after it (one round).
+  const qChoosing = nextMatching(Q, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
+  const second = await qChoosing;
+  check(second.drawer.playerId === 'rQ', 'after the reveal, the next player draws');
+  const pDrawing2 = nextMatching(P, 'draw:state', (v) => v.phase === 'drawing');
+  await Q.emitWithAck('draw:choose', { index: 0 });
+  await pDrawing2;
+  const drawOver = nextEvent(P, 'draw:over');
+  await P.emitWithAck('draw:say', { text: second.choices[0].name });
+  const final = await drawOver;
+  check(final.standings.length === 2 && final.standings.every((s) => s.score > 0), 'after everyone has drawn once, the game ends with scores');
+
+  const drawPage = await httpGet('/draw/');
+  check(drawPage.status === 200 && drawPage.type.includes('text/html'), 'GET /draw/ serves the drawing client');
+  check((await httpGet('/shared/theme.css')).type.includes('css'), 'GET /shared/theme.css serves the common look');
+  check((await httpGet('/shared/common.js')).type.includes('javascript'), 'GET /shared/common.js serves the common helpers');
+  P.close(); Q.close();
 
   C2.close(); D.close();
   await wait(50);

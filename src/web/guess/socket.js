@@ -20,6 +20,7 @@
 // socket id, so a reconnecting phone reclaims its seat and its in-progress setup view.
 
 const loop = require('./turnLoop');
+const access = require('../roomAccess');
 
 function namesOf(room) {
   const names = {};
@@ -283,52 +284,25 @@ function attachSockets(nsp, { registry, setup, variant }) {
   }, WATCHDOG_MS);
   watchdog.unref?.();
 
-  // Nothing here is authenticated -- anyone with the link can open a socket -- so the two
-  // unauthenticated actions that cost something are bounded per connection. Room codes are only
-  // 32^4, which is guessable by machine but not by a person, so the join limit is what keeps a
-  // stranger from walking into a game rather than the code length.
-  const MAX_ROOMS_PER_SOCKET = 5;
-  const MAX_FAILED_JOINS = 20;
-
+  // Identifying, creating and joining -- and their limits on strangers -- are ../roomAccess.js,
+  // shared with every web game.
   nsp.on('connection', (socket) => {
-    const playerId = socket.handshake.auth?.playerId;
-    if (!playerId) {
-      socket.emit('room:error', { error: 'Missing player id.' });
-      socket.disconnect(true);
-      return;
-    }
-    socket.data.playerId = playerId;
-    socket.data.code = null;
+    const playerId = access.identify(socket);
+    if (!playerId) return;
 
     const room = () => registry.getRoom(socket.data.code);
     const isHost = () => room()?.hostPlayerId === playerId;
 
     socket.on('room:create', ({ nickname } = {}, ack) => {
-      socket.data.created = (socket.data.created || 0) + 1;
-      if (socket.data.created > MAX_ROOMS_PER_SOCKET) {
-        return ack?.({ ok: false, error: 'Too many rooms from this device. Reload the page.' });
-      }
-      const res = registry.createRoom({ hostPlayerId: playerId, nickname, kind: variant.kind });
-      if (!res.ok) return ack?.({ ok: false, error: res.error });
-      socket.data.code = res.room.code;
-      socket.join(res.room.code);
-      registry.attachConnection(res.room.code, playerId, socket.id);
+      const res = access.createRoom(socket, registry, variant.kind, nickname);
+      if (!res.ok) return ack?.(res);
       ack?.({ ok: true, state: res.room.publicState() });
       broadcastRoom(res.room);
     });
 
     socket.on('room:join', ({ code, nickname } = {}, ack) => {
-      if ((socket.data.failedJoins || 0) >= MAX_FAILED_JOINS) {
-        return ack?.({ ok: false, error: 'Too many failed attempts. Reload the page.' });
-      }
-      const res = registry.joinRoom(code, { playerId, nickname, kind: variant.kind });
-      if (!res.ok) {
-        socket.data.failedJoins = (socket.data.failedJoins || 0) + 1;
-        return ack?.({ ok: false, error: res.error });
-      }
-      socket.data.code = res.room.code;
-      socket.join(res.room.code);
-      registry.attachConnection(res.room.code, playerId, socket.id);
+      const res = access.joinRoom(socket, registry, variant.kind, code, nickname);
+      if (!res.ok) return ack?.(res);
       ack?.({ ok: true, state: res.room.publicState(), reconnected: res.reconnected });
       broadcastRoom(res.room);
       // If the current player was paused because they'd dropped, their return resumes the clock.

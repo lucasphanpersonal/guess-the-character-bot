@@ -12,8 +12,10 @@
 //
 //   party/   Guess the Character on phones -- foreheads and tilt. Served at the site root.
 //   desk/    Guess the Character on computers -- a board and typed guesses. Served at /desk/.
+//   draw/    Draw the Character -- one draws, everyone else guesses. Served at /draw/.
 //
-// Both are ways of playing one game, whose rules and room protocol live in guess/.
+// party/ and desk/ are two ways of playing one game, whose rules and room protocol live in
+// guess/. draw/ is a different game, sharing only what is around a game.
 //
 // What a game needs from the content comes from ./content.js, never from the compendium
 // directly, so what the web deals from is decided in one place.
@@ -34,13 +36,19 @@ const { WEB_SCOPE } = require('./content');
 const imageCache = require('./imageCache');
 const party = require('./party');
 const desk = require('./desk');
+const drawGame = require('./draw');
 
 const PORT = process.env.WEB_PORT || 4180;
 // Party mode owns the site root: it was the only game when the links and QR codes out there were
 // made, and the client is unversioned. Every other game lives under a path of its own.
-const MOUNTS = [{ prefix: '/desk/', dir: desk.publicDir }];
+const MOUNTS = [
+  { prefix: '/desk/', dir: desk.publicDir },
+  { prefix: '/draw/', dir: drawGame.publicDir },
+  // The computer games' common look and helpers, so the two pages cannot drift apart.
+  { prefix: '/shared/', dir: path.join(__dirname, 'shared') },
+];
 // Where a room's join link points, by kind.
-const JOIN_PATH = { party: '/', desk: '/desk/' };
+const JOIN_PATH = { party: '/', desk: '/desk/', draw: '/draw/' };
 
 const registry = new RoomRegistry();
 
@@ -343,6 +351,7 @@ const server = http.createServer(requestHandler);
 const io = new Server(server); // serves its browser client at /socket.io/socket.io.js
 party.attach(io, { registry });
 desk.attach(io, { registry });
+drawGame.attach(io, { registry });
 
 // Abandoned-room sweep, once for every game's rooms (they share the registry). Same role as
 // GameManager.evictStaleLobbies on the Discord side.

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#46178f" />
+  <title>Draw the Character</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎨</text></svg>" />
+  <!-- The look and the seasonal switch are shared with /desk/ (src/web/shared). -->
+  <script src="/shared/season.js"></script>
+  <link rel="stylesheet" href="/shared/theme.css" />
+  <style>
+    /* This game's own pieces. Three columns: who is playing, the picture, the guesses. */
+    main { max-width:84rem; }
+    .drawgrid { display:grid; grid-template-columns:15rem minmax(0,1fr) 20rem; gap:18px; align-items:start; }
+    @media (max-width: 1000px) { .drawgrid { grid-template-columns:1fr; } }
+    .topbar { display:flex; align-items:center; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+    .topbar .round { font-weight:900; white-space:nowrap; }
+    /* The blanks are the clue: big, spaced, in the display face, with the gaps kept wide. */
+    .mask { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size:1.7rem; font-weight:900;
+            letter-spacing:.35em; white-space:pre-wrap; flex:1; min-width:12rem; text-align:center;
+            text-shadow:0 2px 0 rgba(0,0,0,.25); }
+    .mask .len { font-family:inherit; font-size:.9rem; letter-spacing:0; opacity:.8; }
+    .canvaswrap { background:#fff; border-radius:18px; box-shadow:0 6px 0 rgba(0,0,0,.22); overflow:hidden;
+                  aspect-ratio:4/3; position:relative; }
+    canvas { width:100%; height:100%; display:block; touch-action:none; }
+    canvas.can-draw { cursor:crosshair; }
+    .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+               gap:14px; background:rgba(255,255,255,.94); color:var(--ink); padding:20px; text-align:center; }
+    .overlay[hidden] { display:none; }
+    .overlay h2 { font-size:1.6rem; }
+    .pick { display:grid; grid-template-columns:repeat(3, minmax(0, 12rem)); gap:14px; }
+    .pick button { background:#fff; color:var(--ink); box-shadow:0 6px 0 rgba(0,0,0,.18); border:3px solid var(--edge);
+                   display:flex; flex-direction:column; gap:8px; padding:10px; font-family:var(--font-display); }
+    .pick button:hover { border-color:var(--blue); }
+    .pick .art { height:9rem; border-radius:10px; background:#f3f0f8; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .pick .art img { width:100%; height:100%; object-fit:contain; }
+    .reveal-art { width:14rem; height:11rem; border-radius:12px; background:#f3f0f8; overflow:hidden; display:flex;
+                  align-items:center; justify-content:center; }
+    .reveal-art img { width:100%; height:100%; object-fit:contain; }
+    .tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
+    .tools[hidden] { display:none; }
+    .swatch { width:2.4rem; height:2.4rem; padding:0; border-radius:50%; border:3px solid #fff;
+              box-shadow:0 4px 0 rgba(0,0,0,.25); }
+    .swatch:active { box-shadow:0 1px 0 rgba(0,0,0,.25); }
+    /* The picked colour and size are marked with a ring AND a check -- never by colour alone. */
+    .swatch.on, .size.on { outline:4px solid #fff; outline-offset:2px; }
+    .swatch.on::after { content:"✓"; font-weight:900; color:#fff; text-shadow:0 0 3px #000; }
+    .size { width:2.6rem; height:2.6rem; padding:0; background:#fff; box-shadow:0 4px 0 rgba(0,0,0,.25);
+            display:flex; align-items:center; justify-content:center; }
+    .size i { display:block; border-radius:50%; background:var(--ink); }
+    .tools .gap { flex:1; }
+    .players { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+    .players li { display:flex; align-items:center; gap:8px; background:#fff; color:var(--ink); border-radius:12px;
+                  padding:10px 12px; box-shadow:0 4px 0 rgba(0,0,0,.18); font-weight:800; }
+    .players li .score { margin-left:auto; font-family:var(--font-display); }
+    .players li.got { background:#e3f5dc; }
+    .players li.left { opacity:.55; }
+    .players .tag { font-size:.68rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase; border-radius:999px;
+                    padding:1px 7px; }
+    .players .tag.drawing { background:var(--amber); color:#2b1c00; }
+    .players .tag.got { background:var(--green); color:#fff; }
+    .chat { display:flex; flex-direction:column; height:min(34rem, 62vh); }
+    .chat ul { list-style:none; margin:0; padding:0; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
+    .chat li { line-height:1.35; overflow-wrap:anywhere; }
+    .chat li .who { font-weight:800; }
+    .chat li.sys { color:var(--green-d); font-weight:800; }
+    .chat li.insider { color:#5a4b78; font-style:italic; }
+    .chat li.close { color:var(--amber-d); font-weight:800; }
+    .chat form { display:flex; gap:8px; margin-top:10px; }
+    .chat form input { font-size:1rem; padding:10px 12px; }
+    .chat form button { padding:10px 14px; }
+    .clock { min-width:8rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1 id="title">Draw the Character</h1>
+
+  <!-- Landing -->
+  <section id="landing" class="screen active">
+    <div class="cols">
+      <div class="card stack">
+        <h2>Draw it, guess it</h2>
+        <p class="hint">One player draws a character; everyone else types guesses. The faster you get
+          it, the more you score, and the drawer scores for everyone who does. Everyone draws once a
+          round.</p>
+        <div>
+          <label for="nameInput">Your name</label>
+          <input id="nameInput" maxlength="20" autocomplete="nickname" />
+        </div>
+        <button id="createBtn" class="wide">Create a Room</button>
+      </div>
+      <div class="card stack">
+        <h2>Join a room</h2>
+        <div>
+          <label for="codeInput">Room code</label>
+          <input id="codeInput" maxlength="4" autocomplete="off" />
+        </div>
+        <button id="joinBtn" class="alt wide">Join</button>
+        <p class="hint">Rather guess who you are? Play <a href="/desk/">Guess the Character</a> on
+          computers, or on <a href="/">phones</a>.</p>
+      </div>
+    </div>
+    <p class="err light" id="landingErr" role="alert"></p>
+  </section>
+
+  <!-- Lobby -->
+  <section id="lobby" class="screen">
+    <div class="cols">
+      <div class="card stack">
+        <div>
+          <label>Room code</label>
+          <div class="roomcode" id="roomCode"></div>
+        </div>
+        <div class="row">
+          <input id="shareLink" readonly class="grow" aria-label="Link to this room" />
+          <button id="copyBtn" class="ghost">Copy Link</button>
+        </div>
+        <div>
+          <label id="rosterLabel">Players</label>
+          <ul class="roster" id="roster"></ul>
+        </div>
+        <button id="leaveBtn" class="ghost">Leave Room</button>
+      </div>
+      <div class="card stack" id="hostPanel">
+        <h2>Game settings</h2>
+        <div>
+          <label>Characters from</label>
+          <div class="choices" role="radiogroup">
+            <label class="choice c0"><input type="radio" name="pool" value="random" checked /><span class="shape">▲</span> Random Category</label>
+            <label class="choice c1"><input type="radio" name="pool" value="all" /><span class="shape">◆</span> Everything</label>
+            <label class="choice c2"><input type="radio" name="pool" value="category" /><span class="shape">●</span> A Category</label>
+          </div>
+        </div>
+        <div id="categoryRow" hidden>
+          <label for="categorySelect">Category</label>
+          <select id="categorySelect"></select>
+        </div>
+        <div>
+          <label for="difficultySelect">Difficulty</label>
+          <select id="difficultySelect"></select>
+        </div>
+        <div class="row">
+          <div class="grow">
+            <label for="roundsSelect">Rounds</label>
+            <select id="roundsSelect">
+              <option value="1">1 round</option>
+              <option value="2">2 rounds</option>
+              <option value="3" selected>3 rounds</option>
+              <option value="4">4 rounds</option>
+              <option value="5">5 rounds</option>
+            </select>
+          </div>
+          <div class="grow">
+            <label for="timeSelect">Time to draw</label>
+            <select id="timeSelect">
+              <option value="60">60 seconds</option>
+              <option value="80" selected>80 seconds</option>
+              <option value="100">100 seconds</option>
+              <option value="120">2 minutes</option>
+            </select>
+          </div>
+        </div>
+        <button id="startBtn" class="good wide">Start Drawing</button>
+        <p class="err" id="lobbyErr" role="alert"></p>
+      </div>
+      <div class="card" id="guestPanel" hidden>
+        <h2>Waiting for the host</h2>
+        <p class="hint">The host picks where the characters come from, then starts.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Play -->
+  <section id="game" class="screen">
+    <div class="topbar">
+      <div class="round" id="roundLabel"></div>
+      <div class="mask" id="mask" aria-live="polite"></div>
+      <div class="clock" id="clock"><i id="clockFill"></i></div>
+      <div class="secs" id="clockSecs"></div>
+    </div>
+    <div class="drawgrid">
+      <ul class="players" id="players"></ul>
+      <div>
+        <div class="canvaswrap">
+          <canvas id="canvas" width="1200" height="900" aria-label="The drawing"></canvas>
+          <div class="overlay" id="chooseOverlay" hidden>
+            <h2>Pick one to draw</h2>
+            <div class="pick" id="pick"></div>
+            <p class="hint">Draw it, don't write it. You score for everyone who gets it.</p>
+          </div>
+          <div class="overlay" id="waitOverlay" hidden>
+            <h2 id="waitText"></h2>
+          </div>
+          <div class="overlay" id="revealOverlay" hidden>
+            <h2 id="revealTitle"></h2>
+            <div class="reveal-art" id="revealArt"></div>
+            <div id="revealPoints" class="hint"></div>
+          </div>
+        </div>
+        <div class="tools" id="tools" hidden>
+          <div class="row" id="swatches" role="radiogroup" aria-label="Colour"></div>
+          <div class="row" id="sizes" role="radiogroup" aria-label="Brush size"></div>
+          <span class="gap"></span>
+          <button id="undoBtn" class="ghost">Undo</button>
+          <button id="clearBtn" class="bad">Clear</button>
+        </div>
+      </div>
+      <div class="card chat">
+        <h2 id="chatTitle">Guesses</h2>
+        <ul id="chat" aria-live="polite"></ul>
+        <form id="chatForm" autocomplete="off">
+          <input id="chatInput" maxlength="80" placeholder="Type your guess" aria-label="Your guess" />
+          <button type="submit" class="good">Send</button>
+        </form>
+        <p class="err" id="chatErr" role="alert"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Results -->
+  <section id="over" class="screen">
+    <div class="cols">
+      <div class="card stack">
+        <h2 id="overTitle">Game over</h2>
+        <ol class="standings" id="standings"></ol>
+      </div>
+      <div class="card stack">
+        <div id="hostOver" class="stack">
+          <button id="rematchBtn" class="good wide">Rematch — Same Settings</button>
+          <button id="againBtn" class="ghost wide">Change Settings</button>
+        </div>
+        <p class="hint" id="guestOver">The host can start another game.</p>
+        <p class="err" id="overErr" role="alert"></p>
+        <button id="leaveOverBtn" class="ghost wide">Leave Room</button>
+      </div>
+    </div>
+  </section>
+</main>
+<div class="feed" id="feed" aria-live="polite"></div>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/shared/common.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

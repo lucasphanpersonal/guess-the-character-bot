@@ -1,0 +1,329 @@
+// Socket.io wiring for Draw the Character (namespace /draw).
+//
+// Translates events into calls on the rules (./game.js) and broadcasts per-player views; owns the
+// clock. Rooms come from the shared registry (kind 'draw'), and getting into one -- identifying,
+// creating, joining, and the limits on strangers -- is ../roomAccess.js, as for every web game.
+//
+// Time: ONE timer per room, always aimed at the next thing due (the end of choosing, a hint, the
+// end of the drawing, the end of the reveal), and a watchdog that re-checks against the wall
+// clock, because a laptop that sleeps fires its timers late. tick() is safe to call at any time:
+// it does whatever is due and nothing else.
+//
+// Strokes: the drawer sends them in pieces as they draw; the server checks every number, keeps
+// the turn's strokes (so a reconnecting browser can redraw the picture) and passes each piece on.
+
+const access = require('../roomAccess');
+const draw = require('./game');
+const web = require('../content');
+const Game = require('../../core/game/Game');
+
+const ROUNDS = [1, 2, 3, 4, 5];
+const DRAW_SECONDS = [60, 80, 100, 120];
+// The palette and brush sizes the client offers. Anything else is refused rather than drawn: a
+// stroke is relayed to every screen in the room, so it must be only what the client could make.
+const COLOURS = new Set(['#1b1033', '#ffffff', '#e21b3c', '#1368ce', '#ffa602', '#26890c', '#8b4513', '#c13ac1', '#7fd6ff', '#9a9a9a']);
+const SIZES = new Set([3, 8, 18, 36]);
+const MAX_POINTS_PER_TURN = 30000; // generous for a sketch, bounded for a stranger
+const MAX_POINTS_PER_PIECE = 400;
+
+const namesOf = (room) => {
+  const names = {};
+  for (const [id, nickname] of room.departedNames ?? []) names[id] = nickname;
+  for (const [id, seat] of room.players) names[id] = seat.nickname;
+  return names;
+};
+
+// The DB row a deal returns, in the shape every game passes around (name, imageUrl, source, id).
+const headOf = (row) => Game.head({ guildId: web.WEB_SCOPE }, row);
+
+function cleanPoints(points) {
+  if (!Array.isArray(points)) return null;
+  const out = [];
+  for (const p of points.slice(0, MAX_POINTS_PER_PIECE)) {
+    if (!Array.isArray(p)) return null;
+    const [x, y] = p.map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
+    // Three decimals is a pixel on any canvas a person will use, and a third of the bytes.
+    out.push([Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]);
+  }
+  return out;
+}
+
+function attachDrawSockets(nsp, { registry }) {
+  const broadcastRoom = (room) => room && nsp.to(room.code).emit('room:state', room.publicState());
+
+  const socketsIn = (room) => {
+    const ids = nsp.adapter.rooms.get(room.code) ?? [];
+    return [...ids].map((id) => nsp.sockets.get(id)).filter(Boolean);
+  };
+
+  // Every player gets their OWN view: the answer, the drawer's choices and insiders' lines differ
+  // per person, so this is never a room broadcast.
+  const emitViews = (room) => {
+    const g = room.game;
+    if (!g) return;
+    const names = namesOf(room);
+    const now = Date.now();
+    for (const s of socketsIn(room)) {
+      if (g.order.includes(s.data.playerId)) s.emit('draw:state', draw.viewFor(g, s.data.playerId, names, now));
+    }
+  };
+
+  // The next characters for the current drawer. Prefer ones with a picture -- the drawer needs
+  // something to draw from -- and never one already drawn this game.
+  function dealChoices(room, now) {
+    const g = room.game;
+    const s = room.drawSettings;
+    const rows = web.content.randomCharacters(s.listIds, draw.CHOICES, g.used, s.difficulty, { preferImages: true });
+    if (!rows.length) return false;
+    draw.offerChoices(g, rows.map(headOf), now);
+    nsp.to(room.code).emit('draw:canvas', { strokes: [] });
+    return true;
+  }
+
+  function finish(room) {
+    clearTimer(room);
+    room.status = 'finished';
+    room.game.phase = 'over';
+    nsp.to(room.code).emit('draw:over', { standings: draw.standings(room.game, namesOf(room)) });
+    broadcastRoom(room);
+  }
+
+  const clearTimer = (room) => {
+    if (room?.drawTimer) {
+      clearTimeout(room.drawTimer);
+      room.drawTimer = null;
+    }
+  };
+
+  // Aim the room's one timer at whatever is due next.
+  function schedule(room) {
+    clearTimer(room);
+    const g = room.game;
+    if (!g || room.status !== 'playing') return;
+    const now = Date.now();
+    const due = [g.deadline, ...(g.phase === 'drawing' ? draw.hintTimes(g).filter((t) => t > now) : [])].filter(Boolean);
+    if (!due.length) return;
+    room.drawTimer = setTimeout(() => tick(room), Math.max(0, Math.min(...due) - now) + 20);
+    room.drawTimer.unref?.();
+  }
+
+  // Do whatever is due. Safe to call at any moment; calls itself again through schedule().
+  function tick(room) {
+    const g = room.game;
+    if (!g || room.status !== 'playing') return;
+    const now = Date.now();
+    let changed = false;
+
+    if (g.phase === 'choosing' && g.deadline <= now) {
+      draw.autoChoose(g, now);
+      changed = true;
+    }
+    if (g.phase === 'drawing') {
+      if (draw.revealDueHints(g, now)) changed = true;
+      if (g.deadline <= now) {
+        draw.endTurn(g, now, 'time');
+        changed = true;
+      }
+    }
+    if (g.phase === 'reveal' && g.deadline <= now) {
+      if (draw.advance(g).over) return finish(room);
+      if (!dealChoices(room, now)) return finish(room); // the pool ran dry
+      changed = true;
+    }
+    if (changed) emitViews(room);
+    schedule(room);
+  }
+
+  const watchdog = setInterval(() => {
+    for (const room of registry.allRooms()) if (room.kind === 'draw' && room.status === 'playing') tick(room);
+  }, 2000);
+  watchdog.unref?.();
+
+  function start(room, config) {
+    const { listIds, label } = web.resolvePool({ poolType: config.poolType, category: config.category, excluded: room.excludedListIds });
+    if (!listIds.length) return { ok: false, error: 'That selection has no playable lists.' };
+    const rounds = ROUNDS.includes(Number(config.rounds)) ? Number(config.rounds) : 3;
+    const drawSeconds = DRAW_SECONDS.includes(Number(config.drawSeconds)) ? Number(config.drawSeconds) : 80;
+    const difficulty = config.difficulty || web.DEFAULT_DIFFICULTY;
+    room.drawSettings = { listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category };
+    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds });
+    if (!dealChoices(room, Date.now())) {
+      room.game = null;
+      return { ok: false, error: `${label} has no characters at this difficulty.` };
+    }
+    room.status = 'playing';
+    broadcastRoom(room);
+    emitViews(room);
+    schedule(room);
+    return { ok: true, label };
+  }
+
+  // Someone leaves for good: off the board for turns, kept for the scores.
+  function departGame(room, playerId) {
+    const g = room?.game;
+    if (!g || room.status !== 'playing') return;
+    const res = draw.removePlayer(g, playerId, Date.now());
+    if (!res.ok) return;
+    emitViews(room);
+    schedule(room);
+  }
+
+  nsp.on('connection', (socket) => {
+    const playerId = access.identify(socket);
+    if (!playerId) return;
+    const room = () => registry.getRoom(socket.data.code);
+    const isHost = () => room()?.hostPlayerId === playerId;
+
+    socket.on('room:create', ({ nickname } = {}, ack) => {
+      const res = access.createRoom(socket, registry, 'draw', nickname);
+      if (!res.ok) return ack?.(res);
+      ack?.({ ok: true, state: res.room.publicState() });
+      broadcastRoom(res.room);
+    });
+
+    socket.on('room:join', ({ code, nickname } = {}, ack) => {
+      const res = access.joinRoom(socket, registry, 'draw', code, nickname);
+      if (!res.ok) return ack?.(res);
+      ack?.({ ok: true, state: res.room.publicState(), reconnected: res.reconnected });
+      broadcastRoom(res.room);
+      // Rejoining mid-game: the view, and the picture so far.
+      const g = res.room.game;
+      if (g && res.room.status === 'playing' && g.order.includes(playerId)) {
+        socket.emit('draw:canvas', { strokes: g.phase === 'drawing' ? g.strokes : [] });
+        socket.emit('draw:state', draw.viewFor(g, playerId, namesOf(res.room), Date.now()));
+      } else if (g && res.room.status === 'finished') {
+        socket.emit('draw:over', { standings: draw.standings(g, namesOf(res.room)) });
+      }
+    });
+
+    socket.on('draw:options', (_p, ack) => ack?.(web.poolOptions()));
+
+    socket.on('draw:start', (config = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (!isHost()) return ack?.({ ok: false, error: 'Only the host can start.' });
+      if (r.status === 'playing') return ack?.({ ok: false, error: 'Already playing.' });
+      if (r.players.size < 2) return ack?.({ ok: false, error: 'Need at least 2 players.' });
+      ack?.(start(r, config));
+    });
+
+    // Same settings, same roster, straight back in.
+    socket.on('draw:rematch', (_p, ack) => {
+      const r = room();
+      if (!r || !isHost()) return ack?.({ ok: false, error: 'Only the host can rematch.' });
+      if (r.status !== 'finished') return ack?.({ ok: false, error: 'No finished game to rematch.' });
+      if (r.players.size < 2) return ack?.({ ok: false, error: 'Need at least 2 players for a rematch.' });
+      ack?.(start(r, r.drawSettings ?? {}));
+    });
+
+    socket.on('draw:again', (_p, ack) => {
+      const r = room();
+      if (!r || !isHost()) return ack?.({ ok: false, error: 'Only the host can do that.' });
+      clearTimer(r);
+      r.game = null;
+      r.status = 'lobby';
+      ack?.({ ok: true });
+      broadcastRoom(r);
+    });
+
+    const playing = (r) => r && r.status === 'playing' && r.game;
+
+    socket.on('draw:choose', ({ index } = {}, ack) => {
+      const r = room();
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      const res = draw.choose(r.game, playerId, index, Date.now());
+      ack?.(res);
+      if (res.ok) {
+        emitViews(r);
+        schedule(r);
+      }
+    });
+
+    socket.on('draw:say', ({ text } = {}, ack) => {
+      const r = room();
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      const res = draw.say(r.game, playerId, text, Date.now());
+      ack?.(res.ok ? { ok: true, verdict: res.verdict, points: res.points } : res);
+      if (!res.ok || res.verdict === 'close') return; // close is for the guesser's ack alone
+      if (res.verdict === 'correct') {
+        nsp.to(r.code).emit('draw:correct', { name: namesOf(r)[playerId] ?? 'Player', points: res.points });
+        if (res.allGuessed) draw.endTurn(r.game, Date.now(), 'all');
+        emitViews(r);
+        return schedule(r);
+      }
+      emitViews(r);
+    });
+
+    // --- the picture ------------------------------------------------------------------------
+    const drawerHere = (r) => playing(r) && r.game.phase === 'drawing' && draw.drawerOf(r.game) === playerId;
+
+    socket.on('draw:stroke', (piece = {}) => {
+      const r = room();
+      if (!drawerHere(r)) return;
+      const g = r.game;
+      const points = cleanPoints(piece.points);
+      const id = String(piece.id ?? '').slice(0, 24);
+      if (!points || !points.length || !id) return;
+      if (g.strokes.reduce((n, s) => n + s.points.length, 0) + points.length > MAX_POINTS_PER_TURN) return;
+      let stroke = g.strokes.find((s) => s.id === id);
+      if (!stroke) {
+        const colour = String(piece.color ?? '').toLowerCase();
+        const size = Number(piece.size);
+        if (!COLOURS.has(colour) || !SIZES.has(size)) return;
+        stroke = { id, color: colour, size, points: [] };
+        g.strokes.push(stroke);
+      }
+      stroke.points.push(...points);
+      socket.to(r.code).emit('draw:stroke', { id, color: stroke.color, size: stroke.size, points });
+    });
+
+    socket.on('draw:undo', () => {
+      const r = room();
+      if (!drawerHere(r)) return;
+      r.game.strokes.pop();
+      nsp.to(r.code).emit('draw:canvas', { strokes: r.game.strokes });
+    });
+
+    socket.on('draw:clear', () => {
+      const r = room();
+      if (!drawerHere(r)) return;
+      r.game.strokes = [];
+      nsp.to(r.code).emit('draw:canvas', { strokes: [] });
+    });
+
+    // A tab that was hidden asks for the picture and the clock on its way back.
+    socket.on('draw:resync', (_p, ack) => {
+      const r = room();
+      if (!playing(r) || !r.game.order.includes(playerId)) return ack?.({ ok: false });
+      socket.emit('draw:canvas', { strokes: r.game.phase === 'drawing' ? r.game.strokes : [] });
+      socket.emit('draw:state', draw.viewFor(r.game, playerId, namesOf(r), Date.now()));
+      ack?.({ ok: true });
+    });
+
+    socket.on('room:leave', (_p, ack) => {
+      const code = socket.data.code;
+      if (!code) return ack?.({ ok: true });
+      const before = registry.getRoom(code);
+      departGame(before, playerId);
+      const { room: after } = registry.leaveRoom(code, playerId);
+      socket.leave(code);
+      socket.data.code = null;
+      ack?.({ ok: true });
+      broadcastRoom(after);
+      // Below two players there is no game to keep going.
+      if (after?.game && after.status === 'playing' && after.game.order.filter((id) => !after.game.gone.has(id)).length < 2) finish(after);
+    });
+
+    socket.on('disconnect', () => {
+      const code = socket.data.code;
+      if (!code) return;
+      // A dropped connection keeps the seat, and the turn goes on: a drawer who reloads comes back
+      // to their picture, and one who never returns simply runs out of time.
+      const { room: r, nowOffline } = registry.detachConnection(code, playerId, socket.id);
+      if (nowOffline) broadcastRoom(r);
+    });
+  });
+}
+
+module.exports = { attachDrawSockets, COLOURS, SIZES };

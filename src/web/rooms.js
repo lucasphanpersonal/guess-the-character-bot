@@ -26,6 +26,7 @@ const NICK_MAX = 20;
 const KINDS = {
   party: 'a phone game. Join it from a phone, at the main address',
   desk: 'a computer game. Open it on a computer, at /desk/',
+  draw: 'Draw the Character. Open it on a computer, at /draw/',
 };
 
 function randomCode() {

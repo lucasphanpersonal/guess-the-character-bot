@@ -22,6 +22,10 @@ happen live between humans in voice.
 >   a typo, a nickname — goes to the other players to rule on with one tap. See
 >   [Checking a typed guess](#checking-a-typed-guess).
 >
+> And a second game on the same server: **Draw the Character** (`/draw/`). One player draws a
+> character they picked from three; everyone else types guesses. Letter blanks fill in as hints,
+> faster guesses score more, and the drawer scores for everyone who gets it.
+>
 > Everything below this point describes the Discord bot.
 
 ---
@@ -743,12 +747,14 @@ src/
   web/                 The web games. Imports from core/ and compendium/. See web/README.md.
     server.js             HTTP(S) + socket.io, static files, /img, browse API, QR; mounts each game
     content.js            The web's view of the compendium (scope 'web', pools, curation, dealing)
-    rooms.js, publicCharacter.js, imageCache.js   Shared by every web game
+    rooms.js, roomAccess.js, publicCharacter.js, imageCache.js   Shared by every web game
+    shared/               The computer games' common look and client helpers, at /shared/
     guess/                Guess the Character on the web, however it is played
       gameSetup.js, turnLoop.js   Dealing/confirm and the turn rules (pure, unit-tested)
       service.js, socket.js       The setup service and the room/turn protocol, per variant
     party/                Phones: forehead view, tilt, countdown. At the site root
     desk/                 Computers: board view, typed guesses, rulings. At /desk/
+    draw/                 Draw the Character: rules (game.js), protocol + clock (socket.js). At /draw/
 
 scripts/                Content tools (seeding, image fills, select-lists), sounds, the browser
   lib/compendiumArgs.js   Shared argument handling (drops a legacy leading server id)

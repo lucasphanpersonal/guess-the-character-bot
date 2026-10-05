@@ -14,6 +14,17 @@ without tangling into it. Two ways to play, from one server:
   it. No countdown, no motion sensors. Host-picks mode works on the server but has no picker in
   the computer client yet.
 
+And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
+order: the drawer picks one of three characters (15 s, else the first), sees its picture, and
+draws it; everyone else types guesses into the chat. The checker judges them with single words
+OFF (people guessing at a drawing type what they see — "Combat" is not "Combat Carl"). A wrong
+guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
+100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Letters of the
+name are revealed at half and three-quarter time, never more than a third of them. The turn ends
+when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEAL_SECONDS`, 6 s).
+Once you have it — and for the drawer, always — what you type goes only to the others who know.
+The host sets rounds (1–5) and drawing time (60–120 s).
+
 Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
 ("phone on your forehead!") → each phone shows its wearer's character full-screen, landscape,
@@ -46,6 +57,9 @@ web/
   content.js           The web's view of the compendium: its scope ('web'), pools, per-room
                        curation, dealing. Games use this, never the compendium directly.
   rooms.js             The room registry -- one for every game, so a code means one room.
+  roomAccess.js        Identifying, creating and joining, with the limits on strangers.
+  shared/              The computer games' look (theme.css), seasonal switch and client helpers,
+                       served at /shared/ so /desk/ and /draw/ cannot drift apart.
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
   guess/               Guess the Character on the web, however it is played.
@@ -76,9 +90,20 @@ Rooms carry a `kind` (`party` / `desk`) and each protocol only joins its own, so
 never be dealt into a game its client cannot draw. One registry still holds them all, so a code
 means one room either way.
 
-Another game entirely (Draw the Character) goes in a folder of its own beside these, with its
-own client path and namespace, and gets rooms, pools and images from the shared files above.
-Anything it would copy out of a game folder is the signal to move that piece up a level instead.
+```
+  draw/                Draw the Character -- a different game, sharing nothing of guess/.
+    game.js              The rules: choosing, guesses, hints, scoring, rounds (pure, unit-tested).
+    socket.js            The protocol and the clock: one timer per room aimed at whatever is due
+                         next, a watchdog for sleeping laptops, strokes checked and relayed.
+    public/              The drawing client.
+```
+
+A different game goes in a folder of its own beside these, with its own client path and
+namespace, and gets rooms, pools and images from the shared files above. Anything it would copy
+out of a game folder is the signal to move that piece up a level instead -- which is how
+`roomAccess.js` and `shared/` came to exist when Draw arrived. Draw's own leak to guard is the
+answer reaching a guesser early, through the view, the drawer's choices or an insider's chat
+line; `test/draw.test.js` and the socket check search whole payloads for it.
 
 The rule that keeps it clean: **`core/` never imports from `discord/` or `web/`.** Both
 frontends depend on the core; the core depends on neither. The codemod that created this split

@@ -14,6 +14,8 @@ src/web/         The web games: shared server/rooms/content, one folder per game
   guess/           Guess the Character's web rules + room protocol, shared by both ways below.
   party/           Phones (forehead view, tilt). Owns the site root + default namespace.
   desk/            Computers (board view, typed guesses, rulings). /desk/ + namespace /desk.
+  draw/            Draw the Character -- a separate game. /draw/ + namespace /draw.
+  shared/          The computer games' CSS + client helpers, at /shared/. Change the look HERE.
 ```
 
 **The forehead view and the board view are opposites, and only one may carry your own

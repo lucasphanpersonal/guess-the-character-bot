@@ -1,0 +1,137 @@
+/* The look of the computer games (/desk/, /draw/): the phones' game-show language at desk width.
+   Saturated field, white slabs with a hard bottom edge, chunky buttons whose shadow IS the feel,
+   colour always paired with a shape. The tokens are the phones' own
+   (src/web/party/public/index.html), so a change to the palette is made in both.
+
+   Shared, not copied per game, so the two can't drift apart. A game's own pieces (the board,
+   the canvas) stay in its own page. */
+:root {
+  --brand:#46178f; --ink:#1b1033; --paper:#fff;
+  --muted:#6b6480; --edge:#e6e2ef;
+  --red:#e21b3c; --red-d:#a81430; --blue:#1368ce; --blue-d:#0e4a95;
+  --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
+  --ok:#26890c; --off:#b9b3c7;
+  --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
+                  'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
+}
+:root[data-season="spooky"] { --brand:#cc4a0c; --blue:#6d28d9; --blue-d:#4c1d95; }
+* { box-sizing:border-box; }
+html { overflow-x:clip; }
+body { margin:0; min-height:100vh; font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+       background:var(--brand); color:#fff; display:flex; justify-content:center; }
+main { width:100%; max-width:72rem; padding:28px 28px 48px; }
+h1 { font-family:var(--font-display); font-size:2.6rem; font-weight:900; letter-spacing:-.02em;
+     margin:0 0 1.2rem; text-shadow:0 3px 0 rgba(0,0,0,.28); }
+h1 .wob-word { white-space:nowrap; }
+h1 .wob { display:inline-block; transform:rotate(var(--rot)); }
+h1 .wob.w0 { color:var(--red); } h1 .wob.w1 { color:#fff; } h1 .wob.w2 { color:var(--amber); } h1 .wob.w3 { color:#7fd6ff; }
+:root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
+:root[data-season="spooky"] h1 .wob.w1, :root[data-season="spooky"] h1 .wob.w3 { color:var(--ink); text-shadow:0 3px 0 rgba(255,255,255,.2); }
+h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
+.screen { display:none; }
+.screen.active { display:block; }
+.card { background:var(--paper); color:var(--ink); border-radius:18px; padding:20px;
+        box-shadow:0 6px 0 rgba(0,0,0,.22); }
+.stack > * + * { margin-top:16px; }
+.cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; }
+@media (max-width: 760px) { .cols { grid-template-columns:1fr; } main { padding:20px 16px 40px; } }
+label { display:block; font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
+        color:var(--muted); margin:0 0 6px; }
+input, select { width:100%; padding:12px 14px; font-size:1.05rem; font-weight:600; border-radius:12px;
+                border:3px solid var(--edge); background:#fff; color:var(--ink); font-family:inherit; }
+input:focus, select:focus { outline:none; border-color:var(--blue); }
+#codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.3rem; }
+button { padding:14px 18px; font-size:1.02rem; font-weight:900; border:none; border-radius:14px;
+         background:var(--blue); color:#fff; cursor:pointer; box-shadow:0 6px 0 var(--blue-d);
+         transition:transform .05s, box-shadow .05s; font-family:inherit; }
+button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
+button.wide { width:100%; }
+button.ghost { background:#fff; color:var(--brand); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
+.card button.ghost { background:#f3f0f8; color:var(--ink); box-shadow:0 6px 0 #d9d3e6; }
+button.alt { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); }
+button.alt:active { box-shadow:0 2px 0 var(--amber-d); }
+button.good { background:var(--green); box-shadow:0 6px 0 var(--green-d); }
+button.good:active { box-shadow:0 2px 0 var(--green-d); }
+button.bad { background:var(--red); box-shadow:0 6px 0 var(--red-d); }
+button.bad:active { box-shadow:0 2px 0 var(--red-d); }
+button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+.row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+.row > .grow { flex:1; }
+.err { color:var(--red); font-weight:700; min-height:1.3em; }
+.on-field .err, .err.light { color:#ffd7dd; }
+.hint { color:var(--muted); font-size:.92rem; }
+.light { color:rgba(255,255,255,.88); }
+kbd { font:700 .8rem ui-monospace, monospace; background:#f3f0f8; border:1px solid var(--edge);
+      border-bottom-width:3px; border-radius:6px; padding:1px 6px; color:var(--ink); }
+
+/* Lobby */
+.roomcode { font-family:var(--font-display); font-size:3.4rem; font-weight:900; letter-spacing:.06em; }
+.roomcode .ch { display:inline-block; transform:rotate(var(--rot)); }
+.roomcode .ch:nth-child(1) { color:var(--red); } .roomcode .ch:nth-child(2) { color:var(--blue); }
+.roomcode .ch:nth-child(3) { color:var(--amber-d); } .roomcode .ch:nth-child(4) { color:var(--green); }
+.roster { display:flex; flex-wrap:wrap; gap:8px; list-style:none; margin:0; padding:0; }
+.pill { display:inline-flex; align-items:center; gap:8px; background:var(--amber); color:#2b1c00;
+        border-radius:999px; padding:8px 14px; font-weight:900; }
+.dot { width:10px; height:10px; border-radius:50%; background:var(--ok); }
+.dot.off { background:var(--off); }
+.crown { font-size:.62rem; letter-spacing:.1em; background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; border-radius:999px; }
+.choices { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+.choice { display:flex; align-items:center; gap:10px; padding:12px; border-radius:14px; color:#fff;
+          font-weight:800; cursor:pointer; box-shadow:0 5px 0 rgba(0,0,0,.25); }
+.choice input { width:auto; accent-color:#fff; margin:0; }
+.choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); } .choice.c2 { background:var(--green); }
+.choice .shape { font-size:1.1rem; }
+
+/* Character cards. FIXED image height: artwork arrives asynchronously, and a box that grows
+   when it lands shoves everything below it -- here, the guess box being typed into. */
+.cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:16px; }
+.pcard { background:#fff; color:var(--ink); border-radius:16px; padding:12px; box-shadow:0 6px 0 rgba(0,0,0,.22);
+         display:flex; flex-direction:column; gap:6px; position:relative; }
+.pcard .who { font-weight:900; display:flex; align-items:center; gap:6px; min-height:1.5em; }
+.pcard .who .turns { margin-left:auto; color:var(--muted); font-weight:700; font-size:.82rem; }
+.pcard .art { height:170px; border-radius:12px; background:#f3f0f8; display:flex; align-items:center;
+              justify-content:center; overflow:hidden; }
+.pcard .art img { width:100%; height:100%; object-fit:contain; }
+.pcard .art .noimg { color:var(--muted); font-size:.85rem; padding:10px; text-align:center; }
+.pcard .art.mystery { background:repeating-linear-gradient(45deg, #ede8f6 0 12px, #e3dcf0 12px 24px);
+                      font-family:var(--font-display); font-size:4.4rem; font-weight:900; color:#b8acd0; }
+.pcard .cname { font-family:var(--font-display); font-weight:900; font-size:1.12rem; line-height:1.2;
+                min-height:2.4em; display:flex; align-items:center; }
+.pcard .src { color:var(--muted); font-size:.78rem; min-height:1.2em; }
+.pcard.current { outline:5px solid var(--amber); outline-offset:3px; }
+.pcard.done { opacity:.72; }
+.badge { font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border-radius:999px;
+         padding:2px 8px; background:#f3f0f8; color:var(--muted); }
+.badge.go { background:var(--amber); color:#2b1c00; }
+.badge.got { background:var(--green); color:#fff; }
+.badge.out { background:var(--off); color:#fff; }
+
+/* Play */
+.turnbar { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
+.turnbar .who { font-family:var(--font-display); font-size:1.5rem; font-weight:900; }
+.clock { flex:1; height:14px; border-radius:999px; background:rgba(255,255,255,.25); overflow:hidden; }
+.clock i { display:block; height:100%; width:100%; background:#fff; transition:width 1s linear, background .3s; }
+/* The colour carries "time is short" without moving, for anyone with motion turned down. */
+.clock.crit i { background:#ffd166; }
+.secs { font-family:var(--font-display); font-weight:900; font-size:1.3rem; min-width:3ch; text-align:right; }
+.guessbox { display:flex; gap:12px; }
+.guessbox input { font-size:1.3rem; }
+.verdict { font-weight:800; }
+.verdict.wrong::before { content:"✗ "; color:var(--red); }
+.verdict.correct::before { content:"✓ "; color:var(--green); }
+.verdict.close::before { content:"? "; color:var(--amber-d); }
+.log { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
+.log li { display:flex; gap:8px; align-items:baseline; }
+.log .by { color:var(--muted); font-size:.82rem; }
+.ruling { border:4px solid var(--amber); }
+.ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
+.feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
+.toast { background:var(--ink); color:#fff; border-radius:12px; padding:10px 14px; box-shadow:0 5px 0 rgba(0,0,0,.3);
+         font-weight:700; animation:pop .2s ease-out; }
+@keyframes pop { from { transform:scale(.8); opacity:0 } to { transform:scale(1); opacity:1 } }
+@media (prefers-reduced-motion: reduce) { .toast { animation:none; } .clock i { transition:none; } }
+.standings { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.standings li { display:flex; align-items:center; gap:12px; background:#f6f4fa; border-radius:12px; padding:10px 12px; }
+.standings .place { font-family:var(--font-display); font-weight:900; font-size:1.4rem; min-width:2ch; }
+.standings img { width:52px; height:52px; object-fit:contain; border-radius:8px; background:#fff; }
