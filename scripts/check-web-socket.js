@@ -536,6 +536,13 @@ const connect = (playerId) => {
   res = await W.emitWithAck('room:create', { nickname: 'Wren' });
   check(res.ok && res.state.kind === 'desk', 'a computer creates a desk room');
   const deskCode = res.state.code;
+  // The home page's computer join box asks which game a code is for. Asserted positively: a 404
+  // alone would pass with the route deleted.
+  const lookup = await fetch(`${URL}/api/room?code=${deskCode.toLowerCase()}`);
+  const found = await lookup.json();
+  check(lookup.status === 200 && found.path === '/desk/' && found.kind === 'desk' && Object.keys(found).length === 2,
+    'GET /api/room says which game a code is for, and nothing more');
+  check((await fetch(`${URL}/api/room?code=ZZZZ`)).status === 404, 'GET /api/room 404s an unknown code');
   const X = await connectDesk('dX');
   res = await X.emitWithAck('room:join', { code: deskCode, nickname: 'Xia' });
   check(res.ok && res.state.players.length === 2, 'a second computer joins it');

@@ -30,6 +30,14 @@ const isHost = () => roomState?.hostPlayerId === playerId;
 $('nameInput').value = store.get('gtc_draw_name') || '';
 const params = new URLSearchParams(location.search);
 if (params.get('room')) $('codeInput').value = params.get('room').toUpperCase().slice(0, 4);
+// Handed over by the home page's computer start: a name, and "create" or a room code. Acted on once,
+// at the first connection, and wiped from the address so a reload does not create a second room.
+const handoff = { name: (params.get('name') || '').trim().slice(0, 20), create: params.get('create') === '1' };
+if (handoff.name) $('nameInput').value = handoff.name;
+if (params.has('name') || params.has('create')) {
+  const room = params.get('room');
+  history.replaceState(null, '', location.pathname + (room ? `?room=${encodeURIComponent(room)}` : ''));
+}
 
 function nickname() {
   const name = $('nameInput').value.trim();
@@ -79,6 +87,13 @@ socket.on('connect', () => {
   const last = store.get('gtc_draw_room');
   const name = store.get('gtc_draw_name');
   const linked = params.get('room')?.toUpperCase();
+  if (handoff.name && !roomState) {
+    const { create } = handoff;
+    handoff.name = '';
+    nickname(); // remembers it for next time
+    if (create) return $('createBtn').click();
+    if (linked) return join(linked, $('nameInput').value.trim());
+  }
   if (roomState?.code) return join(roomState.code, name || nickname(), { quiet: true });
   if (last && name && (!linked || linked === last)) join(last, name, { quiet: true });
 });

@@ -1615,7 +1615,7 @@ function pushBrowseHistory(view, extra = {}) {
 window.addEventListener('popstate', (e) => {
   if (!$('browse').classList.contains('active')) return;
   const st = e.state?.gtcExit ? null : e.state?.gtcBrowse;
-  if (!st) return show(currentRoom ? 'lobby' : 'landing');
+  if (!st) return show(currentRoom ? 'lobby' : startScreen);
   if (st.view === 'categories') return openBrowse({ push: false });
   if (st.view === 'lists') return openCategory(st.category, { push: false });
   if (st.view === 'characters') {
@@ -1630,7 +1630,7 @@ function browseBack() {
   if (historyWorks) return history.back();
   if (browseState.view === 'characters') return openCategory(browseState.category);
   if (browseState.view === 'lists') return openBrowse();
-  show(currentRoom ? 'lobby' : 'landing');
+  show(currentRoom ? 'lobby' : startScreen);
 }
 
 // --- helpers ------------------------------------------------------------------------------
@@ -1851,8 +1851,6 @@ $('browseBtn').addEventListener('click', openBrowse);
 // ghost button below it. Buttons don't inherit the page font -- each browser gives them its own
 // (Arial here, the system font on an iPhone) -- so the link takes whatever a real button got,
 // rather than guessing it in CSS and looking pasted in on the next browser.
-$('deskLink').style.fontFamily = getComputedStyle($('browseBtn')).fontFamily;
-$('drawLink').style.fontFamily = $('deskLink').style.fontFamily;
 
 // The title goes home. A real link (so it opens in a new tab), but a plain navigation would put a
 // player straight back in their room, which the page rejoins on load -- so in a room it asks first,
@@ -1873,30 +1871,82 @@ $('homeTitle').addEventListener('click', (e) => {
         : 'Leave this room and go back to the start?';
     if (!confirm(cost)) return;
     leaveRoom();
-  } else {
-    show('landing');
   }
+  // Home is the first question, Phone or Computer -- the one screen every other start hangs off.
+  show('splash');
   window.scrollTo(0, 0);
 });
 
+// --- the start: Phone or Computer ---------------------------------------------------------
+//
+// Asked before anything else, because it decides what the rest of the start screen offers. The
+// answer is remembered only as "where Back from Browse returns to" -- the question itself is asked
+// on every fresh visit, so a phone borrowed for one game is never stuck being a computer.
+let startScreen = 'landing';
+function pickDevice(screen) {
+  startScreen = screen;
+  show(screen);
+  window.scrollTo(0, 0);
+}
+$('pickPhone').addEventListener('click', () => pickDevice('landing'));
+$('pickComputer').addEventListener('click', () => pickDevice('computer'));
+for (const b of document.querySelectorAll('[data-splash]')) b.addEventListener('click', () => show('splash'));
+// A hint, never a decision: touch-first is a good guess at "phone", and a tablet or a touchscreen
+// laptop can still pick the other one.
+$(matchMedia('(pointer: coarse)').matches ? 'likelyPhone' : 'likelyComputer').hidden = false;
+
+// The computer games live on pages of their own, so the computer start hands off: create goes to
+// the chosen game's page with the name, join asks the server which game the code is for.
+const pcNick = () => {
+  const n = $('pcNickInput').value.trim();
+  if (n) store.set('gtc_nick', n);
+  return n;
+};
+$('pcNickInput').value = store.get('gtc_nick') || '';
+$('pcCreateBtn').addEventListener('click', () => {
+  const name = pcNick();
+  if (!name) return ($('pcErr').textContent = 'Enter your name first.');
+  const game = document.querySelector('input[name=pcGame]:checked')?.value === 'draw' ? '/draw/' : '/desk/';
+  location.assign(`${game}?create=1&name=${encodeURIComponent(name)}`);
+});
+$('pcJoinBtn').addEventListener('click', async () => {
+  const name = pcNick();
+  const code = $('pcCodeInput').value.trim().toUpperCase();
+  if (!name) return ($('pcErr').textContent = 'Enter your name first.');
+  if (code.length !== 4) return ($('pcErr').textContent = 'Room codes are 4 letters.');
+  $('pcErr').textContent = '';
+  let found;
+  try {
+    const res = await fetch(`/api/room?code=${encodeURIComponent(code)}`);
+    found = await res.json();
+    if (!res.ok) return ($('pcErr').textContent = found?.error || 'No room with that code.');
+  } catch {
+    return ($('pcErr').textContent = "Couldn't reach the server. Check your connection and try again.");
+  }
+  // A phone room: the forehead game cannot be played from a computer, so say whose it is.
+  if (found.path === '/') return ($('pcErr').textContent = "That room is a phone game. Join it from a phone, or ask the host for a computer room.");
+  location.assign(`${found.path}?room=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`);
+});
+$('pcCodeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));
+$('pcCodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pcJoinBtn').click(); });
+$('pcBrowseBtn').addEventListener('click', () => openBrowse());
+
 // Dark mode. <head> already applied the stored choice (or the phone's own setting) before first
-// paint; this is only the switch, and the label that says where it goes. The choice is per phone.
+// paint; this is only the corner switch, which says which way it is set. The choice is per device.
 const themeIsDark = () => document.documentElement.dataset.theme === 'dark';
-function labelThemeButtons() {
-  for (const b of document.querySelectorAll('.themebtn')) b.textContent = themeIsDark() ? 'Light Mode' : 'Dark Mode';
+function syncThemeToggle() {
+  $('themeToggle').setAttribute('aria-checked', String(themeIsDark()));
 }
-for (const b of document.querySelectorAll('.themebtn')) {
-  b.addEventListener('click', () => {
-    const dark = !themeIsDark();
-    if (dark) document.documentElement.dataset.theme = 'dark';
-    else delete document.documentElement.dataset.theme;
-    store.set('gtc_theme', dark ? 'dark' : 'light');
-    const spooky = document.documentElement.dataset.season === 'spooky';
-    document.querySelector('meta[name=theme-color]').content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
-    labelThemeButtons();
-  });
-}
-labelThemeButtons();
+$('themeToggle').addEventListener('click', () => {
+  const dark = !themeIsDark();
+  if (dark) document.documentElement.dataset.theme = 'dark';
+  else delete document.documentElement.dataset.theme;
+  store.set('gtc_theme', dark ? 'dark' : 'light');
+  const spooky = document.documentElement.dataset.season === 'spooky';
+  document.querySelector('meta[name=theme-color]').content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
+  syncThemeToggle();
+});
+syncThemeToggle();
 $('browseBack').addEventListener('click', browseBack);
 $('browseMore').addEventListener('click', () => { if (!browseState.loading) { browseState.loading = true; loadCharacterPage(false); } });
 $('browseFilter').addEventListener('input', (e) => {
@@ -1932,3 +1982,6 @@ const resumeRoom = (deepRoom || store.get('gtc_lastRoom') || '').toUpperCase();
 if (deepRoom) $('codeInput').value = deepRoom.toUpperCase();
 if (resumeRoom && nickname) currentRoom = { code: resumeRoom };
 else if (resumeRoom) $('codeInput').value = resumeRoom;
+// A room link or a rejoin has already answered Phone or Computer (only a phone page holds a
+// phone room), so skip the question. It is also what shows while the rejoin lands.
+if (resumeRoom) show('landing');
