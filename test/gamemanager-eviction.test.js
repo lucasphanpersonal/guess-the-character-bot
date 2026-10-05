@@ -47,13 +47,25 @@ module.exports = {
     GameManager.endLobby(channelId);
   },
 
-  async 'a lobby that never finished is never evicted, however old'() {
-    const channelId = makeLobby();
-    // No markFinished call -- this lobby is still live.
+  async 'a game being played is never evicted, however long it runs'() {
+    for (const status of ['IN_PROGRESS', 'VOTING']) {
+      const channelId = makeLobby();
+      GameManager.getLobby(channelId).status = status;
+      GameManager.evictStaleLobbies(Date.now() + TTL_MS * 1000);
+      assert.ok(GameManager.getLobby(channelId), `${status} stays`);
+      GameManager.endLobby(channelId);
+    }
+  },
 
-    GameManager.evictStaleLobbies(Date.now() + TTL_MS * 1000);
-
-    assert.ok(GameManager.getLobby(channelId), 'an unfinished lobby has no finish time, so it stays');
-    GameManager.endLobby(channelId);
+  async 'a lobby that never got going is evicted a day after it opened'() {
+    for (const status of ['WAITING', 'CONFIRMING']) {
+      const channelId = makeLobby();
+      const lobby = GameManager.getLobby(channelId);
+      lobby.status = status;
+      assert.deepEqual(GameManager.evictStaleLobbies(lobby.createdAt + TTL_MS - 1000), [], `${status}: not yet`);
+      assert.ok(GameManager.getLobby(channelId));
+      assert.deepEqual(GameManager.evictStaleLobbies(lobby.createdAt + TTL_MS + 1), [lobby], `${status}: reported`);
+      assert.equal(GameManager.getLobby(channelId), undefined, `${status}: gone, so the channel is free again`);
+    }
   },
 };

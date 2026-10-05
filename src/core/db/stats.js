@@ -76,23 +76,27 @@ function getPlayerStats(guildId, playerId) {
   return tallyRows(db.prepare(PLAYER_ROWS).all(guildId, playerId));
 }
 
+// Counts the same games getPlayerStats does. The winners count is LEFT joined: an inner join
+// silently dropped any game with no 'won' row (everyone gave up, say) from the leaderboard while
+// /leaderboard for one player still counted it, so the two disagreed about the same person.
+// Ordered by wins, then shared wins, then fewest losses -- a tie is worth more than a loss.
 function getLeaderboard(guildId, limit = 10) {
   const rows = db
     .prepare(
       `SELECT
          gp.user_id AS playerId,
-         SUM(CASE WHEN gp.outcome = 'won' AND winners.n = 1 THEN 1 ELSE 0 END) AS wins,
-         SUM(CASE WHEN gp.outcome = 'won' AND winners.n > 1 THEN 1 ELSE 0 END) AS ties,
+         SUM(CASE WHEN gp.outcome = 'won' AND COALESCE(winners.n, 0) = 1 THEN 1 ELSE 0 END) AS wins,
+         SUM(CASE WHEN gp.outcome = 'won' AND COALESCE(winners.n, 0) > 1 THEN 1 ELSE 0 END) AS ties,
          SUM(CASE WHEN gp.outcome <> 'won' THEN 1 ELSE 0 END) AS losses,
          COUNT(*) AS total
        FROM game_players gp
        JOIN games g ON g.id = gp.game_id
-       JOIN (
+       LEFT JOIN (
          SELECT game_id, COUNT(*) AS n FROM game_players WHERE outcome = 'won' GROUP BY game_id
        ) winners ON winners.game_id = gp.game_id
        WHERE g.guild_id = ?
        GROUP BY gp.user_id
-       ORDER BY wins DESC, losses ASC
+       ORDER BY wins DESC, ties DESC, losses ASC
        LIMIT ?`
     )
     .all(guildId, limit);

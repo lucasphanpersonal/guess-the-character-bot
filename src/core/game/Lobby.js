@@ -37,6 +37,8 @@ class Lobby {
     this.players = [];
     this.spectators = new Set();
     this.status = 'WAITING';
+    // For evicting a lobby that never got going (GameManager.evictStaleLobbies).
+    this.createdAt = Date.now();
     this.game = null;
     // Set via /lobby set-characters: { [playerId]: characterRow }. Used instead of a random pick
     // at /lobby start when both players have an assignment.

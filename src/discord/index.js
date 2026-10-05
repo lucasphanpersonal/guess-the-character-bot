@@ -9,6 +9,8 @@ const db = require('../core/db/connection');
 const { handleComponentInteraction } = require('./components/router');
 const { clearVoteTimer } = require('./game/audienceVote');
 const { sweepBoards } = require('./game/boards');
+const { refreshLobbyBoard } = require('./game/lobbyBoard');
+const { cancelConfirmations } = require('./game/characterDM');
 const timerWatchdog = require('./game/timerWatchdog');
 
 if (!process.env.DISCORD_TOKEN) {
@@ -55,10 +57,20 @@ client.once('clientReady', async () => {
   // /lobby end in that channel. Sweep them on their TTL so a long-running bot across many
   // channels doesn't grow without bound. unref() so this never keeps the process alive.
   staleLobbyInterval = setInterval(() => {
+    let abandoned = [];
     try {
-      GameManager.evictStaleLobbies();
+      abandoned = GameManager.evictStaleLobbies();
     } catch (err) {
       console.error('[evictStaleLobbies]', err);
+    }
+    // A lobby that never got going is dropped after a day; its board and any confirm DMs should
+    // stop looking live. Best-effort: the startup sweep catches anything missed.
+    for (const lobby of abandoned) {
+      lobby.status = 'CANCELLED';
+      refreshLobbyBoard(lobby).catch(() => {});
+      if (lobby.game?.confirmState) {
+        cancelConfirmations(lobby.game, 'This lobby sat unstarted for a day, so it was closed.').catch(() => {});
+      }
     }
   }, STALE_LOBBY_SWEEP_MS);
   staleLobbyInterval.unref?.();
