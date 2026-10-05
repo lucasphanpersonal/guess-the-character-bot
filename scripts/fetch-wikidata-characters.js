@@ -40,6 +40,8 @@
 //   node scripts/fetch-wikidata-characters.js --refresh     # ignore what's already there
 
 const fs = require('fs');
+// Resume file = committed seed data: never leave it half-written (see the helper).
+const { writeFileAtomic } = require('./lib/writeAtomic');
 const path = require('path');
 
 const SPARQL = 'https://query.wikidata.org/sparql';
@@ -690,7 +692,7 @@ function load(refresh) {
 function save(data) {
   data.updatedAt = new Date().toISOString().slice(0, 10);
   const series = Object.fromEntries(Object.entries(data.series).sort(([a], [b]) => (a < b ? -1 : 1)));
-  fs.writeFileSync(OUT_PATH, `${JSON.stringify({ ...data, series }, null, 0)}\n`);
+  writeFileAtomic(OUT_PATH, `${JSON.stringify({ ...data, series }, null, 0)}\n`);
 }
 
 // ---------------------------------------------------------------------------

@@ -79,6 +79,28 @@ const kind = /movie|film/i.test(category) ? 'movie' : 'tv';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Every lookup ends one of three ways: an answer, a definite no, or no answer at all. A definite
+// no is a 404/410, or an HTML page where JSON was asked for (how a wiki host answers for a wiki
+// that does not exist). No answer -- a 429, a 5xx, a timeout, a dropped connection -- says
+// nothing about whether the art exists, so it is counted apart and reported, instead of being
+// folded silently into "no match". A rate-limited run used to read exactly like a run that
+// found nothing. (The same three-way rule as check-image-urls.js.)
+const unanswered = new Map(); // reason -> count
+function couldNotTell(err) {
+  const status = /HTTP (\d+)/.exec(err?.message ?? '')?.[1];
+  if (status === '404' || status === '410' || err?.name === 'SyntaxError') return null; // a definite no
+  const reason = status ? `HTTP ${status}` : err?.name || 'error';
+  unanswered.set(reason, (unanswered.get(reason) ?? 0) + 1);
+  return null;
+}
+function reportUnanswered() {
+  const total = [...unanswered.values()].reduce((a, b) => a + b, 0);
+  if (!total) return;
+  const why = [...unanswered].map(([reason, n]) => `${reason} x${n}`).join(', ');
+  console.log(`  NO ANSWER:        ${total} lookup(s) (${why})`);
+  console.log('                    Counted above as "no match" only because no answer came -- re-run to retry them.');
+}
+
 async function getJson(path, params = {}) {
   const url = new URL(API + path);
   url.searchParams.set('api_key', apiKey);
@@ -212,7 +234,7 @@ async function main() {
 
   for (const list of lists) {
     stats.lists++;
-    const title = await findTitle(list.name).catch(() => null);
+    const title = await findTitle(list.name).catch(couldNotTell);
     await sleep(PAUSE_MS);
 
     if (!title) {
@@ -236,7 +258,9 @@ async function main() {
       continue;
     }
 
-    const cast = await castFor(title.id).catch(() => []);
+    // Shaped like castFor's answer (an array carrying .voiced): the old fallback of a bare [] had no
+    // .voiced, so one failed cast lookup crashed the run on the next line.
+    const cast = await castFor(title.id).catch((err) => (couldNotTell(err), Object.assign([], { voiced: new Set() })));
     await sleep(PAUSE_MS);
 
     const characters = db
@@ -305,6 +329,7 @@ async function main() {
   console.log(`  rejected:         ${stats.rejected}  (failed the trust rule)`);
   console.log(`  no match:         ${stats.missed}  (nobody in the cast matched that name)`);
   console.log(dryRun ? '  written:         0  (dry run)' : `  written:         ${stats.written}`);
+  reportUnanswered();
 }
 
 // Exported for test/tmdb-credit-match.test.js; only actually runs as a script.

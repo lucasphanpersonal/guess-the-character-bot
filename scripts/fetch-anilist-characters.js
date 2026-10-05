@@ -36,6 +36,8 @@
 //   node scripts/fetch-anilist-characters.js --refresh
 
 const fs = require('fs');
+// Resume file = committed seed data: never leave it half-written (see the helper).
+const { writeFileAtomic } = require('./lib/writeAtomic');
 const path = require('path');
 
 const API = 'https://graphql.anilist.co';
@@ -177,7 +179,7 @@ function load(refresh) {
 function save(data) {
   data.updatedAt = new Date().toISOString().slice(0, 10);
   const series = Object.fromEntries(Object.entries(data.series).sort(([a], [b]) => (Number(a) - Number(b))));
-  fs.writeFileSync(OUT_PATH, `${JSON.stringify({ ...data, series }, null, 0)}\n`);
+  writeFileAtomic(OUT_PATH, `${JSON.stringify({ ...data, series }, null, 0)}\n`);
 }
 
 function parseArgs(argv) {

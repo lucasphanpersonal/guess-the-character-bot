@@ -41,6 +41,8 @@
 //   node scripts/fetch-wikidata-people.js --refresh       # ignore what is already there
 
 const fs = require('fs');
+// Resume file = committed seed data: never leave it half-written (see the helper).
+const { writeFileAtomic } = require('./lib/writeAtomic');
 const path = require('path');
 
 const SPARQL = 'https://query.wikidata.org/sparql';
@@ -335,7 +337,7 @@ async function main() {
     const people = await fetchGroup(group);
     out[group.key] = { list: group.list, min: group.min, people };
     // Written after every group, so Ctrl+C costs only the group in flight.
-    fs.writeFileSync(
+    writeFileAtomic(
       OUT_PATH,
       JSON.stringify(
         {

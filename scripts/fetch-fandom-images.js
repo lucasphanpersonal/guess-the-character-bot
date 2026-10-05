@@ -45,6 +45,28 @@ const verbose = args.includes('--verbose');
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Every lookup ends one of three ways: an answer, a definite no, or no answer at all. A definite
+// no is a 404/410, or an HTML page where JSON was asked for (how a wiki host answers for a wiki
+// that does not exist). No answer -- a 429, a 5xx, a timeout, a dropped connection -- says
+// nothing about whether the art exists, so it is counted apart and reported, instead of being
+// folded silently into "no match". A rate-limited run used to read exactly like a run that
+// found nothing. (The same three-way rule as check-image-urls.js.)
+const unanswered = new Map(); // reason -> count
+function couldNotTell(err) {
+  const status = /HTTP (\d+)/.exec(err?.message ?? '')?.[1];
+  if (status === '404' || status === '410' || err?.name === 'SyntaxError') return null; // a definite no
+  const reason = status ? `HTTP ${status}` : err?.name || 'error';
+  unanswered.set(reason, (unanswered.get(reason) ?? 0) + 1);
+  return null;
+}
+function reportUnanswered() {
+  const total = [...unanswered.values()].reduce((a, b) => a + b, 0);
+  if (!total) return;
+  const why = [...unanswered].map(([reason, n]) => `${reason} x${n}`).join(', ');
+  console.log(`  NO ANSWER:        ${total} lookup(s) (${why})`);
+  console.log('                    Counted above as "no match" only because no answer came -- re-run to retry them.');
+}
+
 // Studio-wide wikis, tried only for a list with no wiki of its own, and only in the categories
 // the seeder files Disney and Pixar titles under -- their films land in Movies, their series in
 // Cartoon and Television Shows. Pixar is its own wiki; Disney's covers everything else.
@@ -338,8 +360,9 @@ async function findWiki(listName) {
     try {
       const data = await getJson(`https://${domain}/api.php?action=query&format=json&meta=siteinfo&siprop=general`);
       sitename = data?.query?.general?.sitename;
-    } catch {
-      continue; // no wiki on that subdomain
+    } catch (err) {
+      couldNotTell(err);
+      continue; // no wiki on that subdomain -- or no answer, which couldNotTell has counted
     } finally {
       await sleep(PAUSE_MS);
     }
@@ -449,7 +472,8 @@ async function searchTitle(domain, name) {
   try {
     const data = await getJson(url);
     return (data?.query?.search ?? []).map((r) => r.title);
-  } catch {
+  } catch (err) {
+    couldNotTell(err);
     return [];
   }
 }
@@ -510,7 +534,7 @@ function titleMatches(characterName, pageTitle, { viaSearch = false } = {}) {
 async function imageFor(domain, name, listName, { filedUnder = null } = {}) {
   const accept = (hit) => !filedUnder || filedUnderTitle(hit, filedUnder);
 
-  const hit = await leadImage(domain, name).catch(() => null);
+  const hit = await leadImage(domain, name).catch(couldNotTell);
   if (hit && titleMatches(name, hit.title) && accept(hit)) return { ...hit, via: 'direct' };
   if (hit && redirectIsIdentity(name, hit, listName) && accept(hit)) return { ...hit, via: 'redirect' };
 
@@ -518,7 +542,7 @@ async function imageFor(domain, name, listName, { filedUnder = null } = {}) {
   for (const title of await searchTitle(domain, name)) {
     if (!titleMatches(name, title, { viaSearch: true })) continue;
     await sleep(PAUSE_MS);
-    const found = await leadImage(domain, title).catch(() => null);
+    const found = await leadImage(domain, title).catch(couldNotTell);
     if (found && accept(found)) return { ...found, via: 'search' };
   }
 
@@ -528,7 +552,7 @@ async function imageFor(domain, name, listName, { filedUnder = null } = {}) {
   const bare = name.replace(HONORIFIC, '');
   if (bare !== name && bare.length >= 3) {
     await sleep(PAUSE_MS);
-    const plain = await leadImage(domain, bare).catch(() => null);
+    const plain = await leadImage(domain, bare).catch(couldNotTell);
     if (plain && titleMatches(bare, plain.title) && isCharacterPage(plain) && accept(plain)) {
       return { ...plain, via: 'honorific' };
     }
@@ -651,7 +675,7 @@ async function main() {
       stats.checked++;
       let hit = null;
       for (const w of wikis) {
-        hit = await imageFor(w.domain, ch.name, list.name, { filedUnder: w.filedUnder }).catch(() => null);
+        hit = await imageFor(w.domain, ch.name, list.name, { filedUnder: w.filedUnder }).catch(couldNotTell);
         await sleep(PAUSE_MS);
         if (hit) break;
       }
@@ -703,6 +727,7 @@ async function main() {
   console.log(`  rejected:         ${stats.rejected}  (junk image, or failed the trust rule)`);
   console.log(`  no match:         ${stats.missed}  (wiki had no usable page)`);
   console.log(dryRun ? '  written:         0  (dry run)' : `  written:         ${stats.written}`);
+  reportUnanswered();
 }
 
 main().catch((err) => {
