@@ -15,6 +15,7 @@
 const access = require('../roomAccess');
 const draw = require('./game');
 const web = require('../content');
+const { poolIndex } = require('../../compendium/answers');
 const { perSocket, SLOW_DOWN } = require('../rateLimit');
 
 // What a player can repeat inside a room, at well above a person's pace: dealing (which reads the
@@ -171,7 +172,15 @@ function attachDrawSockets(nsp, { registry }) {
     const drawSeconds = DRAW_SECONDS.includes(Number(config.drawSeconds)) ? Number(config.drawSeconds) : 80;
     const difficulty = config.difficulty || web.DEFAULT_DIFFICULTY;
     room.drawSettings = { listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category, categories: config.categories };
-    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds });
+    // A character's show, indexed by word the first time one of its characters is drawn: a guess of
+    // one word counts only when nobody else in that show shares it (see game.js).
+    const casts = new Map();
+    const castOf = (c) => {
+      if (c?.listId == null) return [];
+      if (!casts.has(c.listId)) casts.set(c.listId, poolIndex(web.content.poolNames([c.listId])));
+      return casts.get(c.listId);
+    };
+    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf });
     if (!dealChoices(room, Date.now())) {
       room.game = null;
       return { ok: false, error: `${label} has no characters at this difficulty.` };

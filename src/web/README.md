@@ -22,8 +22,9 @@ And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws
 order: the drawer picks one of three characters (15 s, else the first) — or asks for three new
 ones, as often as they like, each with a fresh 15 s and never repeating a face already offered —
 then draws it with the character's picture beside the canvas as a reference only they can see;
-everyone else types guesses into the chat. The checker judges them with single words
-OFF (people guessing at a drawing type what they see — "Combat" is not "Combat Carl"). A wrong
+everyone else types guesses into the chat. The checker judges them, and the name a character is
+known by counts on its own ("Sasuke", "Luffy") when nobody else in the character's own show has
+that word; a shared one ("Uzumaki") is only close. A wrong
 guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
 100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Everyone sees
 the kind of work the character is from ("Anime") from the start, and the work itself from half

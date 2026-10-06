@@ -27,11 +27,19 @@ const guessBudget = perSocket({ max: 8, windowMs: 4000 });
 // read a name and tap; short enough that a table that has wandered off cannot hold a turn.
 const RULING_MS = Number(process.env.WEB_DESK_RULING_MS || 20000);
 
-// The pool's names, once per game and indexed by word: the checker asks of every single-word guess
-// whether anyone else in the pool shares it, and scanning the names each time cost 14ms a guess.
-function othersFor(game) {
-  game.deskPool ??= poolIndex([...new Set([...content.poolNames(game.lobby.listIds ?? []), ...game.turnOrder.map((id) => game.headByPlayer[id].name)])]);
-  return game.deskPool;
+// What a guess of one word must be told apart from: the guesser's own show, indexed by word once
+// per show per game. "Fred" names the one Fred in his show, though somewhere among 25,000
+// characters there is always another -- judged against the whole pool, a first name was "close"
+// more often than not. A character with no list behind it (a name the host typed) has no show,
+// so it is told apart from the whole pool instead.
+function othersFor(game, character) {
+  game.deskCasts ??= new Map();
+  const key = character?.listId ?? 'pool';
+  if (!game.deskCasts.has(key)) {
+    const names = character?.listId != null ? content.poolNames([character.listId]) : content.poolNames(game.lobby.listIds ?? []);
+    game.deskCasts.set(key, poolIndex(names));
+  }
+  return game.deskCasts.get(key);
 }
 
 function clearRulingTimer(room) {
@@ -78,7 +86,7 @@ const variant = {
       if (!guessBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
-      const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game) });
+      const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game, r.game.headByPlayer[playerId]) });
       if (!res.ok) return ack?.(res);
       ack?.({ ok: true, verdict: res.verdict });
       const text = String(payload.text).trim().slice(0, guessing.GUESS_MAX);

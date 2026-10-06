@@ -65,11 +65,29 @@ function aCloseGuessIsTheGuessersAloneAndAWrongOneIsShown() {
 
 // People guessing at a drawing type what they see. "Combat" at a soldier is not a guess that it
 // is Combat Carl, so a single word never wins a drawing round.
-function oneWordOfTheNameIsNeverEnough() {
+function oneWordOfTheNameIsNeverEnoughWithoutAPool() {
+  // A game made without a pool cannot tell whether a word is anyone else's, so nothing short of
+  // the full name counts.
   const g = started();
   draw.choose(g, 'p1', 2, T0); // Combat Carl
   assert.notEqual(draw.say(g, 'p2', 'combat', T0).verdict, 'correct');
   assert.equal(draw.say(g, 'p2', 'combat carl', T0).verdict, 'correct');
+}
+
+function aKnownNameCountsWhenNobodyElseInTheShowHasIt() {
+  const { poolIndex } = require('../src/compendium/answers');
+  const cast = poolIndex(['Sasuke Uchiha', 'Itachi Uchiha', 'Naruto Uzumaki', 'Kushina Uzumaki', 'Monkey D. Luffy', 'Pikachu']);
+  const game = (name) => {
+    const g = draw.createDrawGame({ order: ['p1', 'p2', 'p3'], castOf: () => cast });
+    draw.offerChoices(g, [head(name)], T0);
+    draw.choose(g, 'p1', 0, T0);
+    return g;
+  };
+  assert.equal(draw.say(game('Sasuke Uchiha'), 'p2', 'sasuke', T0).verdict, 'correct', 'a first name nobody else has');
+  assert.equal(draw.say(game('Monkey D. Luffy'), 'p2', 'Luffy', T0).verdict, 'correct', 'the name a character is known by');
+  assert.equal(draw.say(game('Naruto Uzumaki'), 'p2', 'Naruto', T0).verdict, 'correct');
+  assert.equal(draw.say(game('Naruto Uzumaki'), 'p2', 'Uzumaki', T0).verdict, 'close', 'a family name others share stays close');
+  assert.equal(draw.say(game('Itachi Uchiha'), 'p2', 'uchiha', T0).verdict, 'close');
 }
 
 function onceYouKnowYourWordsGoOnlyToTheOthersWhoKnow() {
@@ -400,7 +418,8 @@ module.exports = {
   'a drawer who never chooses gets the first': aDrawerWhoNeverChoosesGetsTheFirst,
   'a correct guess scores by how fast it came': aCorrectGuessScoresByHowFastItCame,
   "a close guess is the guesser's alone, and a wrong one is shown": aCloseGuessIsTheGuessersAloneAndAWrongOneIsShown,
-  'one word of the name is never enough': oneWordOfTheNameIsNeverEnough,
+  'one word of the name is never enough without a pool': oneWordOfTheNameIsNeverEnoughWithoutAPool,
+  'a known name counts when nobody else in the show has it': aKnownNameCountsWhenNobodyElseInTheShowHasIt,
   'once you know, your words go only to the others who know': onceYouKnowYourWordsGoOnlyToTheOthersWhoKnow,
   'the drawer cannot guess': theDrawerCannotGuess,
   'nobody scores twice': nobodyScoresTwice,

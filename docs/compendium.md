@@ -159,7 +159,7 @@ verdicts:
 
 | Verdict | For |
 | --- | --- |
-| **correct** | The name however it's typed (`spiderman`, `uzumaki naruto`); without a qualifier or a leading "The"; a quoted nickname alone (`Tails`) or the name without it; the part before a describing comma (`Catherine`). And — only if the game turns it on — one word of a two- or three-word name when nobody else in the pool has it (`Sasuke`). |
+| **correct** | The name however it's typed (`spiderman`, `uzumaki naruto`); without a qualifier or a leading "The"; a quoted nickname alone (`Tails`) or the name without it; the part before a describing comma (`Catherine`). And — only if the game turns it on, which both computer games do — one word of a two- or three-word name when nobody else in that character's own show has it (`Sasuke`, `Luffy`; not `Uzumaki`). |
 | **close** | Something a person should look at: a title stripped off (`Leia` for Princess Leia, but also `America` for Captain America), a word other characters share (`Uzumaki`), a typo or two, or the right name with extra words. |
 | **wrong** | Everything else. |
 

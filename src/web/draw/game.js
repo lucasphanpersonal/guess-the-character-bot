@@ -14,9 +14,14 @@
 //             has it, or time is up.
 //   reveal    the answer and the turn's points, for REVEAL_SECONDS
 //
-// Guesses are judged by the compendium's checker (src/compendium/answers.js) with single words
-// OFF: people guessing at a drawing type what they SEE, and "Combat" must not win the round for
-// "Combat Carl". A close guess is told privately to whoever typed it ("you're close") and shown
+// Guesses are judged by the compendium's checker (src/compendium/answers.js), and a character's
+// known name counts on its own -- "Sasuke" for Sasuke Uchiha, "Luffy" for Monkey D. Luffy -- when
+// no one else in the character's own show has that word: "Uzumaki" names half the Naruto cast,
+// so it stays close. Full names only was the rule at first, so that "Combat" could not win the
+// round for "Combat Carl" -- people guessing at a drawing type what they SEE -- but it marked
+// "close" the name everyone actually calls most characters by. Unique in the show, not in the
+// whole pool: across 25,000 characters somebody else is always called Fred, which says nothing
+// about whether "Fred" picks out this one. A close guess is told privately to whoever typed it ("you're close") and shown
 // to nobody else. Once you have it -- and for the drawer, always -- what you type goes only to
 // the others who know, because it may well contain the answer.
 
@@ -56,8 +61,14 @@ const GUESS_MAX = 400;
 const GUESS_MIN = 100;
 const DRAWER_PER_GUESS = 60;
 
-function createDrawGame({ order, rounds = 3, drawSeconds = 80 }) {
+/**
+ * @param {(character) => object} [args.castOf]  the names a character must be told apart from --
+ *   their own show's cast, as answers.poolIndex. What lets one word of a name count. Injected, so
+ *   these rules need no database; without it, nothing short of a full name is ever correct.
+ */
+function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null }) {
   return {
+    castOf,
     order: [...order],
     rounds,
     drawSeconds,
@@ -190,7 +201,7 @@ function say(g, playerId, text, now) {
     return { ok: true, verdict: 'said' };
   }
 
-  const { verdict } = judgeGuess(clean, g.character.name, { singleWords: false });
+  const { verdict } = judgeGuess(clean, g.character.name, { singleWords: true, others: g.castOf?.(g.character) ?? [] });
   if (verdict === 'correct') {
     const points = pointsAt(g, now);
     g.guessed.set(playerId, points);

@@ -151,11 +151,13 @@ const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
  *   naming the character they are wearing types a name, while players guessing at a DRAWING type
  *   whatever they see, and "Combat" for "Combat Carl" or "Wild" for "Wild Horn" would hand them
  *   the round. Off, such a word is close.
- * @param {string[]|object} [opts.others]  other characters' names in the same pool, or a
+ * @param {string[]|object} [opts.others]  the names this one must be told apart from, or a
  *   poolIndex() of them (the same answer, without scanning every name per guess). Even with
  *   singleWords on, a word only counts when none of these shares it -- "Sasuke" names Sasuke
- *   Uchiha in a pool with no other Sasuke, "Uzumaki" names nobody. Without them, no single word
- *   is ever correct.
+ *   Uchiha among a cast with no other Sasuke, "Uzumaki" names nobody. The games pass the
+ *   character's own show: across a whole pool of thousands, a common first name always belongs to
+ *   someone else, which says nothing about whether it picks out this one. Without them, no single
+ *   word is ever correct.
  * @returns {{ verdict: 'correct'|'close'|'wrong', as: string|null }}  `as` is the form matched.
  */
 function judgeGuess(guess, name, { others = [], singleWords = false } = {}) {

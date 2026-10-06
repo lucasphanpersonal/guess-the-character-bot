@@ -823,6 +823,13 @@ const connect = (playerId) => {
   check(res.ok && res.verdict === 'close', 'a typo is close -- told only to the guesser');
   check(!P.received.some((e) => e.json.includes(typoDraw)), 'the drawer never sees a close guess');
 
+  // A one-word guess is judged against the drawn character's own show, which the server must hand
+  // the rules: the cast of the fixture's one list, every name in it.
+  const drawGame = registry.getRoom(drawCode).game;
+  const cast = drawGame.castOf?.(drawGame.character);
+  check(cast?.size === SEEDED_NAMES.length && cast.sharesWord('aang', 'bulma') === true,
+    `draw: a guess of one word is judged against the character's own show (${cast?.size} names)`);
+
   const qGotIt = nextEvent(Q, 'draw:correct');
   const reveal1 = nextMatching(P, 'draw:state', (v) => v.phase === 'reveal');
   res = await Q.emitWithAck('draw:say', { text: drawAnswer.toUpperCase() });
