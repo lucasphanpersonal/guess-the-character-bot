@@ -155,9 +155,9 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
   (`core/game/Game.js`, `GameManager.js`, `Lobby.js`, `lobbySettings.js`).
 - **New here:** the transport (WebSocket rooms instead of Discord's gateway), the UI, and the
   forehead-mode tilt mechanic — none of which the Discord bot has an equivalent of.
-- **The seam for a future simultaneous mode:** `core/game/roundMode.js`. Only
-  `TurnRotationMode` ships (today's rules); a simultaneous free-for-all plugs in later without
-  touching the turn loop.
+- **The turn rules are shared, not ported:** `core/game/turnRules.js` is the one copy, and both
+  the bot and `guess/turnLoop.js` call it. It is also the seam a simultaneous free-for-all would
+  replace -- who may act and what "advance" means are decided there and nowhere else.
 
 ## Run it
 

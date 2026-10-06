@@ -326,9 +326,11 @@ recorded below, since the deviations are the useful part of a status update.
    (`'web'`, or `WEB_SCOPE`) with its own playable selection (`npm run select:lists`). It
    originally auto-resolved to the richest Discord guild, i.e. it played that server's
    selection; the compendium's scopes ended that (see "The compendium" in the README).
-3. **Turn loop — done.** `src/web/guess/turnLoop.js` ports `engine.js`'s rules (rotation, fewest-turns
-   scoring, pass/give-up, resolve-once, out-of-contention) over the core `Game`, with a
-   server-authoritative wall-clock turn timer.
+3. **Turn loop — done.** `src/web/guess/turnLoop.js` first ported `engine.js`'s rules (rotation,
+   fewest-turns scoring, pass/give-up, resolve-once, out-of-contention) over the core `Game`, with
+   a server-authoritative wall-clock turn timer. The rules have since moved into
+   `src/core/game/turnRules.js`, which both frontends call; `turnLoop.js` keeps the web's clock and
+   views.
 4. **Forehead mode + tilt — done.** Grace countdown → full-screen wearer's card → tilt to answer.
    Deviations from the plan sketch:
    - **Tilt axis.** Screen-normal gravity, not the `beta` angle first imagined — beta alone
@@ -379,8 +381,9 @@ recorded below, since the deviations are the useful part of a status update.
    compendium** (category -> list -> character, over plain HTTP). Still open: an optional read-only **scoreboard device** (a spectator join that
    shows live standings for a propped-up tablet or a cast TV) and richer haptics.
 
-`RoundMode` (`src/core/game/roundMode.js`) exists as planned, but **neither frontend uses it
-yet**: the bot (`engine.js`) and the web (`src/web/guess/turnLoop.js`) each run the rotation
-directly, so a simultaneous mode is not yet additive. Making it so means both calling one shared
-set of turn rules -- the web's `turnLoop.js` is already pure and is the natural one to move into
-core.
+**The seam, as it turned out.** `RoundMode` (`src/core/game/roundMode.js`) was built as planned,
+but neither frontend ever called it: the bot (`engine.js`) and the web (`turnLoop.js`) each ran
+the rotation directly, the web's a port of the bot's. That is now one module,
+`src/core/game/turnRules.js`, which both call -- and the rules being in one place is what the
+seam was for, so `RoundMode` was removed rather than kept as a second, unused description of
+them. A simultaneous mode replaces `turnRules.js`'s who-may-act and what-advance-means.

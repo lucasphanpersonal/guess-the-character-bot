@@ -722,8 +722,8 @@ src/
       Lobby.js            Pre-game state: host, players, spectators, settings
       lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
       Game.js             Active-game state: turn counts, who has finished, standings
-      roundMode.js        A who-may-act / how-to-advance seam -- planned, not yet used: the bot
-                          (engine.js) and the web (web/guess/turnLoop.js) each run rotation directly
+      turnRules.js        The turn rules both frontends run: rotation, resolve-once, pass /
+                          give up / leave, which controls apply
 
   discord/              The Discord bot. Imports from core/.
     index.js              Client bootstrap, interaction routing, graceful shutdown

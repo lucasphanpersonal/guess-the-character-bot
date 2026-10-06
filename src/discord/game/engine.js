@@ -3,6 +3,8 @@ const Game = require('../../core/game/Game');
 const { MAX_PLAYERS } = require('../../core/game/Lobby');
 const TurnTimer = require('./turnTimer');
 const GameManager = require('../../core/game/GameManager');
+// The turn rules -- the same ones the web runs. This file is the bot's I/O around them.
+const rules = require('../../core/game/turnRules');
 const voice = require('./voice');
 const { getRandomCharacters, getListLabelForIds } = require('../../compendium/characterLists');
 const { recordGame } = require('../../core/db/stats');
@@ -280,6 +282,7 @@ async function maybeBeginPlay(client, lobby) {
   await channel.send(
     `✅ All ${game.turnOrder.length} players are ready -- starting the game! 🗂️ Playing with: **${game.listLabel}**`
   );
+  rules.beginTurn(game); // the first turn; every later one is begun by rules.advance
   await startTurn(client, lobby);
 }
 
@@ -316,9 +319,9 @@ async function startTurn(client, lobby) {
   const channel = await getChannel(client, lobby);
   await dropRetiredBoard(game);
 
-  // The score is counted here, where turns are handed out, rather than anywhere a player
-  // has to remember to press something.
-  game.turnsTaken.set(game.currentPlayerId, game.turnsFor(game.currentPlayerId) + 1);
+  // The turn has already been counted -- by rules.beginTurn for the first, rules.advance for every
+  // other: turns are counted where they are handed out, never where someone must press something.
+  // This posts its board and starts its clock.
   game.timer = new TurnTimer(game.turnSeconds * 1000, () => {
     handleTimeout(client, lobby).catch(console.error);
   });
@@ -448,10 +451,10 @@ async function submitPass(client, lobby, playerId) {
   if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
     return { ok: false, error: 'No game in progress.' };
   }
-  if (playerId !== game.currentPlayerId) {
-    return { ok: false, error: "It's not your turn." };
-  }
-  await endTurn(client, lobby, { correct: false, gaveUp: false });
+  const r = rules.pass(game, playerId);
+  if (r.duplicate) return { ok: true }; // a double tap: the first one already passed
+  if (!r.ok) return r;
+  await finishTurn(client, lobby, { correct: false, gaveUp: false });
   return { ok: true };
 }
 
@@ -472,19 +475,10 @@ async function submitGiveUp(client, lobby, playerId) {
   if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
     return { ok: false, error: 'No game in progress.' };
   }
-  if (playerId !== game.currentPlayerId) {
-    return { ok: false, error: "It's not your turn." };
-  }
-  // Guards a double-press. The character reveal below runs BEFORE endTurn (whose resolvedTurns
-  // lock protects the rotation), so without this a second give-up racing the first -- arriving
-  // while the reveal's channel.send is still awaiting, before endTurn has advanced
-  // currentPlayerId -- would post the reveal a second time. `surrendered.add` is synchronous and
-  // happens before that first await, so the loser of the race sees isActive === false here and
-  // bails. Same guard submitForfeit uses.
-  if (!game.isActive(playerId)) {
-    return { ok: false, error: "You're already out of this game." };
-  }
-  game.surrendered.add(playerId);
+  // Validated, marked and resolved synchronously, before the reveal's first await -- so a second
+  // give-up racing the first finds them already out and posts nothing.
+  const r = rules.giveUp(game, playerId);
+  if (!r.ok) return r;
   // activePlayers now excludes them, so this counts only the OTHERS still guessing. If any
   // remain the game plays on, so reveal their character right away and mark it revealed so the
   // end-of-game reveal doesn't repeat it. If none remain, finalizeGame does the reveal.
@@ -499,7 +493,7 @@ async function submitGiveUp(client, lobby, playerId) {
       )
     );
   }
-  await endTurn(client, lobby, { correct: false, gaveUp: true });
+  await finishTurn(client, lobby, { correct: false, gaveUp: true });
   // game.finished is set only when the table emptied -- i.e. the last survivor gave up.
   return { ok: true, gameOver: game.finished };
 }
@@ -545,41 +539,32 @@ async function announceCompletion(client, lobby, playerId) {
   }
 }
 
+/**
+ * Ends the turn in hand -- a judge's ruling, or the clock -- exactly once.
+ *
+ * The lock is rules.resolveTurn, taken before any await. Judging is open to everyone who isn't
+ * guessing, so simultaneous presses are routine, and every extra resolution used to advance the
+ * rotation again: three presses skipped two players. See src/core/game/turnRules.js.
+ */
 async function endTurn(client, lobby, { correct, gaveUp = false }) {
   const game = lobby.game;
-  const finishingPlayerId = game.currentPlayerId;
-
-  /**
-   * A turn resolves exactly once.
-   *
-   * Judging is open to everyone who isn't guessing, so simultaneous presses are routine --
-   * and the checks in submitJudgement all pass for each of them, because this function
-   * yields on its first await before it clears `paused`. A second press arriving in that
-   * window found the turn still endable, ran the whole resolution again, and advanced the
-   * rotation a second time: the next player was skipped without ever getting a board, and
-   * charged for a turn they never had. Three presses skipped two players.
-   *
-   * The same hole swallowed a double-tapped Pass and two judges confirming one correct
-   * guess, so the guard belongs here rather than on any one button.
-   *
-   * Keyed by turn rather than kept as a busy flag: it is exact, it cannot get stuck if
-   * something throws mid-resolution, and it still lets the *next* turn resolve normally.
-   * Checking and writing it before any await is what makes it a lock at all -- nothing else
-   * can run in between, because the event loop only switches at an await.
-   */
-  const turnKey = `${finishingPlayerId}:${game.turnsFor(finishingPlayerId)}`;
-  if (game.resolvedTurns.has(turnKey)) return;
-  game.resolvedTurns.add(turnKey);
-
-  // Read before clearTimers, which drops the timer this comes from. It is the tiebreak between
-  // equal turn counts (see Game.standings), taken at the moment the turn resolved -- for a
-  // judged guess, when the judge ruled. After the clock has run out, in the last-chance window,
-  // remainingMs() is 0.
+  // Read first -- clearTimers drops the timer it comes from. It is the tiebreak between equal
+  // turn counts (Game.standings), taken when the turn resolved: for a judged guess, when the
+  // judge ruled; in the last-chance window, 0.
   const msLeft = game.timer?.remainingMs() ?? null;
-  clearTimers(game);
+  if (!rules.resolveTurn(game, { correct, msLeft }).ok) return undefined;
+  return finishTurn(client, lobby, { correct, gaveUp });
+}
 
-  // Recorded before the board is frozen, so the outgoing board can state the outcome.
-  if (correct) game.recordFinish(finishingPlayerId, msLeft);
+/**
+ * The bot's side of a turn already resolved: freeze its board, announce a finish, then move on
+ * (rules.advance) -- in that order, so the board and the announcement still describe the turn
+ * that just ended rather than the next one.
+ */
+async function finishTurn(client, lobby, { correct, gaveUp = false }) {
+  const game = lobby.game;
+  const finishingPlayerId = game.currentPlayerId;
+  clearTimers(game);
 
   // Freeze the outgoing turn's board (buttons removed, outcome shown) before anything
   // posts a new one, so old boards are never left clickable.
@@ -592,12 +577,9 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
 
   if (correct) await announceCompletion(client, lobby, finishingPlayerId);
 
-  // Everyone plays until they get their character, so one player finishing ends only their
-  // own involvement. The game is over when nobody is left guessing -- which, since players
-  // otherwise leave only by finishing, means all of them got there or all but the last one did.
-  const next = game.nextActiveIndex();
-  if (next === null) return finalizeGame(client, lobby);
-  game.currentTurnIndex = next;
+  // Everyone plays until they get their character, so one player finishing ends only their own
+  // involvement. The game is over when nobody is left guessing.
+  if (rules.advance(game).gameOver) return finalizeGame(client, lobby);
   return startTurn(client, lobby);
 }
 
@@ -614,8 +596,8 @@ async function endTurn(client, lobby, { correct, gaveUp = false }) {
  * quiet is never removed (see checkLastChanceTimeout), so the only way out is this choice or
  * getting your character. Everyone else plays on.
  *
- * If it is their turn, this goes through endTurn so the rotation advances and the resolution
- * guard applies -- a forfeit racing a judgement must not resolve the same turn twice. If it is
+ * If it is their turn, rules.forfeit resolves it under the same lock as everything else -- a
+ * forfeit racing a judgement must not resolve the same turn twice -- and it advances. If it is
  * not their turn, nothing needs advancing: the current player is active by definition, so a
  * forfeit by anybody else can never empty the table.
  */
@@ -631,7 +613,9 @@ async function submitForfeit(client, lobby, playerId) {
     return { ok: false, error: "You're already out of this game." };
   }
 
-  game.surrendered.add(playerId);
+  // Marked and, if it was their turn, resolved -- synchronously, before the reveal below awaits.
+  const r = rules.forfeit(game, playerId);
+  if (!r.ok) return { ok: false, error: "You're already out of this game." };
   // Reveal what they were wearing at the moment they leave, not only if they stay to the end:
   // they never got to work it out, and it spoils nobody -- everyone else was DM'd it at the
   // start. Marked revealed so the end-of-game reveal (finalizeGame) doesn't show it again.
@@ -645,8 +629,8 @@ async function submitForfeit(client, lobby, playerId) {
     )
   );
 
-  if (playerId === game.currentPlayerId) {
-    await endTurn(client, lobby, { correct: false, gaveUp: true });
+  if (r.resolved) {
+    await finishTurn(client, lobby, { correct: false, gaveUp: true });
   } else {
     // Their row in the standings changed, so the live board is now out of date.
     await refreshTurnBoard(game, lobby.channelId);

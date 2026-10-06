@@ -6,6 +6,8 @@
 
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const { untrackBoard } = require('./boards');
+// Which of the guesser's controls apply is a rule, shared with the web: src/core/game/turnRules.js.
+const rules = require('../../core/game/turnRules');
 
 const BAR_WIDTH = 12;
 
@@ -132,8 +134,7 @@ function buildButtons(game, channelId) {
     .setEmoji('👁')
     .setStyle(ButtonStyle.Secondary);
 
-  const alone = game.activePlayers.length === 1;
-  const outOfContention = !alone && game.isOutOfContention(game.currentPlayerId);
+  const { alone, outOfContention } = rules.guesserControls(game);
   const guesserControls = [];
   if (alone) {
     guesserControls.push(giveUpButton);
@@ -203,8 +204,7 @@ function buildTurnBoardPayload(game, channelId, outcome = null) {
   //
   // Mutually exclusive by construction: the out-of-contention note is gated on NOT being alone,
   // so the two never fire together or contradict each other.
-  const alone = game.activePlayers.length === 1;
-  const outOfContention = !alone && game.isOutOfContention(game.currentPlayerId);
+  const { alone, outOfContention } = rules.guesserControls(game);
   let context = '';
   if (alone) {
     context =

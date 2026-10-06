@@ -1,30 +1,22 @@
 // The turn loop, for Guess the Character on the web -- phones and computers alike.
 //
-// Ports the RULES of src/discord/game/engine.js -- rotation, scoring by turns taken, pass vs
-// give-up, the resolve-a-turn-exactly-once guard, out-of-contention -- with the Discord I/O
-// removed. All the state already lives on the core Game (turnsTaken, finishedBy, surrendered,
-// nextActiveIndex, standings, isOutOfContention), so this file is a thin, pure orchestration
-// over it: no socket.io, no DB, unit-tested on its own. The socket layer drives it and emits.
+// The RULES are not here: they are src/core/game/turnRules.js, the one copy the Discord bot runs
+// too. This file is the web's side of them: its clock (a server-side deadline, frozen while the
+// current player is disconnected), and what every web view shares -- standings, the clock, the
+// buttons, the results. Pure, no socket.io, unit-tested on its own; the socket layer drives it.
 //
 // It has no opinion on what a PLAYER sees: that differs completely between the two ways of
 // playing (phones show each wearer their own character; computers show everyone's but your own),
-// so each brings its own view -- ../party/view.js and ../desk/view.js. What every view shares --
-// standings, the clock, the buttons, the results -- is here.
+// so each brings its own view -- ../party/view.js and ../desk/view.js.
+//
+// The web ends a turn and moves on in one step (turnRules.resolveTurn, then advance): it has
+// nothing to show in between, unlike the bot.
 
 const { publicCharacter } = require('../publicCharacter');
+const rules = require('../../core/game/turnRules');
 
 /** Begin a turn for the current player: their turn counter ticks up. */
-function startTurn(game) {
-  game.turnsTaken.set(game.currentPlayerId, game.turnsFor(game.currentPlayerId) + 1);
-  return game.currentPlayerId;
-}
-
-// The resolve-once key: "<player>:<their turn number>". Checked and written before anything
-// else so two near-simultaneous actions can't resolve the same turn twice (which would skip
-// and mischarge the next player). See the long note in engine.js.
-function turnKey(game) {
-  return `${game.currentPlayerId}:${game.turnsFor(game.currentPlayerId)}`;
-}
+const startTurn = (game) => rules.beginTurn(game);
 
 // How long the current turn's clock still has to run, in ms, or null with no clock. While
 // paused (the current player dropped) that is the frozen remainder, not a deadline in the past.
@@ -34,36 +26,14 @@ function msLeftOf(game, now) {
   return game.turnEndsAt ? Math.max(0, game.turnEndsAt - now) : null;
 }
 
-// Records the outcome and advances the rotation, or ends the game when nobody is left guessing.
-function endTurn(game, { correct, now = Date.now() }) {
-  const key = turnKey(game);
-  if (game.resolvedTurns.has(key)) return { duplicate: true };
-  game.resolvedTurns.add(key);
-
-  const finishingId = game.currentPlayerId;
-  // Time left is the tiebreak between equal turn counts (Game.standings). Read here, before the
-  // socket layer re-arms the clock for the next turn.
-  if (correct) game.recordFinish(finishingId, msLeftOf(game, now));
-
-  const next = game.nextActiveIndex();
-  if (next === null) {
-    game.finished = true;
-    return { finishingId, gameOver: true };
-  }
-  game.currentTurnIndex = next;
-  startTurn(game);
-  return { finishingId, gameOver: false, nextPlayerId: game.currentPlayerId };
-}
-
-const notPlaying = (game) => !game || game.finished;
+// A resolved turn, followed straight through: who it was, and where the game goes next.
+const moveOn = (game, resolved) => ({ finishingId: resolved.finishingId, ...rules.advance(game) });
 
 /** Current player declares they got their character. Records it, reveals it, advances. */
 function gotIt(game, playerId, now = Date.now()) {
-  if (notPlaying(game)) return { ok: false, error: 'The game is over.' };
-  if (playerId !== game.currentPlayerId) return { ok: false, error: "It's not your turn." };
   const turns = game.turnsFor(playerId);
-  const r = endTurn(game, { correct: true, now });
-  if (r.duplicate) return { ok: false, error: 'That turn was already resolved.' };
+  const r = rules.claimCorrect(game, playerId, msLeftOf(game, now));
+  if (!r.ok) return r;
   return {
     ok: true,
     // secondsLeft goes out with the reveal because it is, from this moment, the time to beat.
@@ -74,62 +44,48 @@ function gotIt(game, playerId, now = Date.now()) {
       character: publicCharacter(game.headByPlayer[playerId]),
       kind: 'got',
     },
-    ...r,
+    ...moveOn(game, r),
   };
 }
 
 /** Hand the turn on. Never removes anyone. Only offered while others are still guessing. */
 function pass(game, playerId) {
-  if (notPlaying(game)) return { ok: false, error: 'The game is over.' };
-  if (playerId !== game.currentPlayerId) return { ok: false, error: "It's not your turn." };
-  const r = endTurn(game, { correct: false });
-  if (r.duplicate) return { ok: false, error: 'That turn was already resolved.' };
-  return { ok: true, ...r };
+  const r = rules.pass(game, playerId);
+  return r.ok ? { ok: true, ...moveOn(game, r) } : r;
 }
 
 /** Bow out: reveal what they were wearing and drop from the rotation. */
 function giveUp(game, playerId) {
-  if (notPlaying(game)) return { ok: false, error: 'The game is over.' };
-  if (playerId !== game.currentPlayerId) return { ok: false, error: "It's not your turn." };
-  if (!game.isActive(playerId)) return { ok: false, error: "You're already out." };
-  game.surrendered.add(playerId);
+  const r = rules.giveUp(game, playerId);
+  if (!r.ok) return r;
   const reveal = { playerId, turns: null, character: publicCharacter(game.headByPlayer[playerId]), kind: 'gaveup' };
-  const r = endTurn(game, { correct: false });
-  if (r.duplicate) return { ok: false, error: 'That turn was already resolved.' };
-  return { ok: true, reveal, ...r };
+  return { ok: true, reveal, ...moveOn(game, r) };
 }
 
 /**
  * A player leaves the game entirely (an explicit exit, not a dropped connection). Recorded as
  * a surrender and their character revealed. If it was their turn the rotation advances; if not,
- * the current player is active by definition so nothing needs advancing. Mirrors engine.submitForfeit.
+ * nothing needs advancing -- and no nextPlayerId says so to the caller.
  */
 function forfeit(game, playerId) {
-  if (notPlaying(game) || !game.isActive(playerId)) return { ok: false, stale: true };
-  game.surrendered.add(playerId);
+  const r = rules.forfeit(game, playerId);
+  if (!r.ok) return r;
   const reveal = { playerId, turns: null, character: publicCharacter(game.headByPlayer[playerId]), kind: 'left' };
-  if (playerId === game.currentPlayerId) {
-    const r = endTurn(game, { correct: false });
-    return { ok: true, reveal, ...r };
-  }
-  return { ok: true, reveal, gameOver: false };
+  if (!r.resolved) return { ok: true, reveal, gameOver: false };
+  return { ok: true, reveal, ...moveOn(game, { finishingId: playerId }) };
 }
 
 /** The turn clock ran out: pass, if it's still that player's turn. Never removes anyone. */
 function timeout(game, playerId) {
-  if (notPlaying(game) || game.currentPlayerId !== playerId) return { ok: false, stale: true };
-  const r = endTurn(game, { correct: false });
-  return { ok: true, timedOut: true, ...r };
+  const r = rules.timeout(game, playerId);
+  return r.ok ? { ok: true, timedOut: true, ...moveOn(game, r) } : r;
 }
 
-// Which buttons the current player gets, matching engine.js/turnBoard.js:
-//   in contention, others active     -> Got it + Pass
-//   out of contention, others active  -> Got it + Pass + Give up
-//   last one guessing                 -> Got it + Give up (no one to pass to)
+// Which buttons the current player gets -- the core's rule, in the web's shape. "Got it" is
+// always offered on a phone; the computers turn it off for typing (../desk/view.js).
 function buttonsFor(game) {
-  const others = game.activePlayers.filter((id) => id !== game.currentPlayerId);
-  const hasOthers = others.length > 0;
-  return { gotIt: true, pass: hasOthers, giveUp: game.isOutOfContention(game.currentPlayerId) || !hasOthers };
+  const c = rules.guesserControls(game);
+  return { gotIt: true, pass: c.pass, giveUp: c.giveUp };
 }
 
 function standingsView(game, names) {
