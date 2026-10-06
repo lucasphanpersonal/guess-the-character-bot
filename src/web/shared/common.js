@@ -55,8 +55,9 @@
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
   }
 
-  // A passing note in the corner. `html` must already be escaped by the caller.
-  function toast(html, ms = 4500) {
+  // A passing note in the corner. `html` must already be escaped by the caller. `max` caps how
+  // many stack at once (oldest dropped): the stack grows upward, into whatever sits above it.
+  function toast(html, ms = 4500, { max = 4 } = {}) {
     const feed = $('feed');
     if (!feed) return;
     const t = document.createElement('div');
@@ -64,7 +65,7 @@
     t.innerHTML = html;
     feed.appendChild(t);
     setTimeout(() => t.remove(), ms);
-    while (feed.children.length > 4) feed.firstChild.remove();
+    while (feed.children.length > max) feed.firstChild.remove();
   }
 
   /**

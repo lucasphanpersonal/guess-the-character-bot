@@ -28,7 +28,8 @@ guess is shown to everyone; a close one is told only to whoever typed it; a righ
 100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Everyone sees
 the kind of work the character is from ("Anime") from the start, and the work itself from half
 time, with any word of its title that names the character blanked. Letters of the name are
-revealed at half and three-quarter time, never more than a third of them. The turn ends
+revealed from half time on, coming faster as the clock runs down, until up to half of them show
+(one for a three-letter name, none for two). The turn ends
 when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEAL_SECONDS`, 6 s).
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
 The host sets rounds (1–5) and drawing time (60–120 s).

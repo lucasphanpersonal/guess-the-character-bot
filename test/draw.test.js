@@ -127,8 +127,32 @@ function theMaskShowsTheShapeAndHintsFillItIn() {
   assert.equal(draw.maskOf(g), '______-___ ____', 'nothing before half time');
   draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]);
   assert.equal(draw.maskOf(g), 'S_____-___ ____', 'one letter at half time');
-  draw.revealDueHints(g, T0 + 60_000, (xs) => xs[0]);
-  assert.equal(g.revealed.length, 2, 'another at three quarters');
+  // Then the rest, spread to 95% of the clock: hints come faster as it runs down. Thirteen
+  // letters may give away six, so one every 9% of the 80s from half time: 40s, 47.2s ... 76s.
+  const due = (ms) => {
+    draw.revealDueHints(g, T0 + ms, (xs) => xs[0]);
+    return g.revealed.length;
+  };
+  assert.equal(due(47_000), 1, 'not yet the second');
+  assert.equal(due(47_300), 2);
+  assert.equal(due(62_000), 4);
+  assert.equal(due(76_000), 6, 'half the letters by the last few seconds');
+  assert.equal(due(79_900), 6, 'and never more than half');
+  assert.ok(draw.hintTimes(g).includes(T0 + 76_000), 'the room is woken for the last one');
+}
+
+function longerNamesGiveHalfTheirLettersShortOnesFewer() {
+  const revealedBy = (name) => {
+    const g = started();
+    g.choices[0] = head(name);
+    draw.choose(g, 'p1', 0, T0);
+    draw.revealDueHints(g, T0 + 79_999);
+    return g.revealed.length;
+  };
+  assert.equal(revealedBy('Pikachu'), 3, 'seven letters: three');
+  assert.equal(revealedBy('Luke'), 2, 'four letters: two');
+  assert.equal(revealedBy('Leo'), 1, 'three letters: one');
+  assert.equal(revealedBy('Ed'), 0, 'two letters: none -- that would be the answer');
 }
 
 function aShortNameGetsNoHintThatWouldGiveItAway() {
@@ -361,6 +385,7 @@ module.exports = {
   'the answer reaches only those who know it': theAnswerReachesOnlyThoseWhoKnowIt,
   'the mask shows the shape, and hints fill it in': theMaskShowsTheShapeAndHintsFillItIn,
   'a short name gets no hint that would give it away': aShortNameGetsNoHintThatWouldGiveItAway,
+  'longer names give up half their letters, short ones fewer': longerNamesGiveHalfTheirLettersShortOnesFewer,
   'the kind of work shows from the start, and the work from half time': theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime,
   'the work has the name blanked out of it': theWorkHasTheNameBlankedOutOfIt,
   'a short name still gets its work at half time': aShortNameStillGetsItsWorkAtHalfTime,

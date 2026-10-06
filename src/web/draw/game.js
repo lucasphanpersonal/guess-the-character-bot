@@ -10,7 +10,8 @@
 //   drawing   they draw it; everyone else types guesses. Everyone sees the kind of work it is
 //             from ("Anime") from the start, and the work itself ("Naruto") from half time,
 //             with any word of it that names the character blanked. Letters of the name are
-//             revealed as hints part-way through. Ends when every guesser has it, or time is up.
+//             revealed from half time, faster as the clock runs down. Ends when every guesser
+//             has it, or time is up.
 //   reveal    the answer and the turn's points, for REVEAL_SECONDS
 //
 // Guesses are judged by the compendium's checker (src/compendium/answers.js) with single words
@@ -30,8 +31,19 @@ const CHOICES = 3;
 // the commonest reason a turn goes nowhere, and the cost of another look is only the drawer's own
 // time. A finite number stays representable (rerollsLeft counts down) for when a limit is wanted.
 const CHOICE_REROLLS = -1;
-// Hints: a letter at half time, another at three quarters -- never more than a third of the name.
-const HINT_AT = [0.5, 0.75];
+// The first letter at half time, then the rest spread evenly to HINT_LAST of the clock, so hints
+// speed up as the clock runs down -- the end of a turn is when a stuck room most needs them. The
+// letters a name can give away: half, for names of four letters or more; one for three; none for
+// two ("Ed" spelled out by half is not a hint, it is the answer).
+const HINT_FIRST = 0.5;
+const HINT_LAST = 0.95;
+const letterBudget = (letterCount) => (letterCount >= 4 ? Math.floor(letterCount / 2) : letterCount === 3 ? 1 : 0);
+/** When each letter falls due, as fractions of the drawing time. */
+function hintFractions(letterCount) {
+  const n = letterBudget(letterCount);
+  if (n <= 1) return n ? [HINT_FIRST] : [];
+  return Array.from({ length: n }, (_, i) => HINT_FIRST + ((HINT_LAST - HINT_FIRST) * i) / (n - 1));
+}
 // The work the character is from, at half time. The kind of work is shown from the start.
 const WORK_AT = 0.5;
 const CHAT_KEPT = 60;
@@ -187,8 +199,11 @@ function say(g, playerId, text, now) {
 const isLetter = (ch) => /[\p{L}\p{N}]/u.test(ch);
 
 /** When the hints fall due, in ms timestamps -- the letters and the work. */
+const lettersOf = (name) => [...name].map((ch, i) => (isLetter(ch) ? i : -1)).filter((i) => i >= 0);
 const hintTimes = (g) =>
-  g.startedAt == null ? [] : [...new Set([...HINT_AT, WORK_AT])].map((f) => g.startedAt + f * g.drawSeconds * 1000);
+  g.startedAt == null || !g.character
+    ? []
+    : [...new Set([...hintFractions(lettersOf(g.character.name).length), WORK_AT])].map((f) => g.startedAt + f * g.drawSeconds * 1000);
 
 /**
  * Reveal whatever hints are due. `pick` chooses among the candidate indexes (random in play, fixed
@@ -196,17 +211,15 @@ const hintTimes = (g) =>
  */
 function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.length)]) {
   if (g.phase !== 'drawing' || !g.character) return false;
-  const name = [...g.character.name];
-  const letters = name.map((ch, i) => (isLetter(ch) ? i : -1)).filter((i) => i >= 0);
-  const cap = Math.floor(letters.length / 3);
+  const letters = lettersOf(g.character.name);
   const at = (f) => g.startedAt + f * g.drawSeconds * 1000;
   let changed = false;
   if (!g.workShown && g.character.origin?.work && now >= at(WORK_AT)) {
     g.workShown = true;
     changed = true;
   }
-  const due = HINT_AT.filter((f) => at(f) <= now).length;
-  while (g.revealed.length < Math.min(due, cap)) {
+  const due = hintFractions(letters.length).filter((f) => at(f) <= now).length;
+  while (g.revealed.length < due) {
     const left = letters.filter((i) => !g.revealed.includes(i));
     if (!left.length) break;
     g.revealed.push(pick(left));

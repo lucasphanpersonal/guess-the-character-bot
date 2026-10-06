@@ -434,6 +434,9 @@ function hurryWatch(turn) {
 
 socket.on('draw:state', (v) => {
   const turnChanged = !view || view.drawer.playerId !== v.drawer.playerId || view.phase !== v.phase;
+  // A new drawer is a new chat: the server starts its own afresh each turn, so this player's own
+  // lines ("... is close!") go with it rather than piling up under the next drawing.
+  if (!view || view.drawer.playerId !== v.drawer.playerId || view.round !== v.round) localLines = [];
   view = v;
   show('game');
   renderGame(turnChanged);
@@ -555,8 +558,7 @@ $('rerollChoicesBtn').addEventListener('click', () => {
   });
 });
 
-// The server's chat, plus lines only this player sees: their own close calls, and the "got it"
-// announcements, which are events rather than chat.
+// The server's chat, plus the lines only this player sees: their own close calls.
 let localLines = [];
 function renderChat() {
   const server = (view?.chat ?? []).map((m) => ({
@@ -576,10 +578,13 @@ function localLine(cls, html) {
   renderChat();
 }
 
-// The one "got it" line, the guesser's own included: the ack to their guess says nothing, or the
-// guesser saw it twice -- "You got it!" from the ack, then their own name from this.
+// "Got it" is an announcement, not chat, so it is a toast that goes away rather than a line in the
+// chat box: in a room of six, one turn's worth of them pushed the guesses off the top, and they
+// piled up turn after turn. Who has it stays visible where it belongs -- the player list's tag.
+// The guesser's own comes from here too (the ack says nothing), so they see it once.
 socket.on('draw:correct', ({ playerId: who, name, points }) => {
-  localLine('sys', who === me ? `✓ You got it! +${points}` : `✓ ${esc(name)} got it! +${points}`);
+  // Two at most: a room guessing it in a burst would stack them up over the chat box above.
+  toast(who === me ? `✓ You got it! +${points}` : `✓ ${esc(name)} got it! +${points}`, 3500, { max: 2 });
   // To everyone, the guesser included -- so the guesser's own cue is played here too, not on the
   // ack, or they would hear two.
   sound(who === me ? 'gotMine' : 'got');
