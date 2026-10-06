@@ -222,6 +222,42 @@ function noOriginNoClue() {
   assert.deepEqual(draw.viewFor(g, 'p2', names, T0).clue, { category: 'Anime', work: null, workLater: false }, 'nothing promised that is not coming');
 }
 
+// --- other names the drawer accepts -----------------------------------------------------------
+
+function aNameTheDrawerAcceptsCounts() {
+  const g = started();
+  g.choices[0] = head('Tsukino Usagi');
+  draw.choose(g, 'p1', 0, T0, 'Serena, Sailor Moon');
+  assert.equal(draw.say(g, 'p2', 'serena', T0 + 1000).verdict, 'correct', 'the English name');
+  assert.equal(draw.say(g, 'p3', 'Moon Sailor', T0 + 1000).verdict, 'correct', 'whole names, in any order');
+  assert.equal(draw.viewFor(g, 'p1', names, T0).alsoAccept.join('|'), 'Serena|Sailor Moon', 'the drawer sees them');
+}
+
+function otherNamesReachNobodyButTheDrawerUntilTheReveal() {
+  const g = started();
+  draw.choose(g, 'p1', 0, T0, 'Pika');
+  const guesser = JSON.stringify(draw.viewFor(g, 'p2', names, T0));
+  assert.ok(!guesser.includes('Pika"') && draw.viewFor(g, 'p2', names, T0).alsoAccept === null);
+  draw.endTurn(g, T0 + 80_000, 'time');
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0 + 80_000).lastTurn.alsoAccepted, ['Pika'], 'named at the reveal');
+}
+
+function otherNamesAreAFewRealNames() {
+  assert.deepEqual(draw.cleanAlsoAccept('a, Serena , ,Serena, Bunny, Usako, Moon'), ['Serena', 'Bunny', 'Usako'], 'no single letters, no repeats, at most three');
+  assert.equal(draw.cleanAlsoAccept('x'.repeat(100))[0].length, 40);
+  assert.deepEqual(draw.cleanAlsoAccept(undefined), []);
+}
+
+function otherNamesAreForThatTurnOnly() {
+  const g = started();
+  draw.choose(g, 'p1', 0, T0, 'Pika');
+  draw.endTurn(g, T0 + 80_000, 'time');
+  draw.advance(g);
+  draw.offerChoices(g, [head('Mario')], T0 + 90_000);
+  draw.choose(g, 'p2', 0, T0 + 90_000);
+  assert.notEqual(draw.say(g, 'p3', 'pika', T0 + 91_000).verdict, 'correct');
+}
+
 // --- giving up ------------------------------------------------------------------------------
 
 function whoGaveUpTalksOnlyToThoseWhoKnow() {
@@ -428,6 +464,10 @@ module.exports = {
   'a short name gets no hint that would give it away': aShortNameGetsNoHintThatWouldGiveItAway,
   'longer names give up half their letters, short ones fewer': longerNamesGiveHalfTheirLettersShortOnesFewer,
   'whoever gave up talks only to those who know, and scores nothing': whoGaveUpTalksOnlyToThoseWhoKnow,
+  'a name the drawer accepts counts': aNameTheDrawerAcceptsCounts,
+  'other names reach nobody but the drawer until the reveal': otherNamesReachNobodyButTheDrawerUntilTheReveal,
+  'other names are a few real names': otherNamesAreAFewRealNames,
+  'other names are for that turn only': otherNamesAreForThatTurnOnly,
   'a leaver can leave nobody guessing, which ends the turn': aLeaverCanLeaveNobodyGuessing,
   'the kind of work shows from the start, and the work from half time': theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime,
   'the work has the name blanked out of it': theWorkHasTheNameBlankedOutOfIt,

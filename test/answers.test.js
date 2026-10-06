@@ -171,6 +171,20 @@ module.exports = {
     assert.equal(judgeGuess('Sasuke', 'Sasuke Uchiha', { others: poolIndex([]), singleWords: true }).verdict, 'close', 'an empty pool decides nothing, as an empty list did');
   },
 
+  'a romanised name may drop its long vowels, and only a romanised one'() {
+    const romanised = { romanised: true };
+    assert.equal(judgeGuess('Tanjiro', 'Kamado Tanjirou', { ...romanised, singleWords: true, others: poolIndex(['Kamado Tanjirou', 'Kamado Nezuko']) }).verdict, 'correct');
+    assert.equal(judgeGuess('tanjiro kamado', 'Kamado Tanjirou', romanised).verdict, 'correct', 'in either order');
+    assert.equal(judgeGuess('Sato Kazuma', 'Satou Kazuma', romanised).verdict, 'correct');
+    assert.equal(judgeGuess('Shuichi Aizawa', 'Aizawa Shuuichi', romanised).verdict, 'correct');
+    assert.equal(judgeGuess('Kamado', 'Kamado Tanjirou', { ...romanised, singleWords: true, others: poolIndex(['Kamado Tanjirou', 'Kamado Nezuko']) }).verdict, 'close', 'a shared family name is still close');
+    // Everywhere else, two spellings are two people: measured, folding every name would have made
+    // 121 pairs of different characters one -- Dog and Doug, Lois and Louis.
+    assert.notEqual(judgeGuess('Dog', 'Doug').verdict, 'correct');
+    assert.notEqual(judgeGuess('Lois', 'Louis').verdict, 'correct');
+    assert.notEqual(judgeGuess('Tanjiro', 'Kamado Tanjirou', { singleWords: true }).verdict, 'correct', 'off unless the game says the name is romanised');
+  },
+
   'edit distance counts a swap of neighbours as one typo'() {
     assert.equal(editDistance('sasuke', 'sasuek'), 1);
     assert.equal(editDistance('pikachu', 'pikachu'), 0);

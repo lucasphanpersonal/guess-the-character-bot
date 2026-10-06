@@ -138,6 +138,13 @@ function editDistance(a, b) {
   return d[a.length][b.length];
 }
 
+// Japanese names in the library are romanised with their long vowels spelled out -- "Kamado
+// Tanjirou", "Satou Kazuma", "Aizawa Shuuichi" -- while English releases, and so most people,
+// write "Tanjiro", "Sato", "Shuichi". Folded on BOTH sides of a comparison, so it only ever decides
+// whether two spellings are one; it is never stored, and never part of identityKeys (two different
+// characters must not be merged over a vowel).
+const romaji = (k) => k.replace(/ou/g, 'o').replace(/uu/g, 'u').replace(/oo/g, 'o').replace(/aa/g, 'a').replace(/ii/g, 'i');
+
 // How many typos a form of this length forgives. None below four letters: one edit turns "Ed"
 // into "Al", and short names are exactly where two characters sit one letter apart.
 const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
@@ -151,6 +158,8 @@ const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
  *   naming the character they are wearing types a name, while players guessing at a DRAWING type
  *   whatever they see, and "Combat" for "Combat Carl" or "Wild" for "Wild Horn" would hand them
  *   the round. Off, such a word is close.
+ * @param {boolean} [opts.romanised]  the name is romanised from Japanese (an Anime or Manga list):
+ *   long vowels may then be spelled out or not -- "Tanjiro" is "Tanjirou". Off for everything else.
  * @param {string[]|object} [opts.others]  the names this one must be told apart from, or a
  *   poolIndex() of them (the same answer, without scanning every name per guess). Even with
  *   singleWords on, a word only counts when none of these shares it -- "Sasuke" names Sasuke
@@ -160,28 +169,39 @@ const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
  *   word is ever correct.
  * @returns {{ verdict: 'correct'|'close'|'wrong', as: string|null }}  `as` is the form matched.
  */
-function judgeGuess(guess, name, { others = [], singleWords = false } = {}) {
+function judgeGuess(guess, name, { others = [], singleWords = false, romanised = false } = {}) {
   // The article is optional on the guess's side too: "the joker" names "Joker".
   const g = key(String(guess).trim().replace(/^the\s+/i, '')) || key(guess);
   if (!g) return { verdict: 'wrong', as: null };
   const forms = answerForms(name);
+  // Folding long vowels only for a name romanised from Japanese: everywhere, it would make
+  // different people one -- Dog and Doug, Lois and Louis, Mon and Moon (measured: 121 such pairs).
+  const fold = romanised ? romaji : (k) => k;
+  const fg = fold(g);
 
   if (forms.exact.includes(g) || forms.exact.includes(key(guess))) return { verdict: 'correct', as: g };
+  // The same name, romanised the other way: "Tanjiro" for "Tanjirou", "Sato" for "Satou".
+  const exactAs = romanised ? forms.exact.find((f) => fold(f) === fg) : null;
+  if (exactAs) return { verdict: 'correct', as: exactAs };
 
-  // The words in any order: "Uzumaki Naruto", "Jean-Pierre Polnareff". Same words, same count.
+  // The words in any order: "Uzumaki Naruto", "Jean-Pierre Polnareff". Same words, same count --
+  // and romanised either way, so "Tanjiro Kamado" is "Kamado Tanjirou".
   const guessWords = wordsOf(String(guess).replace(/^the\s+/i, ''));
   const nameWords = wordsOf(String(name).replace(/\s+\([^)]*\)\s*$/, '').replace(/^the\s+/i, ''));
-  const sameBag = (a, b) => a.length === b.length && a.length > 1 && [...a].sort().join(' ') === [...b].sort().join(' ');
+  const sameBag = (a, b) =>
+    a.length === b.length && a.length > 1 && a.map(fold).sort().join(' ') === b.map(fold).sort().join(' ');
   if (sameBag(guessWords, nameWords)) return { verdict: 'correct', as: g };
 
-  // One word of the name, standing for all of it -- only when nobody else in the pool has it.
-  if (forms.words.includes(g)) {
+  // One word of the name, standing for all of it -- only when nobody else in the cast has it. Asked
+  // of the word as the NAME spells it, so the cast (which spells it that way too) can answer.
+  const word = forms.words.find((w) => w === g) ?? forms.words.find((w) => fold(w) === fg);
+  if (word) {
     const own = key(name);
     const index = Array.isArray(others) ? null : others;
-    const shared = index ? index.sharesWord(g, own) : others.some((other) => key(other) !== own && wordsOf(other).includes(g));
+    const shared = index ? index.sharesWord(word, own) : others.some((other) => key(other) !== own && wordsOf(other).includes(word));
     const anyOthers = index ? index.size > 0 : others.length > 0;
-    if (singleWords && !shared && anyOthers) return { verdict: 'correct', as: g };
-    return { verdict: 'close', as: g };
+    if (singleWords && !shared && anyOthers) return { verdict: 'correct', as: word };
+    return { verdict: 'close', as: word };
   }
 
   if (forms.loose.includes(g)) return { verdict: 'close', as: g };

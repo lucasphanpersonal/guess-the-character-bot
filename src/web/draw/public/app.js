@@ -487,6 +487,10 @@ function renderGame(turnChanged) {
   // changes: every guess sends a new view, and resetting the <img> each time would make it blink.
   const ref = v.phase === 'drawing' && v.isDrawer ? v.character : null;
   $('refCard').hidden = !ref;
+  // What else the drawer said would count, beside the picture they draw from.
+  const also = ref ? v.alsoAccept ?? [] : [];
+  $('refAccept').hidden = !also.length;
+  $('refAccept').textContent = also.length ? `Also accepting: ${also.join(', ')}` : '';
   const refKey = ref ? `${ref.name}|${ref.imageUrl ?? ''}` : '';
   if ($('refCard').dataset.key !== refKey) {
     $('refCard').dataset.key = refKey;
@@ -498,7 +502,11 @@ function renderGame(turnChanged) {
 
   // Overlays on the picture: choosing, waiting for the drawer to choose, the reveal.
   $('chooseOverlay').hidden = !(v.phase === 'choosing' && v.isDrawer);
+  $('alsoCard').hidden = !(v.phase === 'choosing' && v.isDrawer);
   if (v.phase === 'choosing' && v.isDrawer) {
+    // A new turn is a new character: last turn's other names would be wrong for it. New choices
+    // within the same turn keep what was typed -- it applies to whichever is picked.
+    if (turnChanged) $('alsoAccept').value = '';
     $('pick').innerHTML = v.choices
       .map((c, i) => `<button data-i="${i}"><div class="art">${characterArt(c)}</div><span>${esc(c.name)}</span><span class="hint" title="${esc(c.source)}">${esc(c.source)}</span></button>`)
       .join('');
@@ -524,7 +532,8 @@ function renderGame(turnChanged) {
       ? lt.guessed.map((x) => `${esc(x.name)} +${x.points}`).join(', ') + ` -- ${esc(lt.drawer)} +${lt.drawerPoints} for drawing`
       : 'Nobody got it.';
     const quit = lt.gaveUp?.length ? ` Gave up: ${lt.gaveUp.map(esc).join(', ')}.` : '';
-    $('revealPoints').innerHTML = `${esc(why)} ${got}${quit}`;
+    const also = lt.alsoAccepted?.length ? ` Also accepted: ${lt.alsoAccepted.map(esc).join(', ')}.` : '';
+    $('revealPoints').innerHTML = `${esc(why)} ${got}${quit}${also}`;
   }
 
   $('tools').hidden = !(v.isDrawer && v.phase === 'drawing');
@@ -566,7 +575,9 @@ function renderPlayers() {
 $('pick').addEventListener('click', (e) => {
   const b = e.target.closest('[data-i]');
   if (!b) return;
-  socket.emit('draw:choose', { index: Number(b.dataset.i) }, (res) => { if (res && !res.ok) toast(esc(res.error)); });
+  socket.emit('draw:choose', { index: Number(b.dataset.i), alsoAccept: $('alsoAccept').value }, (res) => {
+    if (res && !res.ok) toast(esc(res.error));
+  });
 });
 
 $('rerollChoicesBtn').addEventListener('click', () => {

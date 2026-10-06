@@ -26,6 +26,7 @@
 // the others who know, because it may well contain the answer.
 
 const { judgeGuess, maskNameWords } = require('../../compendium/answers');
+const { normalizeLoose } = require('../../compendium/text');
 const { publicCharacter } = require('../publicCharacter');
 
 const CHOOSE_SECONDS = 15;
@@ -51,7 +52,20 @@ function hintFractions(letterCount) {
 }
 // The work the character is from, at half time. The kind of work is shown from the start.
 const WORK_AT = 0.5;
+// Other names the drawer accepts for their character, typed while choosing: the English name of a
+// character the library has in Japanese ("Serena" for Usagi), a nickname the room uses. A few,
+// short, and each a real name rather than a letter that would let anything through.
+const ALSO_MAX = 3;
+const ALSO_LEN = 40;
+function cleanAlsoAccept(text) {
+  const names = String(text ?? '')
+    .split(/[,\n]/)
+    .map((s) => s.trim().slice(0, ALSO_LEN))
+    .filter((s) => normalizeLoose(s).length >= 2);
+  return [...new Set(names)].slice(0, ALSO_MAX);
+}
 const CHAT_KEPT = 60;
+const ROMANISED = new Set(['Anime', 'Manga']);
 const TEXT_MAX = 80;
 // Points for a correct guess fall from GUESS_MAX to GUESS_MIN over the turn: speed is the skill.
 // The drawer earns DRAWER_PER_GUESS for each person who gets it -- a drawing nobody can read
@@ -126,18 +140,21 @@ function offerChoices(g, choices, now) {
   g.startedAt = null;
   g.guessed = new Map();
   g.gaveUp = new Set();
+  g.alsoAccept = [];
   g.revealed = [];
   g.workShown = false;
   g.strokes = [];
   g.chat = [];
 }
 
-function choose(g, playerId, index, now) {
+/** `alsoAccept`: other names the drawer will accept for this character (cleanAlsoAccept). */
+function choose(g, playerId, index, now, alsoAccept = '') {
   if (g.phase !== 'choosing') return { ok: false, error: 'Nothing to choose right now.' };
   if (playerId !== drawerOf(g)) return { ok: false, error: "It's not your turn to draw." };
   const i = Number(index);
   if (!Number.isInteger(i) || i < 0 || i >= g.choices.length) return { ok: false, error: 'Pick one of the three.' };
   g.character = g.choices[i];
+  g.alsoAccept = cleanAlsoAccept(alsoAccept);
   g.choices = [];
   g.used.push(g.character.name);
   g.phase = 'drawing';
@@ -201,7 +218,18 @@ function say(g, playerId, text, now) {
     return { ok: true, verdict: 'said' };
   }
 
-  const { verdict } = judgeGuess(clean, g.character.name, { singleWords: true, others: g.castOf?.(g.character) ?? [] });
+  const romanised = ROMANISED.has(g.character.origin?.category);
+  let { verdict } = judgeGuess(clean, g.character.name, {
+    singleWords: true,
+    others: g.castOf?.(g.character) ?? [],
+    // Anime and Manga names are romanised from Japanese: "Tanjiro" is "Tanjirou" there.
+    romanised,
+  });
+  // A name the drawer said they would accept counts as the name -- as a whole name (any order,
+  // case or accents), not word by word: they typed exactly what they meant.
+  if (verdict !== 'correct' && (g.alsoAccept ?? []).some((name) => judgeGuess(clean, name, { romanised }).verdict === 'correct')) {
+    verdict = 'correct';
+  }
   if (verdict === 'correct') {
     const points = pointsAt(g, now);
     g.guessed.set(playerId, points);
@@ -302,6 +330,7 @@ function endTurn(g, now, reason) {
     reason, // 'all' | 'given-up' | 'time' | 'drawer-left'
     guessed: [...g.guessed].map(([playerId, points]) => ({ playerId, points })),
     gaveUp: [...g.gaveUp],
+    alsoAccepted: [...(g.alsoAccept ?? [])],
     drawerPoints: g.guessed.size * DRAWER_PER_GUESS,
   };
   g.phase = 'reveal';
@@ -400,6 +429,8 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     clue: g.phase === 'drawing' ? clueFor(g) : null,
     guessedIt: g.guessed.has(viewerId),
     gaveUpIt: g.gaveUp.has(viewerId),
+    // Only the drawer, who typed them. To anyone else they would be the answer by another name.
+    alsoAccept: isDrawer && g.phase === 'drawing' ? g.alsoAccept ?? [] : null,
     players: g.order.map((id) => ({
       playerId: id,
       name: nameOf(id),
@@ -422,6 +453,7 @@ function viewFor(g, viewerId, names, now = Date.now()) {
             reason: g.lastTurn.reason,
             guessed: g.lastTurn.guessed.map((x) => ({ name: nameOf(x.playerId), points: x.points })),
             gaveUp: (g.lastTurn.gaveUp ?? []).map(nameOf),
+            alsoAccepted: g.lastTurn.alsoAccepted ?? [],
             drawerPoints: g.lastTurn.drawerPoints,
           }
         : null,
@@ -449,6 +481,7 @@ module.exports = {
   allGuessed,
   allDone,
   giveUp,
+  cleanAlsoAccept,
   knows,
   CHOOSE_SECONDS,
   REVEAL_SECONDS,

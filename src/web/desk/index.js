@@ -27,6 +27,16 @@ const guessBudget = perSocket({ max: 8, windowMs: 4000 });
 // read a name and tap; short enough that a table that has wandered off cannot hold a turn.
 const RULING_MS = Number(process.env.WEB_DESK_RULING_MS || 20000);
 
+// Anime and Manga names come romanised from Japanese ("Kamado Tanjirou"), so the checker lets
+// long vowels be dropped ("Tanjiro") -- for those characters only. Looked up once per list.
+const ROMANISED = new Set(['Anime', 'Manga']);
+const categories = new Map();
+function isRomanised(character) {
+  if (character?.listId == null) return false;
+  if (!categories.has(character.listId)) categories.set(character.listId, content.categoryOf(character.listId));
+  return ROMANISED.has(categories.get(character.listId));
+}
+
 // What a guess of one word must be told apart from: the guesser's own show, indexed by word once
 // per show per game. "Fred" names the one Fred in his show, though somewhere among 25,000
 // characters there is always another -- judged against the whole pool, a first name was "close"
@@ -86,7 +96,8 @@ const variant = {
       if (!guessBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
-      const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game, r.game.headByPlayer[playerId]) });
+      const mine = r.game.headByPlayer[playerId];
+      const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game, mine), romanised: isRomanised(mine) });
       if (!res.ok) return ack?.(res);
       ack?.({ ok: true, verdict: res.verdict });
       const text = String(payload.text).trim().slice(0, guessing.GUESS_MAX);

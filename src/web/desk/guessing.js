@@ -42,7 +42,7 @@ function remember(game, entry) {
  * @returns {{ok: false, error: string} | {ok: true, verdict: 'correct'|'close'|'wrong', ...}}
  *   a correct guess carries everything loop.gotIt returns (reveal, next player, game over)
  */
-function submitGuess(game, playerId, text, { others = [], now = Date.now() } = {}) {
+function submitGuess(game, playerId, text, { others = [], romanised = false, now = Date.now() } = {}) {
   if (!game || game.finished) return { ok: false, error: 'The game is over.' };
   if (playerId !== game.currentPlayerId) return { ok: false, error: "It's not your turn." };
   const st = stateOf(game);
@@ -50,7 +50,7 @@ function submitGuess(game, playerId, text, { others = [], now = Date.now() } = {
   const guess = String(text ?? '').trim().slice(0, GUESS_MAX);
   if (!guess) return { ok: false, error: 'Type a name first.' };
 
-  const { verdict } = judgeGuess(guess, game.headByPlayer[playerId].name, { others, singleWords: true });
+  const { verdict } = judgeGuess(guess, game.headByPlayer[playerId].name, { others, singleWords: true, romanised });
   const turn = turnOf(game);
   if (verdict === 'correct') {
     const res = loop.gotIt(game, playerId, now);

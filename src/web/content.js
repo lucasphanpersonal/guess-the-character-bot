@@ -30,6 +30,8 @@ const content = {
   // Every name a game was dealt from, for the guess-checker: one word of a name only counts as
   // the whole of it when nobody else in the pool has that word (src/compendium/answers.js).
   poolNames: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => c.name),
+  // A list's category -- which tells the checker whether its names are romanised from Japanese.
+  categoryOf: (listId) => characterLists.getListsByIds([listId], null)[0]?.category ?? null,
   // Where a dealt row is from, in parts ({ work, category } or null). A lookup failing is not
   // worth losing a turn over -- it only feeds a hint.
   originOf: (row) => {

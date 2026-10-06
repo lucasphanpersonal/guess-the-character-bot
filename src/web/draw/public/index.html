@@ -71,6 +71,11 @@
     }
     .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .pick .art img { width:100%; height:100%; object-fit:contain; }
+    .alsocard[hidden] { display:none; }
+    .alsocard .opt { font-weight:600; color:var(--muted); text-transform:none; letter-spacing:0; }
+    .alsocard input { width:100%; padding:8px 10px; font-size:.95rem; margin-top:6px; }
+    .alsocard .hint { font-size:.8rem; margin:8px 0 0; }
+    .refaccept { font-size:.85rem; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
     .reveal-art { width:14rem; height:11rem; border-radius:12px; background:var(--chip); overflow:hidden; display:flex;
                   align-items:center; justify-content:center; }
     .reveal-art img { width:100%; height:100%; object-fit:contain; }
@@ -247,9 +252,19 @@
         <!-- The drawer's reference: the character's picture for the whole of their turn, so they
              draw what it looks like rather than from memory. Only ever filled from the drawer's
              own view, which is the only one that carries the character while drawing. -->
+        <!-- Before the drawing starts, because it is the drawer's call what else counts: the English
+             name of a character the library has in Japanese, a nickname. Beside the canvas, not on
+             it: the three choices already fill the 4:3 picture at narrow widths, and anything below
+             them there is cut off. -->
+        <div class="card alsocard" id="alsoCard" hidden>
+          <label for="alsoAccept">Also accept <span class="opt">(optional)</span></label>
+          <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. Serena, Bunny" />
+          <p class="hint">Other names that count, comma-separated: the English name, a nickname. For whichever one you pick.</p>
+        </div>
         <div class="card refcard" id="refCard" hidden>
           <div class="refart" id="refArt"></div>
           <div class="refname" id="refName"></div>
+          <div class="refaccept" id="refAccept" hidden></div>
           <p class="hint">Your reference. Only you can see it.</p>
         </div>
         <ul class="players" id="players"></ul>
