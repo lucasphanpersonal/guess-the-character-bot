@@ -322,10 +322,10 @@ recorded below, since the deviations are the useful part of a status update.
    client `playerId` so a reconnect reclaims the same seat.
 2. **Setup flow — done.** Pool/difficulty picking, deal, and the confirm/reroll screen, in
    `src/web/guess/gameSetup.js` (pure, content injected) over the real core `Game`. The checker-target
-   rule and reroll recording are reused verbatim (rerolls no longer retire anyone -- see the README). The web deals from its own compendium scope
+   rule and reroll recording are reused verbatim (rerolls no longer retire anyone -- see [the compendium](compendium.md#rerolls-and-dropping-a-show)). The web deals from its own compendium scope
    (`'web'`, or `WEB_SCOPE`) with its own playable selection (`npm run select:lists`). It
    originally auto-resolved to the richest Discord guild, i.e. it played that server's
-   selection; the compendium's scopes ended that (see "The compendium" in the README).
+   selection; the compendium's scopes ended that (see [The compendium](compendium.md#the-compendium-shared-lists-and-scopes)).
 3. **Turn loop — done.** `src/web/guess/turnLoop.js` first ported `engine.js`'s rules (rotation,
    fewest-turns scoring, pass/give-up, resolve-once, out-of-contention) over the core `Game`, with
    a server-authoritative wall-clock turn timer. The rules have since moved into

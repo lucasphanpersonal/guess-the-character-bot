@@ -25,8 +25,10 @@ then draws it with the character's picture beside the canvas as a reference only
 everyone else types guesses into the chat. The checker judges them with single words
 OFF (people guessing at a drawing type what they see — "Combat" is not "Combat Carl"). A wrong
 guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
-100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Letters of the
-name are revealed at half and three-quarter time, never more than a third of them. The turn ends
+100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Everyone sees
+the kind of work the character is from ("Anime") from the start, and the work itself from half
+time, with any word of its title that names the character blanked. Letters of the name are
+revealed at half and three-quarter time, never more than a third of them. The turn ends
 when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEAL_SECONDS`, 6 s).
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
 The host sets rounds (1–5) and drawing time (60–120 s).
@@ -151,7 +153,7 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 
 - **Reused verbatim:** the content/difficulty/curation logic from `src/compendium/` (the web
   app plays as its own compendium scope, `'web'`, with its own playable selection -- see
-  "The compendium" in the top-level README), and the pure game state from core
+  [The compendium](../../docs/compendium.md#the-compendium-shared-lists-and-scopes)), and the pure game state from core
   (`core/game/Game.js`, `GameManager.js`, `Lobby.js`, `lobbySettings.js`).
 - **New here:** the transport (WebSocket rooms instead of Discord's gateway), the UI, and the
   forehead-mode tilt mechanic — none of which the Discord bot has an equivalent of.

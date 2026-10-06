@@ -1,6 +1,7 @@
 # Working notes for Claude
 
-Conventions and hard-won rules for this repo. README.md is the reference; this file is the
+Conventions and hard-won rules for this repo. README.md and docs/ are the reference (the README
+maps them: discord.md, compendium.md, architecture.md, plus src/web/README.md); this file is the
 part that is easy to get wrong twice. Every rule below is here because something broke.
 
 ## Shape of the repo

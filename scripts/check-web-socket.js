@@ -3,7 +3,7 @@
 // Boots the real web server on an ephemeral port and drives socket.io clients through the
 // stage 1 lifecycle (rooms/membership/reconnect) and the stage 2 lifecycle (deal characters,
 // reroll, confirm, ready). Kept OUT of `npm test` on purpose: the unit suite is network-free
-// (see README) and this binds a localhost port and seeds a throwaway DB. The room and setup
+// (see docs/architecture.md) and this binds a localhost port and seeds a throwaway DB. The room and setup
 // *logic* are unit-tested without a network in test/web-rooms.test.js and test/web-setup.test.js;
 // this proves the socket wiring end to end.
 
