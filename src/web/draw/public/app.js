@@ -192,9 +192,13 @@ function renderRoom() {
 // The host's way past someone who has walked away: in the lobby, and on the board mid-game, where
 // an absent player otherwise costs the room a full clock every time their turn to draw comes up.
 // Never on the host's own row, and never on someone who has already gone.
-function removeButton(id, name) {
+// `compact` for the in-game player list, whose rows have no room for the word.
+function removeButton(id, name, { compact = false } = {}) {
   if (!isHost() || id === me) return '';
-  return `<button class="rmbtn" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="Remove ${esc(name)}">Remove</button>`;
+  const label = `Remove ${esc(name)}`;
+  return compact
+    ? `<button class="rmbtn icon" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="${label}" title="${label}">✕</button>`
+    : `<button class="rmbtn" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="${label}">Remove</button>`;
 }
 
 function kick(e) {
@@ -537,7 +541,8 @@ function renderPlayers() {
   const html = view.players
     .map((p) => {
       const tag = p.drawing ? '<span class="tag drawing">▲ Drawing</span>' : p.guessed ? '<span class="tag got">✓ Got it</span>' : '';
-      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${esc(p.name)}${p.playerId === me ? ' (you)' : ''} ${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name)}</li>`;
+      const name = `${esc(p.name)}${p.playerId === me ? ' (you)' : ''}`;
+      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
     })
     .join('');
   if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;
