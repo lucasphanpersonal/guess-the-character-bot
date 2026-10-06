@@ -937,6 +937,44 @@ const connect = (playerId) => {
     K1.close(); K2.close(); K3.close();
   }
 
+  // ---- Draw: a guesser gives up -------------------------------------------------------------
+  console.log('\n# draw — giving up on a drawing');
+  {
+    const G1 = await connectDraw('gHost'); // the host, and the drawer
+    let res = await G1.emitWithAck('room:create', { nickname: 'Gia' });
+    const code = res.state.code;
+    const G2 = await connectDraw('gTwo');
+    await G2.emitWithAck('room:join', { code, nickname: 'Gus' });
+    const G3 = await connectDraw('gThree');
+    await G3.emitWithAck('room:join', { code, nickname: 'Gwen' });
+    const choosing = nextMatching(G1, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
+    await G1.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+    await choosing;
+    const drawing = nextMatching(G1, 'draw:state', (v) => v.phase === 'drawing');
+    await G1.emitWithAck('draw:choose', { index: 0 });
+    const answer = (await drawing).character.name;
+
+    check(!(await G1.emitWithAck('draw:giveup', {})).ok, 'give up: the drawer cannot give up on their own drawing');
+    const told = nextEvent(G3, 'draw:gaveup');
+    const g2Knows = nextMatching(G2, 'draw:state', (v) => v.gaveUpIt);
+    res = await G2.emitWithAck('draw:giveup', {});
+    const g2View = await g2Knows;
+    check(res.ok && g2View.character?.name === answer, 'give up: the guesser who gives up is shown the answer');
+    check((await told).playerId === pub('gTwo'), 'give up: the room is told who gave up');
+    check(!(await G2.emitWithAck('draw:giveup', {})).ok, 'give up: ...once');
+    check(g2View.phase === 'drawing', 'give up: with someone still guessing, the turn goes on');
+
+    // Gwen is still guessing: nothing she has been sent may name the answer.
+    const leaked = G3.received.filter((e) => e.json.includes(JSON.stringify(answer).slice(1, -1)));
+    check(leaked.length === 0, `give up: nobody still guessing is sent the answer (${leaked.map((e) => e.event).join(', ')})`);
+
+    const ended = nextMatching(G1, 'draw:state', (v) => v.phase === 'reveal');
+    await G3.emitWithAck('draw:giveup', {});
+    const reveal = (await ended).lastTurn;
+    check(reveal?.reason === 'given-up' && reveal.gaveUp.length === 2, 'give up: once nobody is left guessing, the turn ends early, and says who gave up');
+    G1.close(); G2.close(); G3.close();
+  }
+
   C2.close(); D.close();
   await wait(50);
   console.log(failed ? `\n${failed} check(s) FAILED` : '\nALL WEB CHECKS PASSED');

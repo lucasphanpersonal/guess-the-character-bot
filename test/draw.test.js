@@ -50,7 +50,8 @@ function aCorrectGuessScoresByHowFastItCame() {
   assert.equal(early.verdict, 'correct');
   assert.ok(early.points > late.points, 'sooner scores more');
   assert.ok(late.points >= 100 && early.points <= 400);
-  assert.equal(late.allGuessed, true, 'everyone has it, so the turn can end');
+  assert.equal(late.allDone, true, 'everyone has it, so the turn can end');
+  assert.equal(late.doneReason, 'all');
   assert.equal(g.scores.get('p1'), 120, 'the drawer earns for each person who got it');
 }
 
@@ -201,6 +202,27 @@ function noOriginNoClue() {
   assert.equal(draw.viewFor(g, 'p2', names, T0).clue, null);
   g.character.origin = { work: null, category: 'Anime' };
   assert.deepEqual(draw.viewFor(g, 'p2', names, T0).clue, { category: 'Anime', work: null, workLater: false }, 'nothing promised that is not coming');
+}
+
+// --- giving up ------------------------------------------------------------------------------
+
+function whoGaveUpTalksOnlyToThoseWhoKnow() {
+  // They have seen the answer, so what they type could give it away: it goes to insiders only.
+  const g = drawing();
+  assert.equal(draw.giveUp(g, 'p2').ok, true);
+  assert.equal(draw.say(g, 'p2', 'it is Pikachu obviously', T0 + 1000).verdict, 'said');
+  assert.ok(!JSON.stringify(draw.viewFor(g, 'p3', names, T0 + 1000)).includes('obviously'), 'not shown to someone guessing');
+  assert.ok(JSON.stringify(draw.viewFor(g, 'p1', names, T0 + 1000)).includes('obviously'), 'shown to the drawer');
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 1000).character.name, 'Pikachu', 'and they see the answer');
+  assert.equal(draw.say(g, 'p2', 'Pikachu', T0 + 2000).verdict, 'said', 'no points for naming it now');
+}
+
+function aLeaverCanLeaveNobodyGuessing() {
+  const g = drawing();
+  draw.giveUp(g, 'p2');
+  const res = draw.removePlayer(g, 'p3', T0 + 5000);
+  assert.equal(res.endTurn, true);
+  assert.equal(g.lastTurn.reason, 'given-up');
 }
 
 // --- turns, rounds, leaving ----------------------------------------------------------------
@@ -386,6 +408,8 @@ module.exports = {
   'the mask shows the shape, and hints fill it in': theMaskShowsTheShapeAndHintsFillItIn,
   'a short name gets no hint that would give it away': aShortNameGetsNoHintThatWouldGiveItAway,
   'longer names give up half their letters, short ones fewer': longerNamesGiveHalfTheirLettersShortOnesFewer,
+  'whoever gave up talks only to those who know, and scores nothing': whoGaveUpTalksOnlyToThoseWhoKnow,
+  'a leaver can leave nobody guessing, which ends the turn': aLeaverCanLeaveNobodyGuessing,
   'the kind of work shows from the start, and the work from half time': theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime,
   'the work has the name blanked out of it': theWorkHasTheNameBlankedOutOfIt,
   'a short name still gets its work at half time': aShortNameStillGetsItsWorkAtHalfTime,

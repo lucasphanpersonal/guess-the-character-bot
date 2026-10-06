@@ -71,6 +71,7 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80 }) {
     deadline: null,
     startedAt: null,
     guessed: new Map(), // playerId -> points this turn, in the order they got it
+    gaveUp: new Set(), // guessers who gave up on this drawing (see giveUp)
     scores: new Map(order.map((id) => [id, 0])),
     revealed: [], // indexes into the character's name
     workShown: false,
@@ -86,12 +87,22 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80 }) {
 const drawerOf = (g) => g.order[g.drawerIndex];
 const activeOf = (g) => g.order.filter((id) => !g.gone.has(id));
 const guessersOf = (g) => activeOf(g).filter((id) => id !== drawerOf(g));
-/** Whether a player already knows the answer this turn: the drawer, and anyone who guessed it. */
-const knows = (g, id) => id === drawerOf(g) || g.guessed.has(id);
+/**
+ * Whether a player already knows the answer this turn: the drawer, anyone who guessed it, and
+ * anyone who gave up on it (who is shown it -- see giveUp).
+ */
+const knows = (g, id) => id === drawerOf(g) || g.guessed.has(id) || g.gaveUp.has(id);
 const allGuessed = (g) => {
   const guessers = guessersOf(g);
   return guessers.length > 0 && guessers.every((id) => g.guessed.has(id));
 };
+/** Nobody is still guessing: every guesser got it or gave up. The turn has nothing left to wait for. */
+const allDone = (g) => {
+  const guessers = guessersOf(g);
+  return guessers.length > 0 && guessers.every((id) => g.guessed.has(id) || g.gaveUp.has(id));
+};
+/** Why a turn with nobody left guessing ended: everyone got it, or some gave up. */
+const doneReason = (g) => (allGuessed(g) ? 'all' : 'given-up');
 
 /** Start the current drawer's turn with these characters to choose from. */
 function offerChoices(g, choices, now) {
@@ -103,6 +114,7 @@ function offerChoices(g, choices, now) {
   g.deadline = now + CHOOSE_SECONDS * 1000;
   g.startedAt = null;
   g.guessed = new Map();
+  g.gaveUp = new Set();
   g.revealed = [];
   g.workShown = false;
   g.strokes = [];
@@ -163,7 +175,7 @@ function post(g, playerId, text, insider) {
  * Anything typed into the chat. From someone still guessing it is a guess; from someone who
  * already knows, it is a message for the others who know.
  *
- * @returns {{ok: false, error} | {ok: true, verdict: 'correct'|'close'|'wrong'|'said', points?, allGuessed?}}
+ * @returns {{ok: false, error} | {ok: true, verdict: 'correct'|'close'|'wrong'|'said', points?, allDone?, doneReason?}}
  */
 function say(g, playerId, text, now) {
   if (g.phase !== 'drawing' && g.phase !== 'choosing' && g.phase !== 'reveal') return { ok: false, error: 'The game is over.' };
@@ -185,13 +197,31 @@ function say(g, playerId, text, now) {
     g.scores.set(playerId, (g.scores.get(playerId) ?? 0) + points);
     const drawer = drawerOf(g);
     g.scores.set(drawer, (g.scores.get(drawer) ?? 0) + DRAWER_PER_GUESS);
-    return { ok: true, verdict, points, allGuessed: allGuessed(g) };
+    return { ok: true, verdict, points, allDone: allDone(g), doneReason: doneReason(g) };
   }
   // A close guess is for its author's eyes only: shown to the room, "Sasuek" would be a hint to
   // everyone else.
   if (verdict === 'close') return { ok: true, verdict };
   post(g, playerId, clean, false);
   return { ok: true, verdict };
+}
+
+/**
+ * A guesser gives up on this drawing. They stop guessing, score nothing for it, and are shown the
+ * answer -- so from here they are one of those who know, and their words go only to the others
+ * who know. Without it a stuck guesser could only sit out the clock, and so could everyone
+ * waiting on them: once every guesser has got it or given up, the turn ends early.
+ *
+ * @returns {{ok: false, error} | {ok: true, allDone: boolean, doneReason: string}}
+ */
+function giveUp(g, playerId) {
+  if (g.phase !== 'drawing') return { ok: false, error: 'There is no drawing to give up on.' };
+  if (!g.order.includes(playerId) || g.gone.has(playerId)) return { ok: false, error: "You're not in this game." };
+  if (playerId === drawerOf(g)) return { ok: false, error: "You're drawing it -- you know who it is." };
+  if (g.guessed.has(playerId)) return { ok: false, error: 'You already got it.' };
+  if (g.gaveUp.has(playerId)) return { ok: false, error: 'You already gave up on this one.' };
+  g.gaveUp.add(playerId);
+  return { ok: true, allDone: allDone(g), doneReason: doneReason(g) };
 }
 
 // --- hints -----------------------------------------------------------------------------------
@@ -258,8 +288,9 @@ function endTurn(g, now, reason) {
   g.lastTurn = {
     drawerId: drawer,
     character: g.character ?? g.choices[0] ?? null,
-    reason, // 'all' | 'time' | 'drawer-left'
+    reason, // 'all' | 'given-up' | 'time' | 'drawer-left'
     guessed: [...g.guessed].map(([playerId, points]) => ({ playerId, points })),
+    gaveUp: [...g.gaveUp],
     drawerPoints: g.guessed.size * DRAWER_PER_GUESS,
   };
   g.phase = 'reveal';
@@ -307,8 +338,8 @@ function removePlayer(g, playerId, now) {
     endTurn(g, now, 'drawer-left');
     return { ok: true, endTurn: true };
   }
-  if (g.phase === 'drawing' && allGuessed(g)) {
-    endTurn(g, now, 'all');
+  if (g.phase === 'drawing' && allDone(g)) {
+    endTurn(g, now, doneReason(g));
     return { ok: true, endTurn: true };
   }
   return { ok: true, endTurn: false };
@@ -357,11 +388,13 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     mask: g.phase === 'drawing' ? maskOf(g) : null,
     clue: g.phase === 'drawing' ? clueFor(g) : null,
     guessedIt: g.guessed.has(viewerId),
+    gaveUpIt: g.gaveUp.has(viewerId),
     players: g.order.map((id) => ({
       playerId: id,
       name: nameOf(id),
       score: g.scores.get(id) ?? 0,
       guessed: g.guessed.has(id),
+      gaveUp: g.gaveUp.has(id),
       drawing: id === drawer && (g.phase === 'drawing' || g.phase === 'choosing'),
       left: g.gone.has(id),
     })),
@@ -377,6 +410,7 @@ function viewFor(g, viewerId, names, now = Date.now()) {
             character: g.lastTurn.character ? publicCharacter(g.lastTurn.character) : null,
             reason: g.lastTurn.reason,
             guessed: g.lastTurn.guessed.map((x) => ({ name: nameOf(x.playerId), points: x.points })),
+            gaveUp: (g.lastTurn.gaveUp ?? []).map(nameOf),
             drawerPoints: g.lastTurn.drawerPoints,
           }
         : null,
@@ -402,6 +436,8 @@ module.exports = {
   viewFor,
   drawerOf,
   allGuessed,
+  allDone,
+  giveUp,
   knows,
   CHOOSE_SECONDS,
   REVEAL_SECONDS,

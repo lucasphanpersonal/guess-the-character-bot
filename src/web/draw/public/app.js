@@ -512,19 +512,28 @@ function renderGame(turnChanged) {
     const lt = v.lastTurn;
     $('revealTitle').textContent = lt.character ? `It was ${lt.character.name}` : 'Turn over';
     $('revealArt').innerHTML = characterArt(lt.character);
-    const why = lt.reason === 'all' ? 'Everyone got it!' : lt.reason === 'drawer-left' ? `${lt.drawer} left.` : "Time's up.";
+    const why =
+      lt.reason === 'all'
+        ? 'Everyone got it!'
+        : lt.reason === 'given-up'
+          ? 'Nobody left guessing.'
+          : lt.reason === 'drawer-left'
+            ? `${lt.drawer} left.`
+            : "Time's up.";
     const got = lt.guessed.length
       ? lt.guessed.map((x) => `${esc(x.name)} +${x.points}`).join(', ') + ` -- ${esc(lt.drawer)} +${lt.drawerPoints} for drawing`
       : 'Nobody got it.';
-    $('revealPoints').innerHTML = `${esc(why)} ${got}`;
+    const quit = lt.gaveUp?.length ? ` Gave up: ${lt.gaveUp.map(esc).join(', ')}.` : '';
+    $('revealPoints').innerHTML = `${esc(why)} ${got}${quit}`;
   }
 
   $('tools').hidden = !(v.isDrawer && v.phase === 'drawing');
   canvas.classList.toggle('can-draw', canDraw());
 
   // The chat box: a guess box for those still guessing; a quiet word with the others who know
-  // for the drawer and anyone who has it.
-  const knows = v.isDrawer || v.guessedIt;
+  // for the drawer, anyone who has it, and anyone who gave up on it.
+  const knows = v.isDrawer || v.guessedIt || v.gaveUpIt;
+  $('giveUpBtn').hidden = !(v.phase === 'drawing' && !knows);
   $('chatTitle').textContent = v.phase === 'drawing' && knows ? 'Chat (only others who know see yours)' : 'Guesses';
   $('chatInput').placeholder = v.phase === 'drawing' && !knows ? 'Type your guess' : 'Say something';
   renderChat();
@@ -540,7 +549,13 @@ function renderPlayers() {
   if (!view) return;
   const html = view.players
     .map((p) => {
-      const tag = p.drawing ? '<span class="tag drawing">▲ Drawing</span>' : p.guessed ? '<span class="tag got">✓ Got it</span>' : '';
+      const tag = p.drawing
+        ? '<span class="tag drawing">▲ Drawing</span>'
+        : p.guessed
+          ? '<span class="tag got">✓ Got it</span>'
+          : p.gaveUp
+            ? '<span class="tag gaveup">Gave up</span>'
+            : '';
       const name = `${esc(p.name)}${p.playerId === me ? ' (you)' : ''}`;
       return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
     })
@@ -593,6 +608,17 @@ socket.on('draw:correct', ({ playerId: who, name, points }) => {
   // To everyone, the guesser included -- so the guesser's own cue is played here too, not on the
   // ack, or they would hear two.
   sound(who === me ? 'gotMine' : 'got');
+});
+
+// Giving up shows you the answer, which cannot be taken back -- so it asks first.
+$('giveUpBtn').addEventListener('click', () => {
+  if (!confirm("Give up on this drawing? You'll see who it is, and score nothing for it.")) return;
+  socket.emit('draw:giveup', {}, (res) => {
+    if (!res?.ok) $('chatErr').textContent = res?.error || 'That did not go through.';
+  });
+});
+socket.on('draw:gaveup', ({ playerId: who, name }) => {
+  toast(who === me ? 'You gave up.' : `${esc(name)} gave up.`, 3500, { max: 2 });
 });
 
 // Sent the moment Enter is pressed, and the box emptied at once: a fast typist is already on the

@@ -113,6 +113,7 @@
                     padding:1px 6px; }
     .players .tag.drawing { background:var(--amber); color:#2b1c00; }
     .players .tag.got { background:var(--green); color:#fff; }
+    .players .tag.gaveup { background:#6b6480; color:#fff; } /* grey, but dark enough for white text */
     .chat { display:flex; flex-direction:column; height:min(34rem, 62vh); }
     .chat ul { list-style:none; margin:0; padding:0; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
     .chat li { line-height:1.35; overflow-wrap:anywhere; }
@@ -123,6 +124,8 @@
     .chat form { display:flex; gap:8px; margin-top:10px; }
     .chat form input { font-size:1rem; padding:10px 12px; }
     .chat form button { padding:10px 14px; }
+    .chat .giveup { margin-top:10px; width:100%; padding:8px 12px; font-size:.9rem; }
+    .chat .giveup[hidden] { display:none; }
     .clock { min-width:8rem; }
   </style>
 </head>
@@ -289,6 +292,9 @@
           <input id="chatInput" maxlength="80" placeholder="Type your guess" aria-label="Your guess" />
           <button type="submit" class="good">Send</button>
         </form>
+        <!-- For a guesser who is stuck: out of the guessing, shown the answer. Below the box rather
+             than beside Send, so a fast typist cannot hit it reaching for Send. -->
+        <button type="button" id="giveUpBtn" class="bad giveup" hidden>Give Up — Show Me</button>
         <p class="err" id="chatErr" role="alert"></p>
       </div>
     </div>

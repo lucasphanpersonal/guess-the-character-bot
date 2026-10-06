@@ -313,11 +313,26 @@ function attachDrawSockets(nsp, { registry }) {
       if (res.verdict === 'correct') {
         // The playerId lets the guesser's own page tell this apart from someone else getting it.
         nsp.to(r.code).emit('draw:correct', { playerId, name: namesOf(r)[playerId] ?? 'Player', points: res.points });
-        if (res.allGuessed) draw.endTurn(r.game, Date.now(), 'all');
+        if (res.allDone) draw.endTurn(r.game, Date.now(), res.doneReason);
         emitViews(r);
         return schedule(r);
       }
       emitViews(r);
+    });
+
+    // A stuck guesser gives up on this drawing: shown the answer, out of the guessing, and -- if
+    // that leaves nobody still guessing -- the turn ends now rather than at the clock.
+    socket.on('draw:giveup', (_p, ack) => {
+      if (!sayBudget(socket)) return ack?.(SLOW_DOWN);
+      const r = room();
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      const res = draw.giveUp(r.game, playerId);
+      ack?.(res.ok ? { ok: true } : res);
+      if (!res.ok) return undefined;
+      nsp.to(r.code).emit('draw:gaveup', { playerId, name: namesOf(r)[playerId] ?? 'Player' });
+      if (res.allDone) draw.endTurn(r.game, Date.now(), res.doneReason);
+      emitViews(r);
+      return schedule(r);
     });
 
     // --- the picture ------------------------------------------------------------------------
