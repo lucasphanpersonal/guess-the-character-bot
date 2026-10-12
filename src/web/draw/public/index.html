@@ -126,6 +126,12 @@
     .chat li.sys { color:var(--green-d); font-weight:800; }
     .chat li.insider { color:var(--insider-ink); font-style:italic; }
     .chat li.close { color:var(--amber-d); font-weight:800; }
+    /* What the drawer (and anyone who knows) sees of the others' guesses: right ones in green, close
+       ones tagged -- the word says which, the colour only underlines it. */
+    .chat li.right { color:var(--green-d); font-style:normal; font-weight:800; }
+    .chat li.near { font-style:normal; }
+    .chat li .kind { font-size:.72rem; font-weight:900; text-transform:uppercase; letter-spacing:.04em;
+                     background:var(--amber); color:#2b1c00; border-radius:999px; padding:0 6px; }
     .chat form { display:flex; gap:8px; margin-top:10px; }
     .chat form input { font-size:1rem; padding:10px 12px; }
     .chat form button { padding:10px 14px; }

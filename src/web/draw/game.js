@@ -194,8 +194,9 @@ const pointsAt = (g, now) => {
   return Math.round(GUESS_MIN + (GUESS_MAX - GUESS_MIN) * left);
 };
 
-function post(g, playerId, text, insider) {
-  g.chat.push({ id: ++g.seq, playerId, text, insider });
+// `kind`: 'said' (talk), 'guess' (a miss), 'close', 'correct' -- so a line can say which it was.
+function post(g, playerId, text, insider, kind = 'said') {
+  g.chat.push({ id: ++g.seq, playerId, text, insider, kind });
   if (g.chat.length > CHAT_KEPT) g.chat.splice(0, g.chat.length - CHAT_KEPT);
 }
 
@@ -236,12 +237,17 @@ function say(g, playerId, text, now) {
     g.scores.set(playerId, (g.scores.get(playerId) ?? 0) + points);
     const drawer = drawerOf(g);
     g.scores.set(drawer, (g.scores.get(drawer) ?? 0) + DRAWER_PER_GUESS);
+    // The guess itself, for those who know: the drawer sees every guess, the right ones included.
+    post(g, playerId, clean, true, 'correct');
     return { ok: true, verdict, points, allDone: allDone(g), doneReason: doneReason(g) };
   }
-  // A close guess is for its author's eyes only: shown to the room, "Sasuek" would be a hint to
-  // everyone else.
-  if (verdict === 'close') return { ok: true, verdict };
-  post(g, playerId, clean, false);
+  // A close guess goes only to those who know -- the drawer above all, who wants to see every
+  // guess -- never to anyone still guessing: "Sasuek" would be a hint to them.
+  if (verdict === 'close') {
+    post(g, playerId, clean, true, 'close');
+    return { ok: true, verdict };
+  }
+  post(g, playerId, clean, false, 'guess');
   return { ok: true, verdict };
 }
 
@@ -444,7 +450,7 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     chat: g.chat
       .filter((m) => !m.insider || insider || g.phase !== 'drawing')
       .slice(-40)
-      .map((m) => ({ id: m.id, name: nameOf(m.playerId), text: m.text, insider: m.insider })),
+      .map((m) => ({ id: m.id, name: nameOf(m.playerId), text: m.text, insider: m.insider, kind: m.kind ?? 'said' })),
     lastTurn:
       g.phase === 'reveal' && g.lastTurn
         ? {

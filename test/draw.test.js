@@ -55,12 +55,16 @@ function aCorrectGuessScoresByHowFastItCame() {
   assert.equal(g.scores.get('p1'), 120, 'the drawer earns for each person who got it');
 }
 
-function aCloseGuessIsTheGuessersAloneAndAWrongOneIsShown() {
+function aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess() {
   const g = drawing();
   assert.equal(draw.say(g, 'p2', 'Pikahcu', T0).verdict, 'close');
-  assert.equal(g.chat.length, 0, 'a near miss is a hint to everyone else, so nobody else sees it');
   assert.equal(draw.say(g, 'p2', 'Raichu', T0).verdict, 'wrong');
-  assert.deepEqual(g.chat.map((m) => m.text), ['Raichu']);
+  const lines = (viewer) => draw.viewFor(g, viewer, names, T0).chat.map((m) => `${m.text}:${m.kind}`);
+  assert.deepEqual(lines('p3'), ['Raichu:guess'], 'a near miss is a hint to anyone still guessing, so they never see it');
+  assert.deepEqual(lines('p1'), ['Pikahcu:close', 'Raichu:guess'], 'the drawer sees every guess, marked');
+  assert.equal(draw.say(g, 'p3', 'Pikachu', T0).verdict, 'correct');
+  assert.deepEqual(lines('p1').at(-1), 'Pikachu:correct', '...the right ones too');
+  assert.ok(!lines('p2').some((l) => l.startsWith('Pikachu')), 'but never to someone still guessing');
 }
 
 // People guessing at a drawing type what they see. "Combat" at a soldier is not a guess that it
@@ -453,7 +457,7 @@ module.exports = {
   'only the drawer chooses, and only from the three': onlyTheDrawerChoosesAndOnlyFromTheThree,
   'a drawer who never chooses gets the first': aDrawerWhoNeverChoosesGetsTheFirst,
   'a correct guess scores by how fast it came': aCorrectGuessScoresByHowFastItCame,
-  "a close guess is the guesser's alone, and a wrong one is shown": aCloseGuessIsTheGuessersAloneAndAWrongOneIsShown,
+  'a close guess is hidden from guessers, but the drawer sees every guess': aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess,
   'one word of the name is never enough without a pool': oneWordOfTheNameIsNeverEnoughWithoutAPool,
   'a known name counts when nobody else in the show has it': aKnownNameCountsWhenNobodyElseInTheShowHasIt,
   'once you know, your words go only to the others who know': onceYouKnowYourWordsGoOnlyToTheOthersWhoKnow,

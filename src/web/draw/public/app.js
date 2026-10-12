@@ -592,10 +592,14 @@ $('rerollChoicesBtn').addEventListener('click', () => {
 // The server's chat, plus the lines only this player sees: their own close calls.
 let localLines = [];
 function renderChat() {
+  // A right or close guess reaches only those who know (the drawer sees them all), and says which
+  // it was: ✓ for right, "close" for close.
   const server = (view?.chat ?? []).map((m) => ({
     key: `m${m.id}`,
-    cls: m.insider ? 'insider' : '',
-    html: `<span class="who">${esc(m.name)}:</span> ${esc(m.text)}`,
+    cls: m.kind === 'correct' ? 'insider right' : m.kind === 'close' ? 'insider near' : m.insider ? 'insider' : '',
+    html:
+      `<span class="who">${esc(m.name)}:</span> ${m.kind === 'correct' ? '✓ ' : ''}${esc(m.text)}` +
+      (m.kind === 'close' ? ' <span class="kind">close</span>' : ''),
   }));
   const lines = [...server, ...localLines].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
   const ul = $('chat');
