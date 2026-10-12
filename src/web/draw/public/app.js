@@ -563,8 +563,11 @@ function renderGame(turnChanged) {
   // for the drawer, anyone who has it, and anyone who gave up on it.
   const knows = v.isDrawer || v.guessedIt || v.gaveUpIt;
   $('giveUpBtn').hidden = !(v.phase === 'drawing' && !knows);
-  $('chatTitle').textContent = v.phase === 'drawing' && knows ? 'Chat (only others who know see yours)' : 'Guesses';
-  $('chatInput').placeholder = v.phase === 'drawing' && !knows ? 'Type your guess' : 'Say something';
+  // The heading stays one word; who can read what you type is said in the box itself, where it is
+  // read at the moment it matters (and a long heading wrapped to two lines on a phone).
+  $('chatTitle').textContent = v.phase === 'drawing' && knows ? 'Chat' : 'Guesses';
+  $('chatInput').placeholder =
+    v.phase === 'drawing' ? (knows ? 'Only those who know see this' : 'Type your guess') : 'Say something';
   renderChat();
   if (turnChanged && v.phase === 'drawing' && !v.isDrawer) $('chatInput').focus();
 }
@@ -819,8 +822,14 @@ $('viewerSave').addEventListener('click', () => {
   c.textAlign = 'right';
   c.fillText('Draw the Character', 1172, 946);
   const file = `${d.character?.name ?? 'drawing'} by ${d.drawer}`.replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80) || 'drawing';
-  out.toBlob((blob) => {
-    if (!blob) return toast('Could not make the image.');
+  // Built synchronously (toDataURL, not toBlob): the share sheet below only opens straight from the
+  // tap, and Safari counts an async callback as no longer the tap.
+  const [, b64] = out.toDataURL('image/png').split(',');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const blob = new Blob([bytes], { type: 'image/png' });
+  const download = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -829,7 +838,17 @@ $('viewerSave').addEventListener('click', () => {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  }, 'image/png');
+  };
+  // On a phone the share sheet is where Save to Photos lives; a download lands in Files, where
+  // nobody looks for a picture. A computer downloads. Cancelling the sheet is not a failure.
+  const asFile = typeof File === 'function' ? new File([blob], `${file}.png`, { type: 'image/png' }) : null;
+  if (asFile && matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [asFile] })) {
+    navigator.share({ files: [asFile] }).catch((e) => {
+      if (e?.name !== 'AbortError') download();
+    });
+    return;
+  }
+  download();
 });
 
 $('rematchBtn').addEventListener('click', () =>

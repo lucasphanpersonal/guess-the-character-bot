@@ -377,7 +377,10 @@ function artHtml(cls, character) {
 // -- the thing the room answers about. For them, the mystery card: it is their turn to work it out.
 function spotlightHtml(b, v) {
   const turn = v.phase === 'playing' && b.playerId === v.current.playerId ? `<span class="turnno">Turn ${v.current.turnNumber}</span>` : '';
-  return `<div class="spothead"><span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${STATUS_BADGE[b.status] ?? ''}${turn}</div>
+  // No "Guessing" badge: whoever is in the spotlight is the one guessing, so it would only repeat
+  // the turn bar. Any other status is news.
+  const badge = b.status === 'guessing' ? '' : STATUS_BADGE[b.status] ?? '';
+  return `<div class="spothead"><span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${badge}${turn}</div>
     ${artHtml('art', b.character)}
     <div class="spotname">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
     <div class="src">${b.character ? esc(b.character.source) : ''}</div>
