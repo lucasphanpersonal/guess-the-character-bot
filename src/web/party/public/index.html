@@ -623,9 +623,11 @@
     /* Room for the switch: the title must never run under it. */
     h1 { padding-right:64px; }
     @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
-    /* The device question: two big slabs, colour AND shape, a line under each saying what it means. */
+    /* The first question: big slabs, colour AND shape, a line under each saying what it means. */
     .devicebtn { display:flex; align-items:center; gap:14px; text-align:left; padding:20px 18px; border-radius:18px;
-                 font-size:1.3rem; position:relative; }
+                 font-size:1.3rem; position:relative; font-family:inherit; }
+    /* font-family: the page's, as the Draw slab (a link) has anyway -- a bare <button> falls back to
+       the browser's own face, and two slabs in Arial beside one in the page font looked pasted in. */
     .devicebtn .shape { font-size:1.6rem; flex:none; }
     .devicebtn b { display:block; font-family:var(--font-display); font-size:1.5rem; }
     .devicebtn small { display:block; font-size:.88rem; font-weight:700; opacity:.9; }
@@ -633,13 +635,18 @@
     .devicebtn.c0:active { box-shadow:0 2px 0 var(--red-d); }
     .devicebtn.c1 { background:var(--blue); box-shadow:0 6px 0 var(--blue-d); }
     .devicebtn.c1:active { box-shadow:0 2px 0 var(--blue-d); }
+    /* Draw is a link (it is another page), dressed as the slabs beside it. */
+    .devicebtn.c2 { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); text-decoration:none; }
+    .devicebtn.c2:active { box-shadow:0 2px 0 var(--amber-d); transform:translateY(4px); }
+    .devicebtn.c2:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+    /* ● is a smaller glyph than ▲ and ◆ at the same size; this evens them up. */
+    .devicebtn.c2 .shape { font-size:2rem; }
     .devicebtn .likely { position:absolute; top:-10px; right:12px; font-size:.68rem; font-weight:900; letter-spacing:.05em;
                          background:var(--amber); color:#2b1c00; padding:3px 9px; border-radius:999px; }
-    /* Back to the device question: quiet, above the screen it leaves. */
+    /* Back to the first question: quiet, above the screen it leaves. */
     .backlink { width:auto; align-self:flex-start; padding:6px 2px; background:none; box-shadow:none;
                 color:rgba(255,255,255,.88); font-size:.92rem; font-weight:800; }
     .backlink:active { transform:none; box-shadow:none; opacity:.7; }
-    #pcGameChoices { margin-bottom:6px; }
     /* Empty until something goes wrong; a paragraph's default margins left a gap the size of a card. */
     #pcErr { margin:0; }
   </style>
@@ -663,44 +670,40 @@
   <main>
     <h1><a id="homeTitle" href="/">Guess the Character</a></h1>
 
-    <!-- The first question: which device is in your hand. It decides everything below it -- a phone
-         gets the forehead game and Test Tilt, a computer gets the computer game and Draw -- so it
-         comes before any of them. Skipped when a room link or a rejoin already answers it. -->
+    <!-- The first question: which game. Draw plays on anything, phones and computers in one room;
+         Guess the Character comes in two ways that cannot share a room -- phones on foreheads, or
+         everyone at a computer -- so those are two choices, each saying which device it wants.
+         Skipped when a room link or a rejoin already answers it. -->
     <section id="splash" class="screen active">
       <div class="card">
-        <div class="gatetitle" data-wobble>How Are You Playing?</div>
-        <p class="hint center">Pick the device you're holding. You can change it later.</p>
+        <div class="gatetitle" data-wobble>What Are We Playing?</div>
+        <p class="hint center">Everyone in a room plays the same one.</p>
       </div>
+      <a id="pickDraw" class="devicebtn c2" href="/draw/">
+        <span class="shape" aria-hidden="true">●</span>
+        <span><b>Draw the Character</b><small>One draws, everyone guesses. Phones and computers together.</small></span>
+      </a>
       <button id="pickPhone" class="devicebtn c0" type="button">
         <span class="shape" aria-hidden="true">▲</span>
-        <span><b>Phone</b><small>Phones on foreheads. Tilt to answer.</small></span>
-        <span class="likely" id="likelyPhone" hidden>This Looks Like One</span>
+        <span><b>Guess on Phones</b><small>Guess the Character with phones on foreheads. Tilt to answer.</small></span>
+        <span class="likely" id="likelyPhone" hidden>Looks Like a Phone</span>
       </button>
       <button id="pickComputer" class="devicebtn c1" type="button">
         <span class="shape" aria-hidden="true">◆</span>
-        <span><b>Computer</b><small>Everyone at a screen. Type your guesses, or draw.</small></span>
-        <span class="likely" id="likelyComputer" hidden>This Looks Like One</span>
+        <span><b>Guess on Computers</b><small>Guess the Character at a screen. You see every character but your own.</small></span>
+        <span class="likely" id="likelyComputer" hidden>Looks Like a Computer</span>
       </button>
     </section>
 
-    <!-- Computer: the same create / join as the phones, for the two computer games. Each game has
-         a page of its own (/desk/, /draw/), so this hands off to it rather than playing here. -->
+    <!-- Computer: the same create / join as the phones, for Guess the Character on computers, which
+         has a page of its own (/desk/) -- so this hands off to it rather than playing here. -->
     <section id="computer" class="screen">
-      <button class="backlink" type="button" data-splash>‹ Phone or Computer</button>
+      <button class="backlink" type="button" data-splash>‹ All Games</button>
       <div class="card">
         <label for="pcNickInput">Your name</label>
         <input id="pcNickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />
       </div>
-      <div class="card">
-        <label>Which game?</label>
-        <div id="pcGameChoices">
-          <label class="choice c0"><input type="radio" name="pcGame" value="desk" checked>
-            <span class="shape">▲</span><span><div>Guess the Character</div><div class="sub">everyone sees everyone's character but their own</div></span></label>
-          <label class="choice c1"><input type="radio" name="pcGame" value="draw">
-            <span class="shape">◆</span><span><div>Draw the Character</div><div class="sub">one draws, everyone else guesses</div></span></label>
-        </div>
-        <button id="pcCreateBtn">Create a Room</button>
-      </div>
+      <div class="card"><button id="pcCreateBtn">Create a Room</button></div>
       <div class="divider">or join one</div>
       <div class="card">
         <label for="pcCodeInput">Room code</label>
@@ -714,7 +717,7 @@
 
     <!-- Landing: the phone's start screen -->
     <section id="landing" class="screen">
-      <button class="backlink" type="button" data-splash>‹ Phone or Computer</button>
+      <button class="backlink" type="button" data-splash>‹ All Games</button>
       <div class="card">
         <label for="nickInput">Your name</label>
         <input id="nickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />

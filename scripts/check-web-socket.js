@@ -758,7 +758,13 @@ const connect = (playerId) => {
   const deskSock = await connectDesk('dZ');
   res = await deskSock.emitWithAck('room:join', { code: drawCode, nickname: 'Z' });
   check(!res.ok && /Draw the Character/.test(res.error), 'the guessing game cannot join a drawing room');
+  check(res.kind === 'draw', 'and is told which game it is, so a page can send the player there');
   deskSock.close();
+  // The phones' join box forwards a Draw code to /draw/ on exactly this answer.
+  const phoneSock = await connect('rPhoneToDraw');
+  res = await phoneSock.emitWithAck('room:join', { code: drawCode, nickname: 'Phone' });
+  check(!res.ok && res.kind === 'draw', `a phone typing a Draw code learns it is Draw (${JSON.stringify(res)})`);
+  phoneSock.close();
 
   const pFirst = nextEvent(P, 'draw:state');
   const qFirst = nextEvent(Q, 'draw:state');

@@ -47,13 +47,15 @@ Draw the Character: your turn to draw, someone getting it, the last ten seconds 
 reveal. Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
 screen, play included; the choice is the phones' own `gtc_muted`, one per browser.
 
-**The home page** (`/`) asks one question first: *Phone* or *Computer* (with a hint from
-`pointer: coarse` as to which this is). A phone gets the forehead game's create / join, Browse and
-Test Tilt; a computer gets create — choosing *Guess the Character* or *Draw the Character* — join,
-and Browse, and is handed off to `/desk/` or `/draw/` (`?create=1&name=` or `?room=CODE&name=`,
-wiped from the address once acted on). A computer's join box asks `GET /api/room?code=` which game
-a code belongs to; it answers with the game's path and nothing else. A room link or a rejoin skips
-the question. Dark mode is a small switch in the corner, hidden during play.
+**The home page** (`/`) asks one question first: which game. *Draw the Character* goes to
+`/draw/`, which plays on phones and computers alike, in one room. Guess the Character is two
+choices, because its two ways cannot share a room: *Phones* gets the forehead game's create / join,
+Browse and Test Tilt; *Computers* gets create, join and Browse, and is handed off to `/desk/`
+(`?create=1&name=` or `?room=CODE&name=`, wiped from the address once acted on). A hint from
+`pointer: coarse` marks which of those two this device looks like. A computer's join box asks
+`GET /api/room?code=` which game a code belongs to; it answers with the game's path and nothing
+else. A Draw code typed into the phones' join box goes to `/draw/` too. A room link or a rejoin
+skips the question. Dark mode is a small switch in the corner, hidden during play.
 
 Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown

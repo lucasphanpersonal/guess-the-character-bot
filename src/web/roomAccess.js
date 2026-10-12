@@ -98,7 +98,9 @@ function joinRoom(socket, registry, kind, code, nickname) {
   if (!res.ok) {
     socket.data.failedJoins = (socket.data.failedJoins || 0) + 1;
     failedJoinsByClient.take(socket.data.client);
-    return { ok: false, error: res.error };
+    // A room of another game says which (no more than /api/room would), so a page can send the
+    // player where the room is played -- the phones' join box forwards a Draw code to /draw/.
+    return { ok: false, error: res.error, ...(res.kind ? { kind: res.kind } : {}) };
   }
   seat(socket, registry, res.room);
   return { ok: true, room: res.room, reconnected: res.reconnected };

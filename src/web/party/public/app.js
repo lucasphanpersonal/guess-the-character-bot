@@ -1664,6 +1664,9 @@ function joinRoom() {
   $('landingErr').textContent = '';
   primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
   socket.emit('room:join', { code, nickname: nick }, (res) => {
+    // A Draw room plays on phones too, so a Draw code typed here is sent there rather than
+    // refused: from the home page it is one box for any code a phone can play.
+    if (res?.kind === 'draw') return location.assign(`/draw/?room=${encodeURIComponent(code)}&name=${encodeURIComponent(nick)}`);
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not join.');
     lastState = res.state; enterRoom(res.state); routeByStatus(res.state);
   });
@@ -1877,16 +1880,17 @@ $('homeTitle').addEventListener('click', (e) => {
     if (!confirm(cost)) return;
     leaveRoom();
   }
-  // Home is the first question, Phone or Computer -- the one screen every other start hangs off.
+  // Home is the first question, which game -- the one screen every other start hangs off.
   show('splash');
   window.scrollTo(0, 0);
 });
 
-// --- the start: Phone or Computer ---------------------------------------------------------
+// --- the start: which game ---------------------------------------------------------------
 //
-// Asked before anything else, because it decides what the rest of the start screen offers. The
-// answer is remembered only as "where Back from Browse returns to" -- the question itself is asked
-// on every fresh visit, so a phone borrowed for one game is never stuck being a computer.
+// Asked before anything else, because it decides what the rest of the start screen offers: Draw
+// is its own page (a link), and Guess the Character is phones or computers. The answer is
+// remembered only as "where Back from Browse returns to" -- the question itself is asked on every
+// fresh visit, so a phone borrowed for one game is never stuck being a computer.
 let startScreen = 'landing';
 function pickDevice(screen) {
   startScreen = screen;
@@ -1896,12 +1900,13 @@ function pickDevice(screen) {
 $('pickPhone').addEventListener('click', () => pickDevice('landing'));
 $('pickComputer').addEventListener('click', () => pickDevice('computer'));
 for (const b of document.querySelectorAll('[data-splash]')) b.addEventListener('click', () => show('splash'));
-// A hint, never a decision: touch-first is a good guess at "phone", and a tablet or a touchscreen
-// laptop can still pick the other one.
+// A hint between the two ways to play Guess, never a decision: touch-first is a good guess at
+// "phone", and a tablet or a touchscreen laptop can still pick the other one. Draw needs no hint:
+// it plays on either.
 $(matchMedia('(pointer: coarse)').matches ? 'likelyPhone' : 'likelyComputer').hidden = false;
 
-// The computer games live on pages of their own, so the computer start hands off: create goes to
-// the chosen game's page with the name, join asks the server which game the code is for.
+// The computer game lives on a page of its own, so the computer start hands off: create goes to
+// /desk/ with the name, join asks the server which game the code is for (a Draw code goes to Draw).
 const pcNick = () => {
   const n = $('pcNickInput').value.trim();
   if (n) store.set('gtc_nick', n);
@@ -1911,8 +1916,7 @@ $('pcNickInput').value = store.get('gtc_nick') || '';
 $('pcCreateBtn').addEventListener('click', () => {
   const name = pcNick();
   if (!name) return ($('pcErr').textContent = 'Enter your name first.');
-  const game = document.querySelector('input[name=pcGame]:checked')?.value === 'draw' ? '/draw/' : '/desk/';
-  location.assign(`${game}?create=1&name=${encodeURIComponent(name)}`);
+  location.assign(`/desk/?create=1&name=${encodeURIComponent(name)}`);
 });
 $('pcJoinBtn').addEventListener('click', async () => {
   const name = pcNick();
@@ -1987,6 +1991,6 @@ const resumeRoom = (deepRoom || store.get('gtc_lastRoom') || '').toUpperCase();
 if (deepRoom) $('codeInput').value = deepRoom.toUpperCase();
 if (resumeRoom && nickname) currentRoom = { code: resumeRoom };
 else if (resumeRoom) $('codeInput').value = resumeRoom;
-// A room link or a rejoin has already answered Phone or Computer (only a phone page holds a
-// phone room), so skip the question. It is also what shows while the rejoin lands.
+// A room link or a rejoin has already answered which game (only a phone page holds a phone
+// room), so skip the question. It is also what shows while the rejoin lands.
 if (resumeRoom) show('landing');
