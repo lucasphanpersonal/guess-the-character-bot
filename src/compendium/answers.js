@@ -54,7 +54,8 @@ function isNameWord(k) {
  *   exact   -- any of these is CORRECT
  *   loose   -- CLOSE: a person should look (a title stripped off)
  *   words   -- single words that may stand for the whole name, IF no other character in the
- *              pool shares them (judgeGuess checks that; this cannot see the pool)
+ *              pool shares them, or none who isn't far less famous (judgeGuess checks that; this
+ *              cannot see the pool)
  */
 function answerForms(name) {
   const exact = new Set();
@@ -160,10 +161,11 @@ const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
  *   the round. Off, such a word is close.
  * @param {boolean} [opts.romanised]  the name is romanised from Japanese (an Anime or Manga list):
  *   long vowels may then be spelled out or not -- "Tanjiro" is "Tanjirou". Off for everything else.
- * @param {string[]|object} [opts.others]  the names this one must be told apart from, or a
- *   poolIndex() of them (the same answer, without scanning every name per guess). Even with
- *   singleWords on, a word only counts when none of these shares it -- "Sasuke" names Sasuke
- *   Uchiha among a cast with no other Sasuke, "Uzumaki" names nobody. The games pass the
+ * @param {Array|object} [opts.others]  the names this one must be told apart from -- strings, or
+ *   { name, fame } -- or a poolIndex() of them (the same answer, without indexing per guess). Even
+ *   with singleWords on, a word only counts when none of these shares it, or every one that does
+ *   is far less famous: "Sasuke" names Sasuke Uchiha among a cast with no other Sasuke, "Uzumaki"
+ *   names Naruto only when the cast says how much better known he is than Boruto. The games pass the
  *   character's own show: across a whole pool of thousands, a common first name always belongs to
  *   someone else, which says nothing about whether it picks out this one. Without them, no single
  *   word is ever correct.
@@ -197,10 +199,8 @@ function judgeGuess(guess, name, { others = [], singleWords = false, romanised =
   const word = forms.words.find((w) => w === g) ?? forms.words.find((w) => fold(w) === fg);
   if (word) {
     const own = key(name);
-    const index = Array.isArray(others) ? null : others;
-    const shared = index ? index.sharesWord(word, own) : others.some((other) => key(other) !== own && wordsOf(other).includes(word));
-    const anyOthers = index ? index.size > 0 : others.length > 0;
-    if (singleWords && !shared && anyOthers) return { verdict: 'correct', as: word };
+    const index = Array.isArray(others) ? poolIndex(others) : others;
+    if (singleWords && index.size > 0 && !index.sharesWord(word, own)) return { verdict: 'correct', as: word };
     return { verdict: 'close', as: word };
   }
 
@@ -230,10 +230,28 @@ function judgeGuess(guess, name, { others = [], singleWords = false, romanised =
  * folding every name in it on every guess -- 25,000 names, 14ms a guess, on the event loop every
  * room shares.
  */
+// How much better known a character must be than everyone else sharing a word of their name for
+// that word to name them alone: "Bakugo" is Katsuki (18,581 favourites) though his mother Mitsuki
+// (144) shares it, "Uzumaki" is Naruto (19,839) over Boruto (1,263) and Kushina (1,137), "Lee" is
+// Rock Lee (5,512) over Metal Lee (33). "Uchiha" stays ambiguous: Itachi (23,136) and Sasuke
+// (14,180) are both stars, and a guess of "Uchiha" really could mean either.
+const FAME_DOMINANCE = 10;
+
+/**
+ * Names -- strings, or { name, fame } -- indexed by word: does anyone else here have this word?
+ * With fame, a shared word still names a character who dwarfs every other owner of it
+ * (FAME_DOMINANCE); an owner of unknown fame always counts as a rival, since a hand-added
+ * character with no fame is not known to be obscure.
+ */
 function poolIndex(names) {
   const owners = new Map(); // word key -> keys of the names that have it
-  for (const name of names) {
+  const fameOf = new Map(); // name key -> the best-known fame recorded under it (null: unknown)
+  for (const entry of names) {
+    const name = typeof entry === 'string' ? entry : entry.name;
+    const fame = typeof entry === 'string' ? null : entry.fame ?? null;
     const nameKey = key(name);
+    const had = fameOf.get(nameKey);
+    fameOf.set(nameKey, had == null ? fame : fame == null ? had : Math.max(had, fame));
     for (const w of new Set(wordsOf(name))) {
       if (!owners.has(w)) owners.set(w, new Set());
       owners.get(w).add(nameKey);
@@ -241,10 +259,18 @@ function poolIndex(names) {
   }
   return {
     size: names.length,
-    /** Whether any name other than `ownKey` has this word. */
+    /** Whether any name other than `ownKey` has this word -- and is not dwarfed by `ownKey`. */
     sharesWord(word, ownKey) {
       const has = owners.get(word);
-      return !!has && has.size > (has.has(ownKey) ? 1 : 0);
+      if (!has) return false;
+      const rivals = [...has].filter((k) => k !== ownKey);
+      if (!rivals.length) return false;
+      const own = fameOf.get(ownKey);
+      if (own == null) return true;
+      return rivals.some((k) => {
+        const theirs = fameOf.get(k);
+        return theirs == null || own < FAME_DOMINANCE * theirs;
+      });
     },
   };
 }

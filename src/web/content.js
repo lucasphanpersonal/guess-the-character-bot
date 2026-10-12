@@ -27,9 +27,10 @@ const content = {
   randomCharacters: (listIds, n, excludeNames, difficulty, opts) =>
     characterLists.getRandomCharacters(listIds, n, excludeNames, difficulty, opts),
   countDistinct: (listIds, difficulty) => characterLists.countDistinctCharacters(listIds, difficulty),
-  // Every name a game was dealt from, for the guess-checker: one word of a name only counts as
-  // the whole of it when nobody else in the pool has that word (src/compendium/answers.js).
-  poolNames: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => c.name),
+  // Every name a game was dealt from, with its fame, for the guess-checker: one word of a name only
+  // counts as the whole of it when nobody else in the pool has that word, or everyone who does is
+  // far less famous (answers.poolIndex).
+  castOf: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => ({ name: c.name, fame: c.fame })),
   // A list's category -- which tells the checker whether its names are romanised from Japanese.
   categoryOf: (listId) => characterLists.getListsByIds([listId], null)[0]?.category ?? null,
   // Where a dealt row is from, in parts ({ work, category } or null). A lookup failing is not

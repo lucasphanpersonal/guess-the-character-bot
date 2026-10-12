@@ -185,6 +185,24 @@ module.exports = {
     assert.notEqual(judgeGuess('Tanjiro', 'Kamado Tanjirou', { singleWords: true }).verdict, 'correct', 'off unless the game says the name is romanised');
   },
 
+  'a shared word still names a character who dwarfs everyone else with it'() {
+    // Favourite counts from the live compendium.
+    const naruto = poolIndex([
+      { name: 'Uzumaki Naruto', fame: 19839 }, { name: 'Uzumaki Boruto', fame: 1263 }, { name: 'Uzumaki Kushina', fame: 1137 },
+      { name: 'Uchiha Itachi', fame: 23136 }, { name: 'Uchiha Sasuke', fame: 14180 },
+      { name: 'Lee Rock', fame: 5512 }, { name: 'Lee Metal', fame: 33 },
+    ]);
+    const say = (guess, name) => judgeGuess(guess, name, { others: naruto, singleWords: true }).verdict;
+    assert.equal(say('Uzumaki', 'Uzumaki Naruto'), 'correct');
+    assert.equal(say('Lee', 'Lee Rock'), 'correct');
+    assert.equal(say('Uzumaki', 'Uzumaki Boruto'), 'close', 'only the famous one -- the word does not name the others');
+    assert.equal(say('Uchiha', 'Uchiha Itachi'), 'close', 'two stars share it, so it could be either');
+    assert.equal(say('Uchiha', 'Uchiha Sasuke'), 'close');
+    // A rival of unknown fame is not known to be obscure.
+    const unknown = poolIndex([{ name: 'Lee Rock', fame: 5512 }, { name: 'Lee Metal', fame: null }, 'Lee Might']);
+    assert.equal(judgeGuess('Lee', 'Lee Rock', { others: unknown, singleWords: true }).verdict, 'close');
+  },
+
   'edit distance counts a swap of neighbours as one typo'() {
     assert.equal(editDistance('sasuke', 'sasuek'), 1);
     assert.equal(editDistance('pikachu', 'pikachu'), 0);

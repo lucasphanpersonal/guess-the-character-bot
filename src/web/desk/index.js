@@ -46,7 +46,7 @@ function othersFor(game, character) {
   game.deskCasts ??= new Map();
   const key = character?.listId ?? 'pool';
   if (!game.deskCasts.has(key)) {
-    const names = character?.listId != null ? content.poolNames([character.listId]) : content.poolNames(game.lobby.listIds ?? []);
+    const names = character?.listId != null ? content.castOf([character.listId]) : content.castOf(game.lobby.listIds ?? []);
     game.deskCasts.set(key, poolIndex(names));
   }
   return game.deskCasts.get(key);

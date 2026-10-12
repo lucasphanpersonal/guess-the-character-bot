@@ -176,7 +176,7 @@ function attachDrawSockets(nsp, { registry }) {
     const casts = new Map();
     const castOf = (c) => {
       if (c?.listId == null) return [];
-      if (!casts.has(c.listId)) casts.set(c.listId, poolIndex(web.content.poolNames([c.listId])));
+      if (!casts.has(c.listId)) casts.set(c.listId, poolIndex(web.content.castOf([c.listId])));
       return casts.get(c.listId);
     };
     room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf });
