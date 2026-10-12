@@ -12,18 +12,20 @@
   <link rel="stylesheet" href="/shared/theme.css" />
 </head>
 <body>
-<!-- Dark mode: the corner switch, the same as the phones' page (styles in /shared/theme.css,
-     wired by GTC.bindThemeToggles). season.js applied the choice before first paint. -->
-<button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
-  <span class="knob" aria-hidden="true">◐</span>
-</button>
 <main>
   <div class="titlebar">
     <h1><a id="title" href="/">Guess the Character</a></h1>
-    <!-- Sound On / Off: wired and painted by /shared/sound.js. -->
-    <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
-      <span class="note" aria-hidden="true">♪</span><span class="label">Sound On</span>
-    </button>
+    <div class="titletools">
+      <!-- Sound On / Off: wired and painted by /shared/sound.js. -->
+      <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
+        <span class="note" aria-hidden="true">♪</span><span class="label">Sound On</span>
+      </button>
+      <!-- Dark mode: the same switch as the phones' page (styles in /shared/theme.css, wired by
+           GTC.bindThemeToggles). season.js applied the choice before first paint. -->
+      <button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
+        <span class="knob" aria-hidden="true">◐</span>
+      </button>
+    </div>
   </div>
 
   <!-- Landing -->

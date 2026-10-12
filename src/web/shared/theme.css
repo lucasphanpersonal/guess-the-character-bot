@@ -39,18 +39,19 @@ h1 .wob.w0 { color:var(--red); } h1 .wob.w1 { color:#fff; } h1 .wob.w2 { color:v
 :root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
 :root[data-season="spooky"] h1 .wob.w1, :root[data-season="spooky"] h1 .wob.w3 { color:var(--ink); text-shadow:0 3px 0 rgba(255,255,255,.2); }
 h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
-/* The title row: the title, and the Sound switch at the end of it (/shared/sound.js). A flex row
-   rather than a corner overlay, so a long title wraps beside the switch instead of under it. The
-   switch stays on every screen, play included: the cues happen during play, so that is where the
-   way to stop them has to be. */
-.titlebar { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:0 0 1.2rem; }
-.titlebar h1 { margin:0; }
-/* The dark-mode switch is pinned in the window's top corner (.themetoggle, below); the row keeps
-   its width clear so the Sound switch, at the row's end, can never slide under it. The title
-   inside needs no room of its own then. */
-.titlebar { padding-right:64px; }
-.titlebar h1 { padding-right:0; }
-.soundtoggle { flex:none; display:inline-flex; align-items:center; gap:8px; padding:8px 14px; font-size:.92rem;
+/* The title row: the title, then Sound (/shared/sound.js) and dark mode together at its end. A
+   flex row rather than a corner overlay, so a long title wraps beside the controls instead of
+   under them. Sound stays on every screen, play included: the cues happen during play, so that
+   is where the way to stop them has to be.
+   The controls sit level with the title's FIRST line, as one group. They used to be apart -- dark
+   mode pinned in the window corner, Sound centred on the row -- and once the title wrapped, Sound
+   hung between its two lines, a step below the switch beside it. So the row aligns to the top,
+   and the group is exactly one title line tall (the h1's line-height, set here for that). */
+.titlebar { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:0 0 1.2rem; }
+.titlebar h1 { margin:0; line-height:1.2; }
+.titletools { flex:none; display:flex; align-items:center; gap:12px; height:calc(2.6rem * 1.2); }
+.soundtoggle { flex:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:34px;
+               padding:0 14px; font-size:.92rem;
                background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.22); }
 .soundtoggle:active { box-shadow:0 1px 0 rgba(0,0,0,.22); transform:translateY(3px); }
 .soundtoggle .note { font-size:1.1rem; line-height:1; }
@@ -58,6 +59,13 @@ h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
 .soundtoggle[aria-checked="false"] { background:rgba(0,0,0,.28); color:#fff; box-shadow:0 4px 0 rgba(0,0,0,.3); }
 .soundtoggle[aria-checked="false"] .note { text-decoration:line-through; opacity:.8; }
 .soundtoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+/* A phone gives the title every pixel it can: Sound becomes its note alone. Off still reads
+   without colour -- the note is struck through -- and the switch's name and state are unchanged
+   for a screen reader (aria-label, aria-checked). */
+@media (max-width: 560px) {
+  .soundtoggle { width:44px; padding:0; }
+  .soundtoggle .label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+}
 .screen { display:none; }
 .screen.active { display:block; }
 .card { background:var(--paper); color:var(--ink); border-radius:18px; padding:20px;
@@ -242,11 +250,11 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .standings .place { font-family:var(--font-display); font-weight:900; font-size:1.4rem; min-width:2ch; }
 .standings img { width:52px; height:52px; object-fit:contain; border-radius:8px; background:var(--chip); }
 
-/* The theme switch: a small track in the top corner with a knob that slides -- the same switch as
-   the phones' page (src/web/party/public/index.html), so the site has one dark-mode control, not
-   two styles of it. Wired by GTC.bindThemeToggles. Absolute, not fixed: fixed would ride over
-   content as the page scrolls. The outline keeps it visible on the dark field. */
-.themetoggle { position:absolute; z-index:5; top:14px; right:14px; width:56px; height:30px; padding:0;
+/* The theme switch: a small track with a knob that slides -- the same switch as the phones' page
+   (src/web/party/public/index.html), so the site has one dark-mode control, not two styles of it.
+   Wired by GTC.bindThemeToggles. Here it sits in the title row beside Sound (.titletools); relative
+   only so the knob has something to slide within. The outline keeps it visible on the dark field. */
+.themetoggle { position:relative; flex:none; width:56px; height:30px; padding:0;
                border-radius:999px; background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
                border:2px solid rgba(255,255,255,.4); }
 .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
@@ -256,8 +264,6 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .themetoggle[aria-checked="true"] .knob { left:27px; background:#251a3d; color:#eee9f8; }
 .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
-/* Room for the switch: the title must never run under it. */
-h1 { padding-right:64px; }
 
 /* Dark mode: the same game show with the house lights down. Chosen by the toggle (gtc_theme,
    shared with the phones' page) or, until somebody touches it, by the computer's own setting;
