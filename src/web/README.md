@@ -25,7 +25,10 @@ order: the drawer picks one of three characters, taking as long as they like (no
 who walks away is the host's to remove) — or asks for three new ones, as often as they like, never
 repeating a face already offered. Picking one opens a dialog listing what guessers can type and
 be right, with a box for other names the drawer will accept ("Endeavor" for Todoroki Enji, another
-sub's spelling); the clock starts on **Start Drawing**. They
+sub's spelling), and which of them the blanks spell out: the name, its words the other way round
+for an Anime or Manga name ("Rock Lee" for the library's "Lee Rock"), or any name typed in — the
+blanks, the letters revealed and the reveal ("It was Endeavor (Todoroki Enji)") all follow it, and
+guessers never see it before they have it. The clock starts on **Start Drawing**. They
 then draw it with the character's picture beside the canvas as a reference only they can see;
 everyone else types guesses into the chat. The checker judges them, and the name a character is
 known by counts on its own ("Sasuke", "Luffy") when nobody else in the character's own show has

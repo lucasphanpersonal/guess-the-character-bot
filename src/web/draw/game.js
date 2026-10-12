@@ -70,6 +70,21 @@ const WORK_AT = 0.75;
 // short, and each a real name rather than a letter that would let anything through.
 const ALSO_MAX = 3;
 const ALSO_LEN = 40;
+/**
+ * The spellings the blanks may take: the name, its two words the other way round ("Rock Lee" for
+ * the library's "Lee Rock") when `swap`, or a name the drawer accepts ("Endeavor"). The drawer
+ * picks one, so the blanks match the name the room uses -- and only from these, so they can never
+ * spell something that would not count as right. `swap` is for romanised names: Anime and Manga
+ * lists keep the family name first, where "Walsh Cindy" for anyone else would only be noise.
+ */
+function spellingsFor(name, also = [], { swap = true } = {}) {
+  const words = String(name).trim().split(/\s+/);
+  const out = [String(name)];
+  if (swap && words.length === 2) out.push(`${words[1]} ${words[0]}`);
+  for (const n of also) if (!out.some((o) => o.toLowerCase() === n.toLowerCase())) out.push(n);
+  return out;
+}
+
 function cleanAlsoAccept(text) {
   const names = String(text ?? '')
     .split(/[,\n]/)
@@ -188,6 +203,7 @@ function offerChoices(g, choices, now) {
   g.guessMs = new Map();
   g.gaveUp = new Set();
   g.alsoAccept = [];
+  g.shownAs = null;
   g.revealed = [];
   g.categoryShown = false;
   g.maskShown = false;
@@ -196,14 +212,20 @@ function offerChoices(g, choices, now) {
   g.chat = [];
 }
 
-/** `alsoAccept`: other names the drawer will accept for this character (cleanAlsoAccept). */
-function choose(g, playerId, index, now, alsoAccept = '') {
+/**
+ * `alsoAccept`: other names the drawer will accept for this character (cleanAlsoAccept).
+ * `shownAs`: which spelling the blanks take (spellingsFor); anything else is the name itself.
+ */
+function choose(g, playerId, index, now, alsoAccept = '', shownAs = null) {
   if (g.phase !== 'choosing') return { ok: false, error: 'Nothing to choose right now.' };
   if (playerId !== drawerOf(g)) return { ok: false, error: "It's not your turn to draw." };
   const i = Number(index);
   if (!Number.isInteger(i) || i < 0 || i >= g.choices.length) return { ok: false, error: 'Pick one of the three.' };
   g.character = g.choices[i];
   g.alsoAccept = cleanAlsoAccept(alsoAccept);
+  const wanted = String(shownAs ?? '').trim();
+  const swap = ROMANISED.has(g.character.origin?.category);
+  g.shownAs = spellingsFor(g.character.name, g.alsoAccept, { swap }).find((s) => s === wanted) ?? g.character.name;
   g.choices = [];
   g.used.push(g.character.name);
   g.phase = 'drawing';
@@ -316,13 +338,15 @@ function giveUp(g, playerId) {
 // --- hints -----------------------------------------------------------------------------------
 
 const isLetter = (ch) => /[\p{L}\p{N}]/u.test(ch);
+/** The name as the blanks spell it: the drawer's pick (spellingsFor), the name itself by default. */
+const spelling = (g) => g.shownAs ?? g.character.name;
 
 /** When the hints fall due, in ms timestamps -- each one a moment the room must be sent a view. */
 const lettersOf = (name) => [...name].map((ch, i) => (isLetter(ch) ? i : -1)).filter((i) => i >= 0);
 const hintTimes = (g) =>
   g.startedAt == null || !g.character
     ? []
-    : [...new Set([...hintFractions(lettersOf(g.character.name).length), CATEGORY_AT, MASK_AT, WORK_AT])].map(
+    : [...new Set([...hintFractions(lettersOf(spelling(g)).length), CATEGORY_AT, MASK_AT, WORK_AT])].map(
         (f) => g.startedAt + f * g.drawSeconds * 1000
       );
 
@@ -332,7 +356,7 @@ const hintTimes = (g) =>
  */
 function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.length)]) {
   if (g.phase !== 'drawing' || !g.character) return false;
-  const letters = lettersOf(g.character.name);
+  const letters = lettersOf(spelling(g));
   const at = (f) => g.startedAt + f * g.drawSeconds * 1000;
   let changed = false;
   if (!g.categoryShown && now >= at(CATEGORY_AT)) {
@@ -363,7 +387,7 @@ function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.
  */
 function maskOf(g) {
   if (!g.character) return null;
-  return [...g.character.name].map((ch, i) => (isLetter(ch) && !g.revealed.includes(i) ? '_' : ch)).join('');
+  return [...spelling(g)].map((ch, i) => (isLetter(ch) && !g.revealed.includes(i) ? '_' : ch)).join('');
 }
 
 /** The clock's reading (seconds left) at which a hint falls due -- what the page says it waits for. */
@@ -379,7 +403,9 @@ const secondsLeftAt = (g, f) => Math.round(g.drawSeconds * (1 - f));
 function clueFor(g) {
   const origin = g.character?.origin;
   if (!origin) return null;
-  const work = origin.work ? maskNameWords(origin.work, g.character.name) : null;
+  // Blanked of the name AND of the spelling the blanks use: "Endeavor" in a title would be as
+  // much the answer as "Enji".
+  const work = origin.work ? maskNameWords(maskNameWords(origin.work, g.character.name), spelling(g)) : null;
   const category = origin.category ?? null;
   const categoryNow = g.categoryKnown || g.categoryShown;
   return {
@@ -401,7 +427,8 @@ function endTurn(g, now, reason) {
     g.drawings.push(
       gallery.record({
         drawerId: drawer,
-        character: publicCharacter(g.character),
+        // As the room saw it: the spelling the blanks took, the library's name kept beside it.
+        character: { ...publicCharacter(g.character), name: spelling(g), ...(spelling(g) !== g.character.name ? { realName: g.character.name } : {}) },
         strokes: g.strokes,
         guessed: [...g.guessMs],
         gaveUp: g.gaveUp,
@@ -418,6 +445,7 @@ function endTurn(g, now, reason) {
     guessed: [...g.guessed].map(([playerId, points]) => ({ playerId, points })),
     gaveUp: [...g.gaveUp],
     alsoAccepted: [...(g.alsoAccept ?? [])],
+    shownAs: g.character && g.shownAs && g.shownAs !== g.character.name ? g.shownAs : null,
     drawerPoints: g.guessed.size * DRAWER_PER_GUESS,
   };
   g.phase = 'reveal';
@@ -519,10 +547,21 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     secondsLeft: g.deadline ? Math.max(0, Math.round((g.deadline - now) / 1000)) : null,
     drawSeconds: g.drawSeconds,
     // Each with what will count for it (acceptedNames): what the drawer is shown on picking one.
-    choices: isDrawer && g.phase === 'choosing' ? g.choices.map((c) => ({ ...publicCharacter(c), accepts: acceptedNames(g, c) })) : null,
+    // And, for a romanised name, its words the other way round: a spelling the drawer may pick.
+    choices:
+      isDrawer && g.phase === 'choosing'
+        ? g.choices.map((c) => ({
+            ...publicCharacter(c),
+            accepts: acceptedNames(g, c),
+            swapped: spellingsFor(c.name, [], { swap: ROMANISED.has(c.origin?.category) })[1] ?? null,
+          }))
+        : null,
     // -1 unlimited. Only the drawer has anything to reroll.
     rerollsLeft: isDrawer && g.phase === 'choosing' ? g.rerollsLeft : null,
     character: answerShown && g.character ? publicCharacter(g.character) : null,
+    // The spelling the blanks take -- to those who may see the answer, and to nobody else: for a
+    // guesser it would be the answer by another name.
+    shownAs: answerShown && g.character ? spelling(g) : null,
     // The blanks only from half time: how many words and letters is a big hint on its own.
     mask: g.phase === 'drawing' && g.maskShown ? maskOf(g) : null,
     maskAt: g.phase === 'drawing' && !g.maskShown ? secondsLeftAt(g, MASK_AT) : null,
@@ -554,6 +593,7 @@ function viewFor(g, viewerId, names, now = Date.now()) {
             guessed: g.lastTurn.guessed.map((x) => ({ name: nameOf(x.playerId), points: x.points })),
             gaveUp: (g.lastTurn.gaveUp ?? []).map(nameOf),
             alsoAccepted: g.lastTurn.alsoAccepted ?? [],
+            shownAs: g.lastTurn.shownAs ?? null,
             drawerPoints: g.lastTurn.drawerPoints,
           }
         : null,
@@ -582,6 +622,7 @@ module.exports = {
   allDone,
   giveUp,
   cleanAlsoAccept,
+  spellingsFor,
   knows,
   REVEAL_SECONDS,
   CHOICES,

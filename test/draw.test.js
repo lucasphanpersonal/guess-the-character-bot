@@ -267,6 +267,46 @@ function theDrawerIsToldWhatWillCountForEachChoice() {
   assert.equal(draw.say(g, 'p3', 'Uchiha', T0 + 1000).verdict, 'close');
 }
 
+function theBlanksSpellTheNameTheDrawerPicked() {
+  const g = started();
+  g.choices[0] = head('Todoroki Enji');
+  draw.choose(g, 'p1', 0, T0, 'Endeavor', 'Endeavor');
+  assert.equal(draw.viewFor(g, 'p1', names, T0).shownAs, 'Endeavor', 'the drawer sees what the blanks spell');
+  assert.equal(draw.viewFor(g, 'p2', names, T0).shownAs, null);
+  draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]);
+  const guesser = draw.viewFor(g, 'p2', names, T0 + 40_000);
+  assert.equal(guesser.mask, '________', 'one word of eight, not "Todoroki Enji"');
+  assert.ok(!JSON.stringify(guesser).includes('Endeavor'), 'a guesser is never sent the spelling itself');
+  // Letters come from the spelling too: a third of eight is two.
+  draw.revealDueHints(g, T0 + 79_999, (xs) => xs[0]);
+  assert.equal(draw.maskOf(g), 'En______');
+  assert.equal(draw.say(g, 'p2', 'endeavor', T0 + 79_999).verdict, 'correct');
+  draw.endTurn(g, T0 + 80_000, 'time');
+  assert.equal(draw.viewFor(g, 'p3', names, T0 + 80_000).lastTurn.shownAs, 'Endeavor', 'named at the reveal');
+  assert.deepEqual([g.drawings[0].character.name, g.drawings[0].character.realName], ['Endeavor', 'Todoroki Enji'], 'and in the gallery');
+}
+
+function theBlanksTakeOnlyASpellingThatCounts() {
+  const swapped = started();
+  swapped.choices[0] = { ...head('Lee Rock'), origin: { work: 'Naruto', category: 'Anime' } };
+  assert.equal(draw.viewFor(swapped, 'p1', names, T0).choices[0].swapped, 'Rock Lee', 'offered for a romanised name');
+  draw.choose(swapped, 'p1', 0, T0, '', 'Rock Lee');
+  assert.equal(swapped.shownAs, 'Rock Lee', 'the two words the other way round');
+  const western = started();
+  western.choices[0] = { ...head('Cindy Walsh'), origin: { work: 'Beverly Hills, 90210', category: 'Television Shows' } };
+  assert.equal(draw.viewFor(western, 'p1', names, T0).choices[0].swapped, null, 'not for anyone else');
+  draw.choose(western, 'p1', 0, T0, '', 'Walsh Cindy');
+  assert.equal(western.shownAs, 'Cindy Walsh');
+  const made = started();
+  made.choices[0] = head('Lee Rock');
+  draw.choose(made, 'p1', 0, T0, '', 'Totally Wrong');
+  assert.equal(made.shownAs, 'Lee Rock', 'anything else is the name itself');
+  const plain = started();
+  draw.choose(plain, 'p1', 0, T0);
+  assert.equal(plain.shownAs, 'Pikachu', 'and by default');
+  assert.deepEqual(draw.spellingsFor('Lee Rock', ['Rock Lee', 'Bushy Brow']), ['Lee Rock', 'Rock Lee', 'Bushy Brow'], 'no spelling twice');
+}
+
 function otherNamesReachNobodyButTheDrawerUntilTheReveal() {
   const g = started();
   draw.choose(g, 'p1', 0, T0, 'Pika');
@@ -499,6 +539,8 @@ module.exports = {
   'whoever gave up talks only to those who know, and scores nothing': whoGaveUpTalksOnlyToThoseWhoKnow,
   'a name the drawer accepts counts': aNameTheDrawerAcceptsCounts,
   'the drawer is told what will count for each choice': theDrawerIsToldWhatWillCountForEachChoice,
+  'the blanks spell the name the drawer picked': theBlanksSpellTheNameTheDrawerPicked,
+  'the blanks take only a spelling that counts': theBlanksTakeOnlyASpellingThatCounts,
   'other names reach nobody but the drawer until the reveal': otherNamesReachNobodyButTheDrawerUntilTheReveal,
   'other names are a few real names': otherNamesAreAFewRealNames,
   'other names are for that turn only': otherNamesAreForThatTurnOnly,

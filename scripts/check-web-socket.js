@@ -891,12 +891,20 @@ const connect = (playerId) => {
   const qChoosing = nextMatching(Q, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
   const second = await qChoosing;
   check(second.drawer.playerId === pub('rQ'), 'after the reveal, the next player draws');
+  // Quinn has the blanks spell another name, one Quinn accepts: it reaches the guesser only at the end.
   const pDrawing2 = nextMatching(P, 'draw:state', (v) => v.phase === 'drawing');
-  await Q.emitWithAck('draw:choose', { index: 0 });
+  const qDrawing2 = nextMatching(Q, 'draw:state', (v) => v.phase === 'drawing');
+  await Q.emitWithAck('draw:choose', { index: 0, alsoAccept: 'Zed Prime', shownAs: 'Zed Prime' });
   await pDrawing2;
+  check((await qDrawing2).shownAs === 'Zed Prime', 'the drawer picks what the blanks spell, and sees it');
   const drawOver = nextEvent(P, 'draw:over');
+  const pSince = P.received.length;
   await P.emitWithAck('draw:say', { text: second.choices[0].name });
   const final = await drawOver;
+  const pBefore = P.received.slice(0, pSince);
+  check(!pBefore.some((e) => e.json.includes('Zed Prime')), 'the guesser is never sent the spelling before getting it');
+  check(final.gallery?.[1]?.character?.name === 'Zed Prime' && final.gallery[1].character.realName === second.choices[0].name,
+    'the gallery names the drawing as the blanks spelled it, with the real name beside it');
   check(final.standings.length === 2 && final.standings.every((s) => s.score > 0), 'after everyone has drawn once, the game ends with scores');
   // The gallery: both drawings, in order, the first with the strokes Pia drew (the bad ones dropped).
   const g1 = final.gallery?.[0];

@@ -126,6 +126,15 @@
                               font-weight:800; overflow-wrap:anywhere; }
     .confirmpick .hint { font-size:.82rem; margin:6px 0 16px; }
     .confirmactions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+    /* The spellings: chips you pick one of. Picked = filled blue AND a tick, never colour alone. */
+    .spellings { display:flex; flex-wrap:wrap; gap:6px; }
+    .spellings label { display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; text-transform:none; letter-spacing:0;
+                       font-size:.95rem; font-weight:800; color:var(--ink); background:var(--chip); border:2px solid var(--chip-edge);
+                       border-radius:999px; padding:4px 12px; overflow-wrap:anywhere; }
+    .spellings input { position:absolute; opacity:0; width:1px; height:1px; }
+    .spellings label:has(input:checked) { background:var(--blue); border-color:var(--blue); color:#fff; }
+    .spellings label:has(input:checked)::before { content:"✓"; }
+    .spellings label:has(input:focus-visible) { outline:3px solid var(--blue); outline-offset:2px; }
 
     /* The end screen's extras, under the standings and the buttons. */
     .overextra { margin-top:18px; }
@@ -468,6 +477,10 @@
       <label for="alsoAccept">Known by another name?</label>
       <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. a hero name, the dub's name" />
       <p class="hint">Comma-separated, up to three. Nobody else sees them until the reveal.</p>
+      <!-- Which spelling the blanks take: the room says "Rock Lee", the library "Lee Rock". -->
+      <label id="spellLabel">Blanks spell out</label>
+      <div class="spellings" id="confirmSpellings" role="radiogroup" aria-labelledby="spellLabel"></div>
+      <p class="hint">Any of them still counts as right; this is just what the blanks show.</p>
       <div class="confirmactions">
         <button type="button" class="ghost" id="confirmBack">Back</button>
         <button type="submit" id="confirmGo" autofocus>Start Drawing</button>

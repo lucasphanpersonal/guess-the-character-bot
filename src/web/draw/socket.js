@@ -285,10 +285,10 @@ function attachDrawSockets(nsp, { registry }) {
 
     const playing = (r) => r && r.status === 'playing' && r.game;
 
-    socket.on('draw:choose', ({ index, alsoAccept } = {}, ack) => {
+    socket.on('draw:choose', ({ index, alsoAccept, shownAs } = {}, ack) => {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
-      const res = draw.choose(r.game, playerId, index, Date.now(), alsoAccept);
+      const res = draw.choose(r.game, playerId, index, Date.now(), alsoAccept, shownAs);
       ack?.(res);
       if (res.ok) {
         emitViews(r);

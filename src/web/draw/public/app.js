@@ -483,7 +483,7 @@ function renderGame(turnChanged) {
   // time, and until then when they will come.
   const turnKey = `${v.round}:${v.drawer.playerId}`;
   if (v.phase !== 'drawing') setMask('', '');
-  else if (v.character) setMask(`name|${v.character.name}`, esc(v.character.name));
+  else if (v.character) setMask(`name|${v.shownAs ?? v.character.name}`, esc(v.shownAs ?? v.character.name));
   else if (v.mask) renderBlanks(v.mask, turnKey);
   else if (v.maskAt != null) setMask(`later|${v.maskAt}`, `<span class="tag later">Blanks at ${v.maskAt}s</span>`);
   else setMask('', '');
@@ -539,7 +539,8 @@ function renderGame(turnChanged) {
   $('revealOverlay').hidden = v.phase !== 'reveal';
   if (v.phase === 'reveal' && v.lastTurn) {
     const lt = v.lastTurn;
-    $('revealTitle').textContent = lt.character ? `It was ${lt.character.name}` : 'Turn over';
+    // As the blanks spelled it, with the library's name beside it when the drawer chose another.
+    $('revealTitle').textContent = lt.character ? `It was ${lt.shownAs ? `${lt.shownAs} (${lt.character.name})` : lt.character.name}` : 'Turn over';
     $('revealArt').innerHTML = characterArt(lt.character);
     const why =
       lt.reason === 'all'
@@ -642,19 +643,43 @@ let confirming = null; // { index, name } of the choice the dialog is open for
 function openConfirm(index) {
   const c = view?.choices?.[index];
   if (!c) return;
-  confirming = { index, name: c.name };
+  confirming = { index, name: c.name, choice: c };
   $('confirmArt').innerHTML = characterArt(c);
   $('confirmName').textContent = c.name;
   $('confirmCounts').innerHTML = (c.accepts ?? [c.name]).map((n) => `<li>${esc(n)}</li>`).join('');
   // Other names are for this character: starting blank each time, so Back and another pick
   // cannot carry one character's names onto the next.
   $('alsoAccept').value = '';
+  renderSpellings(c, c.name);
   $('confirmGo').disabled = false;
   $('confirmPick').showModal();
   // Straight into the box with a keyboard to hand; on a phone the button keeps the focus
   // (autofocus), so the on-screen keyboard does not cover the names on opening.
   if (matchMedia('(pointer: fine)').matches) $('alsoAccept').focus();
 }
+// The spellings the blanks may take, as the server allows them (game.js spellingsFor): the name,
+// its words swapped when the server offers that (romanised names), and each name typed above --
+// cleaned as the server cleans them, so what is offered here is what the server will take.
+function spellingOptions(c) {
+  const typed = $('alsoAccept')
+    .value.split(/[,\n]/)
+    .map((s) => s.trim().slice(0, 40))
+    .filter((s) => s.replace(/[^\p{L}\p{N}]/gu, '').length >= 2);
+  const out = [c.name, ...(c.swapped ? [c.swapped] : [])];
+  for (const n of [...new Set(typed)].slice(0, 3)) if (!out.some((o) => o.toLowerCase() === n.toLowerCase())) out.push(n);
+  return out;
+}
+function renderSpellings(c, keep) {
+  const options = spellingOptions(c);
+  const picked = options.includes(keep) ? keep : c.name;
+  $('confirmSpellings').innerHTML = options
+    .map((o) => `<label><input type="radio" name="spelling" value="${esc(o)}"${o === picked ? ' checked' : ''} />${esc(o)}</label>`)
+    .join('');
+}
+const pickedSpelling = () => document.querySelector('#confirmSpellings input:checked')?.value ?? null;
+// Typing another name offers it as a spelling at once; what was picked stays picked while it exists.
+$('alsoAccept').addEventListener('input', () => confirming && renderSpellings(confirming.choice, pickedSpelling()));
+
 function closeConfirm() {
   confirming = null;
   if ($('confirmPick').open) $('confirmPick').close();
@@ -667,7 +692,7 @@ $('confirmForm').addEventListener('submit', (e) => {
   e.preventDefault();
   if (!confirming) return;
   $('confirmGo').disabled = true; // once; the next view closes the dialog
-  socket.emit('draw:choose', { index: confirming.index, alsoAccept: $('alsoAccept').value }, (res) => {
+  socket.emit('draw:choose', { index: confirming.index, alsoAccept: $('alsoAccept').value, shownAs: pickedSpelling() }, (res) => {
     if (res && !res.ok) {
       $('confirmGo').disabled = false;
       toast(esc(res.error));
@@ -814,7 +839,7 @@ function openViewer(i) {
   if (!d) return;
   viewing = i;
   paintDrawing($('viewerCanvas'), d.strokes);
-  $('viewerTitle').textContent = d.character?.name ?? '?';
+  $('viewerTitle').textContent = d.character?.realName ? `${d.character.name} (${d.character.realName})` : d.character?.name ?? '?';
   const got = d.got.length ? ` · ${d.got.map((x) => `${x.name} (${x.seconds}s)`).join(', ')}` : '';
   $('viewerSub').textContent = `Drawn by ${d.drawer} · ${gotLine(d)}${got}`;
   $('viewerPrev').disabled = i === 0;

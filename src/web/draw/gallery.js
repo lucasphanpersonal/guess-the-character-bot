@@ -169,7 +169,7 @@ function accolades(drawings, closeCalls, nameOf) {
 function galleryFor(drawings, nameOf) {
   return drawings.map((d) => ({
     drawer: nameOf(d.drawerId),
-    character: d.character,
+    character: d.character, // { name: as the blanks spelled it, realName: the library's, when different }
     strokes: d.strokes,
     got: d.guessed.map((x) => ({ name: nameOf(x.playerId), seconds: Math.max(1, Math.round(x.ms / 1000)) })),
     guessers: d.guessers,
