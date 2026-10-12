@@ -33,10 +33,13 @@ const DRAW_SECONDS = [60, 80, 100, 120];
 // Named, because a swatch is the one control where colour IS the content -- the names are what a
 // screen reader, or anyone who can't tell two of them apart, has to go on. Two skin tones and the
 // browns are there because characters are mostly people.
+// Chosen by measured distance (CIE76 ΔE between swatches), not by eye: Navy used to sit 24 from
+// Black and read as black on the canvas; it is 54 now, with Blue brightened to keep the two apart.
+// Orange was really amber, 28 from Yellow; it is a true orange now, clear of Red, Yellow and Tan.
 const PALETTE = [
-  ['#1b1033', 'Black'], ['#9a9a9a', 'Grey'], ['#e21b3c', 'Red'], ['#ffa602', 'Orange'], ['#ffd60a', 'Yellow'],
-  ['#8fd14f', 'Lime'], ['#26890c', 'Green'], ['#12a4a0', 'Teal'], ['#7fd6ff', 'Sky blue'], ['#1368ce', 'Blue'],
-  ['#1d2a6e', 'Navy'], ['#c13ac1', 'Purple'], ['#ff7eb6', 'Pink'], ['#f8c9a0', 'Peach'], ['#c68642', 'Tan'],
+  ['#1b1033', 'Black'], ['#9a9a9a', 'Grey'], ['#e21b3c', 'Red'], ['#ff6d00', 'Orange'], ['#ffd60a', 'Yellow'],
+  ['#8fd14f', 'Lime'], ['#26890c', 'Green'], ['#12a4a0', 'Teal'], ['#7fd6ff', 'Sky blue'], ['#1f8bff', 'Blue'],
+  ['#233fb5', 'Navy'], ['#c13ac1', 'Purple'], ['#ff7eb6', 'Pink'], ['#f8c9a0', 'Peach'], ['#c68642', 'Tan'],
   ['#8b4513', 'Brown'], ['#ffffff', 'Eraser'],
 ];
 const COLOURS = new Set(PALETTE.map(([c]) => c));
