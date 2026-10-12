@@ -825,9 +825,16 @@ const connect = (playerId) => {
   res = await Q.emitWithAck('draw:say', { text: 'Definitely Nobody' });
   check(res.ok && res.verdict === 'wrong', 'a wrong guess is wrong, and shown');
   const typoDraw = drawAnswer.slice(0, -1) + (drawAnswer.endsWith('x') ? 'y' : 'x');
+  const drawerSeesClose = nextMatching(P, 'draw:state', (v) => v.chat.some((m) => m.text === typoDraw));
+  const qSince = Q.received.length;
   res = await Q.emitWithAck('draw:say', { text: typoDraw });
-  check(res.ok && res.verdict === 'close', 'a typo is close -- told only to the guesser');
-  check(!P.received.some((e) => e.json.includes(typoDraw)), 'the drawer never sees a close guess');
+  check(res.ok && res.verdict === 'close', 'a typo is close');
+  // Raced against a clock: before this was fixed the drawer was never sent it, and a bare wait hangs.
+  const closeView = await Promise.race([drawerSeesClose, wait(2000).then(() => null)]);
+  const closeLine = closeView?.chat.find((m) => m.text === typoDraw);
+  check(closeLine?.kind === 'close', 'the drawer sees the close guess, marked close, as it happens');
+  await wait(100);
+  check(!Q.received.slice(qSince).some((e) => e.json.includes(typoDraw)), 'and no one still guessing is sent it -- the guesser has their ack');
 
   // A one-word guess is judged against the drawn character's own show, which the server must hand
   // the rules: the cast of the fixture's one list, every name in it.
@@ -860,6 +867,12 @@ const connect = (playerId) => {
   await P.emitWithAck('draw:say', { text: second.choices[0].name });
   const final = await drawOver;
   check(final.standings.length === 2 && final.standings.every((s) => s.score > 0), 'after everyone has drawn once, the game ends with scores');
+  // The gallery: both drawings, in order, the first with the strokes Pia drew (the bad ones dropped).
+  const g1 = final.gallery?.[0];
+  check(final.gallery?.length === 2 && g1.drawer === 'Pia' && g1.character?.name === drawAnswer && g1.strokes.length === 2,
+    `the end screen gets every drawing, its strokes and its character (${final.gallery?.length} drawings, ${g1?.strokes.length} strokes)`);
+  check(g1.got.length === 1 && g1.got[0].name === 'Quinn' && g1.guessers === 1, 'and who got each one');
+  check(Array.isArray(final.accolades) && final.accolades.some((a) => a.title === 'Speed Demon'), `and the accolades (${final.accolades?.map((a) => a.title).join(', ')})`);
 
   const drawPage = await httpGet('/draw/');
   check(drawPage.status === 200 && drawPage.type.includes('text/html'), 'GET /draw/ serves the drawing client');

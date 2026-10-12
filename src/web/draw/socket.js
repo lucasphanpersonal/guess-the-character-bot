@@ -113,7 +113,7 @@ function attachDrawSockets(nsp, { registry }) {
     clearTimer(room);
     room.status = 'finished';
     room.game.phase = 'over';
-    nsp.to(room.code).emit('draw:over', { standings: draw.standings(room.game, namesOf(room)) });
+    nsp.to(room.code).emit('draw:over', draw.overFor(room.game, namesOf(room)));
     broadcastRoom(room);
   }
 
@@ -232,7 +232,7 @@ function attachDrawSockets(nsp, { registry }) {
         socket.emit('draw:canvas', { strokes: g.phase === 'drawing' ? g.strokes : [] });
         socket.emit('draw:state', draw.viewFor(g, playerId, namesOf(res.room), Date.now()));
       } else if (g && res.room.status === 'finished') {
-        socket.emit('draw:over', { standings: draw.standings(g, namesOf(res.room)) });
+        socket.emit('draw:over', draw.overFor(g, namesOf(res.room)));
       }
     });
 
@@ -317,7 +317,9 @@ function attachDrawSockets(nsp, { registry }) {
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       const res = draw.say(r.game, playerId, text, Date.now());
       ack?.(res.ok ? { ok: true, verdict: res.verdict, points: res.points } : res);
-      if (!res.ok || res.verdict === 'close') return; // close is for the guesser's ack alone
+      if (!res.ok) return;
+      // A close guess goes out too: viewFor shows it to those who know (the drawer above all) and
+      // to nobody still guessing, for whom "Sasuek" would be a hint.
       if (res.verdict === 'correct') {
         // The playerId lets the guesser's own page tell this apart from someone else getting it.
         nsp.to(r.code).emit('draw:correct', { playerId, name: namesOf(r)[playerId] ?? 'Player', points: res.points });

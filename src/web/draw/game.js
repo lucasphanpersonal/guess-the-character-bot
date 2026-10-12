@@ -32,6 +32,7 @@
 const { judgeGuess, maskNameWords } = require('../../compendium/answers');
 const { normalizeLoose } = require('../../compendium/text');
 const { publicCharacter } = require('../publicCharacter');
+const gallery = require('./gallery');
 
 // WEB_DRAW_REVEAL_SECONDS shortens it for the socket check, the way WEB_GRACE_SECONDS does the phones' countdown.
 const REVEAL_SECONDS = Number(process.env.WEB_DRAW_REVEAL_SECONDS ?? 6);
@@ -99,6 +100,7 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null }) 
     deadline: null,
     startedAt: null,
     guessed: new Map(), // playerId -> points this turn, in the order they got it
+    guessMs: new Map(), // playerId -> how far into the drawing they got it (for the gallery)
     gaveUp: new Set(), // guessers who gave up on this drawing (see giveUp)
     scores: new Map(order.map((id) => [id, 0])),
     revealed: [], // indexes into the character's name
@@ -109,6 +111,9 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null }) 
     used: [], // names drawn this game, never offered twice
     lastTurn: null,
     gone: new Set(),
+    // For the end screen (./gallery.js): every finished drawing, and each player's near misses.
+    drawings: [],
+    closeCalls: new Map(),
   };
 }
 
@@ -167,6 +172,7 @@ function offerChoices(g, choices, now) {
   g.deadline = null; // choosing has no clock
   g.startedAt = null;
   g.guessed = new Map();
+  g.guessMs = new Map();
   g.gaveUp = new Set();
   g.alsoAccept = [];
   g.revealed = [];
@@ -255,6 +261,7 @@ function say(g, playerId, text, now) {
   if (verdict === 'correct') {
     const points = pointsAt(g, now);
     g.guessed.set(playerId, points);
+    g.guessMs.set(playerId, now - g.startedAt);
     g.scores.set(playerId, (g.scores.get(playerId) ?? 0) + points);
     const drawer = drawerOf(g);
     g.scores.set(drawer, (g.scores.get(drawer) ?? 0) + DRAWER_PER_GUESS);
@@ -265,6 +272,7 @@ function say(g, playerId, text, now) {
   // A close guess goes only to those who know -- the drawer above all, who wants to see every
   // guess -- never to anyone still guessing: "Sasuek" would be a hint to them.
   if (verdict === 'close') {
+    g.closeCalls.set(playerId, (g.closeCalls.get(playerId) ?? 0) + 1);
     post(g, playerId, clean, true, 'close');
     return { ok: true, verdict };
   }
@@ -351,6 +359,22 @@ function clueFor(g) {
 function endTurn(g, now, reason) {
   if (g.phase !== 'drawing' && g.phase !== 'choosing') return { ok: false };
   const drawer = drawerOf(g);
+  // Kept for the end screen while the strokes still exist: the next turn starts a clean canvas.
+  // Only a turn that was drawn -- one that ended while choosing has no picture.
+  if (g.phase === 'drawing' && g.character) {
+    g.drawings.push(
+      gallery.record({
+        drawerId: drawer,
+        character: publicCharacter(g.character),
+        strokes: g.strokes,
+        guessed: [...g.guessMs],
+        gaveUp: g.gaveUp,
+        guessers: guessersOf(g).length,
+        reason,
+        drawSeconds: g.drawSeconds,
+      })
+    );
+  }
   g.lastTurn = {
     drawerId: drawer,
     character: g.character ?? g.choices[0] ?? null,
@@ -410,6 +434,16 @@ function removePlayer(g, playerId, now) {
     return { ok: true, endTurn: true };
   }
   return { ok: true, endTurn: false };
+}
+
+/** Everything the end screen shows: the standings, every drawing, and the accolades. */
+function overFor(g, names) {
+  const nameOf = (id) => names[id] ?? 'Player';
+  return {
+    standings: standings(g, names),
+    gallery: gallery.galleryFor(g.drawings, nameOf),
+    accolades: gallery.accolades(g.drawings, g.closeCalls, nameOf),
+  };
 }
 
 /** Final (or running) standings: by score, ties sharing a place. */
@@ -503,6 +537,7 @@ module.exports = {
   advance,
   removePlayer,
   standings,
+  overFor,
   viewFor,
   drawerOf,
   allGuessed,
