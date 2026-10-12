@@ -212,11 +212,38 @@ function offerChoices(g, choices, now) {
   g.chat = [];
 }
 
+// --- the host's pause ---------------------------------------------------------------------------
+
+const PAUSED = { ok: false, error: 'The game is paused.' };
+/**
+ * The host stops the clock. Nothing falls due and nothing is played until they continue: no
+ * guess, no stroke, no pick. Kept as when it began, so Continue can move the turn's start and
+ * deadline on by however long it lasted -- the hints and the points are both measured from those,
+ * so the turn carries on exactly where it stopped.
+ */
+function pause(g, now) {
+  if (g.phase === 'over' || g.pausedAt != null) return { ok: false };
+  g.pausedAt = now;
+  g.hostPaused = true;
+  return { ok: true };
+}
+function resume(g, now) {
+  if (g.pausedAt == null) return { ok: false };
+  const away = Math.max(0, now - g.pausedAt);
+  if (g.startedAt != null) g.startedAt += away;
+  if (g.deadline != null) g.deadline += away;
+  g.pausedAt = null;
+  g.hostPaused = false;
+  return { ok: true };
+}
+const isPaused = (g) => g.pausedAt != null;
+
 /**
  * `alsoAccept`: other names the drawer will accept for this character (cleanAlsoAccept).
  * `shownAs`: which spelling the blanks take (spellingsFor); anything else is the name itself.
  */
 function choose(g, playerId, index, now, alsoAccept = '', shownAs = null) {
+  if (isPaused(g)) return PAUSED;
   if (g.phase !== 'choosing') return { ok: false, error: 'Nothing to choose right now.' };
   if (playerId !== drawerOf(g)) return { ok: false, error: "It's not your turn to draw." };
   const i = Number(index);
@@ -246,6 +273,7 @@ const rerollExclusions = (g) => [...new Set([...g.used, ...g.offered])];
  * starts again, because it measured time to decide among the old three.
  */
 function rerollChoices(g, playerId, choices, now) {
+  if (isPaused(g)) return PAUSED;
   if (g.phase !== 'choosing') return { ok: false, error: 'Nothing to choose right now.' };
   if (playerId !== drawerOf(g)) return { ok: false, error: "It's not your turn to draw." };
   if (g.rerollsLeft === 0) return { ok: false, error: 'No new choices left this turn.' };
@@ -277,6 +305,7 @@ function post(g, playerId, text, insider, kind = 'said') {
 function say(g, playerId, text, now) {
   if (g.phase !== 'drawing' && g.phase !== 'choosing' && g.phase !== 'reveal') return { ok: false, error: 'The game is over.' };
   if (!g.order.includes(playerId) || g.gone.has(playerId)) return { ok: false, error: "You're not in this game." };
+  if (isPaused(g)) return PAUSED;
   const clean = String(text ?? '').trim().slice(0, TEXT_MAX);
   if (!clean) return { ok: false, error: 'Type something first.' };
 
@@ -326,6 +355,7 @@ function say(g, playerId, text, now) {
  * @returns {{ok: false, error} | {ok: true, allDone: boolean, doneReason: string}}
  */
 function giveUp(g, playerId) {
+  if (isPaused(g)) return PAUSED;
   if (g.phase !== 'drawing') return { ok: false, error: 'There is no drawing to give up on.' };
   if (!g.order.includes(playerId) || g.gone.has(playerId)) return { ok: false, error: "You're not in this game." };
   if (playerId === drawerOf(g)) return { ok: false, error: "You're drawing it -- you know who it is." };
@@ -355,7 +385,7 @@ const hintTimes = (g) =>
  * in tests). Returns whether anything changed.
  */
 function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.length)]) {
-  if (g.phase !== 'drawing' || !g.character) return false;
+  if (g.phase !== 'drawing' || !g.character || isPaused(g)) return false;
   const letters = lettersOf(spelling(g));
   const at = (f) => g.startedAt + f * g.drawSeconds * 1000;
   let changed = false;
@@ -544,7 +574,9 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     rounds: g.rounds,
     drawer: { playerId: drawer, name: nameOf(drawer) },
     isDrawer,
-    secondsLeft: g.deadline ? Math.max(0, Math.round((g.deadline - now) / 1000)) : null,
+    // Read off the moment it stopped while paused, so the clock shows still rather than running out.
+    secondsLeft: g.deadline ? Math.max(0, Math.round((g.deadline - (g.pausedAt ?? now)) / 1000)) : null,
+    paused: isPaused(g),
     drawSeconds: g.drawSeconds,
     // Each with what will count for it (acceptedNames): what the drawer is shown on picking one.
     // And, for a romanised name, its words the other way round: a spelling the drawer may pick.
@@ -602,6 +634,9 @@ function viewFor(g, viewerId, names, now = Date.now()) {
 
 module.exports = {
   createDrawGame,
+  pause,
+  resume,
+  isPaused,
   offerChoices,
   choose,
   rerollChoices,

@@ -136,6 +136,12 @@ function attachSockets(nsp, { registry, setup, variant }) {
     clearTurnTimer(room);
     const game = room.game;
     const duration = ms ?? game.turnSeconds * 1000;
+    // Paused by the host: the turn is armed frozen, its time kept for Continue.
+    if (game.hostPaused) {
+      game.turnEndsAt = null;
+      game.pausedRemaining = duration;
+      return;
+    }
     game.turnEndsAt = Date.now() + duration;
     room.turnTimer = setTimeout(() => {
       if (variant.deferTimeout?.(room)) return; // the variant ends this turn itself
@@ -162,11 +168,18 @@ function attachSockets(nsp, { registry, setup, variant }) {
     const game = room?.game;
     if (!game || game.finished || game.pausedForDisconnect) return;
     clearTurnTimer(room);
-    game.pausedRemaining = Math.max(0, (game.turnEndsAt ?? Date.now()) - Date.now());
+    // A clock the host already stopped has its time left kept; reading turnEndsAt (null then)
+    // would have handed the player a turn of zero seconds.
+    if (game.turnEndsAt != null) game.pausedRemaining = Math.max(0, game.turnEndsAt - Date.now());
+    else game.pausedRemaining ??= game.turnSeconds * 1000;
     game.turnEndsAt = null;
     game.pausedForDisconnect = true;
-    room.pauseGuard = setTimeout(() => resumeTurn(room), PAUSE_MAX_MS);
-    room.pauseGuard.unref?.();
+    // The 30s guard waits for the host's Continue: running now, it would restart a clock the host
+    // stopped.
+    if (!game.hostPaused) {
+      room.pauseGuard = setTimeout(() => resumeTurn(room), PAUSE_MAX_MS);
+      room.pauseGuard.unref?.();
+    }
     broadcastRoom(room);
     emitGame(room);
   };
@@ -176,6 +189,42 @@ function attachSockets(nsp, { registry, setup, variant }) {
     const remaining = game.pausedRemaining ?? game.turnSeconds * 1000;
     clearPause(room);
     scheduleTurn(room, remaining);
+    broadcastRoom(room);
+    emitGame(room);
+  };
+
+  // The host's pause: the clock stops for everyone until they press Continue. It belongs to the
+  // GAME (game.hostPaused), not to a turn: a turn that ends while paused -- someone leaves -- arms
+  // the next one frozen (scheduleTurn), and only Continue or the game's end lifts it. It lives
+  // beside the disconnect pause above: the clock runs only when neither holds it, and both keep
+  // the turn's time left in game.pausedRemaining.
+  const hostPause = (room) => {
+    const game = room.game;
+    if (game.hostPaused) return;
+    if (game.turnEndsAt != null) game.pausedRemaining = Math.max(0, game.turnEndsAt - Date.now());
+    clearTurnTimer(room);
+    game.turnEndsAt = null;
+    game.hostPaused = true;
+    if (room.pauseGuard) {
+      clearTimeout(room.pauseGuard);
+      room.pauseGuard = null;
+    }
+    broadcastRoom(room);
+    emitGame(room);
+  };
+  const hostContinue = (room) => {
+    const game = room.game;
+    if (!game.hostPaused) return;
+    game.hostPaused = false;
+    if (game.pausedForDisconnect) {
+      // Still waiting on someone who dropped: their own pause takes over, guard and all.
+      room.pauseGuard = setTimeout(() => resumeTurn(room), PAUSE_MAX_MS);
+      room.pauseGuard.unref?.();
+    } else {
+      const remaining = game.pausedRemaining ?? game.turnSeconds * 1000;
+      game.pausedRemaining = null;
+      scheduleTurn(room, remaining);
+    }
     broadcastRoom(room);
     emitGame(room);
   };
@@ -458,6 +507,19 @@ function attachSockets(nsp, { registry, setup, variant }) {
     // status check a stray game:gotit in that window was accepted and finished that player with
     // ZERO turns -- which is exactly what a phone tilting during the reroll stage produced.
     const playing = (r) => r && r.status === 'playing' && r.game;
+    // While the host has paused, nobody's turn moves -- a tilt or a guess would score against a
+    // clock that is not running. Rulings and notes still work: they are not the turn.
+    const PAUSED = { ok: false, error: 'The game is paused.' };
+
+    socket.on('room:pause', ({ paused } = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can pause.' });
+      if (!playing(r)) return ack?.({ ok: false, error: 'There is no game running to pause.' });
+      if (paused) hostPause(r);
+      else hostContinue(r);
+      ack?.({ ok: true, paused: !!r.game.hostPaused });
+    });
 
     // A tab that was hidden has been counting the turn down on throttled timers, so it comes
     // back with a clock that has drifted and nothing to correct it until the turn changes.
@@ -472,6 +534,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('game:pass', (_p, ack) => {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      if (r.game.hostPaused) return ack?.(PAUSED);
       const res = loop.pass(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, null);
@@ -480,6 +543,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('game:giveup', (_p, ack) => {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      if (r.game.hostPaused) return ack?.(PAUSED);
       const res = loop.giveUp(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, res.reveal);

@@ -89,6 +89,9 @@ class Room {
       kind: this.kind,
       status: this.status,
       hostPlayerId: this.hostPlayerId,
+      // The host has stopped the clock (room:pause). On the game, because it lasts the game;
+      // published here because every screen in the room shows it, whatever the game.
+      paused: this.status === 'playing' && !!this.game?.hostPaused,
       // Published rather than hardcoded in the client, which had its own copy of "8".
       maxPlayers: MAX_PLAYERS,
       players: this.order.map((id) => {

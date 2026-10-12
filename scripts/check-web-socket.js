@@ -762,6 +762,61 @@ const connect = (playerId) => {
     KH.close(); K1.close(); K2.close();
   }
 
+  // ---- Desk: the host's pause. The clock stops, nobody's turn moves, and a turn that ends while
+  // paused (here: the guesser removed) arms the next one frozen.
+  console.log('\n# desk — the host pauses and continues');
+  {
+    const PH = await connectDesk('dPauseHost');
+    let r = await PH.emitWithAck('room:create', { nickname: 'Pat' });
+    const code = r.state.code;
+    const P1 = await connectDesk('dPause1');
+    await P1.emitWithAck('room:join', { code, nickname: 'Quin' });
+    const P2 = await connectDesk('dPause2');
+    await P2.emitWithAck('room:join', { code, nickname: 'Rae' });
+    await PH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+    const started = nextMatching(PH, 'game:state', (v) => v.phase === 'playing');
+    for (const s of [PH, P1, P2]) await s.emitWithAck('setup:confirm', {});
+    let first = await started;
+    const socks = { [pub('dPauseHost')]: PH, [pub('dPause1')]: P1, [pub('dPause2')]: P2 };
+    // The guesser must be someone the host can remove: if the host goes first, they pass.
+    if (first.current.playerId === pub('dPauseHost')) {
+      const moved = nextMatching(PH, 'game:state', (v) => v.current.playerId !== pub('dPauseHost'));
+      await PH.emitWithAck('game:pass', {});
+      first = await moved;
+    }
+    const guesser = socks[first.current.playerId];
+    check(!(await P1.emitWithAck('room:pause', { paused: true })).ok || P1 === PH, 'pause: only the host can pause');
+    const pausedRoom = nextMatching(P2, 'room:state', (s) => s.paused === true);
+    const frozen = nextMatching(PH, 'game:state', (v) => v.hostPaused === true);
+    r = await PH.emitWithAck('room:pause', { paused: true });
+    check(r.ok && r.paused === true, 'pause: the host pauses a running game');
+    check(!!(await Promise.race([pausedRoom, wait(2000).then(() => null)])), 'pause: every screen is told the room is paused');
+    const f1 = await frozen;
+    await wait(1200);
+    const again = await PH.emitWithAck('game:resync', {});
+    const f2 = PH.received.filter((e) => e.event === 'game:state').map((e) => JSON.parse(e.json)).pop();
+    check(again.ok && f2.turnRemaining === f1.turnRemaining, `pause: the clock stands still (${f1.turnRemaining}s, then ${f2.turnRemaining}s)`);
+    check(!(await guesser.emitWithAck('game:pass', {})).ok, "pause: the guesser's turn cannot move");
+    // The guesser is removed while paused: the next turn starts, and starts frozen, with its whole clock.
+    const next = nextMatching(PH, 'game:state', (v) => v.current.playerId !== first.current.playerId);
+    await PH.emitWithAck('room:kick', { playerId: first.current.playerId });
+    const n = await Promise.race([next, wait(2000).then(() => null)]);
+    check(n?.hostPaused === true && n.turnRemaining === 60, `pause: a turn that begins while paused begins frozen, with its whole clock (${n?.turnRemaining}s)`);
+    await wait(1200);
+    await PH.emitWithAck('game:resync', {});
+    const still = PH.received.filter((e) => e.event === 'game:state').map((e) => JSON.parse(e.json)).pop();
+    check(still.turnRemaining === 60, `pause: and stays frozen (${still.turnRemaining}s)`);
+    const running = nextMatching(PH, 'game:state', (v) => v.hostPaused === false);
+    r = await PH.emitWithAck('room:pause', { paused: false });
+    const after = await Promise.race([running, wait(2000).then(() => null)]);
+    check(r.ok && after && after.turnRemaining > 0, 'pause: Continue starts the clock again');
+    await wait(1500);
+    await PH.emitWithAck('game:resync', {});
+    const later = PH.received.filter((e) => e.event === 'game:state').map((e) => JSON.parse(e.json)).pop();
+    check(later.turnRemaining < after.turnRemaining, `pause: and it runs (${after.turnRemaining}s, then ${later.turnRemaining}s)`);
+    PH.close(); P1.close(); P2.close();
+  }
+
   console.log('\n# draw — one draws, everyone else guesses');
   const connectDraw = (pid) => {
     const sock = io(`${URL}/draw`, { auth: { playerId: pid } });
@@ -855,6 +910,20 @@ const connect = (playerId) => {
 
   res = await Q.emitWithAck('draw:say', { text: 'Definitely Nobody' });
   check(res.ok && res.verdict === 'wrong', 'a wrong guess is wrong, and shown');
+  // The host's pause, mid-drawing: the clock stands still and nothing is played until Continue.
+  {
+    const pausedView = nextMatching(Q, 'draw:state', (v) => v.paused === true);
+    res = await P.emitWithAck('room:pause', { paused: true });
+    check(res.ok && res.paused === true, 'draw pause: the host pauses mid-drawing');
+    const pv = await Promise.race([pausedView, wait(2000).then(() => null)]);
+    check(!!pv, 'draw pause: the guesser sees the game paused');
+    check(!(await Q.emitWithAck('draw:say', { text: drawAnswer })).ok, 'draw pause: no guess counts while paused');
+    check(!(await Q.emitWithAck('room:pause', { paused: false })).ok, 'draw pause: only the host can continue');
+    const runningView = nextMatching(Q, 'draw:state', (v) => v.paused === false);
+    res = await P.emitWithAck('room:pause', { paused: false });
+    const rv = await Promise.race([runningView, wait(2000).then(() => null)]);
+    check(res.ok && rv && rv.secondsLeft >= pv.secondsLeft - 1, `draw pause: Continue picks up where it stopped (${pv.secondsLeft}s, then ${rv?.secondsLeft}s)`);
+  }
   const typoDraw = drawAnswer.slice(0, -1) + (drawAnswer.endsWith('x') ? 'y' : 'x');
   const drawerSeesClose = nextMatching(P, 'draw:state', (v) => v.chat.some((m) => m.text === typoDraw));
   const qSince = Q.received.length;

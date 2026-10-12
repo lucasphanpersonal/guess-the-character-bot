@@ -22,7 +22,8 @@ const startTurn = (game) => rules.beginTurn(game);
 // paused (the current player dropped) that is the frozen remainder, not a deadline in the past.
 // One owner for "time left": the clock players see and the tiebreak are both read from here.
 function msLeftOf(game, now) {
-  if (game.pausedForDisconnect) return game.pausedRemaining ?? 0;
+  // Either pause holds the clock still, with the turn's time left in one place.
+  if (game.pausedForDisconnect || game.hostPaused) return game.pausedRemaining ?? 0;
   return game.turnEndsAt ? Math.max(0, game.turnEndsAt - now) : null;
 }
 
@@ -133,6 +134,7 @@ function buildHostGameView(game, names, now = Date.now()) {
   return {
     phase: 'playing',
     paused: !!game.pausedForDisconnect,
+    hostPaused: !!game.hostPaused,
     current: { playerId: currentId, name: names[currentId] ?? 'Player', turnNumber: game.turnsFor(currentId) },
     turnRemaining: turnRemainingOf(game, now),
     turnSeconds: game.turnSeconds,

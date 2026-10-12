@@ -307,6 +307,32 @@ function theBlanksTakeOnlyASpellingThatCounts() {
   assert.deepEqual(draw.spellingsFor('Lee Rock', ['Rock Lee', 'Bushy Brow']), ['Lee Rock', 'Rock Lee', 'Bushy Brow'], 'no spelling twice');
 }
 
+// --- the host's pause --------------------------------------------------------------------------
+
+function aPauseStopsTheClockAndContinuePicksUpWhereItStopped() {
+  const g = drawing(); // drawing since T0, 80s
+  draw.pause(g, T0 + 10_000);
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 50_000).secondsLeft, 70, 'the clock shows still');
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 50_000).paused, true);
+  assert.equal(draw.say(g, 'p2', 'Pikachu', T0 + 50_000).ok, false, 'no guess while paused');
+  assert.equal(draw.giveUp(g, 'p2').ok, false);
+  assert.equal(draw.revealDueHints(g, T0 + 50_000), false, 'nothing falls due');
+  draw.resume(g, T0 + 60_000); // paused for 50s
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 60_000).secondsLeft, 70, 'picked up where it stopped');
+  // Half time comes 40s of DRAWING in -- 50s later than it would have.
+  draw.revealDueHints(g, T0 + 89_000);
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 89_000).mask, null);
+  draw.revealDueHints(g, T0 + 90_000);
+  assert.ok(draw.viewFor(g, 'p2', names, T0 + 90_000).mask, 'the blanks at half time of the drawing, not of the wall clock');
+  // And a guess scores as it would have at the same point without the pause.
+  const unpaused = drawing();
+  const expected = draw.say(unpaused, 'p2', 'Pikachu', T0 + 20_000).points;
+  const h = drawing();
+  draw.pause(h, T0 + 10_000);
+  draw.resume(h, T0 + 60_000);
+  assert.equal(draw.say(h, 'p2', 'Pikachu', T0 + 70_000).points, expected);
+}
+
 function otherNamesReachNobodyButTheDrawerUntilTheReveal() {
   const g = started();
   draw.choose(g, 'p1', 0, T0, 'Pika');
@@ -541,6 +567,7 @@ module.exports = {
   'the drawer is told what will count for each choice': theDrawerIsToldWhatWillCountForEachChoice,
   'the blanks spell the name the drawer picked': theBlanksSpellTheNameTheDrawerPicked,
   'the blanks take only a spelling that counts': theBlanksTakeOnlyASpellingThatCounts,
+  'a pause stops the clock, and continue picks up where it stopped': aPauseStopsTheClockAndContinuePicksUpWhereItStopped,
   'other names reach nobody but the drawer until the reveal': otherNamesReachNobodyButTheDrawerUntilTheReveal,
   'other names are a few real names': otherNamesAreAFewRealNames,
   'other names are for that turn only': otherNamesAreForThatTurnOnly,

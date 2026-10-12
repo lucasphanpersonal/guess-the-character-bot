@@ -96,6 +96,7 @@ const variant = {
       if (!guessBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      if (r.game.hostPaused) return ack?.({ ok: false, error: 'The game is paused.' });
       const mine = r.game.headByPlayer[playerId];
       const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game, mine), romanised: isRomanised(mine) });
       if (!res.ok) return ack?.(res);

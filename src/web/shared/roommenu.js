@@ -1,5 +1,7 @@
 // The Room button, in every game: who is in the room, the host's Remove beside each of them, and
-// Leave Room -- one button away on every screen, from the lobby to the results.
+// Leave Room -- one button away on every screen, from the lobby to the results. And, while a game
+// runs, the host's Pause Game: the clock stops for everyone, a Paused screen covers every page
+// (the phones' forehead view included), and Continue Game picks up where it stopped.
 //
 // Before it, leaving and removing were wherever each screen happened to put them: the computer
 // guessing game had no Remove anywhere and no way out mid-game but the title; Draw had Remove only
@@ -33,6 +35,21 @@
     .roommenu .rmerr { color:var(--red, #e21b3c); font-weight:800; min-height:0; margin:0 0 10px; }
     .roommenu .rmerr:empty { display:none; }
     .roommenu .rmleave { width:100%; }
+    .roommenu .rmpause { width:100%; margin-bottom:10px; }
+    .roommenu .rmpause[hidden] { display:none; }
+    /* Paused: over everything, the phones' forehead view (z-index 50) included -- a phone on a
+       forehead is exactly the screen that most needs to say the clock has stopped. Plain and
+       large, read across a room. */
+    .pauseveil { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+      padding:16px; background:rgba(20,8,45,.82); }
+    .pauseveil[hidden] { display:none; }
+    .pauseveil .pausecard { width:min(24rem, 100%); text-align:center; background:var(--paper, #fff); color:var(--ink, #1b1033);
+      border-radius:18px; padding:24px 20px; box-shadow:0 6px 0 rgba(0,0,0,.22); display:flex; flex-direction:column; gap:12px; }
+    .pauseveil .pausetitle { font-size:2.4rem; font-weight:900; letter-spacing:-.01em; line-height:1; }
+    .pauseveil .pausetitle::before { content:"❚❚ "; font-size:.7em; vertical-align:.12em; }
+    .pauseveil p { margin:0; color:var(--muted, #6b6480); font-weight:700; }
+    .pauseveil button { width:100%; }
+    .pauseveil button[hidden] { display:none; }
     .roommenu .rmtheme { display:none; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; font-weight:800; }
     .roommenu .rmtheme .themetoggle { position:relative; top:auto; right:auto; left:auto; flex:none; }
     /* On a phone the title row has no room for the dark-mode switch beside Room and Sound, so it
@@ -67,22 +84,68 @@
       <p class="rmsub"></p>
       <ul></ul>
       <p class="rmerr" role="alert"></p>
+      <button type="button" class="good rmpause" hidden>Pause Game</button>
       ${o.themeToggle ? '<div class="rmtheme"><span>Dark Mode</span><button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode"><span class="knob" aria-hidden="true">◐</span></button></div>' : ''}
       <button type="button" class="bad rmleave">Leave Room</button>`;
     document.body.append(dlg);
     const list = dlg.querySelector('ul');
     const err = dlg.querySelector('.rmerr');
 
+    // The Paused screen, for everyone in the room. The host continues from it; anyone can still
+    // reach Room (and leave) without waiting.
+    const veil = document.createElement('div');
+    veil.className = 'pauseveil';
+    veil.hidden = true;
+    veil.setAttribute('role', 'alert');
+    veil.innerHTML = `
+      <div class="pausecard">
+        <div class="pausetitle">Paused</div>
+        <p class="pausewho"></p>
+        <p class="rmerr pauseerr"></p>
+        <button type="button" class="good pausego" hidden>Continue Game</button>
+        <button type="button" class="ghost pauseroom">Room</button>
+      </div>`;
+    document.body.append(veil);
+
+    const setPaused = (paused, errEl) => {
+      errEl.textContent = '';
+      o.socket.emit('room:pause', { paused }, (res) => {
+        // The server's reason, always.
+        if (!res?.ok) errEl.textContent = res?.error || (paused ? 'Could not pause.' : 'Could not continue.');
+      });
+    };
+    veil.querySelector('.pausego').addEventListener('click', () => setPaused(false, veil.querySelector('.pauseerr')));
+    veil.querySelector('.pauseroom').addEventListener('click', () => {
+      err.textContent = '';
+      dlg.showModal();
+      render();
+    });
+    dlg.querySelector('.rmpause').addEventListener('click', () => {
+      const room = o.room();
+      setPaused(!room?.paused, err);
+      dlg.close();
+    });
+
     function render() {
       const room = o.room();
       o.button.hidden = !room;
       if (!room) {
         if (dlg.open) dlg.close();
+        veil.hidden = true;
         return;
       }
-      if (!dlg.open) return;
       const me = o.me();
       const host = room.hostPlayerId === me;
+      veil.hidden = !room.paused;
+      if (room.paused) {
+        veil.querySelector('.pausewho').textContent = host ? 'You paused the game. The clock has stopped.' : 'The host paused the game. The clock has stopped.';
+        veil.querySelector('.pausego').hidden = !host;
+      }
+      // Pause is the host's, and only while a game is running.
+      const pauseBtn = dlg.querySelector('.rmpause');
+      pauseBtn.hidden = !(host && room.status === 'playing');
+      pauseBtn.textContent = room.paused ? 'Continue Game' : 'Pause Game';
+      if (!dlg.open) return;
       dlg.querySelector('h2').textContent = `Room ${room.code}`;
       dlg.querySelector('.rmsub').textContent = host ? 'You are the host: you can remove anyone, at any point.' : `${room.players.length} in the room.`;
       // Rewritten only when it changes: a state arrives with every roster change, and replacing

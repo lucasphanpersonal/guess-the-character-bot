@@ -128,7 +128,8 @@ function attachDrawSockets(nsp, { registry }) {
   function schedule(room) {
     clearTimer(room);
     const g = room.game;
-    if (!g || room.status !== 'playing') return;
+    // Paused: nothing is due until Continue, which schedules afresh.
+    if (!g || room.status !== 'playing' || draw.isPaused(g)) return;
     const now = Date.now();
     const due = [g.deadline, ...(g.phase === 'drawing' ? draw.hintTimes(g).filter((t) => t > now) : [])].filter(Boolean);
     if (!due.length) return;
@@ -139,7 +140,8 @@ function attachDrawSockets(nsp, { registry }) {
   // Do whatever is due. Safe to call at any moment; calls itself again through schedule().
   function tick(room) {
     const g = room.game;
-    if (!g || room.status !== 'playing') return;
+    // The watchdog ticks every room; a paused one has nothing due, however late it is.
+    if (!g || room.status !== 'playing' || draw.isPaused(g)) return;
     const now = Date.now();
     let changed = false;
 
@@ -349,7 +351,7 @@ function attachDrawSockets(nsp, { registry }) {
     });
 
     // --- the picture ------------------------------------------------------------------------
-    const drawerHere = (r) => playing(r) && r.game.phase === 'drawing' && draw.drawerOf(r.game) === playerId;
+    const drawerHere = (r) => playing(r) && r.game.phase === 'drawing' && !draw.isPaused(r.game) && draw.drawerOf(r.game) === playerId;
 
     socket.on('draw:stroke', (piece = {}) => {
       const r = room();
@@ -405,6 +407,21 @@ function attachDrawSockets(nsp, { registry }) {
       ack?.({ ok: true });
       broadcastRoom(after);
       finishIfTooFew(after);
+    });
+
+    // The host stops the clock, and starts it again (game.js pause / resume).
+    socket.on('room:pause', ({ paused } = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (!isHost()) return ack?.({ ok: false, error: 'Only the host can pause.' });
+      if (!playing(r)) return ack?.({ ok: false, error: 'There is no game running to pause.' });
+      const now = Date.now();
+      if (paused) draw.pause(r.game, now);
+      else draw.resume(r.game, now);
+      ack?.({ ok: true, paused: draw.isPaused(r.game) });
+      broadcastRoom(r);
+      emitViews(r);
+      schedule(r);
     });
 
     // Removing a player, host only -- as in the guessing games. Without it, someone who walks away

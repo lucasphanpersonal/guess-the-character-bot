@@ -20,6 +20,7 @@ function buildGameView(game, viewerId, names, now = Date.now()) {
     phase: game.finished ? 'over' : 'playing',
     // True while the current player is disconnected -- their clock is held and everyone waits.
     paused: !!game.pausedForDisconnect,
+    hostPaused: !!game.hostPaused,
     current: {
       playerId: currentId,
       name: names[currentId] ?? 'Player',

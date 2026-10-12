@@ -506,7 +506,8 @@ function renderGame() {
   const v = gameView;
   if (!v) return;
   $('turnWho').textContent = v.isMyTurn ? 'Your turn' : `${v.current.name}'s turn`;
-  setClock(v.paused ? null : v.turnRemaining, v.turnSeconds, v.paused);
+  // Dropped: no reading (their turn waits for them). Host's pause: the reading it stopped at.
+  setClock(v.paused ? null : v.turnRemaining, v.turnSeconds, v.paused || v.hostPaused);
 
   // Redrawn only when something on it changed. Every guess and every clock correction sends a new
   // state, and rebuilding the cards each time reloaded every picture -- a board that blinks
@@ -679,7 +680,7 @@ socket.on('host:state', (view) => {
     $('hostTitle').textContent = 'Starting...';
   } else if (playing) {
     $('hostWho').textContent = view.paused ? `Waiting for ${view.current.name} to reconnect` : `${view.current.name} is guessing, turn ${view.current.turnNumber}`;
-    setClock(view.paused ? null : view.turnRemaining, view.turnSeconds, view.paused, { bar: 'hostClock', fill: 'hostClockFill', secs: 'hostClockSecs' });
+    setClock(view.paused ? null : view.turnRemaining, view.turnSeconds, view.paused || view.hostPaused, { bar: 'hostClock', fill: 'hostClockFill', secs: 'hostClockSecs' });
     $('hostTitle').textContent = 'You picked these';
     $('hostNote').textContent = 'Close guesses are ruled by the players. You are watching.';
   }

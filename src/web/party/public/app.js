@@ -627,12 +627,12 @@ function renderHost(view) {
     let remaining = view.turnRemaining;
     const name = escapeHtml(view.current.name);
     const paint = () => {
-      banner.innerHTML = view.paused
-        ? `Waiting for <b>${name}</b> to reconnect…`
+      banner.innerHTML = frozen(view)
+        ? (view.hostPaused ? '<b>Paused</b> — the clock has stopped' : `Waiting for <b>${name}</b> to reconnect…`)
         : `<b>${name}</b> is guessing — turn ${view.current.turnNumber}${remaining != null ? ` · ${remaining}s` : ''}`;
     };
     paint();
-    if (!view.paused && remaining != null) {
+    if (!frozen(view) && remaining != null) {
       turnTicker = setInterval(() => {
         remaining = Math.max(0, remaining - 1);
         paint();
@@ -675,6 +675,9 @@ function renderHostList(rows) {
 
 // --- playing ------------------------------------------------------------------------------
 let countdown = null;          // local 1s ticker
+// The clock is frozen when the current player has dropped (their turn waits for them) or the host
+// has paused the game -- the same stillness either way: no ticking, no bed, no cues.
+const frozen = (v) => !!(v?.paused || v?.hostPaused);
 let lastPlayView = null;
 
 const STATUS_ICON = { finished: '✓', guessing: '▶', waiting: '·', gave_up: '✗' };
@@ -754,7 +757,7 @@ function paintTurnClock(view, remaining) {
   const fh = $('forehead');
   const total = view.turnSeconds || 0;
   if (!bar) return;
-  const live = view.isMyTurn && !view.paused && remaining != null && total > 0;
+  const live = view.isMyTurn && !frozen(view) && remaining != null && total > 0;
   bar.style.display = live ? 'block' : 'none';
   fh.classList.toggle('warn', live && remaining <= total / 2 && remaining > CRIT_SECONDS);
   fh.classList.toggle('crit', live && remaining <= CRIT_SECONDS);
@@ -762,7 +765,7 @@ function paintTurnClock(view, remaining) {
 }
 
 function turnCue(view, remaining) {
-  if (!view.isMyTurn || view.paused || remaining == null) return;
+  if (!view.isMyTurn || frozen(view) || remaining == null) return;
   const total = view.turnSeconds || 0;
   const half = Math.floor(total / 2);
   if (remaining === 0) {
@@ -789,7 +792,7 @@ let turnTicker = null;
 function startTurnTicker(view) {
   clearInterval(turnTicker);
   let remaining = view.turnRemaining;
-  const pausedMsg = `Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
+  const pausedMsg = view.hostPaused ? 'Paused by the host' : `Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
   const paint = () => {
     if (motionEnabled && $('forehead').classList.contains('active')) {
       // The last player has nobody to pass to, so down = give up (held long). Say so.
@@ -800,11 +803,11 @@ function startTurnTicker(view) {
       // and from their side the game just quietly stopped mattering.
       const ooc = view.isMyTurn && view.outOfContentionNote
         ? `<div class="ooc">${escapeHtml(view.outOfContentionNote)}</div>` : '';
-      $('foreheadTurn').innerHTML = (view.paused ? pausedMsg
+      $('foreheadTurn').innerHTML = (frozen(view) ? pausedMsg
         : view.isMyTurn ? `YOUR TURN${remaining != null ? ` · ${remaining}s` : ''} — ${downHint}`
         : `${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`) + ooc;
     } else {
-      $('turnBanner').innerHTML = view.paused ? pausedMsg : bannerText(view, remaining);
+      $('turnBanner').innerHTML = frozen(view) ? pausedMsg : bannerText(view, remaining);
     }
     paintTurnClock(view, remaining);
     // In paint() rather than turnCue(): this has to run on the first render of a turn as well as
@@ -812,7 +815,7 @@ function startTurnTicker(view) {
     updateBed(view, remaining);
   };
   paint();
-  if (view.paused || remaining == null) return; // frozen while the current player is away
+  if (frozen(view) || remaining == null) return; // the current player is away, or the host paused
   turnTicker = setInterval(() => {
     remaining = Math.max(0, remaining - 1);
     paint();
@@ -1144,7 +1147,7 @@ function stopBed() {
 // The bed belongs to one live turn on one phone: the player's own, running, not paused, not
 // over. Called every second from the ticker, so it also picks up the change into the last ten.
 function updateBed(view, remaining) {
-  const live = view.isMyTurn && !view.paused && remaining != null && remaining > 0;
+  const live = view.isMyTurn && !frozen(view) && remaining != null && remaining > 0;
   if (live) startBed(remaining <= CRIT_SECONDS);
   else stopBed();
 }

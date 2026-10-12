@@ -59,6 +59,7 @@ function buildBoardView(game, viewerId, names, now = Date.now()) {
   return {
     phase: game.finished ? 'over' : 'playing',
     paused: !!game.pausedForDisconnect,
+    hostPaused: !!game.hostPaused,
     current: {
       playerId: currentId,
       name: nameOf(currentId),

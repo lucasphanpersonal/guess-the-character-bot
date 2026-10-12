@@ -62,7 +62,12 @@ screen, play included; the choice is the phones' own `gtc_muted`, one per browse
 **Room** (`shared/roommenu.js`), in all three games, is a button by the title on every screen once
 you are in a room, play included: who is in the room, **Leave Room** (asking first, in the game's
 own words for what leaving costs), and for the host **Remove** beside everyone else, at any
-stage -- a removal mid-game is the same as that player leaving. On a phone-width computer page
+stage -- a removal mid-game is the same as that player leaving. While a game runs, the host's
+**Pause Game** is there too: the clock stops for everyone (`room:pause`), nobody's turn can move
+and nothing scores, a Paused screen covers every page -- the phones' forehead view included --
+and **Continue Game** picks up exactly where it stopped. In the guessing games the pause belongs
+to the game, not the turn: a turn that begins while paused begins frozen. It sits beside the
+disconnect pause, and the clock runs only when neither holds it. On a phone-width computer page
 the dark-mode switch moves into it, so the title row keeps its room.
 
 **The home page** (`/`) asks one question first: which game. *Draw the Character* goes to

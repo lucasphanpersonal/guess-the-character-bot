@@ -26,6 +26,7 @@ const variant = {
     socket.on('game:gotit', (_p, ack) => {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      if (r.game.hostPaused) return ack?.({ ok: false, error: 'The game is paused.' });
       const res = loop.gotIt(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, res.reveal);

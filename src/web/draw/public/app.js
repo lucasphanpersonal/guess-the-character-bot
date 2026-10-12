@@ -413,7 +413,7 @@ let clockTimer = null;
 // "Nearly out of time": the clock bar turns colour here, and the hurry cue sounds as it does.
 const CRIT_SECONDS = 10;
 // `onTick(left)`: told each second's value, for the cue below.
-function setClock(seconds, total, onTick = null) {
+function setClock(seconds, total, onTick = null, paused = false) {
   clearInterval(clockTimer);
   let left = seconds;
   const draw = () => {
@@ -424,7 +424,8 @@ function setClock(seconds, total, onTick = null) {
     onTick?.(left);
   };
   draw();
-  if (left == null) return;
+  // Paused by the host: the reading it stopped at, standing still.
+  if (left == null || paused) return;
   clockTimer = setInterval(() => {
     if (left > 0) left -= 1;
     draw();
@@ -477,7 +478,7 @@ function renderGame(turnChanged) {
   $('roundLabel').textContent = `Round ${v.round} of ${v.rounds}`;
   // Choosing has no clock (secondsLeft is null): the bar sits full and says nothing.
   const total = v.phase === 'reveal' ? 6 : v.drawSeconds;
-  setClock(v.secondsLeft, total, v.phase === 'drawing' ? hurryWatch(`${v.round}:${v.drawer.playerId}`) : null);
+  setClock(v.secondsLeft, total, v.phase === 'drawing' ? hurryWatch(`${v.round}:${v.drawer.playerId}`) : null, v.paused);
 
   // The clue: the drawer and anyone who has it see the name; everyone else the blanks from half
   // time, and until then when they will come.
