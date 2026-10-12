@@ -28,7 +28,11 @@ const roomMenu = GTCRoomMenu.mount({
   leaveCost,
   themeToggle: true,
   removeCost: (name, status) =>
-    status === 'playing' ? `Remove ${name}? Their score stays on the board; if they are drawing, the turn ends.` : `Remove ${name} from the room?`,
+    status !== 'playing'
+      ? `Remove ${name} from the room?`
+      : telView
+        ? `Remove ${name}? Their seat is skipped from here on; the chains carry on.`
+        : `Remove ${name}? Their score stays on the board; if they are drawing, the turn ends.`,
 });
 GTC.bindThemeToggles();
 
@@ -150,6 +154,9 @@ function backToStart() {
   roomState = null;
   roomMenu.update();
   view = null;
+  telView = null;
+  telTaskKey = '';
+  telShownKey = '';
   clearInterval(clockTimer);
   history.replaceState(null, '', location.pathname);
   show('landing');
@@ -160,6 +167,7 @@ $('leaveOverBtn').addEventListener('click', leave);
 // What leaving costs, in words -- asked by the title (which goes home) and by Room's Leave.
 function leaveCost() {
   if (!roomState) return null;
+  if (roomState.status === 'playing' && telView) return 'Leave the game? Your seat is skipped from here on; the chains carry on.';
   if (roomState.status === 'playing') return 'Leave the game? You stop drawing and guessing; your score stays on the board.';
   return 'Leave this room and go back to the start?';
 }
@@ -185,8 +193,12 @@ function renderRoom() {
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
   if (!isHost()) return;
-  $('startBtn').disabled = roomState.players.length < 2;
-  $('lobbyErr').textContent = roomState.players.length < 2 ? 'Waiting for at least one more player to join.' : '';
+  renderModes();
+  // Telephone passes each chain round the table: it needs three to be worth it.
+  const need = drawMode === 'telephone' ? 3 : 2;
+  const short = need - roomState.players.length;
+  $('startBtn').disabled = short > 0;
+  $('lobbyErr').textContent = short > 0 ? `Waiting for ${short === 1 ? 'one more player' : `${short} more players`} to join${drawMode === 'telephone' ? ' — Telephone needs three' : ''}.` : '';
   if (!options) {
     socket.emit('draw:options', {}, (res) => {
       options = res;
@@ -233,6 +245,21 @@ socket.on('room:kicked', ({ reason } = {}) => {
   $('landingErr').textContent = reason || 'You were removed from the room.';
 });
 
+// How to play: Classic (turns) or Telephone (everyone at once, passed along). Remembered here.
+let drawMode = store.get('gtc_draw_mode') === 'telephone' ? 'telephone' : 'classic';
+function renderModes() {
+  for (const b of document.querySelectorAll('#modes [data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === drawMode));
+  // Telephone has no rounds: every chain goes once round the table.
+  $('roundsField').hidden = drawMode === 'telephone';
+}
+$('modes').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mode]');
+  if (!b) return;
+  drawMode = b.dataset.mode;
+  store.set('gtc_draw_mode', drawMode);
+  renderRoom();
+});
+
 // Built once, when the options first arrive: the server keeps this room's curation.
 let poolPicker = null;
 const ask = (event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
@@ -258,6 +285,7 @@ $('startBtn').addEventListener('click', () => {
       difficulty: $('difficultySelect').value || undefined,
       rounds: Number($('roundsSelect').value),
       drawSeconds: Number($('timeSelect').value),
+      mode: drawMode,
     },
     (res) => {
       $('startBtn').disabled = false;
@@ -268,7 +296,6 @@ $('startBtn').addEventListener('click', () => {
 
 // --- the picture -----------------------------------------------------------------------------
 const canvas = $('canvas');
-let strokes = []; // { id, color, size, points: [[x, y], ...] }
 // Any canvas: the live one, and the end screen's thumbnails and viewer, which must draw a stroke
 // exactly as the game did. `h` is the picture's height, which an exported image (with its caption
 // strip below) does not share with the canvas.
@@ -363,17 +390,94 @@ function paintDrawing(cv, list, h = cv.height) {
   for (const s of list) strokeOn(cv, s, 0, h);
 }
 
-function redraw() {
-  paintDrawing(canvas, strokes);
+// --- the pad ---------------------------------------------------------------------------------
+// A canvas to draw on: the pointer, the strokes on it, and its pieces sent every PIECE_MS. Made
+// twice -- the classic game's canvas, and Telephone's (telephone.js on this page) -- each with its
+// own strokes and its own events. One pen and one tools row serve both: activePad is whichever
+// is in use.
+// tool: 'brush' (the sizes) or 'fill' (the bucket) -- picking a size picks the brush.
+let pen = { color: null, size: null, tool: 'brush' }; // colour and size set by takeTools
+let seq = 0;
+// Prefixes this page's stroke ids, which every screen in the room receives -- random, so they
+// say nothing about the player id they used to be cut from.
+const STROKE_TAG = Math.random().toString(36).slice(2, 10);
+const PIECE_MS = 50;
+const pads = [];
+setInterval(() => pads.forEach((pad) => pad.flush()), PIECE_MS);
+
+function makePad(cv, { canDraw, send, undo, clear }) {
+  const pad = { cv, strokes: [], live: null, pending: [], canDraw };
+  const pointOf = (e) => {
+    const r = cv.getBoundingClientRect();
+    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+    return [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000];
+  };
+  pad.redraw = () => paintDrawing(cv, pad.strokes);
+  pad.flush = () => {
+    if (!pad.live || !pad.pending.length) return;
+    send({ id: pad.live.id, color: pad.live.color, size: pad.live.size, points: pad.pending });
+    pad.pending = [];
+  };
+  pad.undo = () => undo(pad);
+  pad.clear = () => clear(pad);
+  cv.addEventListener('pointerdown', (e) => {
+    if (!pad.canDraw()) return;
+    if (pen.tool === 'fill') {
+      // One tap, one fill: sent whole, painted here at once, and never a live stroke to extend.
+      const fill = { id: `${STROKE_TAG}-${++seq}`, kind: 'fill', color: pen.color, size: 0, points: [pointOf(e)] };
+      pad.strokes.push(fill);
+      strokeOn(cv, fill, 0);
+      send(fill);
+      return;
+    }
+    // Keeps the stroke when the pen leaves the canvas mid-line. Can refuse (a pointer the browser
+    // no longer tracks), and a refusal must not cost the stroke.
+    try { cv.setPointerCapture(e.pointerId); } catch { /* draw without capture */ }
+    pad.live = { id: `${STROKE_TAG}-${++seq}`, color: pen.color, size: pen.size, points: [pointOf(e)] };
+    pad.strokes.push(pad.live);
+    pad.pending = [...pad.live.points];
+    strokeOn(cv, pad.live, 0);
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const live = pad.live;
+    if (!live) return;
+    const p = pointOf(e);
+    const last = live.points[live.points.length - 1];
+    if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 0.002) return; // not worth a point
+    live.points.push(p);
+    pad.pending.push(p);
+    strokeOn(cv, live, live.points.length - 1);
+  });
+  const endStroke = () => {
+    pad.flush();
+    pad.live = null;
+  };
+  cv.addEventListener('pointerup', endStroke);
+  cv.addEventListener('pointercancel', endStroke);
+  pads.push(pad);
+  pad.redraw();
+  return pad;
 }
-redraw();
+
+// The classic game's canvas. The server holds its picture: an undo or a clear is answered with the
+// whole of it (draw:canvas), so neither is done here first.
+const mainPad = makePad(canvas, {
+  canDraw: () => view?.isDrawer && view.phase === 'drawing',
+  send: (piece) => socket.emit('draw:stroke', piece),
+  undo: () => socket.emit('draw:undo'),
+  clear: () => socket.emit('draw:clear'),
+});
+let activePad = mainPad;
+const canDraw = () => mainPad.canDraw();
+const redraw = () => mainPad.redraw();
 
 // Someone else's stroke arriving in pieces.
 socket.on('draw:stroke', (piece) => {
-  let s = strokes.find((x) => x.id === piece.id);
+  let s = mainPad.strokes.find((x) => x.id === piece.id);
   if (!s) {
     s = { id: piece.id, ...(piece.kind ? { kind: piece.kind } : {}), color: piece.color, size: piece.size, points: [] };
-    strokes.push(s);
+    mainPad.strokes.push(s);
   }
   const from = s.points.length;
   s.points.push(...piece.points);
@@ -381,69 +485,9 @@ socket.on('draw:stroke', (piece) => {
 });
 // The whole picture: a new turn (empty), an undo or clear, or a reconnect catching up.
 socket.on('draw:canvas', ({ strokes: all }) => {
-  strokes = (all ?? []).map((s) => ({ ...s, points: [...s.points] }));
+  mainPad.strokes = (all ?? []).map((s) => ({ ...s, points: [...s.points] }));
   redraw();
 });
-
-// The drawer's pen. Drawn here at once; sent in pieces every PIECE_MS.
-// tool: 'brush' (the sizes) or 'fill' (the bucket) -- picking a size picks the brush.
-let pen = { color: null, size: null, tool: 'brush' }; // colour and size set by takeTools
-let live = null; // the stroke being drawn
-let pending = [];
-let seq = 0;
-// Prefixes this page's stroke ids, which every screen in the room receives -- random, so they
-// say nothing about the player id they used to be cut from.
-const STROKE_TAG = Math.random().toString(36).slice(2, 10);
-const PIECE_MS = 50;
-const canDraw = () => view?.isDrawer && view.phase === 'drawing';
-
-function pointOf(e) {
-  const r = canvas.getBoundingClientRect();
-  const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-  const y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
-  return [Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000];
-}
-
-function flush() {
-  if (!live || !pending.length) return;
-  socket.emit('draw:stroke', { id: live.id, color: live.color, size: live.size, points: pending });
-  pending = [];
-}
-setInterval(flush, PIECE_MS);
-
-canvas.addEventListener('pointerdown', (e) => {
-  if (!canDraw()) return;
-  if (pen.tool === 'fill') {
-    // One tap, one fill: sent whole, painted here at once, and never a live stroke to extend.
-    const fill = { id: `${STROKE_TAG}-${++seq}`, kind: 'fill', color: pen.color, size: 0, points: [pointOf(e)] };
-    strokes.push(fill);
-    strokeSegment(fill, 0);
-    socket.emit('draw:stroke', fill);
-    return;
-  }
-  // Keeps the stroke when the pen leaves the canvas mid-line. Can refuse (a pointer the browser
-  // no longer tracks), and a refusal must not cost the stroke.
-  try { canvas.setPointerCapture(e.pointerId); } catch { /* draw without capture */ }
-  live = { id: `${STROKE_TAG}-${++seq}`, color: pen.color, size: pen.size, points: [pointOf(e)] };
-  strokes.push(live);
-  pending = [...live.points];
-  strokeSegment(live, 0);
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (!live) return;
-  const p = pointOf(e);
-  const last = live.points[live.points.length - 1];
-  if (Math.abs(p[0] - last[0]) + Math.abs(p[1] - last[1]) < 0.002) return; // not worth a point
-  live.points.push(p);
-  pending.push(p);
-  strokeSegment(live, live.points.length - 1);
-});
-const endStroke = () => {
-  flush();
-  live = null;
-};
-canvas.addEventListener('pointerup', endStroke);
-canvas.addEventListener('pointercancel', endStroke);
 
 function renderTools() {
   $('swatches').innerHTML = PALETTE.map(
@@ -456,7 +500,7 @@ function renderTools() {
     ).join('') +
     // The bucket sits with the sizes: one choice of what a touch does, so picking one un-picks the other.
     `<button class="size fill${brush ? '' : ' on'}" data-tool="fill" aria-label="Fill" title="Fill an area with the colour" aria-pressed="${!brush}"><span aria-hidden="true">Fill</span></button>`;
-  canvas.classList.toggle('filling', !brush);
+  for (const pad of pads) pad.cv.classList.toggle('filling', !brush);
 }
 $('swatches').addEventListener('click', (e) => {
   const b = e.target.closest('[data-color]');
@@ -475,12 +519,12 @@ $('sizes').addEventListener('click', (e) => {
   renderTools();
 });
 renderTools();
-$('undoBtn').addEventListener('click', () => socket.emit('draw:undo'));
-$('clearBtn').addEventListener('click', () => socket.emit('draw:clear'));
+$('undoBtn').addEventListener('click', () => activePad.undo());
+$('clearBtn').addEventListener('click', () => activePad.clear());
 document.addEventListener('keydown', (e) => {
-  if (canDraw() && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.closest?.('input')) {
+  if (activePad.canDraw() && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.closest?.('input')) {
     e.preventDefault();
-    socket.emit('draw:undo');
+    activePad.undo();
   }
 });
 
@@ -515,14 +559,15 @@ let clockTimer = null;
 // "Nearly out of time": the clock bar turns colour here, and the hurry cue sounds as it does.
 const CRIT_SECONDS = 10;
 // `onTick(left)`: told each second's value, for the cue below.
-function setClock(seconds, total, onTick = null, paused = false) {
+// `ids`: the classic game's clock by default; Telephone has one of its own (tel.js).
+function setClock(seconds, total, onTick = null, paused = false, ids = { secs: 'clockSecs', fill: 'clockFill', bar: 'clock' }) {
   clearInterval(clockTimer);
   let left = seconds;
   const draw = () => {
-    $('clockSecs').textContent = left == null ? '' : `${left}s`;
-    $('clockFill').style.width = left == null ? '100%' : `${Math.max(0, (left / (total || 80)) * 100)}%`;
+    $(ids.secs).textContent = left == null ? '' : `${left}s`;
+    $(ids.fill).style.width = left == null ? '100%' : `${Math.max(0, (left / (total || 80)) * 100)}%`;
     // The colour carries "nearly out of time" without anything moving.
-    $('clock').classList.toggle('crit', left != null && left <= CRIT_SECONDS);
+    $(ids.bar).classList.toggle('crit', left != null && left <= CRIT_SECONDS);
     onTick?.(left);
   };
   draw();
@@ -575,7 +620,15 @@ socket.on('draw:state', (v) => {
   }
 });
 
+// The tools row is one element: Telephone borrows it (tel.js); the classic game takes it back.
+const toolsHome = $('tools').parentElement;
+function homeTools() {
+  if ($('tools').parentElement !== toolsHome) toolsHome.insertBefore($('tools'), $('reactions'));
+  activePad = mainPad;
+}
+
 function renderGame(turnChanged) {
+  homeTools();
   const v = view;
   $('roundLabel').textContent = `Round ${v.round} of ${v.rounds}`;
   // Choosing has no clock (secondsLeft is null): the bar sits full and says nothing.
@@ -888,6 +941,7 @@ document.addEventListener('visibilitychange', () => {
 
 // --- results ---------------------------------------------------------------------------------
 socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts = [] }) => {
+  telView = null;
   show('over');
   renderGallery(gallery, accolades);
   // A new end screen is a new vote; a page coming back to one is told its own by draw:votes.
@@ -995,8 +1049,8 @@ function openViewer(i) {
   viewing = i;
   paintDrawing($('viewerCanvas'), d.strokes);
   $('viewerTitle').textContent = d.character?.realName ? `${d.character.name} (${d.character.realName})` : d.character?.name ?? '?';
-  const got = d.got.length ? ` · ${d.got.map((x) => `${x.name} (${x.seconds}s)`).join(', ')}` : '';
-  $('viewerSub').textContent = `Drawn by ${d.drawer} · ${gotLine(d)}${got}`;
+  const got = d.got?.length ? ` · ${d.got.map((x) => `${x.name} (${x.seconds}s)`).join(', ')}` : '';
+  $('viewerSub').textContent = d.caption ?? `Drawn by ${d.drawer} · ${gotLine(d)}${got}`;
   $('viewerPrev').disabled = i === 0;
   $('viewerNext').disabled = i === galleryItems.length - 1;
   if (!$('viewer').open) $('viewer').showModal();

@@ -91,7 +91,7 @@ src/
       service.js, socket.js       The setup service and the room/turn protocol, per variant
     party/                Phones: forehead view, tilt, countdown. At the site root
     desk/                 Computers: board view, typed guesses, rulings. At /desk/
-    draw/                 Draw the Character: rules (game.js), end screen (gallery.js), protocol + clock (socket.js). At /draw/
+    draw/                 Draw the Character: rules (game.js), Telephone (telephone.js), end screen (gallery.js), protocol + clock (socket.js). At /draw/
 
 scripts/                Content tools (seeding, image fills, select-lists), sounds, the browser
   lib/compendiumArgs.js   Shared argument handling (drops a legacy leading server id)

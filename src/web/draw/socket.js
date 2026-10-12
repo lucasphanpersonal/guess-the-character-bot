@@ -28,6 +28,8 @@ const sayBudget = perSocket({ max: 8, windowMs: 4000 });
 // guess its budget.
 const REACTIONS = new Set(['star', 'wow', 'huh', 'ha']);
 const reactBudget = perSocket({ max: 5, windowMs: 3000 });
+// Telephone guesses are sent as they are typed (debounced on the page), so a timeout keeps them.
+const typeBudget = perSocket({ max: 30, windowMs: 5000 });
 const Game = require('../../core/game/Game');
 
 const ROUNDS = [1, 2, 3, 4, 5];
@@ -540,6 +542,10 @@ function attachDrawSockets(nsp, { registry }) {
       const r = room();
       const p = cleanPiece(piece);
       if (telephone(r) && p) tel.addPiece(r.game, playerId, p);
+    });
+    socket.on('tel:typing', ({ text } = {}) => {
+      const r = room();
+      if (typeBudget(socket) && telephone(r)) tel.typeGuess(r.game, playerId, text);
     });
     socket.on('tel:undo', () => {
       const r = room();

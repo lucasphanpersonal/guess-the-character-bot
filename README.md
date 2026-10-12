@@ -25,7 +25,9 @@ computers alike in one room. One player draws a character they picked from three
 types guesses. The hints wait for the drawing: the kind of work at a quarter of the time, the
 blanks at half, letters written in from there, the work itself for the last quarter. Faster
 guesses score more, the drawer scores for everyone who gets it, and the night's drawings come
-back at the end with accolades, each one saveable.
+back at the end with accolades and a vote for the best, each one saveable. Or play it as
+**Telephone**: everyone at once, each chain passed along -- draw, guess, draw -- then replayed card
+by card to see where it went wrong.
 
 The website's home page asks which game: Draw, or Guess on phones or on computers. In every game a **Room** button lists
 who is in the room and lets anyone leave, and the host remove anyone or pause the game. Every

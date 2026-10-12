@@ -50,7 +50,21 @@ The host sets rounds (1–5) and drawing time (60–120 s). At the end, everyone
 drawings (each turn's strokes, simplified and kept as it ends) with up to four accolades — Most
 Recognisable, Speed Demon, Mind Reader, Clutch, So Close, Abstract Artist, each only when it is
 true and no more than two per player — and any drawing opens big, with **Save Image** (a PNG with
-its name and drawer under it).
+its name and drawer under it). Everyone can ★ their favourite drawing there: one vote each,
+changeable, never for your own, only the tally published, and **Crowd Favourite** heads the
+accolades as votes come in. The drawer has a **Fill** bucket beside the brush sizes (a fill is one
+point in the stroke list, so undo, rejoining and the gallery replay it in order), and guessers
+have four reactions under the picture — ★ !! ?! ha — that float up over it on every screen.
+
+**Telephone** is Draw's other way to play (the lobby's *How to Play*; three or more): everyone
+works at once, each on a chain passed one seat along per step — pick a character, draw it, name
+the drawing, draw that … always ending on a guess. Steps are timed (pick 45 s, draw at the host's
+time, guess 40 s; `WEB_TEL_PICK_SECONDS` / `WEB_TEL_GUESS_SECONDS` shorten them for checks);
+handing in early moves on once everyone has, and the clock hands in what each player had — a
+drawing so far, a guess half typed. Then the host walks the room through each chain a card at a
+time, "Made it through!" kept back until its last card, and the album of every chain. During play
+a player is sent only their own task — never another chain — and a drawing travels only when its
+step is over (`draw/telephone.js`, unit-tested; the socket check searches every payload).
 
 **Sound on the computers** (`shared/sound.js`) is a handful of short, quiet cues, never a bed:
 everyone can see the screen, so sound is only for the moments worth looking up for — often from
@@ -166,6 +180,7 @@ means one room either way.
   draw/                Draw the Character -- a different game, sharing nothing of guess/.
     game.js              The rules: choosing, guesses, hints, scoring, rounds (pure, unit-tested).
     gallery.js           The end screen: each drawing kept, simplified; the accolades (pure, tested).
+    telephone.js         Telephone: the chains, the steps, the replay (pure, unit-tested).
     socket.js            The protocol and the clock: one timer per room aimed at whatever is due
                          next, a watchdog for sleeping laptops, strokes checked and relayed.
     public/              The drawing client.

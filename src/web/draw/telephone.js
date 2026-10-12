@@ -19,8 +19,10 @@ const { publicCharacter } = require('../publicCharacter');
 const { simplifyStrokes } = require('./gallery');
 
 const MIN_PLAYERS = 3;
-const PICK_SECONDS = 45;
-const GUESS_SECONDS = 40;
+// WEB_TEL_PICK_SECONDS / WEB_TEL_GUESS_SECONDS shorten them for the socket check, as
+// WEB_DRAW_REVEAL_SECONDS does the classic game's reveal.
+const PICK_SECONDS = Number(process.env.WEB_TEL_PICK_SECONDS ?? 45);
+const GUESS_SECONDS = Number(process.env.WEB_TEL_GUESS_SECONDS ?? 40);
 const GUESS_MAX = 60;
 const CHOICES = 3;
 
@@ -115,7 +117,8 @@ function entryFor(t, playerId, { index, text } = {}) {
     return { kind, by: playerId, text: c.name, character: c };
   }
   if (kind === 'draw') return { kind, by: playerId, strokes: simplifyStrokes(t.drafts.get(playerId) ?? []) };
-  const clean = String(text ?? '').trim().slice(0, GUESS_MAX);
+  // Handed in, or -- when the clock got there first -- whatever they had typed (typeGuess).
+  const clean = String(text ?? t.drafts.get(playerId) ?? '').trim().slice(0, GUESS_MAX);
   return { kind, by: playerId, text: clean || '(no guess)', ...(clean ? {} : { blank: true }) };
 }
 
@@ -243,6 +246,13 @@ function addPiece(t, playerId, piece) {
   t.drafts.set(playerId, draft);
   return true;
 }
+/** The guess as it is typed, so a clock that runs out hands in what was there, not nothing. */
+function typeGuess(t, playerId, text) {
+  if (t.phase !== 'guess' || isPaused(t) || !t.order.includes(playerId) || t.gone.has(playerId) || t.done.has(playerId)) return false;
+  t.drafts.set(playerId, String(text ?? '').slice(0, GUESS_MAX));
+  return true;
+}
+
 function undo(t, playerId) {
   if (!drawsNow(t, playerId)) return false;
   t.drafts.get(playerId)?.pop();
@@ -332,6 +342,7 @@ module.exports = {
   addPiece,
   undo,
   clearDraft,
+  typeGuess,
   viewFor,
   chainIndexFor,
   stepKind,

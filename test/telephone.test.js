@@ -81,6 +81,19 @@ module.exports = {
     assert.equal(t.chains[tel.chainIndexFor(t, 'p3', 1)].entries[1].strokes.length, 1, 'the drawing so far, undo and all');
   },
 
+  'a guess still being typed when the clock runs out is the guess'() {
+    const t = game();
+    for (const id of ['p1', 'p2', 'p3']) tel.submit(t, id, { index: 0 }, T0);
+    for (const id of ['p1', 'p2', 'p3']) tel.submit(t, id, {}, T0);
+    tel.typeGuess(t, 'p1', 'a mouse, maybe');
+    tel.submit(t, 'p2', { text: '' }, T0); // handed in blank on purpose: blank it stays
+    tel.timeUp(t, T0 + 10 * 60_000);
+    const by = (id) => t.chains.flatMap((c) => c.entries).find((e) => e.kind === 'guess' && e.by === id);
+    assert.equal(by('p1').text, 'a mouse, maybe');
+    assert.equal(by('p2').text, '(no guess)');
+    assert.equal(by('p3').text, '(no guess)', 'nothing typed, nothing handed in');
+  },
+
   'someone leaving is skipped, and the chains carry on'() {
     const t = game(['p1', 'p2', 'p3', 'p4']);
     tel.removePlayer(t, 'p4', T0);

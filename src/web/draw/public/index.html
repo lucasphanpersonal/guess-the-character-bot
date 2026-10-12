@@ -81,6 +81,55 @@
                   aspect-ratio:4/3; position:relative; }
     canvas { width:100%; height:100%; display:block; touch-action:none; }
     canvas.can-draw { cursor:crosshair; }
+
+    /* How to play, in the lobby: two slabs, picked = blue border AND a tick. */
+    .modes { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .mode { display:flex; flex-direction:column; gap:4px; padding:12px; text-align:left; background:var(--soft); color:var(--ink);
+            border:3px solid var(--chip-edge); box-shadow:0 4px 0 var(--chip-edge); }
+    .mode:active { box-shadow:0 1px 0 var(--chip-edge); }
+    .mode b { font-family:var(--font-display); font-size:1.05rem; }
+    .mode small { font-size:.8rem; font-weight:700; color:var(--muted); }
+    .mode[aria-checked="true"] { background:var(--paper); border-color:var(--blue); }
+    .mode[aria-checked="true"] b::before { content:"✓ "; color:var(--blue); }
+    #roundsField[hidden] { display:none; }
+    @media (max-width: 560px) { .modes { grid-template-columns:1fr; } }
+
+    /* Telephone. The picture as large as the window allows below the prompt, like the classic one. */
+    .telgrid { display:grid; grid-template-columns:minmax(0,1fr) 15rem; gap:18px; align-items:start; }
+    @media (max-width: 1000px) { .telgrid { grid-template-columns:1fr; } }
+    .telmain > div { max-width:max(20rem, calc((100dvh - 24rem) * 4 / 3)); margin-inline:auto; }
+    .telmain > #telReplay, .telmain > #telAlbum { max-width:none; }
+    .telprompt { font-family:var(--font-display); font-size:1.4rem; font-weight:800; text-align:center; overflow-wrap:anywhere; }
+    .telprompt b { font-weight:900; font-size:1.15em; }
+    .telclock { display:flex; align-items:center; gap:12px; flex:1; min-width:10rem; }
+    .telclock[hidden] { display:none; }
+    .teldone { margin-top:14px; }
+    .telguess { display:flex; gap:8px; margin-top:14px; }
+    .telguess input { font-size:1.15rem; }
+    .telnav { display:flex; justify-content:space-between; gap:10px; }
+    .telnav[hidden] { display:none; }
+    .telalbum { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); gap:16px; align-items:start; margin-top:18px; }
+    .telchain { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
+    .tc { background:var(--soft); border-radius:14px; padding:12px; }
+    .tc .tcby { font-size:.75rem; font-weight:900; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px; }
+    .tc .tctext { font-family:var(--font-display); font-weight:900; font-size:1.35rem; line-height:1.2; overflow-wrap:anywhere; }
+    .tc.blank .tctext { color:var(--muted); font-style:italic; font-weight:700; }
+    .tc .tcrow { display:flex; align-items:center; gap:12px; }
+    .tc .tcart { flex:none; width:4rem; height:4rem; border-radius:10px; overflow:hidden; background:var(--chip); display:flex;
+                 align-items:center; justify-content:center; }
+    .tc .tcart img { width:100%; height:100%; object-fit:cover; object-position:50% 20%; }
+    .tc .tcart .hint { font-size:.65rem; text-align:center; }
+    /* Drawings on paper, white in both themes, like every other drawing here. */
+    .tc .tcpic { display:block; width:100%; padding:0; border-radius:10px; overflow:hidden; background:#fff;
+                 border:2px solid var(--edge); box-shadow:none; }
+    .tc .tcpic canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; }
+    .tcend { text-align:center; font-family:var(--font-display); font-weight:900; font-size:1.25rem; padding:10px; border-radius:14px; }
+    .tcend.yes { background:var(--green); color:#fff; }
+    .tcend.no { background:var(--amber); color:#2b1c00; }
+    /* The replay's newest card arrives; nothing else moves. */
+    .telchain .fresh { animation:tcin .45s cubic-bezier(.3,.7,.4,1.3) both; }
+    @keyframes tcin { from { opacity:0; transform:translateY(14px) scale(.96); } to { opacity:1; transform:none; } }
+    @media (prefers-reduced-motion: reduce) { .telchain .fresh { animation:none; } }
     /* Reactions: four chunky pills under the picture, and each one tapped floats up over it on
        every screen, in its colour, outlined white so it reads over any drawing. */
     .reactions { display:flex; justify-content:center; gap:10px; margin-top:12px; }
@@ -290,9 +339,9 @@
     /* A phone during play: the title shrinks to one line, the round shares the clock's line under
        the blanks, and the palette packs into two rows instead of three. */
     @media (max-width: 560px) {
-      body:has(#game.active) .titlebar { align-items:center; margin-bottom:.8rem; }
-      body:has(#game.active) .titlebar h1 { font-size:1.45rem; }
-      body:has(#game.active) .titletools { height:auto; }
+      body:is(:has(#game.active), :has(#tel.active)) .titlebar { align-items:center; margin-bottom:.8rem; }
+      body:is(:has(#game.active), :has(#tel.active)) .titlebar h1 { font-size:1.45rem; }
+      body:is(:has(#game.active), :has(#tel.active)) .titletools { height:auto; }
       .topbar { gap:8px 12px; margin-bottom:12px; }
       .cluebox { order:-1; flex-basis:100%; }
       .mask { font-size:1.4rem; letter-spacing:.25em; }
@@ -379,6 +428,17 @@
       <div class="card stack" id="hostPanel">
         <h2>Game settings</h2>
         <div>
+          <label id="modeLabel">How to Play</label>
+          <div class="modes" id="modes" role="radiogroup" aria-labelledby="modeLabel">
+            <button type="button" class="mode" data-mode="classic" role="radio" aria-checked="true">
+              <b>Classic</b><small>Take turns: one draws, everyone guesses.</small>
+            </button>
+            <button type="button" class="mode" data-mode="telephone" role="radio" aria-checked="false">
+              <b>Telephone</b><small>Everyone at once, passed along: draw, guess, draw. Three or more.</small>
+            </button>
+          </div>
+        </div>
+        <div>
           <label>Characters from</label>
           <div id="poolPicker"></div>
         </div>
@@ -387,7 +447,7 @@
           <select id="difficultySelect"></select>
         </div>
         <div class="row">
-          <div class="grow">
+          <div class="grow" id="roundsField">
             <label for="roundsSelect">Rounds</label>
             <select id="roundsSelect">
               <option value="1">1 round</option>
@@ -525,6 +585,68 @@
     </form>
   </dialog>
 
+  <!-- Telephone (tel.js): one screen for the whole game -- the step's task (pick, draw, guess),
+       or who the room is waiting on; then the replay and the album. -->
+  <section id="tel" class="screen">
+    <div class="topbar">
+      <div class="round" id="telStep"></div>
+      <div class="cluebox"><div class="telprompt" id="telPrompt" aria-live="polite"></div></div>
+      <div class="telclock" id="telClockRow">
+        <div class="clock" id="telClock"><i id="telClockFill"></i></div>
+        <div class="secs" id="telClockSecs"></div>
+      </div>
+    </div>
+    <div class="telgrid">
+      <div class="telmain">
+        <div class="card" id="telPick" hidden>
+          <div class="choosehead">
+            <h2>Start a Chain</h2>
+            <button id="telReroll" class="alt">New Choices</button>
+          </div>
+          <div class="pick" id="telChoices"></div>
+        </div>
+        <div id="telDraw" hidden>
+          <div class="canvaswrap"><canvas id="telCanvas" class="can-draw" width="1200" height="900" aria-label="Your drawing"></canvas></div>
+          <div id="telToolsSlot"></div>
+          <button id="telDone" class="good wide teldone">Done Drawing</button>
+        </div>
+        <div id="telGuess" hidden>
+          <div class="canvaswrap"><canvas id="telSeen" width="1200" height="900" aria-label="The drawing to name"></canvas></div>
+          <form class="telguess" id="telGuessForm" autocomplete="off">
+            <input id="telGuessInput" maxlength="60" placeholder="What is it?" aria-label="Your guess" />
+            <button type="submit" class="good">Send</button>
+          </form>
+        </div>
+        <div class="card stack" id="telWait" hidden>
+          <h2>Handed In</h2>
+          <p class="hint" id="telWaitText"></p>
+        </div>
+        <div class="card stack" id="telReplay" hidden>
+          <h2 id="telReplayTitle"></h2>
+          <div id="telReplayChain"></div>
+          <div class="telnav" id="telNav">
+            <button type="button" class="ghost" id="telBack">Back</button>
+            <button type="button" class="good" id="telNext">Next</button>
+          </div>
+          <p class="hint" id="telReplayHint">The host moves the replay on.</p>
+        </div>
+        <div id="telAlbum" hidden>
+          <div class="card stack telover">
+            <h2>The Album</h2>
+            <p class="hint">Every chain, start to finish. Open a drawing to see it big or save it.</p>
+            <div id="telHostOver" class="row">
+              <button id="telRematchBtn" class="good grow">Play Again — Same Settings</button>
+              <button id="telAgainBtn" class="ghost grow">Change Settings</button>
+            </div>
+            <p class="hint" id="telGuestOver">The host can start another game.</p>
+          </div>
+          <div class="telalbum" id="telChains"></div>
+        </div>
+      </div>
+      <ul class="players" id="telPlayers"></ul>
+    </div>
+  </section>
+
   <section id="over" class="screen">
     <div class="cols">
       <div class="card stack">
@@ -576,5 +698,6 @@
 <script src="/shared/pickers.js"></script>
 <script src="/shared/roommenu.js"></script>
 <script src="app.js"></script>
+<script src="tel.js"></script>
 </body>
 </html>
