@@ -256,39 +256,45 @@ $('startBtn').addEventListener('click', () => {
 
 // --- the picture -----------------------------------------------------------------------------
 const canvas = $('canvas');
-const ctx = canvas.getContext('2d');
 let strokes = []; // { id, color, size, points: [[x, y], ...] }
-const W = () => canvas.width;
-const H = () => canvas.height;
-// Sizes are in units of an 800px-wide picture, scaled to the canvas.
-const widthOf = (size) => (size * W()) / 800;
-
-function strokeSegment(s, from) {
+// Any canvas: the live one, and the end screen's thumbnails and viewer, which must draw a stroke
+// exactly as the game did. `h` is the picture's height, which an exported image (with its caption
+// strip below) does not share with the canvas.
+function strokeOn(cv, s, from, h = cv.height) {
   if (!s.points.length) return;
-  ctx.strokeStyle = s.color;
-  ctx.fillStyle = s.color;
-  ctx.lineWidth = widthOf(s.size);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  const c = cv.getContext('2d');
+  const w = cv.width;
+  c.strokeStyle = s.color;
+  c.fillStyle = s.color;
+  c.lineWidth = (s.size * w) / 800; // sizes are in units of an 800px-wide picture, scaled to the canvas
+  c.lineCap = 'round';
+  c.lineJoin = 'round';
   if (s.points.length === 1) {
     // A tap is a dot, not nothing.
     const [x, y] = s.points[0];
-    ctx.beginPath();
-    ctx.arc(x * W(), y * H(), ctx.lineWidth / 2, 0, Math.PI * 2);
-    ctx.fill();
+    c.beginPath();
+    c.arc(x * w, y * h, c.lineWidth / 2, 0, Math.PI * 2);
+    c.fill();
     return;
   }
   const start = Math.max(0, from - 1);
-  ctx.beginPath();
-  ctx.moveTo(s.points[start][0] * W(), s.points[start][1] * H());
-  for (let i = start + 1; i < s.points.length; i++) ctx.lineTo(s.points[i][0] * W(), s.points[i][1] * H());
-  ctx.stroke();
+  c.beginPath();
+  c.moveTo(s.points[start][0] * w, s.points[start][1] * h);
+  for (let i = start + 1; i < s.points.length; i++) c.lineTo(s.points[i][0] * w, s.points[i][1] * h);
+  c.stroke();
+}
+const strokeSegment = (s, from) => strokeOn(canvas, s, from);
+
+/** A whole drawing on any canvas, on white paper. */
+function paintDrawing(cv, list, h = cv.height) {
+  const c = cv.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 0, cv.width, h);
+  for (const s of list) strokeOn(cv, s, 0, h);
 }
 
 function redraw() {
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, W(), H());
-  for (const s of strokes) strokeSegment(s, 0);
+  paintDrawing(canvas, strokes);
 }
 redraw();
 
@@ -442,6 +448,8 @@ socket.on('draw:state', (v) => {
   // lines ("... is close!") go with it rather than piling up under the next drawing.
   if (!view || view.drawer.playerId !== v.drawer.playerId || view.round !== v.round) localLines = [];
   view = v;
+  // A rematch from the end screen: last game's drawing must not stay open over the new one.
+  closeViewer();
   show('game');
   renderGame(turnChanged);
   const phase = `${v.round}:${v.drawer.playerId}:${v.phase}`;
@@ -695,8 +703,9 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // --- results ---------------------------------------------------------------------------------
-socket.on('draw:over', ({ standings }) => {
+socket.on('draw:over', ({ standings, gallery = [], accolades = [] }) => {
   show('over');
+  renderGallery(gallery, accolades);
   clearInterval(clockTimer);
   view = null;
   localLines = [];
@@ -710,6 +719,107 @@ socket.on('draw:over', ({ standings }) => {
   $('guestOver').hidden = isHost();
   $('overErr').textContent = '';
 });
+// --- the gallery ------------------------------------------------------------------------------
+// Every drawing of the game, from the server's draw:over (draw/gallery.js), as thumbnails that
+// open into the viewer. Painted from strokes, not sent as images: a stroke list is a fraction of a
+// picture's size, and it paints at whatever size it is shown.
+let galleryItems = [];
+let viewing = -1;
+const gotLine = (d) =>
+  !d.guessers ? 'Nobody else was guessing' : d.got.length === d.guessers ? 'Everyone got it' : d.got.length ? `${d.got.length} of ${d.guessers} got it` : 'Nobody got it';
+function thumbnail(d) {
+  const cv = document.createElement('canvas');
+  cv.width = 400;
+  cv.height = 300;
+  cv.setAttribute('aria-hidden', 'true');
+  paintDrawing(cv, d.strokes);
+  return cv;
+}
+function renderGallery(gallery, accolades) {
+  galleryItems = gallery;
+  closeViewer();
+  $('galleryCard').hidden = !gallery.length;
+  $('gallery').innerHTML = gallery
+    .map((d, i) => `<button type="button" data-view="${i}"><span class="thumb"></span><span class="name">${esc(d.character?.name ?? '?')}</span><span class="hint">by ${esc(d.drawer)} · ${esc(gotLine(d))}</span></button>`)
+    .join('');
+  for (const b of $('gallery').querySelectorAll('[data-view]')) b.querySelector('.thumb').replaceWith(thumbnail(gallery[Number(b.dataset.view)]));
+  // Shapes paired with the colours, as everywhere else: ▲ ◆ ● ■.
+  const shapes = ['▲', '◆', '●', '■'];
+  $('accoladesCard').hidden = !accolades.length;
+  $('accolades').innerHTML = accolades
+    .map((a, i) => {
+      const thumb = a.drawing != null && gallery[a.drawing] ? `<button type="button" class="thumbbtn" data-view="${a.drawing}" aria-label="See ${esc(gallery[a.drawing].character?.name ?? 'the drawing')}"></button>` : '';
+      return `<li><span class="medal" aria-hidden="true">${shapes[i % 4]}</span><div class="what"><div class="title">${esc(a.title)}</div><div class="who">${esc(a.playerId === me ? 'You' : a.name)}</div><div class="detail">${esc(a.detail)}</div></div>${thumb}</li>`;
+    })
+    .join('');
+  for (const b of $('accolades').querySelectorAll('.thumbbtn')) b.append(thumbnail(gallery[Number(b.dataset.view)]));
+}
+function openViewer(i) {
+  const d = galleryItems[i];
+  if (!d) return;
+  viewing = i;
+  paintDrawing($('viewerCanvas'), d.strokes);
+  $('viewerTitle').textContent = d.character?.name ?? '?';
+  const got = d.got.length ? ` · ${d.got.map((x) => `${x.name} (${x.seconds}s)`).join(', ')}` : '';
+  $('viewerSub').textContent = `Drawn by ${d.drawer} · ${gotLine(d)}${got}`;
+  $('viewerPrev').disabled = i === 0;
+  $('viewerNext').disabled = i === galleryItems.length - 1;
+  if (!$('viewer').open) $('viewer').showModal();
+}
+function closeViewer() {
+  viewing = -1;
+  if ($('viewer').open) $('viewer').close();
+}
+for (const list of ['gallery', 'accolades']) {
+  $(list).addEventListener('click', (e) => {
+    const b = e.target.closest('[data-view]');
+    if (b) openViewer(Number(b.dataset.view));
+  });
+}
+$('viewerPrev').addEventListener('click', () => openViewer(viewing - 1));
+$('viewerNext').addEventListener('click', () => openViewer(viewing + 1));
+$('viewerClose').addEventListener('click', closeViewer);
+$('viewer').addEventListener('close', () => (viewing = -1));
+$('viewer').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft' && viewing > 0) openViewer(viewing - 1);
+  if (e.key === 'ArrowRight' && viewing < galleryItems.length - 1) openViewer(viewing + 1);
+});
+// The picture as a PNG, with a strip under it saying what it is and who drew it -- a drawing
+// saved to a phone's photos is otherwise a mystery a week later.
+$('viewerSave').addEventListener('click', () => {
+  const d = galleryItems[viewing];
+  if (!d) return;
+  const out = document.createElement('canvas');
+  out.width = 1200;
+  out.height = 990;
+  paintDrawing(out, d.strokes, 900);
+  const c = out.getContext('2d');
+  c.fillStyle = '#ffffff';
+  c.fillRect(0, 900, 1200, 90);
+  c.fillStyle = '#e6e2ef';
+  c.fillRect(0, 900, 1200, 2);
+  c.fillStyle = '#1b1033';
+  c.font = '900 34px "Trebuchet MS", system-ui, sans-serif';
+  c.textBaseline = 'middle';
+  c.fillText(`${d.character?.name ?? '?'} — drawn by ${d.drawer}`, 28, 946, 860);
+  c.fillStyle = '#6b6480';
+  c.font = '700 24px "Trebuchet MS", system-ui, sans-serif';
+  c.textAlign = 'right';
+  c.fillText('Draw the Character', 1172, 946);
+  const file = `${d.character?.name ?? 'drawing'} by ${d.drawer}`.replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80) || 'drawing';
+  out.toBlob((blob) => {
+    if (!blob) return toast('Could not make the image.');
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${file}.png`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  }, 'image/png');
+});
+
 $('rematchBtn').addEventListener('click', () =>
   socket.emit('draw:rematch', {}, (res) => { if (!res?.ok) $('overErr').textContent = res?.error || 'Could not rematch.'; }));
 $('againBtn').addEventListener('click', () =>

@@ -88,6 +88,46 @@
                               font-weight:800; overflow-wrap:anywhere; }
     .confirmpick .hint { font-size:.82rem; margin:6px 0 16px; }
     .confirmactions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+
+    /* The end screen's extras, under the standings and the buttons. */
+    .overextra { margin-top:18px; }
+    .overextra[hidden] { display:none; }
+    .accolades { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); gap:12px; }
+    .accolades li { display:flex; align-items:center; gap:12px; background:var(--soft); border-radius:14px; padding:12px; }
+    .accolades .medal { flex:none; width:2.6rem; height:2.6rem; border-radius:50%; display:flex; align-items:center; justify-content:center;
+                        font-size:1.2rem; color:#fff; box-shadow:0 3px 0 rgba(0,0,0,.2); }
+    .accolades li:nth-child(4n+1) .medal { background:var(--red); }
+    .accolades li:nth-child(4n+2) .medal { background:var(--blue); }
+    .accolades li:nth-child(4n+3) .medal { background:var(--amber); color:#2b1c00; }
+    .accolades li:nth-child(4n+4) .medal { background:var(--green); }
+    .accolades .what { flex:1; min-width:0; }
+    .accolades .title { font-family:var(--font-display); font-weight:900; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+    .accolades .who { font-family:var(--font-display); font-weight:900; font-size:1.25rem; overflow-wrap:anywhere; }
+    .accolades .detail { font-size:.9rem; overflow-wrap:anywhere; }
+    /* A thumbnail of the drawing it is for, which opens it. */
+    .accolades .thumbbtn { flex:none; width:4.5rem; padding:0; border-radius:8px; overflow:hidden; background:#fff;
+                           box-shadow:0 3px 0 rgba(0,0,0,.2); border:2px solid var(--edge); }
+    /* Two across even on a phone (min() lets a column shrink to half the row): a night of a dozen
+       drawings one per row is a long way to scroll. */
+    .gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(11rem, calc(50% - 7px)), 1fr)); gap:14px; }
+    .gallery button { display:flex; flex-direction:column; gap:6px; padding:8px; text-align:left; background:var(--soft); color:var(--ink);
+                      border-radius:14px; box-shadow:0 4px 0 var(--chip-edge); font-weight:700; }
+    .gallery button:active { box-shadow:0 1px 0 var(--chip-edge); }
+    .gallery .name { font-family:var(--font-display); font-weight:900; overflow-wrap:anywhere; }
+    .gallery .hint { font-size:.8rem; margin:0; }
+    /* Drawings are on paper, white in both themes, like the canvas they were drawn on. */
+    .gallery canvas, .accolades canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; background:#fff; border-radius:8px; }
+    dialog.viewer { border:none; width:min(56rem, calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain;
+                    padding-top:58px; }
+    /* Close in the corner, over the dialog's own top margin; the row below is for moving through. */
+    .viewer .viewerclose { position:absolute; top:10px; right:12px; width:2.5rem; height:2.5rem; padding:0; font-size:1.1rem; line-height:1; }
+    dialog.viewer::backdrop { background:rgba(20,8,45,.72); }
+    .viewer canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; background:#fff; border-radius:12px; border:2px solid var(--edge); }
+    .viewercap { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin:12px 0; }
+    .viewercap strong { font-family:var(--font-display); font-size:1.3rem; overflow-wrap:anywhere; }
+    .viewernav { display:flex; align-items:center; gap:10px; }
+    .viewernav #viewerSave { flex:1; }
+    .viewernav #viewerPrev, .viewernav #viewerNext { flex:none; width:3.2rem; padding:6px 0 10px; font-size:2rem; line-height:1; }
     .refaccept { font-size:.85rem; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
     .reveal-art { width:14rem; height:11rem; border-radius:12px; background:var(--chip); overflow:hidden; display:flex;
                   align-items:center; justify-content:center; }
@@ -407,7 +447,33 @@
         <button id="leaveOverBtn" class="ghost wide">Leave Room</button>
       </div>
     </div>
+    <!-- The night's drawings, kept by the server as each turn ended (draw/gallery.js). The
+         accolades first: they point at drawings below, and are the part people read aloud. -->
+    <div class="card stack overextra" id="accoladesCard" hidden>
+      <h2>Accolades</h2>
+      <ul class="accolades" id="accolades"></ul>
+    </div>
+    <div class="card stack overextra" id="galleryCard" hidden>
+      <h2>The Gallery</h2>
+      <p class="hint">Open a drawing to see it big, or to save it.</p>
+      <div class="gallery" id="gallery"></div>
+    </div>
   </section>
+
+  <!-- One drawing, big, with Save Image. ‹ › walk the gallery without closing it. -->
+  <dialog class="card viewer" id="viewer" aria-labelledby="viewerTitle">
+    <button type="button" class="ghost viewerclose" id="viewerClose" aria-label="Close">✕</button>
+    <canvas id="viewerCanvas" width="1200" height="900" aria-label="The drawing"></canvas>
+    <div class="viewercap">
+      <strong id="viewerTitle"></strong>
+      <span class="hint" id="viewerSub"></span>
+    </div>
+    <div class="viewernav">
+      <button type="button" class="ghost" id="viewerPrev" aria-label="Previous drawing">‹</button>
+      <button type="button" class="good" id="viewerSave">Save Image</button>
+      <button type="button" class="ghost" id="viewerNext" aria-label="Next drawing">›</button>
+    </div>
+  </dialog>
 </main>
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>

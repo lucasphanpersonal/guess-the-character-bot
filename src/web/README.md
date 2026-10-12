@@ -37,7 +37,11 @@ revealed from half time on, coming faster as the clock runs down, until up to ha
 (one for a three-letter name, none for two). The turn ends
 when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEAL_SECONDS`, 6 s).
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
-The host sets rounds (1–5) and drawing time (60–120 s).
+The host sets rounds (1–5) and drawing time (60–120 s). At the end, everyone gets the night's
+drawings (each turn's strokes, simplified and kept as it ends) with up to four accolades — Most
+Recognisable, Speed Demon, Mind Reader, Clutch, So Close, Abstract Artist, each only when it is
+true and no more than two per player — and any drawing opens big, with **Save Image** (a PNG with
+its name and drawer under it).
 
 **Sound on the computers** (`shared/sound.js`) is a handful of short, quiet cues, never a bed:
 everyone can see the screen, so sound is only for the moments worth looking up for — often from
@@ -133,13 +137,14 @@ the dangerous part: the forehead view sends each phone its own character on purp
 same field on a computer would show you your answer. `test/desk.test.js` and the socket check
 both search every payload a computer receives for its own character.
 
-Rooms carry a `kind` (`party` / `desk`) and each protocol only joins its own, so a phone can
+Rooms carry a `kind` (`party` / `desk` / `draw`) and each protocol only joins its own, so a phone can
 never be dealt into a game its client cannot draw. One registry still holds them all, so a code
 means one room either way.
 
 ```
   draw/                Draw the Character -- a different game, sharing nothing of guess/.
     game.js              The rules: choosing, guesses, hints, scoring, rounds (pure, unit-tested).
+    gallery.js           The end screen: each drawing kept, simplified; the accolades (pure, tested).
     socket.js            The protocol and the clock: one timer per room aimed at whatever is due
                          next, a watchdog for sleeping laptops, strokes checked and relayed.
     public/              The drawing client.
