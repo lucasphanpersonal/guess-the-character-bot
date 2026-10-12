@@ -274,6 +274,7 @@ let strokes = []; // { id, color, size, points: [[x, y], ...] }
 // strip below) does not share with the canvas.
 function strokeOn(cv, s, from, h = cv.height) {
   if (!s.points.length) return;
+  if (s.kind === 'fill') return floodFill(cv, s.points[0], s.color, h);
   const c = cv.getContext('2d');
   const w = cv.width;
   c.strokeStyle = s.color;
@@ -297,6 +298,63 @@ function strokeOn(cv, s, from, h = cv.height) {
 }
 const strokeSegment = (s, from) => strokeOn(canvas, s, from);
 
+// The fill bucket: the colour under the point, and everything touching it within FILL_TOLERANCE,
+// becomes the pen's colour -- then one pixel more all round, so the soft (anti-aliased) edge of a
+// line does not leave a pale seam between the fill and the line. Bounded to the picture's own
+// height: an exported image has a caption strip below it that a fill must not leak into.
+const FILL_TOLERANCE = 96; // summed over R, G and B
+function floodFill(cv, [fx, fy], color, h = cv.height) {
+  const c = cv.getContext('2d');
+  const w = cv.width;
+  const x0 = Math.min(w - 1, Math.max(0, Math.floor(fx * w)));
+  const y0 = Math.min(h - 1, Math.max(0, Math.floor(fy * h)));
+  const img = c.getImageData(0, 0, w, h);
+  const d = img.data;
+  const at = (y0 * w + x0) * 4;
+  const [tr, tg, tb] = [d[at], d[at + 1], d[at + 2]];
+  const n = parseInt(color.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  if (Math.abs(tr - r) + Math.abs(tg - g) + Math.abs(tb - b) < 6) return; // already that colour
+  const like = (p) => Math.abs(d[p * 4] - tr) + Math.abs(d[p * 4 + 1] - tg) + Math.abs(d[p * 4 + 2] - tb) <= FILL_TOLERANCE;
+  const hit = new Uint8Array(w * h);
+  // Scanline: fill a run, then queue the rows above and below it -- one stack entry per run.
+  const stack = [x0, y0];
+  while (stack.length) {
+    const y = stack.pop();
+    let x = stack.pop();
+    while (x > 0 && !hit[y * w + x - 1] && like(y * w + x - 1)) x--;
+    let up = false;
+    let down = false;
+    for (; x < w && !hit[y * w + x] && like(y * w + x); x++) {
+      hit[y * w + x] = 1;
+      if (y > 0) {
+        const a = !hit[(y - 1) * w + x] && like((y - 1) * w + x);
+        if (a && !up) stack.push(x, y - 1);
+        up = a;
+      }
+      if (y < h - 1) {
+        const a = !hit[(y + 1) * w + x] && like((y + 1) * w + x);
+        if (a && !down) stack.push(x, y + 1);
+        down = a;
+      }
+    }
+  }
+  const paint = (p) => {
+    d[p * 4] = r;
+    d[p * 4 + 1] = g;
+    d[p * 4 + 2] = b;
+    d[p * 4 + 3] = 255;
+  };
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      if (hit[p]) paint(p);
+      else if ((x > 0 && hit[p - 1]) || (x < w - 1 && hit[p + 1]) || (y > 0 && hit[p - w]) || (y < h - 1 && hit[p + w])) paint(p);
+    }
+  }
+  c.putImageData(img, 0, 0);
+}
+
 /** A whole drawing on any canvas, on white paper. */
 function paintDrawing(cv, list, h = cv.height) {
   const c = cv.getContext('2d');
@@ -314,7 +372,7 @@ redraw();
 socket.on('draw:stroke', (piece) => {
   let s = strokes.find((x) => x.id === piece.id);
   if (!s) {
-    s = { id: piece.id, color: piece.color, size: piece.size, points: [] };
+    s = { id: piece.id, ...(piece.kind ? { kind: piece.kind } : {}), color: piece.color, size: piece.size, points: [] };
     strokes.push(s);
   }
   const from = s.points.length;
@@ -328,7 +386,8 @@ socket.on('draw:canvas', ({ strokes: all }) => {
 });
 
 // The drawer's pen. Drawn here at once; sent in pieces every PIECE_MS.
-let pen = { color: null, size: null }; // set by takeTools when the room arrives
+// tool: 'brush' (the sizes) or 'fill' (the bucket) -- picking a size picks the brush.
+let pen = { color: null, size: null, tool: 'brush' }; // colour and size set by takeTools
 let live = null; // the stroke being drawn
 let pending = [];
 let seq = 0;
@@ -354,6 +413,14 @@ setInterval(flush, PIECE_MS);
 
 canvas.addEventListener('pointerdown', (e) => {
   if (!canDraw()) return;
+  if (pen.tool === 'fill') {
+    // One tap, one fill: sent whole, painted here at once, and never a live stroke to extend.
+    const fill = { id: `${STROKE_TAG}-${++seq}`, kind: 'fill', color: pen.color, size: 0, points: [pointOf(e)] };
+    strokes.push(fill);
+    strokeSegment(fill, 0);
+    socket.emit('draw:stroke', fill);
+    return;
+  }
   // Keeps the stroke when the pen leaves the canvas mid-line. Can refuse (a pointer the browser
   // no longer tracks), and a refusal must not cost the stroke.
   try { canvas.setPointerCapture(e.pointerId); } catch { /* draw without capture */ }
@@ -382,9 +449,14 @@ function renderTools() {
   $('swatches').innerHTML = PALETTE.map(
     ([c, name]) => `<button class="swatch${pen.color === c ? ' on' : ''}" style="background:${esc(c)}" data-color="${esc(c)}" title="${esc(name)}" aria-label="${esc(name)}" aria-pressed="${pen.color === c}"></button>`
   ).join('');
-  $('sizes').innerHTML = SIZES.map(
-    (s, i) => `<button class="size${pen.size === s ? ' on' : ''}" data-size="${s}" aria-label="Brush size ${i + 1} of ${SIZES.length}" aria-pressed="${pen.size === s}"><i style="width:${Math.min(28, 4 + s * 0.7)}px;height:${Math.min(28, 4 + s * 0.7)}px"></i></button>`
-  ).join('');
+  const brush = pen.tool === 'brush';
+  $('sizes').innerHTML =
+    SIZES.map(
+      (s, i) => `<button class="size${brush && pen.size === s ? ' on' : ''}" data-size="${s}" aria-label="Brush size ${i + 1} of ${SIZES.length}" aria-pressed="${brush && pen.size === s}"><i style="width:${Math.min(28, 4 + s * 0.7)}px;height:${Math.min(28, 4 + s * 0.7)}px"></i></button>`
+    ).join('') +
+    // The bucket sits with the sizes: one choice of what a touch does, so picking one un-picks the other.
+    `<button class="size fill${brush ? '' : ' on'}" data-tool="fill" aria-label="Fill" title="Fill an area with the colour" aria-pressed="${!brush}"><span aria-hidden="true">Fill</span></button>`;
+  canvas.classList.toggle('filling', !brush);
 }
 $('swatches').addEventListener('click', (e) => {
   const b = e.target.closest('[data-color]');
@@ -393,9 +465,13 @@ $('swatches').addEventListener('click', (e) => {
   renderTools();
 });
 $('sizes').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-size]');
+  const b = e.target.closest('[data-size], [data-tool]');
   if (!b) return;
-  pen.size = Number(b.dataset.size);
+  if (b.dataset.tool === 'fill') pen.tool = 'fill';
+  else {
+    pen.tool = 'brush';
+    pen.size = Number(b.dataset.size);
+  }
   renderTools();
 });
 renderTools();

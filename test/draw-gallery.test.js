@@ -36,6 +36,12 @@ module.exports = {
     assert.ok(total > 0, 'but not to nothing');
   },
 
+  'a fill is kept as a fill, where it fell among the strokes'() {
+    const out = gallery.simplifyStrokes([stroke(line(200)), { id: 'f', kind: 'fill', color: '#ffd60a', size: 0, points: [[0.5, 0.5]] }, stroke(line(200))]);
+    assert.deepEqual(out[1], { kind: 'fill', color: '#ffd60a', size: 0, points: [[0.5, 0.5]] });
+    assert.equal(out[0].kind, undefined, 'a line is still a line');
+  },
+
   'a finished drawing is kept with who got it and how fast'() {
     const g = draw.createDrawGame({ order: ['p1', 'p2', 'p3'] });
     draw.offerChoices(g, [head('Pikachu')], T0);

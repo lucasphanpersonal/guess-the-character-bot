@@ -896,16 +896,22 @@ const connect = (playerId) => {
   const colourArrives = nextEvent(Q, 'draw:stroke');
   P.emit('draw:stroke', { id: 's1b', color: lastColour, size: 8, points: [[0.4, 0.4]] });
   check((await colourArrives).color === lastColour, `a stroke in any palette colour is drawn (${lastColour})`);
+  // The bucket: a fill relays whole, and keeps its kind; one with two points is not a fill.
+  const fillArrives = nextEvent(Q, 'draw:stroke');
+  P.emit('draw:stroke', { id: 'f1', kind: 'fill', color: '#ffd60a', points: [[0.5, 0.5]] });
+  const fill = await fillArrives;
+  check(fill.id === 'f1' && fill.kind === 'fill' && fill.points.length === 1, 'a fill reaches the guesser as a fill');
+  P.emit('draw:stroke', { id: 'f2', kind: 'fill', color: '#ffd60a', points: [[0.1, 0.1], [0.2, 0.2]] });
   P.emit('draw:stroke', { id: 's2', color: 'url(javascript:alert(1))', size: 8, points: [[0.3, 0.3]] });
   P.emit('draw:stroke', { id: 's3', color: '#e21b3c', size: 8, points: [[5, -2]] });
   Q.emit('draw:stroke', { id: 's4', color: '#e21b3c', size: 8, points: [[0.5, 0.5]] });
   await wait(150);
-  check(!Q.received.some((e) => e.event === 'draw:stroke' && /"s[234]"/.test(e.json)), 'a bad colour, an off-canvas point and a non-drawer\'s stroke are all dropped');
+  check(!Q.received.some((e) => e.event === 'draw:stroke' && /"(s[234]|f2)"/.test(e.json)), 'a bad colour, an off-canvas point, a malformed fill and a non-drawer\'s stroke are all dropped');
   const reconnecting = await connectDraw('rQ');
   const caughtUp = nextEvent(reconnecting, 'draw:canvas');
   await reconnecting.emitWithAck('room:join', { code: drawCode, nickname: 'Quinn' });
   const caughtIds = (await caughtUp).strokes.map((s) => s.id).join(',');
-  check(caughtIds === 's1,s1b', `a reconnecting browser gets the picture so far, and only the strokes that were drawn (${caughtIds})`);
+  check(caughtIds === 's1,s1b,f1', `a reconnecting browser gets the picture so far, fills included, and only what was drawn (${caughtIds})`);
   reconnecting.close();
 
   res = await Q.emitWithAck('draw:say', { text: 'Definitely Nobody' });
@@ -977,7 +983,7 @@ const connect = (playerId) => {
   check(final.standings.length === 2 && final.standings.every((s) => s.score > 0), 'after everyone has drawn once, the game ends with scores');
   // The gallery: both drawings, in order, the first with the strokes Pia drew (the bad ones dropped).
   const g1 = final.gallery?.[0];
-  check(final.gallery?.length === 2 && g1.drawer === 'Pia' && g1.character?.name === drawAnswer && g1.strokes.length === 2,
+  check(final.gallery?.length === 2 && g1.drawer === 'Pia' && g1.character?.name === drawAnswer && g1.strokes.length === caughtIds.split(',').length,
     `the end screen gets every drawing, its strokes and its character (${final.gallery?.length} drawings, ${g1?.strokes.length} strokes)`);
   check(g1.got.length === 1 && g1.got[0].name === 'Quinn' && g1.guessers === 1, 'and who got each one');
   check(Array.isArray(final.accolades) && final.accolades.some((a) => a.title === 'Speed Demon'), `and the accolades (${final.accolades?.map((a) => a.title).join(', ')})`);

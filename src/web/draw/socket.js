@@ -49,6 +49,9 @@ const SIZES = new Set(SIZE_LIST);
 const stateOf = (room) => ({ ...room.publicState(), palette: PALETTE, sizes: SIZE_LIST });
 const MAX_POINTS_PER_TURN = 30000; // generous for a sketch, bounded for a stranger
 const MAX_POINTS_PER_PIECE = 400;
+// Every screen floods its whole canvas for each fill on every redraw (an undo replays them all),
+// so a turn's fills are bounded the way its points are.
+const MAX_FILLS_PER_TURN = 60;
 
 const namesOf = (room) => {
   const names = {};
@@ -361,7 +364,18 @@ function attachDrawSockets(nsp, { registry }) {
       const id = String(piece.id ?? '').slice(0, 24);
       if (!points || !points.length || !id) return;
       if (g.strokes.reduce((n, s) => n + s.points.length, 0) + points.length > MAX_POINTS_PER_TURN) return;
+      // A fill: one point, one palette colour, whole in one piece -- painted where it falls in the
+      // order of strokes, so undo, a reconnect and the gallery all replay it like any other.
+      if (piece.kind === 'fill') {
+        const colour = String(piece.color ?? '').toLowerCase();
+        if (!COLOURS.has(colour) || points.length !== 1 || g.strokes.some((s) => s.id === id)) return;
+        if (g.strokes.filter((s) => s.kind === 'fill').length >= MAX_FILLS_PER_TURN) return;
+        g.strokes.push({ id, kind: 'fill', color: colour, size: 0, points });
+        socket.to(r.code).emit('draw:stroke', { id, kind: 'fill', color: colour, size: 0, points });
+        return;
+      }
       let stroke = g.strokes.find((s) => s.id === id);
+      if (stroke?.kind === 'fill') return; // a fill is whole when it arrives
       if (!stroke) {
         const colour = String(piece.color ?? '').toLowerCase();
         const size = Number(piece.size);

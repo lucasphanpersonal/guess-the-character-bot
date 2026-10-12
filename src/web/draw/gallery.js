@@ -61,7 +61,12 @@ function simplifyStrokes(strokes, maxPoints = MAX_POINTS) {
   let tolerance = 0.0015;
   let out;
   for (;;) {
-    out = strokes.map((s) => ({ color: s.color, size: s.size, points: simplifyLine(s.points, tolerance) }));
+    // A fill is one point and stays one: it is a place, not a line.
+    out = strokes.map((s) =>
+      s.kind === 'fill'
+        ? { kind: 'fill', color: s.color, size: 0, points: s.points.slice(0, 1) }
+        : { color: s.color, size: s.size, points: simplifyLine(s.points, tolerance) }
+    );
     if (pointCount(out) <= maxPoints || tolerance > 0.05) break;
     tolerance *= 2;
   }
