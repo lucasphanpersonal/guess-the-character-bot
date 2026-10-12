@@ -19,8 +19,9 @@ without tangling into it. Two ways to play, from one server:
   one thing a player writes that the others read.
 
 And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
-order: the drawer picks one of three characters (15 s, else the first) — or asks for three new
-ones, as often as they like, each with a fresh 15 s and never repeating a face already offered —
+order: the drawer picks one of three characters, taking as long as they like (no clock; a drawer
+who walks away is the host's to remove) — or asks for three new ones, as often as they like, never
+repeating a face already offered —
 then draws it with the character's picture beside the canvas as a reference only they can see;
 everyone else types guesses into the chat. The checker judges them, and the name a character is
 known by counts on its own ("Sasuke", "Luffy") when nobody else in the character's own show has

@@ -5,8 +5,9 @@
 //
 // A game is ROUNDS rounds; in each, every player draws once, in seat order. A turn is:
 //
-//   choosing  the drawer picks one of three characters (CHOOSE_SECONDS, then the first is taken),
-//             or asks for three new ones -- as often as they like (CHOICE_REROLLS), each a fresh clock
+//   choosing  the drawer picks one of three characters, with no clock -- choosing well is half the
+//             fun, and a drawer who walks away is the host's to remove -- or asks for three new
+//             ones, as often as they like (CHOICE_REROLLS)
 //   drawing   they draw it; everyone else types guesses. Everyone sees the kind of work it is
 //             from ("Anime") from the start, and the work itself ("Naruto") from half time,
 //             with any word of it that names the character blanked. Letters of the name are
@@ -29,7 +30,6 @@ const { judgeGuess, maskNameWords } = require('../../compendium/answers');
 const { normalizeLoose } = require('../../compendium/text');
 const { publicCharacter } = require('../publicCharacter');
 
-const CHOOSE_SECONDS = 15;
 // WEB_DRAW_REVEAL_SECONDS shortens it for the socket check, the way WEB_GRACE_SECONDS does the phones' countdown.
 const REVEAL_SECONDS = Number(process.env.WEB_DRAW_REVEAL_SECONDS ?? 6);
 const CHOICES = 3;
@@ -136,7 +136,7 @@ function offerChoices(g, choices, now) {
   g.offered = g.choices.map((c) => c.name);
   g.rerollsLeft = CHOICE_REROLLS;
   g.character = null;
-  g.deadline = now + CHOOSE_SECONDS * 1000;
+  g.deadline = null; // choosing has no clock
   g.startedAt = null;
   g.guessed = new Map();
   g.gaveUp = new Set();
@@ -182,12 +182,9 @@ function rerollChoices(g, playerId, choices, now) {
   g.choices = choices.slice(0, CHOICES);
   g.offered.push(...g.choices.map((c) => c.name));
   if (g.rerollsLeft > 0) g.rerollsLeft -= 1;
-  g.deadline = now + CHOOSE_SECONDS * 1000;
+  g.deadline = null; // choosing has no clock
   return { ok: true };
 }
-
-/** The drawer let the clock run out: the first choice it is. */
-const autoChoose = (g, now) => choose(g, drawerOf(g), 0, now);
 
 const pointsAt = (g, now) => {
   const left = Math.max(0, g.deadline - now) / (g.drawSeconds * 1000);
@@ -472,7 +469,6 @@ module.exports = {
   choose,
   rerollChoices,
   rerollExclusions,
-  autoChoose,
   say,
   revealDueHints,
   hintTimes,
@@ -489,7 +485,6 @@ module.exports = {
   giveUp,
   cleanAlsoAccept,
   knows,
-  CHOOSE_SECONDS,
   REVEAL_SECONDS,
   CHOICES,
   CHOICE_REROLLS,

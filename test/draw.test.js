@@ -35,10 +35,12 @@ function onlyTheDrawerChoosesAndOnlyFromTheThree() {
   assert.equal(g.deadline, T0 + 80_000);
 }
 
-function aDrawerWhoNeverChoosesGetsTheFirst() {
+function choosingHasNoClock() {
+  // However long the drawer takes, nothing is picked for them.
   const g = started();
-  draw.autoChoose(g, T0 + 15_000);
-  assert.equal(g.character.name, 'Pikachu');
+  assert.equal(g.deadline, null);
+  assert.equal(draw.viewFor(g, 'p1', names, T0 + 3_600_000).secondsLeft, null);
+  assert.equal(g.phase, 'choosing');
 }
 
 // --- guessing ------------------------------------------------------------------------------
@@ -424,10 +426,10 @@ function newChoicesNeverRepeatOnesAlreadyOfferedOrDrawn() {
   assert.deepEqual(draw.rerollExclusions(g).sort(), ['Drawn Earlier', 'Luigi', 'Mario'].sort());
 }
 
-function newChoicesRestartTheChoosingClock() {
+function newChoicesStayUntimed() {
   const g = started();
   draw.rerollChoices(g, 'p1', [head('Luigi')], T0 + 12_000);
-  assert.equal(g.deadline, T0 + 12_000 + draw.CHOOSE_SECONDS * 1000);
+  assert.equal(g.deadline, null);
 }
 
 function onlyTheDrawerAndOnlyWhileChoosingMayAskForNewChoices() {
@@ -455,7 +457,7 @@ function onlyTheDrawerHearsAboutRerolls() {
 
 module.exports = {
   'only the drawer chooses, and only from the three': onlyTheDrawerChoosesAndOnlyFromTheThree,
-  'a drawer who never chooses gets the first': aDrawerWhoNeverChoosesGetsTheFirst,
+  'choosing has no clock': choosingHasNoClock,
   'a correct guess scores by how fast it came': aCorrectGuessScoresByHowFastItCame,
   'a close guess is hidden from guessers, but the drawer sees every guess': aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess,
   'one word of the name is never enough without a pool': oneWordOfTheNameIsNeverEnoughWithoutAPool,
@@ -491,7 +493,7 @@ module.exports = {
   'ties share a place': tiesShareAPlace,
   'the drawer can ask for new choices as often as they like': theDrawerCanAskForNewChoicesAsOftenAsTheyLike,
   'new choices never repeat ones already offered or drawn': newChoicesNeverRepeatOnesAlreadyOfferedOrDrawn,
-  'new choices restart the choosing clock': newChoicesRestartTheChoosingClock,
+  'new choices stay untimed': newChoicesStayUntimed,
   'only the drawer, and only while choosing, may ask for new choices': onlyTheDrawerAndOnlyWhileChoosingMayAskForNewChoices,
   'a finite budget counts down': aFiniteBudgetCountsDown,
   'only the drawer hears about rerolls': onlyTheDrawerHearsAboutRerolls,

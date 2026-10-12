@@ -143,10 +143,6 @@ function attachDrawSockets(nsp, { registry }) {
     const now = Date.now();
     let changed = false;
 
-    if (g.phase === 'choosing' && g.deadline <= now) {
-      draw.autoChoose(g, now);
-      changed = true;
-    }
     if (g.phase === 'drawing') {
       if (draw.revealDueHints(g, now)) changed = true;
       if (g.deadline <= now) {

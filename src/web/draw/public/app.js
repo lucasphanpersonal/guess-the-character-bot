@@ -455,7 +455,8 @@ socket.on('draw:state', (v) => {
 function renderGame(turnChanged) {
   const v = view;
   $('roundLabel').textContent = `Round ${v.round} of ${v.rounds}`;
-  const total = v.phase === 'choosing' ? 15 : v.phase === 'reveal' ? 6 : v.drawSeconds;
+  // Choosing has no clock (secondsLeft is null): the bar sits full and says nothing.
+  const total = v.phase === 'reveal' ? 6 : v.drawSeconds;
   setClock(v.secondsLeft, total, v.phase === 'drawing' ? hurryWatch(`${v.round}:${v.drawer.playerId}`) : null);
 
   // The clue: the drawer and anyone who has it see the name; everyone else the blanks.
