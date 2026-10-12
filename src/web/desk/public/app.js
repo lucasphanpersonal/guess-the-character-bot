@@ -38,6 +38,7 @@ let options = null;
 let gameView = null;
 let clock = { remaining: null, total: 60, timer: null };
 let lastBoardHtml = '';
+let lastSpotHtml = ''; // the spotlight, redrawn on the same terms as the board
 // Everyone's notes, by player. Kept apart from the board's HTML and filled into it in place, so a
 // note arriving with every keystroke never rebuilds the cards (and reloads every picture).
 const notesBy = new Map();
@@ -341,9 +342,45 @@ function cardHtml({ name, character, badge = '', current = false, mystery = fals
 }
 
 // Writes each player's notes into their card. textContent, never innerHTML: notes are typed by
-// other people.
+// other people. A strip tile shows two lines; its tooltip is the whole of them.
 function fillNotes() {
-  for (const el of document.querySelectorAll('[data-notes-for]')) el.textContent = notesBy.get(el.dataset.notesFor) ?? '';
+  for (const el of document.querySelectorAll('[data-notes-for]')) {
+    el.textContent = notesBy.get(el.dataset.notesFor) ?? '';
+    if (el.classList.contains('tnotes')) el.title = el.textContent;
+  }
+}
+
+// The art of a seat on the board: its character, or the mystery face for your own.
+function artHtml(cls, character) {
+  if (!character) return `<div class="${cls} mystery">?</div>`;
+  if (character.imageUrl) return `<div class="${cls}"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
+  return `<div class="${cls}"><span class="noimg">No picture</span></div>`;
+}
+
+// The middle of the screen: whoever is asking questions. For everyone else, their character, big
+// -- the thing the room answers about. For them, the mystery card: it is their turn to work it out.
+function spotlightHtml(b, v) {
+  const turn = v.phase === 'playing' && b.playerId === v.current.playerId ? `<span class="turnno">Turn ${v.current.turnNumber}</span>` : '';
+  return `<div class="spothead"><span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${STATUS_BADGE[b.status] ?? ''}${turn}</div>
+    ${artHtml('art', b.character)}
+    <div class="spotname">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
+    <div class="src">${b.character ? esc(b.character.source) : ''}</div>
+    ${b.isMe ? '' : `<div class="notes" data-notes-for="${esc(b.playerId)}"></div>`}`;
+}
+
+// One face in the strip. Seat order, every turn: tiles that swapped places each turn would make
+// the room hunt for each other.
+function tileHtml(b, v) {
+  const current = v.phase === 'playing' && b.playerId === v.current.playerId;
+  const done = b.status === 'finished' || b.status === 'gave_up';
+  const turns = b.turns ? `<span class="turns">${b.turns} turn${b.turns === 1 ? '' : 's'}</span>` : '';
+  return `<div class="tile${current ? ' current' : ''}${done ? ' done' : ''}">
+      ${artHtml('tart', b.character)}
+      <div class="tname"><span class="n" title="${esc(b.name)}">${esc(b.isMe ? `${b.name} (you)` : b.name)}</span>${turns}</div>
+      <div class="tchar">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
+      ${STATUS_BADGE[b.status] ?? ''}
+      <div class="tnotes" data-notes-for="${esc(b.playerId)}"></div>
+    </div>`;
 }
 // Your own box shows what the server holds -- unless you are typing in it right now.
 function syncMyNotes() {
@@ -455,23 +492,16 @@ function renderGame() {
   // Redrawn only when something on it changed. Every guess and every clock correction sends a new
   // state, and rebuilding the cards each time reloaded every picture -- a board that blinks
   // whenever anyone types.
-  const boardHtml = v.board
-    .map((b) =>
-      cardHtml({
-        name: b.isMe ? `${b.name} (you)` : b.name,
-        character: b.character,
-        mystery: !b.character,
-        badge: STATUS_BADGE[b.status] ?? '',
-        current: b.playerId === v.current.playerId && v.phase === 'playing',
-        done: b.status === 'finished' || b.status === 'gave_up',
-        turns: b.turns || null,
-        notesFor: b.playerId,
-      })
-    )
-    .join('');
+  const boardHtml = v.board.map((b) => tileHtml(b, v)).join('');
   if (lastBoardHtml !== boardHtml) {
     $('board').innerHTML = boardHtml;
     lastBoardHtml = boardHtml;
+  }
+  const spot = v.board.find((b) => b.playerId === v.current?.playerId) ?? v.board.find((b) => b.isMe);
+  const spotHtml = spot ? spotlightHtml(spot, v) : '';
+  if (lastSpotHtml !== spotHtml) {
+    $('spotlight').innerHTML = spotHtml;
+    lastSpotHtml = spotHtml;
   }
   for (const b of v.board) notesBy.set(b.playerId, b.notes ?? '');
   fillNotes();
@@ -506,7 +536,7 @@ function renderGame() {
       ? 'Their clock is paused until they reconnect.'
       : v.me.finished
         ? "You've got yours. Answer their questions honestly."
-        : 'Answer their yes-or-no questions. Their character is on their card.';
+        : 'Answer their yes-or-no questions. Their character is the big one in the middle.';
   }
 
   $('logTitle').textContent = v.isMyTurn ? 'Your guesses' : `${v.current.name}'s guesses`;

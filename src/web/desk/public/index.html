@@ -180,10 +180,14 @@
       <div class="clock" id="clock"><i id="clockFill"></i></div>
       <div class="secs" id="clockSecs"></div>
     </div>
-    <div class="cols">
+    <!-- The one asking questions is the middle of the screen, big -- their character for everyone
+         else, the mystery card for themselves -- with what to do about it beside them. Everyone
+         sits in a strip along the bottom, in seat order every turn, like the faces in a call. -->
+    <div class="stage">
+      <div class="card spotlight" id="spotlight"></div>
       <div class="stack">
+        <!-- No heading: the turn bar says "Your turn" and the spotlight "Who are you?". -->
         <div class="card stack" id="myTurnPanel" hidden>
-          <h2>Your turn: who are you?</h2>
           <p class="hint">Ask yes-or-no questions, then type a name. A miss costs nothing.</p>
           <form class="guessbox" id="guessForm" autocomplete="off">
             <input id="guessInput" maxlength="80" placeholder="Type a name and press Enter" aria-label="Your guess" />
@@ -208,22 +212,21 @@
           <h2 id="waitTitle"></h2>
           <p class="hint" id="waitHint"></p>
         </div>
-        <div class="card stack">
-          <div>
-            <h2>Your Notes</h2>
-            <p class="hint">What you've worked out about yourself. Everyone sees these as you type,
-              so keep other people's characters out of them.</p>
-          </div>
-          <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
-          <p class="err" id="notesErr" role="alert"></p>
-        </div>
         <div class="card">
           <h2 id="logTitle">Guesses</h2>
           <ul class="log" id="guessLog"></ul>
         </div>
+        <div class="card stack notescard">
+          <div>
+            <h2>Your Notes</h2>
+            <p class="hint">Everyone sees them as you type: keep other people's characters out.</p>
+          </div>
+          <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
+          <p class="err" id="notesErr" role="alert"></p>
+        </div>
       </div>
-      <div class="cards" id="board"></div>
     </div>
+    <div class="strip" id="board" aria-label="Everyone playing"></div>
   </section>
 
   <!-- Results -->

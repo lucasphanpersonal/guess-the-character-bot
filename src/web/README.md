@@ -6,7 +6,9 @@ without tangling into it. Two ways to play, from one server:
 - **Phones** (party mode, the site root): Heads Up–style, below. Full design:
   [docs/mobile-app-plan.md](../../docs/mobile-app-plan.md).
 - **Computers** (`/desk/`): every screen shows everyone's character except its owner's.
-  Questions are asked out loud or over a call; on your turn you type a name. The compendium's
+  Questions are asked out loud or over a call; on your turn you type a name. During play whoever
+  is asking questions is the middle of the screen, big (their character, or the mystery card on
+  their own screen), with everyone in a strip of small tiles along the bottom in seat order. The compendium's
   guess-checker rules: a clear match is "got it", a clear miss costs nothing (no limit), and a
   close one (a typo, a stripped title, a shared surname) goes to the other players — the first
   to tap Yes or No (or press <kbd>Y</kbd>/<kbd>N</kbd>) settles it. Nobody ruling within 20 s
@@ -14,7 +16,7 @@ without tangling into it. Two ways to play, from one server:
   it. No countdown, no motion sensors. Pick-for-each-other and **I'll pick them** work here too:
   the host fills one slot per player (or leaves it on Random) and watches every character and the
   clock while the players rule on close guesses.
-  Each player has notes, shown live under their card to everyone (`desk/notes.js`); a note that
+  Each player has notes, shown live to everyone on their tile and in the spotlight (`desk/notes.js`); a note that
   names a character someone is still guessing is refused with the reason, because notes are the
   one thing a player writes that the others read.
 

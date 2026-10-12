@@ -239,6 +239,62 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .log li { display:flex; gap:8px; align-items:baseline; }
 .log .by { color:var(--muted); font-size:.82rem; }
 .ruling { border:4px solid var(--amber); }
+
+/* Guess on computers, during play (desk): the stage and the strip. The spotlight is whoever is
+   asking questions, big; the strip is everyone, small, in seat order -- the faces along the bottom
+   of a call. Picture heights are FIXED (no max-height): pictures arrive after the turn starts, and
+   a box that grew when one landed would shove the strip and the guess box mid-turn. */
+.stage { display:grid; grid-template-columns:minmax(0,1fr) minmax(18rem, 26rem); gap:20px; align-items:start; }
+/* Side by side, the stage is sized to the window so the strip is on screen (title, turn bar and
+   strip take about 21rem): the picture takes what is left, and the side column scrolls inside
+   itself once its cards are taller than that, the way a call's chat panel does -- rather than
+   pushing the faces off the bottom. Its padding is room for the cards' shadows. */
+@media (min-width: 901px) {
+  .stage > .stack { max-height:max(24rem, calc(100dvh - 21rem)); overflow-y:auto; overscroll-behavior:contain;
+                    padding:0 6px 8px 0; }
+}
+@media (max-width: 900px) { .stage { grid-template-columns:1fr; } }
+.notescard textarea { min-height:4.5em; }
+.spotlight { display:flex; flex-direction:column; gap:10px; outline:5px solid var(--amber); outline-offset:3px; }
+.spothead { display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; }
+.spothead .spotwho { font-family:var(--font-display); font-weight:900; font-size:1.3rem; overflow-wrap:anywhere; }
+.spothead .turnno { margin-left:auto; color:var(--muted); font-weight:800; font-size:.9rem; }
+.spotlight .art { height:clamp(12rem, calc(100dvh - 36rem), 26rem); border-radius:14px; background:var(--chip); display:flex;
+                  align-items:center; justify-content:center; overflow:hidden; }
+.spotlight .art img { width:100%; height:100%; object-fit:contain; }
+.spotlight .art .noimg { color:var(--muted); }
+.spotlight .art.mystery, .tile .tart.mystery { background:repeating-linear-gradient(45deg, var(--mystery-a) 0 12px, var(--mystery-b) 12px 24px);
+                  color:#fff; font-family:var(--font-display); font-weight:900; text-shadow:0 3px 0 rgba(0,0,0,.3); }
+.spotlight .art.mystery { font-size:8rem; }
+.spotname { font-family:var(--font-display); font-weight:900; font-size:2rem; line-height:1.15; overflow-wrap:anywhere; }
+.spotlight .src { color:var(--muted); font-size:.9rem; margin-top:-6px; }
+.spotlight .src:empty { display:none; }
+.spotlight .notes { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.4; background:var(--soft); border-radius:10px; padding:10px 12px; }
+.spotlight .notes:empty { display:none; }
+.spotlight .notes::before { content:"Their notes"; display:block; font-size:.72rem; font-weight:900; letter-spacing:.05em;
+                            text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+/* `safe center`: centred while it fits, and scrolling from the first tile (not off both ends) once
+   eight players are wider than the window. The padding is the room the current tile's outline
+   needs inside a scrolling box. */
+.strip { display:flex; justify-content:safe center; gap:12px; overflow-x:auto; padding:10px 8px 14px; margin-top:16px; }
+.tile { flex:0 0 10.5rem; display:flex; flex-direction:column; gap:3px; background:var(--paper); color:var(--ink);
+        border-radius:14px; padding:8px; box-shadow:0 4px 0 rgba(0,0,0,.22); min-width:0; }
+.tile .tart { height:4.5rem; border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center;
+              overflow:hidden; margin-bottom:3px; }
+.tile .tart img { width:100%; height:100%; object-fit:contain; }
+.tile .tart .noimg { color:var(--muted); font-size:.75rem; }
+.tile .tart.mystery { font-size:2.4rem; }
+.tile .tname { display:flex; align-items:center; gap:6px; font-weight:900; font-size:.88rem; }
+.tile .tname .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tile .tname .turns { flex:none; color:var(--muted); font-weight:700; font-size:.75rem; }
+.tile .tchar { font-family:var(--font-display); font-weight:900; font-size:.95rem; line-height:1.2; overflow-wrap:anywhere; }
+.tile .badge { align-self:flex-start; }
+/* Two lines of someone's notes; the whole of them is the tile's tooltip, and the spotlight's. */
+.tile .tnotes { font-size:.75rem; line-height:1.3; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2;
+                -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+.tile .tnotes:empty { display:none; }
+.tile.current { outline:4px solid var(--amber); outline-offset:2px; }
+.tile.done { opacity:.72; }
 .ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
 .feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
 .toast { background:var(--toast); color:#fff; border-radius:12px; padding:10px 14px; box-shadow:0 5px 0 rgba(0,0,0,.3);
