@@ -18,6 +18,18 @@ socket.on('hello', ({ you }) => {
   me = you;
 });
 wobble($('title'), 'Draw the Character');
+// Before bindThemeToggles: the menu carries a dark-mode switch of its own for phone widths.
+const roomMenu = GTCRoomMenu.mount({
+  button: $('roomBtn'),
+  socket,
+  room: () => roomState,
+  me: () => me,
+  leave,
+  leaveCost,
+  themeToggle: true,
+  removeCost: (name, status) =>
+    status === 'playing' ? `Remove ${name}? Their score stays on the board; if they are drawing, the turn ends.` : `Remove ${name} from the room?`,
+});
 GTC.bindThemeToggles();
 
 // Sound (/shared/sound.js): your turn to draw, someone getting it, time nearly up, the reveal.
@@ -136,6 +148,7 @@ function leave() {
 function backToStart() {
   store.set('gtc_draw_room', '');
   roomState = null;
+  roomMenu.update();
   view = null;
   clearInterval(clockTimer);
   history.replaceState(null, '', location.pathname);
@@ -144,15 +157,13 @@ function backToStart() {
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
 
-// The title goes home -- asking first when that means leaving a room, in words that say what it costs.
-GTC.homeTitle($('title'), {
-  leave,
-  leaving() {
-    if (!roomState) return null;
-    if (roomState.status === 'playing') return 'Leave the game? You stop drawing and guessing; your score stays on the board.';
-    return 'Leave this room and go back to the start?';
-  },
-});
+// What leaving costs, in words -- asked by the title (which goes home) and by Room's Leave.
+function leaveCost() {
+  if (!roomState) return null;
+  if (roomState.status === 'playing') return 'Leave the game? You stop drawing and guessing; your score stays on the board.';
+  return 'Leave this room and go back to the start?';
+}
+GTC.homeTitle($('title'), { leave, leaving: leaveCost });
 
 socket.on('room:state', (state) => {
   roomState = state;
@@ -162,6 +173,7 @@ socket.on('room:state', (state) => {
 });
 
 function renderRoom() {
+  roomMenu.update(); // the Room button and its list follow every roster change
   if (!roomState || roomState.status !== 'lobby') return;
   show('lobby');
   $('roomCode').innerHTML = roomCodeHtml(roomState.code);

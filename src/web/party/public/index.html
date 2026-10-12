@@ -622,6 +622,17 @@
     body.at-play .themetoggle { display:none; }
     /* Room for the switch: the title must never run under it. */
     h1 { padding-right:64px; }
+    /* The Room button, dressed as the switch beside it: a small translucent pill on the field. */
+    .roombtn { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
+               right:calc(80px + env(safe-area-inset-right, 0px)); width:auto; height:30px; padding:0 12px;
+               display:inline-flex; align-items:center; gap:6px; font-size:.85rem; font-weight:900; color:#fff;
+               border-radius:999px; background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
+               border:2px solid rgba(255,255,255,.4); }
+    .roombtn:active { transform:none; opacity:.8; }
+    .roombtn:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+    body.at-play .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); }
+    body:has(.roombtn:not([hidden])) h1 { padding-right:150px; }
+    body.at-play:has(.roombtn:not([hidden])) h1 { padding-right:96px; }
     @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
     /* The first question: big slabs, colour AND shape, a line under each saying what it means. */
     .devicebtn { display:flex; align-items:center; gap:14px; text-align:left; padding:20px 18px; border-radius:18px;
@@ -662,6 +673,11 @@
     <i style="left:86%;font-size:1.6rem;animation-duration:33s;animation-delay:-21s">●</i>
     <i style="left:94%;font-size:2.2rem;animation-duration:28s;animation-delay:-15s">■</i>
   </div>
+  <!-- Room: who is in it, Leave, and the host's Remove (/shared/roommenu.js) -- beside the dark-mode
+       switch on every screen once you are in a room, play included, where it takes the corner. -->
+  <button id="roomBtn" class="roombtn" type="button" hidden aria-label="Room: players and leaving">
+    <span aria-hidden="true">☰</span> Room
+  </button>
   <!-- Dark mode: a small switch in the corner, on every screen but play (body.at-play hides it --
        nobody should be reaching for a phone on a forehead). <head> applied the choice already. -->
   <button id="themeToggle" class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
@@ -983,6 +999,7 @@
   <script src="/shared/pickers.js"></script>
   <!-- For GTC.mountPoolPicker: the plain dropdown that stands in if pickers.js fails to load. -->
   <script src="/shared/common.js"></script>
+  <script src="/shared/roommenu.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

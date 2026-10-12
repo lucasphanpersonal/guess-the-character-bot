@@ -737,6 +737,31 @@ const connect = (playerId) => {
     DH.close(); D1.close(); D2.close();
   }
 
+  // ---- Desk: the host removes someone mid-game. The Room menu offers it at every stage, so the
+  // server must take it at every stage -- here, the one with most to undo: a turn loop running.
+  console.log('\n# desk — the host removes someone mid-game');
+  {
+    const KH = await connectDesk('dKickHost');
+    let r = await KH.emitWithAck('room:create', { nickname: 'Kim' });
+    const code = r.state.code;
+    const K1 = await connectDesk('dKick1');
+    await K1.emitWithAck('room:join', { code, nickname: 'Lou' });
+    const K2 = await connectDesk('dKick2');
+    await K2.emitWithAck('room:join', { code, nickname: 'Max' });
+    await KH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+    const started = nextMatching(KH, 'game:state', (v) => v.phase === 'playing');
+    for (const s of [KH, K1, K2]) await s.emitWithAck('setup:confirm', {});
+    await started;
+    const kicked = nextEvent(K2, 'room:kicked');
+    const maxOut = nextMatching(KH, 'game:state', (v) => v.board.find((b) => b.playerId === pub('dKick2'))?.status === 'gave_up');
+    r = await KH.emitWithAck('room:kick', { playerId: pub('dKick2') });
+    check(r.ok, 'desk kick: the host can remove a player mid-game');
+    check(!!(await Promise.race([kicked, wait(2000).then(() => null)])), 'desk kick: the removed player is told');
+    const after = await Promise.race([maxOut, wait(2000).then(() => null)]);
+    check(after?.phase === 'playing', 'desk kick: they drop out, as if they had left, and the game carries on');
+    KH.close(); K1.close(); K2.close();
+  }
+
   console.log('\n# draw — one draws, everyone else guesses');
   const connectDraw = (pid) => {
     const sock = io(`${URL}/draw`, { auth: { playerId: pid } });
@@ -884,6 +909,13 @@ const connect = (playerId) => {
   for (const game of ['/desk/', '/draw/']) {
     const html = await fetch(`${URL}${game}`).then((r) => r.text());
     check(html.includes('/shared/sound.js') && html.includes('id="soundToggle"'), `${game} loads the sound and has its switch`);
+  }
+  // Leaving and removing live in the Room menu, in every game. Positively: the file and its use.
+  const roomMenuJs = await fetch(`${URL}/shared/roommenu.js`).then(async (r) => ({ ok: r.ok, body: await r.text() }));
+  check(roomMenuJs.ok && roomMenuJs.body.includes('window.GTCRoomMenu'), 'GET /shared/roommenu.js serves the Room menu');
+  for (const game of ['/', '/desk/', '/draw/']) {
+    const html = await fetch(`${URL}${game}`).then((r) => r.text());
+    check(html.includes('/shared/roommenu.js') && html.includes('id="roomBtn"'), `${game} loads the Room menu and has its button`);
   }
   P.close(); Q.close();
 

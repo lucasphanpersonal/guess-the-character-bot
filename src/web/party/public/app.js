@@ -22,6 +22,7 @@ if (!playerId) {
 
 let currentRoom = null;          // { code }
 let lastState = null;            // last room:state
+let roomMenu = null;             // the Room button (/shared/roommenu.js), mounted below
 let nickname = store.get('gtc_nick') || '';
 let options = null;              // setup options (categories/difficulties), fetched for host
 // Why setup ended, held rather than written straight to the lobby hint: the room:state that
@@ -74,6 +75,8 @@ function show(screen) {
   // Idle whimsy stops once play starts -- phones are on foreheads, and the only thing that
   // should be moving is the game.
   document.body.classList.toggle('at-play', screen === 'playing' || screen === 'countdown');
+  // Every way in or out of a room ends on a screen change, so this is where Room follows it.
+  roomMenu?.update();
 }
 
 // Alternates the decorative lean across the cards actually visible on a screen. Hidden cards are
@@ -1696,6 +1699,7 @@ function routeByStatus(state) {
 socket.on('room:state', (state) => {
   if (!currentRoom || state.code !== currentRoom.code) return;
   lastState = state;
+  roomMenu?.update(); // a roster change (someone joined, left or was removed)
   // Don't yank the host off the config screen just because a roster broadcast arrived.
   const onConfig = $('config').classList.contains('active');
   if (state.status === 'lobby') {
@@ -1868,22 +1872,42 @@ $('homeTitle').addEventListener('click', (e) => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   if (currentRoom) {
-    const status = lastState?.status;
-    const watching = document.getElementById('hosting')?.classList.contains('active');
-    const cost = watching
-      ? 'Leave the room? The game carries on without you.'
-      : status === 'playing' || status === 'countdown'
-      ? 'Leave the game? Your character is revealed and you drop out.'
-      : status === 'setup' || status === 'ready'
-        ? 'Leave the room? This deal is called off and everyone goes back to the lobby.'
-        : 'Leave this room and go back to the start?';
-    if (!confirm(cost)) return;
+    if (!confirm(leaveCost())) return;
     leaveRoom();
   }
   // Home is the first question, which game -- the one screen every other start hangs off.
   show('splash');
   window.scrollTo(0, 0);
 });
+
+// What leaving costs, in words -- asked by the title and by Room's Leave.
+function leaveCost() {
+  if (!currentRoom) return null;
+  const status = lastState?.status;
+  const watching = document.getElementById('hosting')?.classList.contains('active');
+  return watching
+    ? 'Leave the room? The game carries on without you.'
+    : status === 'playing' || status === 'countdown'
+      ? 'Leave the game? Your character is revealed and you drop out.'
+      : status === 'setup' || status === 'ready'
+        ? 'Leave the room? This deal is called off and everyone goes back to the lobby.'
+        : 'Leave this room and go back to the start?';
+}
+roomMenu = GTCRoomMenu.mount({
+  button: $('roomBtn'),
+  socket,
+  room: () => (currentRoom ? lastState : null),
+  me: () => me,
+  leave: leaveRoom,
+  leaveCost,
+  removeCost: (name, status) =>
+    status === 'playing' || status === 'countdown'
+      ? `Remove ${name}? Their character is revealed and they drop out of the game.`
+      : status === 'setup' || status === 'ready'
+        ? `Remove ${name}? Everyone goes back to the lobby and you deal again.`
+        : `Remove ${name} from the room?`,
+});
+roomMenu.update();
 
 // --- the start: which game ---------------------------------------------------------------
 //

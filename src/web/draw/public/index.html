@@ -235,6 +235,11 @@
   <div class="titlebar">
     <h1><a id="title" href="/">Draw the Character</a></h1>
     <div class="titletools">
+      <!-- Room: who is in it, Leave, and the host's Remove -- on every screen once you are in one
+           (/shared/roommenu.js). -->
+      <button id="roomBtn" class="roombtn" type="button" hidden aria-label="Room: players and leaving">
+        <span class="note" aria-hidden="true">☰</span><span class="label">Room</span>
+      </button>
       <!-- Sound On / Off: wired and painted by /shared/sound.js. -->
       <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
         <span class="note" aria-hidden="true">♪</span><span class="label">Sound On</span>
@@ -480,6 +485,7 @@
 <script src="/shared/common.js"></script>
 <script src="/shared/sound.js"></script>
 <script src="/shared/pickers.js"></script>
+<script src="/shared/roommenu.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

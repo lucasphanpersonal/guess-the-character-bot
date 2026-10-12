@@ -50,11 +50,12 @@ h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
 .titlebar { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:0 0 1.2rem; }
 .titlebar h1 { margin:0; line-height:1.2; }
 .titletools { flex:none; display:flex; align-items:center; gap:12px; height:calc(2.6rem * 1.2); }
-.soundtoggle { flex:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:34px;
+.soundtoggle, .roombtn { flex:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:34px;
                padding:0 14px; font-size:.92rem;
                background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.22); }
-.soundtoggle:active { box-shadow:0 1px 0 rgba(0,0,0,.22); transform:translateY(3px); }
-.soundtoggle .note { font-size:1.1rem; line-height:1; }
+.soundtoggle:active, .roombtn:active { box-shadow:0 1px 0 rgba(0,0,0,.22); transform:translateY(3px); }
+.soundtoggle .note, .roombtn .note { font-size:1.1rem; line-height:1; }
+.roombtn:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 /* Off says so in words; the struck-through note is a second signal, not the only one. */
 .soundtoggle[aria-checked="false"] { background:rgba(0,0,0,.28); color:#fff; box-shadow:0 4px 0 rgba(0,0,0,.3); }
 .soundtoggle[aria-checked="false"] .note { text-decoration:line-through; opacity:.8; }
@@ -63,8 +64,11 @@ h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
    without colour -- the note is struck through -- and the switch's name and state are unchanged
    for a screen reader (aria-label, aria-checked). */
 @media (max-width: 560px) {
-  .soundtoggle { width:44px; padding:0; }
-  .soundtoggle .label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .soundtoggle, .roombtn { width:44px; padding:0; }
+  .soundtoggle .label, .roombtn .label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  /* In a room the row holds Room as well, and the title needs the width more than dark mode does:
+     the switch moves into the Room menu (roommenu.js) for as long as the button is showing. */
+  .titletools:has(.roombtn:not([hidden])) > .themetoggle { display:none; }
 }
 .screen { display:none; }
 .screen.active { display:block; }

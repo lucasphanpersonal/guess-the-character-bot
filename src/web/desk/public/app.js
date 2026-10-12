@@ -23,6 +23,22 @@ socket.on('hello', ({ you }) => {
   me = you;
 });
 wobble($('title'), 'Guess the Character');
+// Before bindThemeToggles: the menu carries a dark-mode switch of its own for phone widths.
+const roomMenu = GTCRoomMenu.mount({
+  button: $('roomBtn'),
+  socket,
+  room: () => roomState,
+  me: () => me,
+  leave,
+  leaveCost,
+  themeToggle: true,
+  removeCost: (name, status) =>
+    status === 'playing'
+      ? `Remove ${name}? Their character is revealed and they drop out of the game.`
+      : status === 'setup' || status === 'ready'
+        ? `Remove ${name}? This deal is called off and everyone goes back to the lobby.`
+        : `Remove ${name} from the room?`,
+});
 GTC.bindThemeToggles();
 
 // Sound (/shared/sound.js): short cues for your turn, a result, and a call to rule. Optional-
@@ -130,6 +146,7 @@ function leave() {
   store.set('gtc_desk_room', '');
   roomState = null;
   gameView = null;
+  roomMenu.update();
   history.replaceState(null, '', location.pathname);
   show('landing');
   return done;
@@ -137,17 +154,15 @@ function leave() {
 $('leaveBtn').addEventListener('click', leave);
 $('leaveOverBtn').addEventListener('click', leave);
 
-// The title goes home -- asking first when that means leaving a room, in words that say what it costs.
-GTC.homeTitle($('title'), {
-  leave,
-  leaving() {
-    if (!roomState) return null;
-    if ($('hosting').classList.contains('active')) return 'Leave the room? The game carries on without you.';
-    if (roomState.status === 'playing') return 'Leave the game? Your character is revealed and you drop out.';
-    if (roomState.status === 'setup' || roomState.status === 'ready') return 'Leave the room? This deal is called off and everyone goes back to the lobby.';
-    return 'Leave this room and go back to the start?';
-  },
-});
+// What leaving costs, in words -- asked by the title (which goes home) and by Room's Leave.
+function leaveCost() {
+  if (!roomState) return null;
+  if ($('hosting').classList.contains('active')) return 'Leave the room? The game carries on without you.';
+  if (roomState.status === 'playing') return 'Leave the game? Your character is revealed and you drop out.';
+  if (roomState.status === 'setup' || roomState.status === 'ready') return 'Leave the room? This deal is called off and everyone goes back to the lobby.';
+  return 'Leave this room and go back to the start?';
+}
+GTC.homeTitle($('title'), { leave, leaving: leaveCost });
 
 // --- lobby --------------------------------------------------------------------------------
 socket.on('room:state', (state) => {
@@ -156,6 +171,7 @@ socket.on('room:state', (state) => {
 });
 
 function renderRoom() {
+  roomMenu.update(); // the Room button and its list follow every roster change
   if (!roomState) return;
   if (roomState.status === 'lobby') {
     show('lobby');
@@ -738,6 +754,7 @@ $('againBtn').addEventListener('click', () =>
 socket.on('room:kicked', ({ reason } = {}) => {
   store.set('gtc_desk_room', '');
   roomState = null;
+  roomMenu.update();
   show('landing');
   $('landingErr').textContent = reason || 'You were removed from the room.';
 });

@@ -53,6 +53,12 @@ Draw the Character: your turn to draw, someone getting it, the last ten seconds 
 reveal. Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
 screen, play included; the choice is the phones' own `gtc_muted`, one per browser.
 
+**Room** (`shared/roommenu.js`), in all three games, is a button by the title on every screen once
+you are in a room, play included: who is in the room, **Leave Room** (asking first, in the game's
+own words for what leaving costs), and for the host **Remove** beside everyone else, at any
+stage -- a removal mid-game is the same as that player leaving. On a phone-width computer page
+the dark-mode switch moves into it, so the title row keeps its room.
+
 **The home page** (`/`) asks one question first: which game. *Draw the Character* goes to
 `/draw/`, which plays on phones and computers alike, in one room. Guess the Character is two
 choices, because its two ways cannot share a room: *Phones* gets the forehead game's create / join,
