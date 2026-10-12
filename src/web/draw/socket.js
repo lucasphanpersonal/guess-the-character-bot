@@ -179,7 +179,10 @@ function attachDrawSockets(nsp, { registry }) {
       if (!casts.has(c.listId)) casts.set(c.listId, poolIndex(web.content.castOf([c.listId])));
       return casts.get(c.listId);
     };
-    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf });
+    // One category in the whole pool, however the host got there (picked it, Surprise Me, or lists
+    // that happen to share one): the kind of work is no hint, so it shows from the start.
+    const categoryKnown = web.content.categoryCount(listIds) === 1;
+    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf, categoryKnown });
     if (!dealChoices(room, Date.now())) {
       room.game = null;
       return { ok: false, error: `${label} has no characters at this difficulty.` };

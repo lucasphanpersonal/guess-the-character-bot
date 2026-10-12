@@ -143,30 +143,38 @@ function theAnswerReachesOnlyThoseWhoKnowIt() {
   assert.equal(draw.viewFor(g, 'p3', names, T0).lastTurn.character.name, 'Pikachu', 'the reveal shows everyone');
 }
 
-function theMaskShowsTheShapeAndHintsFillItIn() {
+function theBlanksWaitForHalfTimeAndLettersFillThemIn() {
   const g = started();
   g.choices[0] = head('Spider-Man Noir');
   draw.choose(g, 'p1', 0, T0);
-  assert.equal(draw.maskOf(g), '______-___ ____', 'hyphen and space are part of the shape');
+  // The first half is the drawing's: no blanks, only when they will come (at 40s on the clock).
+  let v = draw.viewFor(g, 'p2', names, T0);
+  assert.equal(v.mask, null, 'no blanks before half time');
+  assert.equal(v.maskAt, 40);
   draw.revealDueHints(g, T0 + 39_000, (xs) => xs[0]);
-  assert.equal(draw.maskOf(g), '______-___ ____', 'nothing before half time');
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 39_000).mask, null);
   draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]);
-  assert.equal(draw.maskOf(g), 'S_____-___ ____', 'one letter at half time');
-  // Then the rest, spread to 95% of the clock: hints come faster as it runs down. Thirteen
-  // letters may give away six, so one every 9% of the 80s from half time: 40s, 47.2s ... 76s.
+  v = draw.viewFor(g, 'p2', names, T0 + 40_000);
+  assert.equal(v.mask, '______-___ ____', 'at half time: the shape, hyphen and space included');
+  assert.equal(v.maskAt, null);
+  assert.ok(draw.hintTimes(g).includes(T0 + 40_000), 'the room is woken for the blanks');
+  // Letters from 60%, a beat after the blanks, then faster to 95%. Thirteen letters give away a
+  // third, four: at 48s, 57.3s, 66.7s and 76s.
   const due = (ms) => {
     draw.revealDueHints(g, T0 + ms, (xs) => xs[0]);
     return g.revealed.length;
   };
-  assert.equal(due(47_000), 1, 'not yet the second');
-  assert.equal(due(47_300), 2);
-  assert.equal(due(62_000), 4);
-  assert.equal(due(76_000), 6, 'half the letters by the last few seconds');
-  assert.equal(due(79_900), 6, 'and never more than half');
+  assert.equal(due(47_900), 0, 'no letter on top of the blanks');
+  assert.equal(due(48_000), 1);
+  assert.equal(draw.maskOf(g), 'S_____-___ ____');
+  assert.equal(due(57_000), 1, 'not yet the second');
+  assert.equal(due(57_400), 2);
+  assert.equal(due(76_000), 4, 'a third of the letters by the last few seconds');
+  assert.equal(due(79_900), 4, 'and never more');
   assert.ok(draw.hintTimes(g).includes(T0 + 76_000), 'the room is woken for the last one');
 }
 
-function longerNamesGiveHalfTheirLettersShortOnesFewer() {
+function namesGiveUpAThirdOfTheirLetters() {
   const revealedBy = (name) => {
     const g = started();
     g.choices[0] = head(name);
@@ -174,58 +182,63 @@ function longerNamesGiveHalfTheirLettersShortOnesFewer() {
     draw.revealDueHints(g, T0 + 79_999);
     return g.revealed.length;
   };
-  assert.equal(revealedBy('Pikachu'), 3, 'seven letters: three');
-  assert.equal(revealedBy('Luke'), 2, 'four letters: two');
+  assert.equal(revealedBy('Pikachu'), 2, 'seven letters: two');
+  assert.equal(revealedBy('Luke'), 1, 'four letters: one');
   assert.equal(revealedBy('Leo'), 1, 'three letters: one');
   assert.equal(revealedBy('Ed'), 0, 'two letters: none -- that would be the answer');
 }
 
-function aShortNameGetsNoHintThatWouldGiveItAway() {
-  const g = started();
-  g.choices[0] = head('Ed');
-  draw.choose(g, 'p1', 0, T0);
-  draw.revealDueHints(g, T0 + 79_000);
-  assert.equal(g.revealed.length, 0, 'never more than a third of the letters');
-}
-
-function theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime() {
+function theKindOfWorkComesAtAQuarterAndTheWorkInTheLastQuarter() {
   const g = started();
   g.choices[0] = { ...head('Bowser Koopa'), origin: { work: 'Super Mario Bros.', category: 'Video Games' } };
   draw.choose(g, 'p1', 0, T0);
   for (const viewer of ['p1', 'p2']) {
-    assert.deepEqual(draw.viewFor(g, viewer, names, T0).clue, { category: 'Video Games', work: null, workLater: true }, `${viewer} at the start`);
+    assert.deepEqual(draw.viewFor(g, viewer, names, T0).clue, { category: null, categoryAt: 60, work: null, workAt: 20 }, `${viewer} at the start: only when each will come`);
   }
-  assert.ok(draw.hintTimes(g).includes(T0 + 40_000), 'the room is woken at half time');
-  assert.equal(draw.revealDueHints(g, T0 + 39_000), false);
-  assert.equal(draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]), true);
-  assert.deepEqual(draw.viewFor(g, 'p2', names, T0 + 40_000).clue, { category: 'Video Games', work: 'Super Mario Bros.', workLater: false });
+  assert.ok(draw.hintTimes(g).includes(T0 + 20_000) && draw.hintTimes(g).includes(T0 + 60_000), 'the room is woken for each');
+  assert.equal(draw.revealDueHints(g, T0 + 19_000), false);
+  assert.equal(draw.revealDueHints(g, T0 + 20_000, (xs) => xs[0]), true);
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0 + 20_000).clue, { category: 'Video Games', categoryAt: null, work: null, workAt: 20 });
+  draw.revealDueHints(g, T0 + 59_000, (xs) => xs[0]);
+  assert.equal(draw.viewFor(g, 'p2', names, T0 + 59_000).clue.work, null, 'not before the last quarter');
+  draw.revealDueHints(g, T0 + 60_000, (xs) => xs[0]);
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0 + 60_000).clue, { category: 'Video Games', categoryAt: null, work: 'Super Mario Bros.', workAt: null });
+}
+
+function aRoomPlayingOneCategorySeesItFromTheStart() {
+  // Everyone saw "Anime" in the lobby: holding it back would hide nothing.
+  const g = draw.createDrawGame({ order: ['p1', 'p2', 'p3'], categoryKnown: true });
+  draw.offerChoices(g, [{ ...head('Ed'), origin: { work: 'Cowboy Bebop', category: 'Anime' } }], T0);
+  draw.choose(g, 'p1', 0, T0);
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0).clue, { category: 'Anime', categoryAt: null, work: null, workAt: 20 });
 }
 
 function theWorkHasTheNameBlankedOutOfIt() {
   const g = started();
   g.choices[0] = { ...head('Mario'), origin: { work: 'Super Mario Bros.', category: 'Video Games' } };
   draw.choose(g, 'p1', 0, T0);
-  draw.revealDueHints(g, T0 + 40_000, (xs) => xs[0]);
-  const json = JSON.stringify(draw.viewFor(g, 'p2', names, T0 + 40_000));
+  draw.revealDueHints(g, T0 + 60_000, (xs) => xs[0]);
+  const json = JSON.stringify(draw.viewFor(g, 'p2', names, T0 + 60_000));
   assert.ok(json.includes('Super _____ Bros.'), json);
   assert.ok(!/mario/i.test(json), 'a guesser never sees the name, title or no title');
 }
 
-function aShortNameStillGetsItsWorkAtHalfTime() {
-  // No letter is due for "Ed" (a third of two letters is none), so the work must be a change of
-  // its own -- or the room would not be told until some guess happened to send a view.
+function aShortNameStillGetsItsWorkOnTime() {
+  // No letter is ever due for "Ed" (a third of two letters is none), so each hint must be a change
+  // of its own -- or the room would not be told until some guess happened to send a view.
   const g = started();
   g.choices[0] = { ...head('Ed'), origin: { work: 'Cowboy Bebop', category: 'Anime' } };
   draw.choose(g, 'p1', 0, T0);
-  assert.equal(draw.revealDueHints(g, T0 + 40_000), true);
-  assert.equal(draw.viewFor(g, 'p3', names, T0 + 40_000).clue.work, 'Cowboy Bebop');
+  assert.equal(draw.revealDueHints(g, T0 + 40_000), true, 'the blanks');
+  assert.equal(draw.revealDueHints(g, T0 + 60_000), true, 'the work');
+  assert.equal(draw.viewFor(g, 'p3', names, T0 + 60_000).clue.work, 'Cowboy Bebop');
 }
 
 function noOriginNoClue() {
   const g = drawing();
   assert.equal(draw.viewFor(g, 'p2', names, T0).clue, null);
   g.character.origin = { work: null, category: 'Anime' };
-  assert.deepEqual(draw.viewFor(g, 'p2', names, T0).clue, { category: 'Anime', work: null, workLater: false }, 'nothing promised that is not coming');
+  assert.deepEqual(draw.viewFor(g, 'p2', names, T0).clue, { category: null, categoryAt: 60, work: null, workAt: null }, 'nothing promised that is not coming');
 }
 
 // --- other names the drawer accepts -----------------------------------------------------------
@@ -481,9 +494,8 @@ module.exports = {
   'the drawer cannot guess': theDrawerCannotGuess,
   'nobody scores twice': nobodyScoresTwice,
   'the answer reaches only those who know it': theAnswerReachesOnlyThoseWhoKnowIt,
-  'the mask shows the shape, and hints fill it in': theMaskShowsTheShapeAndHintsFillItIn,
-  'a short name gets no hint that would give it away': aShortNameGetsNoHintThatWouldGiveItAway,
-  'longer names give up half their letters, short ones fewer': longerNamesGiveHalfTheirLettersShortOnesFewer,
+  'the blanks wait for half time, and letters fill them in': theBlanksWaitForHalfTimeAndLettersFillThemIn,
+  'names give up a third of their letters': namesGiveUpAThirdOfTheirLetters,
   'whoever gave up talks only to those who know, and scores nothing': whoGaveUpTalksOnlyToThoseWhoKnow,
   'a name the drawer accepts counts': aNameTheDrawerAcceptsCounts,
   'the drawer is told what will count for each choice': theDrawerIsToldWhatWillCountForEachChoice,
@@ -491,9 +503,10 @@ module.exports = {
   'other names are a few real names': otherNamesAreAFewRealNames,
   'other names are for that turn only': otherNamesAreForThatTurnOnly,
   'a leaver can leave nobody guessing, which ends the turn': aLeaverCanLeaveNobodyGuessing,
-  'the kind of work shows from the start, and the work from half time': theKindOfWorkShowsFromTheStartAndTheWorkFromHalfTime,
+  'the kind of work comes at a quarter, and the work in the last quarter': theKindOfWorkComesAtAQuarterAndTheWorkInTheLastQuarter,
+  'a room playing one category sees it from the start': aRoomPlayingOneCategorySeesItFromTheStart,
   'the work has the name blanked out of it': theWorkHasTheNameBlankedOutOfIt,
-  'a short name still gets its work at half time': aShortNameStillGetsItsWorkAtHalfTime,
+  'a short name still gets its work on time': aShortNameStillGetsItsWorkOnTime,
   'no origin, no clue': noOriginNoClue,
   'everyone draws once a round, then it ends': everyoneDrawsOnceARoundThenItEnds,
   'the drawer leaving ends their turn': theDrawerLeavingEndsTheirTurn,

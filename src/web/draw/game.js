@@ -8,11 +8,13 @@
 //   choosing  the drawer picks one of three characters, with no clock -- choosing well is half the
 //             fun, and a drawer who walks away is the host's to remove -- or asks for three new
 //             ones, as often as they like (CHOICE_REROLLS)
-//   drawing   they draw it; everyone else types guesses. Everyone sees the kind of work it is
-//             from ("Anime") from the start, and the work itself ("Naruto") from half time,
-//             with any word of it that names the character blanked. Letters of the name are
-//             revealed from half time, faster as the clock runs down. Ends when every guesser
-//             has it, or time is up.
+//   drawing   they draw it; everyone else types guesses. The hints come on a clock, so the
+//             first half is about the drawing: the kind of work ("Anime") at a quarter of the
+//             time -- from the start when the room plays one category, since everyone knows it
+//             then -- the blanks (how many words, how many letters) at half time, letters of the
+//             name from 60%, faster as the clock runs down, and the work itself ("Naruto", any
+//             word of it that names the character blanked) for the last quarter. Ends when every
+//             guesser has it, or time is up.
 //   reveal    the answer and the turn's points, for REVEAL_SECONDS
 //
 // Guesses are judged by the compendium's checker (src/compendium/answers.js), and a character's
@@ -41,21 +43,28 @@ const CHOICES = 3;
 // the commonest reason a turn goes nowhere, and the cost of another look is only the drawer's own
 // time. A finite number stays representable (rerollsLeft counts down) for when a limit is wanted.
 const CHOICE_REROLLS = -1;
-// The first letter at half time, then the rest spread evenly to HINT_LAST of the clock, so hints
-// speed up as the clock runs down -- the end of a turn is when a stuck room most needs them. The
-// letters a name can give away: half, for names of four letters or more; one for three; none for
-// two ("Ed" spelled out by half is not a hint, it is the answer).
-const HINT_FIRST = 0.5;
+// The hint clock, as fractions of the drawing time. It was everything early -- the blanks and the
+// kind of work from the first second, the title and the first letter at half time -- and a room
+// could often name the character before the drawing said anything. So the first half is the
+// drawing's: the kind of work at a quarter, the blanks at half, letters from 60% (a beat after
+// the blanks, not on top of them), the title for the last quarter.
+const CATEGORY_AT = 0.25;
+const MASK_AT = 0.5;
+// The first letter at HINT_FIRST, then the rest spread evenly to HINT_LAST, so hints speed up as
+// the clock runs down -- the end of a turn is when a stuck room most needs them. The letters a
+// name can give away: a third of them (one for three to five letters), none for two ("Ed" with a
+// letter showing is not a hint, it is the answer).
+const HINT_FIRST = 0.6;
 const HINT_LAST = 0.95;
-const letterBudget = (letterCount) => (letterCount >= 4 ? Math.floor(letterCount / 2) : letterCount === 3 ? 1 : 0);
+const letterBudget = (letterCount) => (letterCount >= 3 ? Math.floor(letterCount / 3) : 0);
 /** When each letter falls due, as fractions of the drawing time. */
 function hintFractions(letterCount) {
   const n = letterBudget(letterCount);
   if (n <= 1) return n ? [HINT_FIRST] : [];
   return Array.from({ length: n }, (_, i) => HINT_FIRST + ((HINT_LAST - HINT_FIRST) * i) / (n - 1));
 }
-// The work the character is from, at half time. The kind of work is shown from the start.
-const WORK_AT = 0.5;
+// The work the character is from: the strongest of the hints, so the last quarter.
+const WORK_AT = 0.75;
 // Other names the drawer accepts for their character, typed while choosing: the English name of a
 // character the library has in Japanese ("Serena" for Usagi), a nickname the room uses. A few,
 // short, and each a real name rather than a letter that would let anything through.
@@ -84,9 +93,11 @@ const DRAWER_PER_GUESS = 60;
  *   their own show's cast, as answers.poolIndex. What lets one word of a name count. Injected, so
  *   these rules need no database; without it, nothing short of a full name is ever correct.
  */
-function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null }) {
+function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null, categoryKnown = false }) {
   return {
     castOf,
+    // The room plays one category, so the kind of work is no hint: shown from the start.
+    categoryKnown,
     order: [...order],
     rounds,
     drawSeconds,
@@ -104,6 +115,8 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null }) 
     gaveUp: new Set(), // guessers who gave up on this drawing (see giveUp)
     scores: new Map(order.map((id) => [id, 0])),
     revealed: [], // indexes into the character's name
+    categoryShown: false,
+    maskShown: false,
     workShown: false,
     strokes: [],
     chat: [],
@@ -176,6 +189,8 @@ function offerChoices(g, choices, now) {
   g.gaveUp = new Set();
   g.alsoAccept = [];
   g.revealed = [];
+  g.categoryShown = false;
+  g.maskShown = false;
   g.workShown = false;
   g.strokes = [];
   g.chat = [];
@@ -302,12 +317,14 @@ function giveUp(g, playerId) {
 
 const isLetter = (ch) => /[\p{L}\p{N}]/u.test(ch);
 
-/** When the hints fall due, in ms timestamps -- the letters and the work. */
+/** When the hints fall due, in ms timestamps -- each one a moment the room must be sent a view. */
 const lettersOf = (name) => [...name].map((ch, i) => (isLetter(ch) ? i : -1)).filter((i) => i >= 0);
 const hintTimes = (g) =>
   g.startedAt == null || !g.character
     ? []
-    : [...new Set([...hintFractions(lettersOf(g.character.name).length), WORK_AT])].map((f) => g.startedAt + f * g.drawSeconds * 1000);
+    : [...new Set([...hintFractions(lettersOf(g.character.name).length), CATEGORY_AT, MASK_AT, WORK_AT])].map(
+        (f) => g.startedAt + f * g.drawSeconds * 1000
+      );
 
 /**
  * Reveal whatever hints are due. `pick` chooses among the candidate indexes (random in play, fixed
@@ -318,6 +335,14 @@ function revealDueHints(g, now, pick = (xs) => xs[Math.floor(Math.random() * xs.
   const letters = lettersOf(g.character.name);
   const at = (f) => g.startedAt + f * g.drawSeconds * 1000;
   let changed = false;
+  if (!g.categoryShown && now >= at(CATEGORY_AT)) {
+    g.categoryShown = true;
+    changed = true;
+  }
+  if (!g.maskShown && now >= at(MASK_AT)) {
+    g.maskShown = true;
+    changed = true;
+  }
   if (!g.workShown && g.character.origin?.work && now >= at(WORK_AT)) {
     g.workShown = true;
     changed = true;
@@ -341,17 +366,28 @@ function maskOf(g) {
   return [...g.character.name].map((ch, i) => (isLetter(ch) && !g.revealed.includes(i) ? '_' : ch)).join('');
 }
 
+/** The clock's reading (seconds left) at which a hint falls due -- what the page says it waits for. */
+const secondsLeftAt = (g, f) => Math.round(g.drawSeconds * (1 - f));
+
 /**
- * Where the character is from, as far as the clock allows: `category` throughout, `work` once
- * it is due (masked -- "Super _____ Bros." -- because a title can spell the answer), and
- * `workLater` while there is one still to come, so the page can say it is on its way. The same
- * for everyone, the drawer included: they see what the guessers are working with.
+ * Where the character is from, as far as the clock allows: `category` once due (or from the start
+ * when the room plays one category), `work` once due (masked -- "Super _____ Bros." -- because a
+ * title can spell the answer), and for each one still to come the clock reading it arrives at
+ * (`categoryAt`, `workAt`), so the page can say so. The same for everyone, the drawer included:
+ * they see what the guessers are working with.
  */
 function clueFor(g) {
   const origin = g.character?.origin;
   if (!origin) return null;
   const work = origin.work ? maskNameWords(origin.work, g.character.name) : null;
-  return { category: origin.category ?? null, work: g.workShown ? work : null, workLater: !g.workShown && !!work };
+  const category = origin.category ?? null;
+  const categoryNow = g.categoryKnown || g.categoryShown;
+  return {
+    category: categoryNow ? category : null,
+    categoryAt: !categoryNow && category ? secondsLeftAt(g, CATEGORY_AT) : null,
+    work: g.workShown ? work : null,
+    workAt: !g.workShown && work ? secondsLeftAt(g, WORK_AT) : null,
+  };
 }
 
 // --- turn ends and advances ------------------------------------------------------------------
@@ -487,7 +523,9 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     // -1 unlimited. Only the drawer has anything to reroll.
     rerollsLeft: isDrawer && g.phase === 'choosing' ? g.rerollsLeft : null,
     character: answerShown && g.character ? publicCharacter(g.character) : null,
-    mask: g.phase === 'drawing' ? maskOf(g) : null,
+    // The blanks only from half time: how many words and letters is a big hint on its own.
+    mask: g.phase === 'drawing' && g.maskShown ? maskOf(g) : null,
+    maskAt: g.phase === 'drawing' && !g.maskShown ? secondsLeftAt(g, MASK_AT) : null,
     clue: g.phase === 'drawing' ? clueFor(g) : null,
     guessedIt: g.guessed.has(viewerId),
     gaveUpIt: g.gaveUp.has(viewerId),

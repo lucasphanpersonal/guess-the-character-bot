@@ -32,11 +32,14 @@ known by counts on its own ("Sasuke", "Luffy") when nobody else in the character
 that word, or everyone who does is at least ten times less famous ("Uzumaki" for Naruto); one
 shared between stars ("Uchiha") is only close. A wrong
 guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
-100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Everyone sees
-the kind of work the character is from ("Anime") from the start, and the work itself from half
-time, with any word of its title that names the character blanked. Letters of the name are
-revealed from half time on, coming faster as the clock runs down, until up to half of them show
-(one for a three-letter name, none for two). The turn ends
+100–400 by how fast it came, and the drawer gets 60 for each person who gets it. The hints run
+on the clock, so the first half is the drawing's: the kind of work ("Anime") at a quarter —
+from the start when the room's lists are all one category, since everyone knows it then — the
+blanks (words and letters) at half time, letters of the name from 60%, coming faster as the
+clock runs down, up to a third of them (none for a two-letter name), each written into its
+slot with a pen stroke, and the work itself for the last quarter, any word of its title that
+names the character blanked. Each hint still to come shows when it arrives, on the clock's
+reading ("Blanks at 40s"). The turn ends
 when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEAL_SECONDS`, 6 s).
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
 The host sets rounds (1–5) and drawing time (60–120 s). At the end, everyone gets the night's

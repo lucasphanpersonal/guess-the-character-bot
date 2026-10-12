@@ -33,6 +33,8 @@ const content = {
   castOf: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => ({ name: c.name, fame: c.fame })),
   // A list's category -- which tells the checker whether its names are romanised from Japanese.
   categoryOf: (listId) => characterLists.getListsByIds([listId], null)[0]?.category ?? null,
+  // How many categories a pool spans: one, and everyone in the room already knows which.
+  categoryCount: (listIds) => new Set(characterLists.getListsByIds(listIds, null).map((l) => l.category)).size,
   // Where a dealt row is from, in parts ({ work, category } or null). A lookup failing is not
   // worth losing a turn over -- it only feeds a hint.
   originOf: (row) => {

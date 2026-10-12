@@ -818,11 +818,17 @@ const connect = (playerId) => {
   const qView = await qDrawing;
   const drawAnswer = newChoices[0];
   check((await pDrawing).character?.name === drawAnswer, 'the drawer keeps the character (its reference picture) while drawing');
-  check(qView.mask && qView.mask.length === drawAnswer.length && !qView.mask.includes(drawAnswer[0] + drawAnswer[1]), 'the guesser sees blanks the length of the name');
+  // The blanks wait for half time (the schedule itself is test/draw.test.js's, on a fake clock):
+  // here, that none is sent early and the page is told when they come.
+  check(qView.mask === null && qView.maskAt === Math.round(qView.drawSeconds / 2), `the guesser gets no blanks before half time, only when they come (${qView.maskAt}s)`);
   // Expected from the compendium, not restated: whatever the fixture says this character is from.
+  // The fixture is one category, so the room knows it already and it shows from the start.
   const drawOrigin = characterLists.getCharacterOrigin(process.env.WEB_SCOPE, drawAnswer);
-  check(drawOrigin?.category && qView.clue?.category === drawOrigin.category && qView.clue.work === null && qView.clue.workLater === !!drawOrigin.work,
-    `the guesser sees the kind of work from the start, and the work is held for half time (${JSON.stringify(qView.clue)})`);
+  check(
+    drawOrigin?.category && qView.clue?.category === drawOrigin.category && qView.clue.work === null &&
+      qView.clue.workAt === (drawOrigin.work ? Math.round(qView.drawSeconds / 4) : null),
+    `one category in the room: the kind of work from the start, the work held for the last quarter (${JSON.stringify(qView.clue)})`
+  );
 
   // Strokes: passed on when they are what the client could make, dropped when not.
   const strokeArrives = nextEvent(Q, 'draw:stroke');

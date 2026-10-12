@@ -479,14 +479,14 @@ function renderGame(turnChanged) {
   const total = v.phase === 'reveal' ? 6 : v.drawSeconds;
   setClock(v.secondsLeft, total, v.phase === 'drawing' ? hurryWatch(`${v.round}:${v.drawer.playerId}`) : null);
 
-  // The clue: the drawer and anyone who has it see the name; everyone else the blanks.
-  if (v.phase === 'drawing') {
-    if (v.character) $('mask').textContent = v.character.name;
-    else {
-      const words = v.mask.split(' ').map((w) => w.length);
-      $('mask').innerHTML = `${esc(v.mask)} <span class="len">(${words.join(' ')})</span>`;
-    }
-  } else $('mask').textContent = '';
+  // The clue: the drawer and anyone who has it see the name; everyone else the blanks from half
+  // time, and until then when they will come.
+  const turnKey = `${v.round}:${v.drawer.playerId}`;
+  if (v.phase !== 'drawing') setMask('', '');
+  else if (v.character) setMask(`name|${v.character.name}`, esc(v.character.name));
+  else if (v.mask) renderBlanks(v.mask, turnKey);
+  else if (v.maskAt != null) setMask(`later|${v.maskAt}`, `<span class="tag later">Blanks at ${v.maskAt}s</span>`);
+  else setMask('', '');
 
   // Where it is from. Rewritten only when it changes, so the live region announces the title
   // once, at half time, rather than on every guess that sends a new view.
@@ -494,8 +494,9 @@ function renderGame(turnChanged) {
   const clueHtml = clue
     ? [
         clue.category ? `<span class="tag">${esc(clue.category)}</span>` : '',
+        clue.categoryAt != null ? `<span class="tag later">Category at ${clue.categoryAt}s</span>` : '',
         clue.work ? `<span class="tag work" title="The title, with any word of the name blanked">${esc(clue.work)}</span>` : '',
-        clue.workLater ? '<span class="tag later">Title at half time</span>' : '',
+        clue.workAt != null ? `<span class="tag later">Title at ${clue.workAt}s</span>` : '',
       ].join('')
     : '';
   // Compared by the string built here, not innerHTML: the browser re-serialises what it was given.
@@ -570,6 +571,45 @@ function renderGame(turnChanged) {
     v.phase === 'drawing' ? (knows ? 'Only those who know see this' : 'Type your guess') : 'Say something';
   renderChat();
   if (turnChanged && v.phase === 'drawing' && !v.isDrawer) $('chatInput').focus();
+}
+
+// --- the blanks ------------------------------------------------------------------------------
+// Rewritten only when what they say changes -- every guess sends a view, and rebuilding the slots
+// each time would replay the newest letter's pen stroke on every guess.
+function setMask(key, html, cls = '') {
+  const el = $('mask');
+  if (el.dataset.key === key) return;
+  el.dataset.key = key;
+  el.className = `mask${cls ? ` ${cls}` : ''}`;
+  el.innerHTML = html;
+}
+// Which letters this page has already shown, this turn: only a letter it has not is written in.
+// A page that arrives mid-turn (a reload) sees what is there already standing still.
+let inked = { turn: '', at: new Set() };
+const isLetterCh = (ch) => /[\p{L}\p{N}]/u.test(ch);
+function renderBlanks(mask, turn) {
+  const firstSight = inked.turn !== turn;
+  if (firstSight) inked = { turn, at: new Set() };
+  const chars = [...mask];
+  const shown = chars.map((ch, i) => (ch !== '_' && isLetterCh(ch) ? i : -1)).filter((i) => i >= 0);
+  const fresh = firstSight ? new Set() : new Set(shown.filter((i) => !inked.at.has(i)));
+  for (const i of shown) inked.at.add(i);
+  // Words kept whole (a slot run never breaks mid-word); slots numbered for the underline cascade.
+  const words = [[]];
+  chars.forEach((ch, i) => (ch === ' ' ? words.push([]) : words[words.length - 1].push([ch, i])));
+  let n = 0;
+  const slot = ([ch, i]) => {
+    if (ch === '_') return `<span class="slot" style="--i:${n++}"></span>`;
+    if (!isLetterCh(ch)) return `<span class="punct">${esc(ch)}</span>`;
+    return `<span class="slot inked${fresh.has(i) ? ' fresh' : ''}" style="--i:${n++};--rot:${GTC.ANGLES[i % GTC.ANGLES.length]}deg"><b>${esc(ch)}</b></span>`;
+  };
+  // A screen reader gets it in words ("blank" for each gap), not as a row of empty boxes.
+  const spoken = words.map((w) => w.map(([ch]) => (ch === '_' ? 'blank' : ch)).join(' ')).join(', ');
+  const html =
+    `<span class="sr">${esc(spoken)}</span>` +
+    words.map((w) => `<span class="mword" aria-hidden="true">${w.map(slot).join('')}</span>`).join('') +
+    `<span class="len" aria-hidden="true">(${words.map((w) => w.length).join(' ')})</span>`;
+  setMask(`blanks|${turn}|${mask}`, html, firstSight ? 'blanks drawlines' : 'blanks');
 }
 
 // Also from room:state, which is what says who the host is now: a host who leaves mid-game hands

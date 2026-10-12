@@ -25,6 +25,44 @@
        break anywhere rather than push the page sideways. The "(5 14)" after it keeps the shape. */
     .mask { overflow-wrap:anywhere; }
     .mask .len { font-family:inherit; font-size:.9rem; letter-spacing:0; opacity:.8; }
+    /* Room for one line of blanks before they come, so the picture does not drop when they do. */
+    .mask { min-height:2.4rem; }
+    /* The same dashed "still to come" pill as the clue bar's, here where the blanks will be. */
+    .mask .tag.later { font-family:var(--font-display); font-size:.95rem; letter-spacing:0; font-weight:800; text-shadow:none;
+                       border:2px dashed rgba(255,255,255,.55); border-radius:999px; padding:1px 12px; }
+
+    /* The blanks: a slot per letter, each with its own underline, and the letters WRITTEN in as
+       they come -- a pen (✎) sweeps across the slot and the letter appears behind it, in the
+       display face at the title's hand-set tilt. The underlines draw themselves in when the blanks
+       first arrive. Only the new letter moves: the rest are re-rendered still. */
+    .mask.blanks { font-family:var(--font-display); letter-spacing:0; white-space:normal; display:flex; flex-wrap:wrap;
+                   justify-content:center; align-items:flex-end; gap:.35em .7em; }
+    .mask .mword { display:inline-flex; gap:.16em; white-space:nowrap; }
+    .mask .slot { position:relative; display:inline-flex; align-items:flex-end; justify-content:center; width:.8em; height:1.2em; }
+    .mask .slot::before { content:""; position:absolute; left:0; right:0; bottom:0; height:.12em; border-radius:999px;
+                          background:currentColor; opacity:.9; transform-origin:left center; }
+    .mask .slot b { display:inline-block; font-weight:900; line-height:1; padding-bottom:.14em; transform:rotate(var(--rot, 0deg)); }
+    .mask .punct { display:inline-flex; align-items:flex-end; height:1.2em; padding-bottom:.14em; }
+    .mask.drawlines .slot::before { animation:drawline .45s ease-out both; animation-delay:calc(var(--i) * 28ms); }
+    @keyframes drawline { from { transform:scaleX(0); } to { transform:scaleX(1); } }
+    .mask .slot.fresh b { animation:inkin .9s cubic-bezier(.3,.6,.35,1) both; }
+    @keyframes inkin {
+      from { clip-path:inset(-40% 100% -40% -40%); transform:rotate(var(--rot, 0deg)) scale(1.35); }
+      70% { transform:rotate(var(--rot, 0deg)) scale(1.08); }
+      to { clip-path:inset(-40% -40% -40% -40%); transform:rotate(var(--rot, 0deg)) scale(1); }
+    }
+    .mask .slot.fresh::after { content:"✎"; position:absolute; left:0; bottom:.35em; font-size:.8em; line-height:1;
+                               text-shadow:0 2px 0 rgba(0,0,0,.3); pointer-events:none; animation:pen .9s cubic-bezier(.3,.6,.35,1) both; }
+    @keyframes pen {
+      0% { transform:translate(-.3em, -.1em) rotate(-14deg); opacity:1; }
+      75% { transform:translate(.75em, .05em) rotate(6deg); opacity:1; }
+      100% { transform:translate(1em, -.2em) rotate(10deg); opacity:0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mask .slot.fresh b, .mask.drawlines .slot::before { animation:none; }
+      .mask .slot.fresh::after { display:none; }
+    }
+    .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
     /* Where the character is from: the kind of work all turn, the work itself from half time.
        On the field, like the mask, so a translucent dark pill reads in both themes. */
     .cluebar { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-weight:800; font-size:.95rem; }
@@ -221,6 +259,7 @@
       .topbar { gap:8px 12px; margin-bottom:12px; }
       .cluebox { order:-1; flex-basis:100%; }
       .mask { font-size:1.4rem; letter-spacing:.25em; }
+      .mask.blanks { letter-spacing:0; }
       .tools { gap:8px; }
       #swatches { display:grid; grid-template-columns:repeat(9, minmax(0, 1fr)); gap:7px; width:100%; }
       .swatch { width:100%; height:auto; aspect-ratio:1; border-width:2px; }
