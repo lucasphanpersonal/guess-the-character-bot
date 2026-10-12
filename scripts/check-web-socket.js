@@ -1025,6 +1025,82 @@ const connect = (playerId) => {
   }
   P.close(); Q.close();
 
+  // ---- Draw: Telephone. Three play at once, each on a chain; nobody is sent another chain's work
+  // until the replay. Searched in whole payloads, every event each player received.
+  console.log('\n# draw — telephone');
+  {
+    const T1 = await connectDraw('tTel1');
+    let r = await T1.emitWithAck('room:create', { nickname: 'Tia' });
+    const code = r.state.code;
+    const T2 = await connectDraw('tTel2');
+    await T2.emitWithAck('room:join', { code, nickname: 'Uma' });
+    const socks = [T1, T2];
+    r = await T1.emitWithAck('draw:start', { mode: 'telephone', poolType: 'everything', difficulty: 'everything', drawSeconds: 60 });
+    check(!r.ok && /at least 3/.test(r.error), `telephone: needs three players, and says so (${r.error})`);
+    const T3 = await connectDraw('tTel3');
+    await T3.emitWithAck('room:join', { code, nickname: 'Vic' });
+    socks.push(T3);
+    const firstViews = socks.map((s) => nextMatching(s, 'tel:state', (v) => v.phase === 'pick'));
+    r = await T1.emitWithAck('draw:start', { mode: 'telephone', poolType: 'everything', difficulty: 'everything', drawSeconds: 60 });
+    check(r.ok, `telephone: three players start a game${r.ok ? '' : ` (${r.error})`}`);
+    if (!r.ok) throw new Error('telephone did not start');
+    const picks = await Promise.all(firstViews);
+    // Up to three each; the fixture's small pool has fewer to go round -- derived, not restated.
+    const each = Math.min(3, Math.floor(SEEDED_NAMES.length / 3));
+    check(picks.every((v) => v.task?.kind === 'pick' && v.task.choices.length === each), `telephone: everyone gets choices to start a chain from (${each} each from a pool of ${SEEDED_NAMES.length})`);
+    const allChoices = picks.flatMap((v) => v.task.choices.map((c) => c.name));
+    check(new Set(allChoices).size === allChoices.length, 'telephone: nobody is offered a character anyone else is');
+    check(!(await T1.emitWithAck('draw:say', { text: 'hello' })).ok, "telephone: the classic game's events do nothing here");
+    // Everyone picks their first; the draw step follows at once.
+    const drawViews = socks.map((s) => nextMatching(s, 'tel:state', (v) => v.phase === 'draw'));
+    for (const s of socks) await s.emitWithAck('tel:pick', { index: 0 });
+    const draws = await Promise.all(drawViews);
+    const started = picks.map((v) => v.task.choices[0].name);
+    // Seat i draws chain i-1: the character the previous seat picked.
+    check(draws.every((v, i) => v.task?.kind === 'draw' && v.task.prompt === started[(i + 2) % 3]), 'telephone: each draws the character the seat before them picked');
+    // The leak: in play, each player was only ever sent their own pick and the one name passed to them.
+    const leaks = socks.map((s, i) => {
+      const seen = s.received.filter((e) => e.event === 'tel:state').map((e) => e.json).join(' ');
+      return started.filter((name, j) => j !== i && j !== (i + 2) % 3 && seen.includes(JSON.stringify(name).slice(1, -1)));
+    }).flat();
+    check(leaks.length === 0, `telephone: nobody is sent a chain they are not working on${leaks.length ? `: ${leaks.join(', ')}` : ''}`);
+    // A stroke each, then hand in; then the guesses.
+    T1.emit('tel:stroke', { id: 'a1', color: '#e21b3c', size: 8, points: [[0.1, 0.1], [0.6, 0.6]] });
+    T1.emit('tel:stroke', { id: 'a2', kind: 'fill', color: '#ffd60a', points: [[0.5, 0.2]] });
+    await wait(100);
+    const guessViews = socks.map((s) => nextMatching(s, 'tel:state', (v) => v.phase === 'guess'));
+    for (const s of socks) await s.emitWithAck('tel:submit', {});
+    const guesses = await Promise.all(guessViews);
+    // Tia drew alone; her drawing (a line and a fill) goes on, at the guess step, to one guesser.
+    const withDrawing = guesses.filter((v) => v.task?.drawing?.length === 2);
+    check(withDrawing.length === 1, "telephone: Tia's drawing, fill and all, reaches exactly one guesser");
+    // ...and to nobody before then: no stroke relayed, no view carrying her line while she drew it.
+    const beforeGuess = (sock) => {
+      const i = sock.received.findIndex((e) => e.event === 'tel:state' && JSON.parse(e.json).phase === 'guess');
+      return sock.received.slice(0, i < 0 ? undefined : i);
+    };
+    check([T2, T3].every((sock) => !beforeGuess(sock).some((e) => e.event === 'draw:stroke' || e.json.includes('[0.6,0.6]'))),
+      'telephone: a drawing is not relayed while it is made');
+    const replayViews = socks.map((s) => nextMatching(s, 'tel:state', (v) => v.phase === 'replay'));
+    await T1.emitWithAck('tel:submit', { text: 'a red line' });
+    await T2.emitWithAck('tel:submit', { text: '' });
+    await T3.emitWithAck('tel:submit', { text: started[0] });
+    const replays = await Promise.all(replayViews);
+    check(replays.every((v) => v.replay?.chain === 0 && v.replay.entries.length === 1 && v.replay.madeIt === null), 'telephone: the replay starts at the first card of the first chain, the ending kept back');
+    check(!(await T2.emitWithAck('tel:next', {})).ok, 'telephone: only the host moves the replay on');
+    for (let i = 0; i < 12; i++) await T1.emitWithAck('tel:next', {});
+    await wait(150);
+    const albumView = T2.received.filter((e) => e.event === 'tel:state').map((e) => JSON.parse(e.json)).pop();
+    check(albumView.phase === 'over' && albumView.album?.length === 3 && albumView.album.every((c) => c.entries.length === 3),
+      'telephone: then the album -- every chain, start, drawing and guess');
+    const roomAfter = T1.received.filter((e) => e.event === 'room:state').map((e) => JSON.parse(e.json)).pop();
+    check(roomAfter.status === 'finished', 'telephone: the room is finished, so the host can rematch or change settings');
+    const again = nextMatching(T2, 'tel:state', (v) => v.phase === 'pick');
+    r = await T1.emitWithAck('draw:rematch', {});
+    check(r.ok && !!(await Promise.race([again, wait(2000).then(() => null)])), 'telephone: a rematch is another Telephone game');
+    T1.close(); T2.close(); T3.close();
+  }
+
   // ---- Draw: the host removes a player ----------------------------------------------------------
   // Someone who walks away keeps their seat, and every turn of theirs runs a full clock with nobody
   // drawing. Mid-game a removal is a departure: the turn ends if it was theirs, and below two

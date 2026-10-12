@@ -17,6 +17,7 @@ const draw = require('./game');
 const web = require('../content');
 const { poolIndex } = require('../../compendium/answers');
 const { perSocket, SLOW_DOWN } = require('../rateLimit');
+const tel = require('./telephone');
 
 // What a player can repeat inside a room, at well above a person's pace: dealing (which reads the
 // pool) and guessing/chatting (which every screen in the room receives).
@@ -82,6 +83,21 @@ function cleanPoints(points) {
   return out;
 }
 
+/**
+ * A piece of a stroke as a client sent it, checked: a palette colour, a brush size, points on the
+ * canvas -- or a fill, whole, at one point. Null when it is anything else. Both modes draw with it.
+ */
+function cleanPiece(piece = {}) {
+  const points = cleanPoints(piece.points);
+  const id = String(piece.id ?? '').slice(0, 24);
+  if (!points || !points.length || !id) return null;
+  const color = String(piece.color ?? '').toLowerCase();
+  if (!COLOURS.has(color)) return null;
+  if (piece.kind === 'fill') return points.length === 1 ? { id, kind: 'fill', color, size: 0, points } : null;
+  const size = Number(piece.size);
+  return SIZES.has(size) ? { id, color, size, points } : null;
+}
+
 function attachDrawSockets(nsp, { registry }) {
   const broadcastRoom = (room) => room && nsp.to(room.code).emit('room:state', stateOf(room));
 
@@ -94,6 +110,7 @@ function attachDrawSockets(nsp, { registry }) {
   // per person, so this is never a room broadcast. Not to anyone gone: a leaver's or removed
   // player's socket is still in the room when their departure is broadcast, and a view arriving
   // after they reached the start screen would put them straight back into the game.
+  const isTel = (room) => room?.game?.mode === 'telephone';
   const emitViews = (room) => {
     const g = room.game;
     if (!g) return;
@@ -101,9 +118,22 @@ function attachDrawSockets(nsp, { registry }) {
     const now = Date.now();
     for (const s of socketsIn(room)) {
       const id = s.data.playerId;
-      if (g.order.includes(id) && !g.gone.has(id)) s.emit('draw:state', draw.viewFor(g, id, names, now));
+      if (!g.order.includes(id) || g.gone.has(id)) continue;
+      if (isTel(room)) s.emit('tel:state', tel.viewFor(g, id, names, now));
+      else s.emit('draw:state', draw.viewFor(g, id, names, now));
     }
   };
+
+  // After anything that may have moved a Telephone game on: everyone's view, the clock, and the
+  // room's status once the album is reached (the end screen's Rematch and Change Settings).
+  function afterTel(room) {
+    if (room.game?.phase === 'over' && room.status === 'playing') {
+      room.status = 'finished';
+      broadcastRoom(room);
+    }
+    emitViews(room);
+    schedule(room);
+  }
 
   // The next characters for the current drawer. Prefer ones with a picture -- the drawer needs
   // something to draw from -- and never one already drawn this game.
@@ -137,7 +167,14 @@ function attachDrawSockets(nsp, { registry }) {
     clearTimer(room);
     const g = room.game;
     // Paused: nothing is due until Continue, which schedules afresh.
-    if (!g || room.status !== 'playing' || draw.isPaused(g)) return;
+    if (!g || room.status !== 'playing') return;
+    if (isTel(room)) {
+      if (tel.isPaused(g) || g.deadline == null) return;
+      room.drawTimer = setTimeout(() => tick(room), Math.max(0, g.deadline - Date.now()) + 20);
+      room.drawTimer.unref?.();
+      return;
+    }
+    if (draw.isPaused(g)) return;
     const now = Date.now();
     const due = [g.deadline, ...(g.phase === 'drawing' ? draw.hintTimes(g).filter((t) => t > now) : [])].filter(Boolean);
     if (!due.length) return;
@@ -149,7 +186,12 @@ function attachDrawSockets(nsp, { registry }) {
   function tick(room) {
     const g = room.game;
     // The watchdog ticks every room; a paused one has nothing due, however late it is.
-    if (!g || room.status !== 'playing' || draw.isPaused(g)) return;
+    if (!g || room.status !== 'playing') return;
+    if (isTel(room)) {
+      if (tel.timeUp(g, Date.now())) return afterTel(room);
+      return schedule(room);
+    }
+    if (draw.isPaused(g)) return;
     const now = Date.now();
     let changed = false;
 
@@ -180,7 +222,9 @@ function attachDrawSockets(nsp, { registry }) {
     const rounds = ROUNDS.includes(Number(config.rounds)) ? Number(config.rounds) : 3;
     const drawSeconds = DRAW_SECONDS.includes(Number(config.drawSeconds)) ? Number(config.drawSeconds) : 80;
     const difficulty = config.difficulty || web.DEFAULT_DIFFICULTY;
-    room.drawSettings = { listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category, categories: config.categories };
+    const mode = config.mode === 'telephone' ? 'telephone' : 'classic';
+    room.drawSettings = { mode, listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category, categories: config.categories };
+    if (mode === 'telephone') return startTelephone(room, label);
     // A character's show, indexed by word the first time one of its characters is drawn: a guess of
     // one word counts only when nobody else in that show shares it (see game.js).
     const casts = new Map();
@@ -204,10 +248,34 @@ function attachDrawSockets(nsp, { registry }) {
     return { ok: true, label };
   }
 
+  // Telephone: up to three starting characters for everyone, none shared, pictures preferred. A
+  // small pool gives fewer each rather than none -- one each is still a game.
+  function startTelephone(room, label) {
+    const s = room.drawSettings;
+    const order = [...room.order];
+    if (order.length < tel.MIN_PLAYERS) return { ok: false, error: `Telephone needs at least ${tel.MIN_PLAYERS} players.` };
+    const rows = web.content.randomCharacters(s.listIds, order.length * tel.CHOICES, [], s.difficulty, { preferImages: true });
+    const each = Math.min(tel.CHOICES, Math.floor(rows.length / order.length));
+    if (each < 1) return { ok: false, error: `${label} has too few characters at this difficulty for ${order.length} players.` };
+    const heads = rows.map(headOf);
+    const choices = new Map(order.map((id, i) => [id, heads.slice(i * each, (i + 1) * each)]));
+    room.game = tel.begin(tel.createTelephone({ order, drawSeconds: s.drawSeconds, choices }), Date.now());
+    room.status = 'playing';
+    broadcastRoom(room);
+    emitViews(room);
+    schedule(room);
+    return { ok: true, label };
+  }
+
   // Someone leaves for good: off the board for turns, kept for the scores.
   function departGame(room, playerId) {
     const g = room?.game;
     if (!g || room.status !== 'playing') return;
+    if (isTel(room)) {
+      // Their seat is skipped from here on; with one player left, straight to the replay.
+      if (tel.removePlayer(g, playerId, Date.now()).ok) afterTel(room);
+      return;
+    }
     const res = draw.removePlayer(g, playerId, Date.now());
     if (!res.ok) return;
     emitViews(room);
@@ -218,6 +286,7 @@ function attachDrawSockets(nsp, { registry }) {
   // socket room, so the results reach only those still in it.
   function finishIfTooFew(room) {
     const g = room?.game;
+    if (isTel(room)) return; // Telephone ends itself early (telephone.js removePlayer)
     if (g && room.status === 'playing' && g.order.filter((id) => !g.gone.has(id)).length < 2) finish(room);
   }
 
@@ -241,7 +310,9 @@ function attachDrawSockets(nsp, { registry }) {
       broadcastRoom(res.room);
       // Rejoining mid-game: the view, and the picture so far.
       const g = res.room.game;
-      if (g && res.room.status === 'playing' && g.order.includes(playerId)) {
+      if (isTel(res.room) && g.order.includes(playerId) && ['playing', 'finished'].includes(res.room.status)) {
+        socket.emit('tel:state', tel.viewFor(g, playerId, namesOf(res.room), Date.now()));
+      } else if (g && res.room.status === 'playing' && g.order.includes(playerId)) {
         socket.emit('draw:canvas', { strokes: g.phase === 'drawing' ? g.strokes : [] });
         socket.emit('draw:state', draw.viewFor(g, playerId, namesOf(res.room), Date.now()));
       } else if (g && res.room.status === 'finished') {
@@ -295,7 +366,9 @@ function attachDrawSockets(nsp, { registry }) {
       broadcastRoom(r);
     });
 
-    const playing = (r) => r && r.status === 'playing' && r.game;
+    // A classic game running. Every classic handler asks this, so none of them can act on a
+    // Telephone game (whose rules are telephone.js, handled below).
+    const playing = (r) => r && r.status === 'playing' && r.game && !isTel(r);
 
     socket.on('draw:choose', ({ index, alsoAccept, shownAs } = {}, ack) => {
       const r = room();
@@ -365,7 +438,7 @@ function attachDrawSockets(nsp, { registry }) {
     socket.on('draw:vote', ({ drawing } = {}, ack) => {
       if (!sayBudget(socket)) return ack?.(SLOW_DOWN);
       const r = room();
-      if (!r?.game || r.status !== 'finished') return ack?.({ ok: false, error: 'Voting opens when the game ends.' });
+      if (!r?.game || r.status !== 'finished' || isTel(r)) return ack?.({ ok: false, error: 'Voting opens when the game ends.' });
       const res = draw.vote(r.game, playerId, drawing);
       ack?.(res);
       if (res.ok) nsp.to(r.code).emit('draw:votes', { counts: draw.votesOf(r.game) });
@@ -393,27 +466,24 @@ function attachDrawSockets(nsp, { registry }) {
       const r = room();
       if (!drawerHere(r)) return;
       const g = r.game;
-      const points = cleanPoints(piece.points);
-      const id = String(piece.id ?? '').slice(0, 24);
-      if (!points || !points.length || !id) return;
+      const p = cleanPiece(piece);
+      if (!p) return;
+      const { id, points } = p;
       if (g.strokes.reduce((n, s) => n + s.points.length, 0) + points.length > MAX_POINTS_PER_TURN) return;
       // A fill: one point, one palette colour, whole in one piece -- painted where it falls in the
       // order of strokes, so undo, a reconnect and the gallery all replay it like any other.
-      if (piece.kind === 'fill') {
-        const colour = String(piece.color ?? '').toLowerCase();
-        if (!COLOURS.has(colour) || points.length !== 1 || g.strokes.some((s) => s.id === id)) return;
+      if (p.kind === 'fill') {
+        if (g.strokes.some((s) => s.id === id)) return;
         if (g.strokes.filter((s) => s.kind === 'fill').length >= MAX_FILLS_PER_TURN) return;
-        g.strokes.push({ id, kind: 'fill', color: colour, size: 0, points });
-        socket.to(r.code).emit('draw:stroke', { id, kind: 'fill', color: colour, size: 0, points });
+        g.strokes.push(p);
+        socket.to(r.code).emit('draw:stroke', p);
         return;
       }
       let stroke = g.strokes.find((s) => s.id === id);
       if (stroke?.kind === 'fill') return; // a fill is whole when it arrives
       if (!stroke) {
-        const colour = String(piece.color ?? '').toLowerCase();
-        const size = Number(piece.size);
-        if (!COLOURS.has(colour) || !SIZES.has(size)) return;
-        stroke = { id, color: colour, size, points: [] };
+        // A stroke keeps the colour and size it began with.
+        stroke = { id, color: p.color, size: p.size, points: [] };
         g.strokes.push(stroke);
       }
       stroke.points.push(...points);
@@ -443,6 +513,56 @@ function attachDrawSockets(nsp, { registry }) {
       ack?.({ ok: true });
     });
 
+    // --- Telephone (telephone.js) ---------------------------------------------------------
+    const telephone = (r) => r && r.game && isTel(r) && ['playing', 'finished'].includes(r.status);
+    const telAct = (fn) => (payload = {}, ack) => {
+      const r = room();
+      if (!telephone(r)) return ack?.({ ok: false, error: 'No Telephone game running.' });
+      const res = fn(r, payload);
+      ack?.(res);
+      if (res?.ok) afterTel(r);
+    };
+    socket.on('tel:pick', telAct((r, { index }) => tel.submit(r.game, playerId, { index }, Date.now())));
+    socket.on('tel:submit', telAct((r, { text }) => tel.submit(r.game, playerId, { text }, Date.now())));
+    socket.on('tel:reroll', (payload, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
+      telAct((r) => {
+        const s = r.drawSettings;
+        const g = r.game;
+        if (g.phase !== 'pick' || g.done.has(playerId)) return { ok: false, error: 'Nothing to choose right now.' };
+        const rows = web.content.randomCharacters(s.listIds, tel.CHOICES, tel.offeredNames(g), s.difficulty, { preferImages: true });
+        return tel.rerollChoices(g, playerId, rows.map(headOf));
+      })(payload, ack);
+    });
+    // The drawing in progress: kept for its drawer alone (a timeout hands in what there is, and a
+    // reload gets it back), never relayed -- nobody watches a Telephone drawing being made.
+    socket.on('tel:stroke', (piece = {}) => {
+      const r = room();
+      const p = cleanPiece(piece);
+      if (telephone(r) && p) tel.addPiece(r.game, playerId, p);
+    });
+    socket.on('tel:undo', () => {
+      const r = room();
+      if (telephone(r)) tel.undo(r.game, playerId);
+    });
+    socket.on('tel:clear', () => {
+      const r = room();
+      if (telephone(r)) tel.clearDraft(r.game, playerId);
+    });
+    // The replay is the host's to move on, so the room watches each chain together.
+    const hostReplay = (move) => (payload, ack) => {
+      if (!isHost()) return ack?.({ ok: false, error: 'The host moves the replay on.' });
+      telAct((r) => move(r.game))(payload, ack);
+    };
+    socket.on('tel:next', hostReplay(tel.replayNext));
+    socket.on('tel:back', hostReplay(tel.replayBack));
+    socket.on('tel:resync', (_p, ack) => {
+      const r = room();
+      if (!telephone(r) || !r.game.order.includes(playerId)) return ack?.({ ok: false });
+      socket.emit('tel:state', tel.viewFor(r.game, playerId, namesOf(r), Date.now()));
+      ack?.({ ok: true });
+    });
+
     socket.on('room:leave', (_p, ack) => {
       const code = socket.data.code;
       if (!code) return ack?.({ ok: true });
@@ -461,11 +581,12 @@ function attachDrawSockets(nsp, { registry }) {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
       if (!isHost()) return ack?.({ ok: false, error: 'Only the host can pause.' });
-      if (!playing(r)) return ack?.({ ok: false, error: 'There is no game running to pause.' });
+      if (r.status !== 'playing' || !r.game) return ack?.({ ok: false, error: 'There is no game running to pause.' });
       const now = Date.now();
-      if (paused) draw.pause(r.game, now);
-      else draw.resume(r.game, now);
-      ack?.({ ok: true, paused: draw.isPaused(r.game) });
+      const rules = isTel(r) ? tel : draw;
+      if (paused) rules.pause(r.game, now);
+      else rules.resume(r.game, now);
+      ack?.({ ok: true, paused: rules.isPaused(r.game) });
       broadcastRoom(r);
       emitViews(r);
       schedule(r);
