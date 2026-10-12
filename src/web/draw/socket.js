@@ -246,6 +246,8 @@ function attachDrawSockets(nsp, { registry }) {
         socket.emit('draw:state', draw.viewFor(g, playerId, namesOf(res.room), Date.now()));
       } else if (g && res.room.status === 'finished') {
         socket.emit('draw:over', draw.overFor(g, namesOf(res.room)));
+        // Back on the end screen: the tally, and which one is theirs.
+        socket.emit('draw:votes', { counts: draw.votesOf(g), mine: g.votes?.get(playerId) ?? null });
       }
     });
 
@@ -356,6 +358,17 @@ function attachDrawSockets(nsp, { registry }) {
       if (res.allDone) draw.endTurn(r.game, Date.now(), res.doneReason);
       emitViews(r);
       return schedule(r);
+    });
+
+    // The end screen's vote for the best drawing (game.js vote). The tally goes to everyone; who
+    // voted for what goes to nobody.
+    socket.on('draw:vote', ({ drawing } = {}, ack) => {
+      if (!sayBudget(socket)) return ack?.(SLOW_DOWN);
+      const r = room();
+      if (!r?.game || r.status !== 'finished') return ack?.({ ok: false, error: 'Voting opens when the game ends.' });
+      const res = draw.vote(r.game, playerId, drawing);
+      ack?.(res);
+      if (res.ok) nsp.to(r.code).emit('draw:votes', { counts: draw.votesOf(r.game) });
     });
 
     // A guesser reacts to the drawing: everyone sees it float up over the picture, the drawer

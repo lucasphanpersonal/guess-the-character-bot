@@ -887,9 +887,12 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // --- results ---------------------------------------------------------------------------------
-socket.on('draw:over', ({ standings, gallery = [], accolades = [] }) => {
+socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts = [] }) => {
   show('over');
   renderGallery(gallery, accolades);
+  // A new end screen is a new vote; a page coming back to one is told its own by draw:votes.
+  votes = { counts, mine: null };
+  renderVotes();
   clearInterval(clockTimer);
   view = null;
   localLines = [];
@@ -924,11 +927,16 @@ function renderGallery(gallery, accolades) {
   closeViewer();
   $('galleryCard').hidden = !gallery.length;
   $('gallery').innerHTML = gallery
-    .map((d, i) => `<button type="button" data-view="${i}"><span class="thumb"></span><span class="name">${esc(d.character?.name ?? '?')}</span><span class="hint">by ${esc(d.drawer)} · ${esc(gotLine(d))}</span></button>`)
+    .map((d, i) => {
+      const own = d.drawerId === me;
+      return `<div class="gitem"><button type="button" class="open" data-view="${i}"><span class="thumb"></span><span class="name">${esc(d.character?.name ?? '?')}</span><span class="hint">by ${esc(d.drawer)} · ${esc(gotLine(d))}</span></button>
+        <button type="button" class="vote" data-vote="${i}" aria-pressed="false"${own ? ' disabled title="Your drawing"' : ''} aria-label="Vote for ${esc(d.character?.name ?? 'this drawing')}">★ <span class="n">0</span></button></div>`;
+    })
     .join('');
   for (const b of $('gallery').querySelectorAll('[data-view]')) b.querySelector('.thumb').replaceWith(thumbnail(gallery[Number(b.dataset.view)]));
   // Shapes paired with the colours, as everywhere else: ▲ ◆ ● ■.
   const shapes = ['▲', '◆', '●', '■'];
+  lastAccolades = accolades;
   $('accoladesCard').hidden = !accolades.length;
   $('accolades').innerHTML = accolades
     .map((a, i) => {
@@ -938,6 +946,49 @@ function renderGallery(gallery, accolades) {
     .join('');
   for (const b of $('accolades').querySelectorAll('.thumbbtn')) b.append(thumbnail(gallery[Number(b.dataset.view)]));
 }
+// --- the vote ----------------------------------------------------------------------------------
+// One each, changeable, never your own (the server's rule; own drawings' buttons are disabled to
+// say so). Crowd Favourite is the leader -- or leaders, tied -- above the other accolades, and moves
+// as votes come in.
+let lastAccolades = [];
+let votes = { counts: [], mine: null };
+function renderVotes() {
+  for (const b of $('gallery').querySelectorAll('[data-vote]')) {
+    const i = Number(b.dataset.vote);
+    b.querySelector('.n').textContent = votes.counts[i] ?? 0;
+    b.setAttribute('aria-pressed', String(votes.mine === i));
+  }
+  $('accolades').querySelector('li.crowd')?.remove();
+  const top = Math.max(0, ...votes.counts);
+  if (top < 1) {
+    $('accoladesCard').hidden = !lastAccolades.length;
+    return;
+  }
+  const leaders = votes.counts.map((n, i) => (n === top ? i : -1)).filter((i) => i >= 0);
+  const names = [...new Set(leaders.map((i) => (galleryItems[i].drawerId === me ? 'You' : galleryItems[i].drawer)))];
+  const detail = leaders.length === 1 ? `★ ${top} for ${galleryItems[leaders[0]].character?.name ?? 'their drawing'}` : `★ ${top} each`;
+  const li = document.createElement('li');
+  li.className = 'crowd';
+  li.innerHTML = `<span class="medal" aria-hidden="true">★</span><div class="what"><div class="title">Crowd Favourite</div><div class="who">${esc(names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0])}</div><div class="detail">${esc(detail)}</div></div><button type="button" class="thumbbtn" data-view="${leaders[0]}" aria-label="See it"></button>`;
+  li.querySelector('.thumbbtn').append(thumbnail(galleryItems[leaders[0]]));
+  $('accolades').prepend(li);
+  $('accoladesCard').hidden = false;
+}
+$('gallery').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-vote]');
+  if (!b || b.disabled) return;
+  socket.emit('draw:vote', { drawing: Number(b.dataset.vote) }, (res) => {
+    if (!res?.ok) return toast(esc(res?.error || 'Could not vote.'));
+    votes.mine = res.mine;
+    renderVotes();
+  });
+});
+socket.on('draw:votes', ({ counts = [], mine } = {}) => {
+  votes.counts = counts;
+  if (mine !== undefined) votes.mine = mine;
+  renderVotes();
+});
+
 function openViewer(i) {
   const d = galleryItems[i];
   if (!d) return;

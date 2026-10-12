@@ -174,6 +174,7 @@ function accolades(drawings, closeCalls, nameOf) {
 function galleryFor(drawings, nameOf) {
   return drawings.map((d) => ({
     drawer: nameOf(d.drawerId),
+    drawerId: d.drawerId, // public: so a page knows which drawings are its own (and cannot vote for them)
     character: d.character, // { name: as the blanks spelled it, realName: the library's, when different }
     strokes: d.strokes,
     got: d.guessed.map((x) => ({ name: nameOf(x.playerId), seconds: Math.max(1, Math.round(x.ms / 1000)) })),

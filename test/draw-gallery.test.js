@@ -80,6 +80,27 @@ module.exports = {
     assert.deepEqual(over.accolades.map((a) => a.title), ['Most Recognisable', 'Speed Demon']);
   },
 
+  'one vote each for the best drawing, changeable, never your own'() {
+    const g = draw.createDrawGame({ order: ['p1', 'p2', 'p3'], rounds: 1 });
+    for (const [drawer, name] of [['p1', 'Pikachu'], ['p2', 'Mario'], ['p3', 'Zelda']]) {
+      g.drawerIndex = g.order.indexOf(drawer);
+      draw.offerChoices(g, [head(name)], T0);
+      draw.choose(g, drawer, 0, T0);
+      draw.endTurn(g, T0 + 1000, 'time');
+    }
+    assert.equal(draw.vote(g, 'p2', 0).ok, false, 'not before the game ends');
+    g.phase = 'over';
+    assert.equal(draw.vote(g, 'p1', 0).ok, false, 'never your own');
+    assert.equal(draw.vote(g, 'p2', 0).mine, 0);
+    assert.equal(draw.vote(g, 'p3', 0).mine, 0);
+    assert.deepEqual(draw.votesOf(g), [2, 0, 0]);
+    assert.equal(draw.vote(g, 'p3', 1).mine, 1, 'changed');
+    assert.deepEqual(draw.votesOf(g), [1, 1, 0], 'one vote each');
+    assert.equal(draw.vote(g, 'p3', 1).mine, null, 'the same again takes it back');
+    assert.deepEqual(draw.overFor(g, names).votes, [1, 0, 0], 'the end screen carries the tally');
+    assert.equal(draw.overFor(g, names).gallery[0].drawerId, 'p1', 'and whose each drawing is');
+  },
+
   'each accolade says something true about the game'() {
     const drawings = [
       kept({ drawerId: 'p1', character: { name: 'Pikachu' }, guessed: [{ playerId: 'p2', ms: 2000 }, { playerId: 'p3', ms: 76_000 }] }),

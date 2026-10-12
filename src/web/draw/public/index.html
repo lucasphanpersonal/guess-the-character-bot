@@ -178,9 +178,16 @@
     /* Two across even on a phone (min() lets a column shrink to half the row): a night of a dozen
        drawings one per row is a long way to scroll. */
     .gallery { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(11rem, calc(50% - 7px)), 1fr)); gap:14px; }
-    .gallery button { display:flex; flex-direction:column; gap:6px; padding:8px; text-align:left; background:var(--soft); color:var(--ink);
+    /* One drawing: the card that opens it, with its vote beneath -- two buttons, not one inside another. */
+    .gitem { display:flex; flex-direction:column; gap:8px; }
+    .gitem .vote { align-self:flex-start; padding:6px 12px; font-size:.9rem; background:var(--paper); color:var(--ink);
+                   box-shadow:0 3px 0 var(--chip-edge); border:2px solid var(--chip-edge); }
+    .gitem .vote[aria-pressed="true"] { background:var(--amber); color:#2b1c00; border-color:var(--amber-d); box-shadow:0 3px 0 var(--amber-d); }
+    .gitem .vote:disabled { opacity:.55; }
+    .accolades li.crowd .medal { background:var(--amber); color:#2b1c00; }
+    .gallery .open { display:flex; flex-direction:column; gap:6px; padding:8px; text-align:left; background:var(--soft); color:var(--ink);
                       border-radius:14px; box-shadow:0 4px 0 var(--chip-edge); font-weight:700; }
-    .gallery button:active { box-shadow:0 1px 0 var(--chip-edge); }
+    .gallery .open:active { box-shadow:0 1px 0 var(--chip-edge); }
     .gallery .name { font-family:var(--font-display); font-weight:900; overflow-wrap:anywhere; }
     .gallery .hint { font-size:.8rem; margin:0; }
     /* Drawings are on paper, white in both themes, like the canvas they were drawn on. */
@@ -542,7 +549,7 @@
     </div>
     <div class="card stack overextra" id="galleryCard" hidden>
       <h2>The Gallery</h2>
-      <p class="hint">Open a drawing to see it big, or to save it.</p>
+      <p class="hint">Open a drawing to see it big or save it, and ★ your favourite: one vote each.</p>
       <div class="gallery" id="gallery"></div>
     </div>
   </section>

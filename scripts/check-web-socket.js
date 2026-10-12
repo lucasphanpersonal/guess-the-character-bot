@@ -996,6 +996,14 @@ const connect = (playerId) => {
     `the end screen gets every drawing, its strokes and its character (${final.gallery?.length} drawings, ${g1?.strokes.length} strokes)`);
   check(g1.got.length === 1 && g1.got[0].name === 'Quinn' && g1.guessers === 1, 'and who got each one');
   check(Array.isArray(final.accolades) && final.accolades.some((a) => a.title === 'Speed Demon'), `and the accolades (${final.accolades?.map((a) => a.title).join(', ')})`);
+  // The vote: Quinn votes for Pia's drawing; everyone gets the tally, nobody who voted for what.
+  {
+    const tally = nextEvent(P, 'draw:votes');
+    res = await Q.emitWithAck('draw:vote', { drawing: 0 });
+    const t = await Promise.race([tally, wait(2000).then(() => null)]);
+    check(res.ok && res.mine === 0 && t?.counts?.[0] === 1 && !('mine' in t), 'the vote: counted, and only the tally goes out');
+    check(!(await P.emitWithAck('draw:vote', { drawing: 0 })).ok, 'the vote: never for your own drawing');
+  }
 
   const drawPage = await httpGet('/draw/');
   check(drawPage.status === 200 && drawPage.type.includes('text/html'), 'GET /draw/ serves the drawing client');

@@ -142,6 +142,7 @@ function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null, ca
     // For the end screen (./gallery.js): every finished drawing, and each player's near misses.
     drawings: [],
     closeCalls: new Map(),
+    votes: new Map(), // the end screen's favourite: voter -> drawing index
   };
 }
 
@@ -530,15 +531,35 @@ function removePlayer(g, playerId, now) {
   return { ok: true, endTurn: false };
 }
 
-/** Everything the end screen shows: the standings, every drawing, and the accolades. */
+/** Everything the end screen shows: the standings, every drawing, the accolades and the votes. */
 function overFor(g, names) {
   const nameOf = (id) => names[id] ?? 'Player';
   return {
     standings: standings(g, names),
     gallery: gallery.galleryFor(g.drawings, nameOf),
     accolades: gallery.accolades(g.drawings, g.closeCalls, nameOf),
+    votes: votesOf(g),
   };
 }
+
+/**
+ * The end screen's vote for the best drawing: one each, changeable (the same one again takes it
+ * back), never for your own. Counted openly but cast in secret -- only the tally is published, so
+ * nobody's vote is anyone else's business.
+ */
+function vote(g, playerId, index) {
+  if (g.phase !== 'over') return { ok: false, error: 'Voting opens when the game ends.' };
+  if (!g.order.includes(playerId) || g.gone.has(playerId)) return { ok: false, error: "You're not in this game." };
+  const i = Number(index);
+  const d = g.drawings[i];
+  if (!Number.isInteger(i) || !d) return { ok: false, error: 'There is no such drawing.' };
+  if (d.drawerId === playerId) return { ok: false, error: "You can't vote for your own drawing." };
+  if (g.votes.get(playerId) === i) g.votes.delete(playerId);
+  else g.votes.set(playerId, i);
+  return { ok: true, mine: g.votes.get(playerId) ?? null };
+}
+/** How many votes each drawing has, in gallery order. */
+const votesOf = (g) => g.drawings.map((_, i) => [...g.votes.values()].filter((v) => v === i).length);
 
 /** Final (or running) standings: by score, ties sharing a place. */
 function standings(g, names) {
@@ -651,6 +672,8 @@ module.exports = {
   removePlayer,
   standings,
   overFor,
+  vote,
+  votesOf,
   viewFor,
   drawerOf,
   allGuessed,
