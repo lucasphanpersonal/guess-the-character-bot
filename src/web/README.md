@@ -1,9 +1,9 @@
 # Web app
 
 Guess the Character in a browser, living **side by side** with the Discord bot in the same repo
-without tangling into it. Two ways to play, from one server:
+without tangling into it. Two ways to play, from one server, chosen on the home page (below):
 
-- **Phones** (party mode, the site root): Heads Up–style, below. Full design:
+- **Phones** (party mode, at the site root): Heads Up–style, below. Full design:
   [docs/mobile-app-plan.md](../../docs/mobile-app-plan.md).
 - **Computers** (`/desk/`): every screen shows everyone's character except its owner's.
   Questions are asked out loud or over a call; on your turn you type a name. During play whoever
@@ -34,7 +34,8 @@ everyone else types guesses into the chat. The checker judges them, and the name
 known by counts on its own ("Sasuke", "Luffy") when nobody else in the character's own show has
 that word, or everyone who does is at least ten times less famous ("Uzumaki" for Naruto); one
 shared between stars ("Uchiha") is only close. A wrong
-guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
+guess is shown to everyone; a close one is told to whoever typed it and shown to the drawer, and
+to nobody still guessing; a right one scores
 100–400 by how fast it came, and the drawer gets 60 for each person who gets it. The hints run
 on the clock, so the first half is the drawing's: the kind of work ("Anime") at a quarter —
 from the start when the room's lists are all one category, since everyone knows it then — the
@@ -62,9 +63,9 @@ screen, play included; the choice is the phones' own `gtc_muted`, one per browse
 **Room** (`shared/roommenu.js`), in all three games, is a button by the title on every screen once
 you are in a room, play included: who is in the room, **Leave Room** (asking first, in the game's
 own words for what leaving costs), and for the host **Remove** beside everyone else, at any
-stage -- a removal mid-game is the same as that player leaving. While a game runs, the host's
+stage — a removal mid-game is the same as that player leaving. While a game runs, the host's
 **Pause Game** is there too: the clock stops for everyone (`room:pause`), nobody's turn can move
-and nothing scores, a Paused screen covers every page -- the phones' forehead view included --
+and nothing scores, a Paused screen covers every page — the phones' forehead view included —
 and **Continue Game** picks up exactly where it stopped. In the guessing games the pause belongs
 to the game, not the turn: a turn that begins while paused begins frozen. It sits beside the
 disconnect pause, and the clock runs only when neither holds it. On a phone-width computer page
@@ -78,7 +79,8 @@ Browse and Test Tilt; *Computers* gets create, join and Browse, and is handed of
 `pointer: coarse` marks which of those two this device looks like. A computer's join box asks
 `GET /api/room?code=` which game a code belongs to; it answers with the game's path and nothing
 else. A Draw code typed into the phones' join box goes to `/draw/` too. A room link or a rejoin
-skips the question. Dark mode is a small switch in the corner, hidden during play.
+skips the question. Dark mode is a small switch: in the corner on the phones' page (hidden during
+play), in the title row on the computer pages.
 
 Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
@@ -128,8 +130,8 @@ web/
   roomAccess.js        Identifying, creating and joining, with the limits on strangers.
   shared/              The computer games' look (theme.css), seasonal switch, client helpers and
                        sound (sound.js), served at /shared/ so /desk/ and /draw/ cannot drift
-                       apart. pickers.js (the pool picker and character search) is loaded by the
-                       phones too.
+                       apart. The phones load three of them too: common.js, pickers.js (the pool
+                       picker and character search) and roommenu.js (Room: leave, remove, pause).
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
   guess/               Guess the Character on the web, however it is played.
@@ -234,11 +236,11 @@ one laptop cannot hold up a room. There is no button fallback: pressing on-scree
 holding the phone where you can see it, and it is showing your own character.
 
 **Testing tilt on a phone:** run `npm run web:secure`, open the printed `https://<LAN-ip>:4443`
-on the phone, and accept the one-time self-signed-cert warning. Tilt is **always on** — the
-first tap (create/join) requests motion access, so on iOS you just grant it when asked; there's
-no separate enable step. The landing screen has a **Test tilt** button to calibrate direction
-(a "flip" toggle) and sensitivity. Without motion (plain HTTP, or permission refused) the game
-still plays fully via on-screen buttons.
+on the phone, and accept the one-time self-signed-cert warning. Where motion needs no permission
+(Android) it is switched on with the first tap; iOS asks once per site, ever, so it is asked on
+the setup screen, where the reason for it is on screen. The landing screen's **Test Tilt** shows
+what the phone reads. Without motion (plain HTTP, or permission refused) a phone cannot lock in
+-- see *Tilt is required to play* above, and the host's Remove.
 
 Open the page on two phones (or two browser tabs): one taps **Create a room**, the other
 enters the 4-letter code (or opens `/?room=CODE`). The roster updates live, offline players
@@ -287,19 +289,21 @@ Endpoints that prove the shared core is reachable from this frontend:
 - **4. Forehead mode + tilt — done.** A synchronized grace countdown ("phone on your
   forehead!"), then each phone shows its wearer's character full-screen for the room, with a
   turn-start chime + buzz and a bright border on your turn.
-  - **Tilt** reads `DeviceMotion.accelerationIncludingGravity.z` (the screen-normal axis, which
-    is what tilting up/down changes whether the phone is portrait or landscape): tilt up = Got
-    it, tilt down / clock runs out = Pass, debounced, with no on-screen controls during play.
+  - **Tilt** reads how far the screen faces up or down -- from the orientation angles
+    (`DeviceOrientation` beta/gamma), which every platform reports the same way, falling back to
+    `accelerationIncludingGravity.z`, whose sign differs between browsers and is learned from a
+    tap: tilt up = Got it, tilt down / clock runs out = Pass, debounced, with no on-screen
+    controls during play.
     The two directions are tuned **asymmetrically** (`TILT_TH_UP` 6.5 / `HOLD_UP_MS` 600 vs
     `TILT_TH_DOWN` 5.5 / `HOLD_DOWN_MS` 450 in `party/public/tilt.js`): tilting up is irreversible — it
     ends the turn and publishes the character — and is also what ordinary nodding produces by
-    accident, so it asks for a firmer, slightly longer tilt. Direction is calibrated by the
-    Test-tilt screen's "flip" toggle, which is persisted.
+    accident, so it asks for a firmer, slightly longer tilt. Thresholds are absolute, not taken
+    from a baseline at the start of a turn (see `party/public/tilt.js`).
   - **Always landscape:** the card is CSS-rotated to landscape even under an iOS portrait lock
     (iOS gives web pages no way to unlock orientation). A ▲ TOP bar during the countdown tells
     players which edge is up before they raise the phone, then hides.
-  - **Always on:** motion is requested on the first gesture; there's no opt-in button. Falls
-    back to on-screen tap buttons when motion is unavailable.
+  - **Always on, and required:** there is no opt-in and no tap fallback; a phone without working
+    motion cannot lock in, and the host can remove its player.
   - **End screen** reveals every player's character alongside the final standings.
 - **5. Reconnection hardening — done.** Seats track a *set* of live sockets, so a second tab or
   a reconnect whose new socket arrives before the old one's disconnect never flips a player

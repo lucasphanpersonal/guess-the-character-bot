@@ -211,9 +211,6 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
                       font-family:var(--font-display); font-size:4.4rem; font-weight:900; color:var(--mystery-ink); }
 /* A player's notes, under their card, for everyone. Below the art on purpose: they change as the
    player types, and nothing anyone aims at sits beneath them. Empty notes take no room. */
-.pcard .notes { white-space:pre-wrap; overflow-wrap:anywhere; font-size:.85rem; line-height:1.35; background:var(--soft);
-                border-radius:10px; padding:6px 8px; max-height:8.2em; overflow:auto; }
-.pcard .notes:empty { display:none; }
 .pcard .cname { font-family:var(--font-display); font-weight:900; font-size:1.12rem; line-height:1.2;
                 min-height:2.4em; display:flex; align-items:center; }
 .pcard .src { color:var(--muted); font-size:.78rem; min-height:1.2em; }

@@ -63,8 +63,9 @@
       .mask .slot.fresh::after { display:none; }
     }
     .sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
-    /* Where the character is from: the kind of work all turn, the work itself from half time.
-       On the field, like the mask, so a translucent dark pill reads in both themes. */
+    /* Where the character is from: the kind of work and the work itself, each once the clock
+       says so (game.js), and a dashed pill for each still to come. On the field, like the mask,
+       so a translucent dark pill reads in both themes. */
     .cluebar { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-weight:800; font-size:.95rem; }
     .cluebar:empty { display:none; }
     .cluebar .tag { background:rgba(0,0,0,.28); color:#fff; padding:3px 12px; border-radius:999px; overflow-wrap:anywhere; }

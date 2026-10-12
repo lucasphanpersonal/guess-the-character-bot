@@ -8,12 +8,12 @@
 // beside the players it listed; the phones' Remove appeared only for players holding up a deal.
 // The server has always allowed both at every stage, so this is the one place that offers them.
 //
-// Self-contained (its own escaping and styles) because the phones' page does not load
-// /shared/common.js. It reuses each page's own way of leaving, so what leaving costs is asked in
-// that game's words, and a leave from here is the same leave as anywhere else.
+// Loaded after /shared/common.js on every page (GTC.esc); its styles are its own, scoped to the
+// dialog, because the phones' page has no theme.css. It reuses each page's own way of leaving, so
+// what leaving costs is asked in that game's words, and a leave from here is the same leave as
+// anywhere else.
 (function () {
-  const esc = (s) =>
-    String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const { esc } = window.GTC;
 
   // Styles, scoped to the dialog. Tokens with fallbacks: the phones' page and the computer pages
   // define the same names, and either may be missing one.

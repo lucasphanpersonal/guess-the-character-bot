@@ -16,8 +16,9 @@ bottom up — each imports only from the ones below it:
   owns its own tables and knows nothing about games.
 - `core/` is the game: rules, turn counts, standings, and the records of finished games.
   Discord-agnostic and frontend-agnostic.
-- `discord/` is this bot; `web/` is the party-mode web app
-  ([docs/mobile-app-plan.md](mobile-app-plan.md)).
+- `discord/` is this bot; `web/` is the web games -- Guess the Character on phones and on
+  computers, and Draw the Character ([src/web/README.md](../src/web/README.md); the phones' design:
+  [docs/mobile-app-plan.md](mobile-app-plan.md)).
 
 The two rules that keep them untangled: **`core/` never imports from `discord/` or `web/`**,
 and **nothing above the compendium queries its tables directly** — content goes through
@@ -84,13 +85,13 @@ src/
     server.js             HTTP(S) + socket.io, static files, /img, browse API, QR; mounts each game
     content.js            The web's view of the compendium (scope 'web', pools, curation, dealing)
     rooms.js, roomAccess.js, publicCharacter.js, imageCache.js   Shared by every web game
-    shared/               The computer games' common look and client helpers, at /shared/
+    shared/               The common look and client helpers, at /shared/ (the phones load some too)
     guess/                Guess the Character on the web, however it is played
       gameSetup.js, turnLoop.js   Dealing/confirm and the turn rules (pure, unit-tested)
       service.js, socket.js       The setup service and the room/turn protocol, per variant
     party/                Phones: forehead view, tilt, countdown. At the site root
     desk/                 Computers: board view, typed guesses, rulings. At /desk/
-    draw/                 Draw the Character: rules (game.js), protocol + clock (socket.js). At /draw/
+    draw/                 Draw the Character: rules (game.js), end screen (gallery.js), protocol + clock (socket.js). At /draw/
 
 scripts/                Content tools (seeding, image fills, select-lists), sounds, the browser
   lib/compendiumArgs.js   Shared argument handling (drops a legacy leading server id)

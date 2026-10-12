@@ -489,8 +489,8 @@ function renderGame(turnChanged) {
   else if (v.maskAt != null) setMask(`later|${v.maskAt}`, `<span class="tag later">Blanks at ${v.maskAt}s</span>`);
   else setMask('', '');
 
-  // Where it is from. Rewritten only when it changes, so the live region announces the title
-  // once, at half time, rather than on every guess that sends a new view.
+  // Where it is from. Rewritten only when it changes, so the live region announces each hint
+  // once, as it arrives, rather than on every guess that sends a new view.
   const clue = v.phase === 'drawing' ? v.clue : null;
   const clueHtml = clue
     ? [

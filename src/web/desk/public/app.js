@@ -341,7 +341,7 @@ $('startBtn').addEventListener('click', () => {
 });
 
 // --- setup: check and reroll --------------------------------------------------------------
-function cardHtml({ name, character, badge = '', current = false, mystery = false, empty = false, done = false, turns = null, notesFor = null }) {
+function cardHtml({ name, character, badge = '', current = false, mystery = false, empty = false, done = false, turns = null }) {
   let art;
   if (mystery) art = '<div class="art mystery">?</div>';
   // A seat not picked for yet (pick-for-each-other). Not the mystery face: that one means "yours".
@@ -353,7 +353,6 @@ function cardHtml({ name, character, badge = '', current = false, mystery = fals
       ${art}
       <div class="cname">${mystery ? 'Who are you?' : empty ? '' : esc(character?.name)}</div>
       <div class="src">${mystery || empty ? '' : esc(character?.source)}</div>
-      ${notesFor ? `<div class="notes" data-notes-for="${esc(notesFor)}"></div>` : ''}
     </div>`;
 }
 

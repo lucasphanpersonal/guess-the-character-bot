@@ -122,8 +122,9 @@
   }
 
   // Dark mode's switch. season.js already applied the saved choice (or the computer's setting)
-  // before first paint; this wires the corner switch (.themetoggle, role="switch" -- the same as
-  // the phones' page) to flip it, saves the choice in gtc_theme (shared with the phones' page),
+  // before first paint; this wires every switch on the page (.themetoggle, role="switch" -- the
+  // same as the phones' page: the title row's, and the Room menu's at phone width) to flip it,
+  // saves the choice in gtc_theme (shared with the phones' page),
   // and keeps aria-checked true to the theme, which is also what slides the knob.
   function bindThemeToggles() {
     const root = document.documentElement;

@@ -207,8 +207,8 @@ function getCharacterSource(scope, characterName, drawnListId = null) {
  * or null when the best there is is a bare category list; `category` is the kind of work
  * ("Anime"), or null for an uncategorised list. Null when getCharacterSource would say nothing.
  *
- * In parts because a game can hand them out separately -- Draw shows the category from the
- * start of a turn and the work only from half time.
+ * In parts because a game can hand them out separately -- Draw shows the category a quarter of
+ * the way into a drawing and the work only in its last quarter.
  */
 function getCharacterOrigin(scope, characterName, drawnListId = null) {
   const rows = db
@@ -506,11 +506,6 @@ function listNamesInCategory(scope, category) {
   return scopedLists(scope, `AND ${where} ORDER BY cl.name COLLATE NOCASE`, ...params).map((r) => r.name);
 }
 
-function getListsByCategory(scope, category) {
-  const [where, params] = categoryClause(category);
-  return scopedLists(scope, `AND ${where}`, ...params);
-}
-
 // ---------------------------------------------------------------------------
 // A scope's playable selection (`enabled`), curated from /list select
 // ---------------------------------------------------------------------------
@@ -789,7 +784,6 @@ module.exports = {
   WEB_SCOPE,
   listCategoriesWithCounts,
   listNamesInCategory,
-  getListsByCategory,
   getEnabledListsByCategory,
   getEnabledLists,
   listCategoriesWithEnabledCounts,
