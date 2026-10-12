@@ -81,6 +81,23 @@
                   aspect-ratio:4/3; position:relative; }
     canvas { width:100%; height:100%; display:block; touch-action:none; }
     canvas.can-draw { cursor:crosshair; }
+    /* Reactions: four chunky pills under the picture, and each one tapped floats up over it on
+       every screen, in its colour, outlined white so it reads over any drawing. */
+    .reactions { display:flex; justify-content:center; gap:10px; margin-top:12px; }
+    .reactions[hidden] { display:none; }
+    .reactions button { min-width:3.2rem; padding:8px 14px; font-family:var(--font-display); font-size:1.15rem; font-weight:900;
+                        background:var(--paper); box-shadow:0 5px 0 rgba(0,0,0,.25); }
+    .reactions button:active { box-shadow:0 1px 0 rgba(0,0,0,.25); }
+    .r-star { color:var(--amber-d); } .r-wow { color:var(--red); } .r-huh { color:var(--blue); } .r-ha { color:var(--green); }
+    .floater { position:absolute; bottom:6%; z-index:2; pointer-events:none; font-family:var(--font-display); font-weight:900;
+               font-size:2.4rem; line-height:1; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 2px 0 #fff; animation:floatup 1.8s ease-out forwards; }
+    @keyframes floatup {
+      0% { transform:translateY(0) scale(.6); opacity:0; }
+      15% { transform:translateY(-15%) scale(1.15); opacity:1; }
+      100% { transform:translateY(-260%) scale(1); opacity:0; }
+    }
+    @keyframes fadeonly { 0% { opacity:0; } 15% { opacity:1; } 100% { opacity:0; } }
+    @media (prefers-reduced-motion: reduce) { .floater { animation-name:fadeonly; } }
     canvas.can-draw.filling { cursor:cell; }
     /* The bucket, among the sizes: a word, not a picture -- the rest of the tools are words too. */
     .size.fill { width:auto; padding:0 10px; font-size:.82rem; font-weight:900; color:var(--ink); }
@@ -446,6 +463,13 @@
           <span class="gap"></span>
           <button id="undoBtn" class="ghost">Undo</button>
           <button id="clearBtn" class="bad">Clear</button>
+        </div>
+        <!-- For the guessers, where the drawer has their tools: a quick word to the artist. -->
+        <div class="reactions" id="reactions" role="group" aria-label="React to the drawing" hidden>
+          <button type="button" data-react="star" class="r-star" aria-label="Love it" title="Love it">★</button>
+          <button type="button" data-react="wow" class="r-wow" aria-label="Whoa" title="Whoa">!!</button>
+          <button type="button" data-react="huh" class="r-huh" aria-label="Huh?" title="Huh?">?!</button>
+          <button type="button" data-react="ha" class="r-ha" aria-label="Funny" title="Funny">ha</button>
         </div>
       </div>
       <div class="card chat">

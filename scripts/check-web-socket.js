@@ -916,6 +916,15 @@ const connect = (playerId) => {
 
   res = await Q.emitWithAck('draw:say', { text: 'Definitely Nobody' });
   check(res.ok && res.verdict === 'wrong', 'a wrong guess is wrong, and shown');
+  // Reactions: a guesser's floats to everyone, the drawer's own and unknown kinds are refused.
+  {
+    const toDrawer = nextEvent(P, 'draw:reaction');
+    res = await Q.emitWithAck('draw:react', { kind: 'star' });
+    const got = await Promise.race([toDrawer, wait(2000).then(() => null)]);
+    check(res.ok && got?.kind === 'star' && Object.keys(got).length === 1, 'reactions: a guesser\'s reaction reaches the drawer, and says nothing else');
+    check(!(await P.emitWithAck('draw:react', { kind: 'star' })).ok, 'reactions: the drawer does not react to their own drawing');
+    check(!(await Q.emitWithAck('draw:react', { kind: 'pikachu' })).ok, 'reactions: only the fixed few -- none can carry a word');
+  }
   // The host's pause, mid-drawing: the clock stands still and nothing is played until Continue.
   {
     const pausedView = nextMatching(Q, 'draw:state', (v) => v.paused === true);

@@ -22,6 +22,11 @@ const { perSocket, SLOW_DOWN } = require('../rateLimit');
 // pool) and guessing/chatting (which every screen in the room receives).
 const dealBudget = perSocket({ max: 10, windowMs: 5000 });
 const sayBudget = perSocket({ max: 8, windowMs: 4000 });
+// Reactions to a drawing in progress: a fixed few, so none can carry a guess (or anything else)
+// to a room that is still guessing. Rate-limited apart from guesses, so tapping ★ never costs a
+// guess its budget.
+const REACTIONS = new Set(['star', 'wow', 'huh', 'ha']);
+const reactBudget = perSocket({ max: 5, windowMs: 3000 });
 const Game = require('../../core/game/Game');
 
 const ROUNDS = [1, 2, 3, 4, 5];
@@ -351,6 +356,21 @@ function attachDrawSockets(nsp, { registry }) {
       if (res.allDone) draw.endTurn(r.game, Date.now(), res.doneReason);
       emitViews(r);
       return schedule(r);
+    });
+
+    // A guesser reacts to the drawing: everyone sees it float up over the picture, the drawer
+    // above all -- the one player who otherwise hears nothing until someone gets it.
+    socket.on('draw:react', ({ kind } = {}, ack) => {
+      if (!reactBudget(socket)) return ack?.(SLOW_DOWN);
+      const r = room();
+      if (!playing(r) || r.game.phase !== 'drawing' || draw.isPaused(r.game)) return ack?.({ ok: false, error: 'Nothing to react to right now.' });
+      if (!REACTIONS.has(kind)) return ack?.({ ok: false, error: 'Unknown reaction.' });
+      const g = r.game;
+      if (playerId === draw.drawerOf(g) || !g.order.includes(playerId) || g.gone.has(playerId)) {
+        return ack?.({ ok: false, error: 'Only the guessers react.' });
+      }
+      nsp.to(r.code).emit('draw:reaction', { kind });
+      ack?.({ ok: true });
     });
 
     // --- the picture ------------------------------------------------------------------------

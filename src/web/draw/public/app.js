@@ -484,6 +484,32 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// --- reactions -------------------------------------------------------------------------------
+const REACTION_GLYPH = { star: '★', wow: '!!', huh: '?!', ha: 'ha' };
+$('reactions').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-react]');
+  if (!b) return;
+  // The float comes back from the server like everyone else's, so a refused tap shows nothing.
+  socket.emit('draw:react', { kind: b.dataset.react }, (res) => {
+    if (res && !res.ok && res.error) toast(esc(res.error), 2500, { max: 2 });
+  });
+});
+// Over the picture, anywhere along it; a dozen at once at most, so a burst cannot bury the drawing.
+socket.on('draw:reaction', ({ kind } = {}) => {
+  const glyph = REACTION_GLYPH[kind];
+  if (!glyph) return;
+  const wrap = canvas.parentElement;
+  if (wrap.querySelectorAll('.floater').length >= 12) return;
+  const f = document.createElement('span');
+  f.className = `floater r-${kind}`;
+  f.setAttribute('aria-hidden', 'true');
+  f.textContent = glyph;
+  f.style.left = `${8 + Math.random() * 80}%`;
+  f.addEventListener('animationend', () => f.remove());
+  setTimeout(() => f.remove(), 2500); // and if no animation runs at all
+  wrap.append(f);
+});
+
 // --- the game --------------------------------------------------------------------------------
 let clockTimer = null;
 // "Nearly out of time": the clock bar turns colour here, and the hurry cue sounds as it does.
@@ -636,6 +662,7 @@ function renderGame(turnChanged) {
   }
 
   $('tools').hidden = !(v.isDrawer && v.phase === 'drawing');
+  $('reactions').hidden = !(!v.isDrawer && v.phase === 'drawing' && !v.paused);
   canvas.classList.toggle('can-draw', canDraw());
 
   // The chat box: a guess box for those still guessing; a quiet word with the others who know
