@@ -151,6 +151,43 @@
     .chat .giveup { margin-top:10px; width:100%; padding:8px 12px; font-size:.9rem; }
     .chat .giveup[hidden] { display:none; }
     .clock { min-width:8rem; }
+
+    /* One column (a phone, or half a laptop screen). The order is what a player looks at: the
+       blanks, the picture, the chat -- and the scores last. In source order the left column came
+       first, so the scores and the drawer's 13rem reference sat between the blanks and the
+       picture, and on a phone the canvas started below the bottom of the screen. The side column
+       dissolves into the grid (display:contents) so its two pieces can go to opposite ends. */
+    @media (max-width: 1000px) {
+      .side { display:contents; }
+      .refcard { order:1; }
+      /* Full width on a phone, but in a wide one-column window a 4:3 picture as wide as the page
+         is taller than the screen and pushes the drawer's tools off the bottom. So no wider than
+         the height left over allows: ~31rem is the title, blanks, reference and tools together. */
+      .drawgrid > :not(.side):not(.chat) { order:2; width:100%; max-width:max(20rem, calc((100dvh - 31rem) * 4 / 3)); justify-self:center; }
+      .chat { order:3; height:20rem; }
+      .players { order:4; display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); }
+      /* The reference as a strip beside its name, not a 13rem panel above the canvas. Still a
+         FIXED height, for the same reason as at full size. */
+      .refcard:not([hidden]) { display:grid; grid-template-columns:6rem minmax(0,1fr); column-gap:12px; align-items:center; }
+      .refart { grid-row:span 3; height:6rem; }
+      .refname { margin-top:0; }
+    }
+    /* A phone during play: the title shrinks to one line, the round shares the clock's line under
+       the blanks, and the palette packs into two rows instead of three. */
+    @media (max-width: 560px) {
+      body:has(#game.active) .titlebar { align-items:center; margin-bottom:.8rem; }
+      body:has(#game.active) .titlebar h1 { font-size:1.45rem; }
+      body:has(#game.active) .titletools { height:auto; }
+      .topbar { gap:8px 12px; margin-bottom:12px; }
+      .cluebox { order:-1; flex-basis:100%; }
+      .mask { font-size:1.4rem; letter-spacing:.25em; }
+      .tools { gap:8px; }
+      #swatches { display:grid; grid-template-columns:repeat(9, minmax(0, 1fr)); gap:7px; width:100%; }
+      .swatch { width:100%; height:auto; aspect-ratio:1; border-width:2px; }
+      .swatch.on, .size.on { outline-width:3px; outline-offset:1px; }
+      .size { width:2.2rem; height:2.2rem; }
+      .tools button.ghost, .tools button.bad { padding:9px 12px; font-size:.92rem; }
+    }
   </style>
 </head>
 <body>
