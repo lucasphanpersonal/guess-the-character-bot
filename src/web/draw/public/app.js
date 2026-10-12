@@ -503,11 +503,10 @@ function renderGame(turnChanged) {
 
   // Overlays on the picture: choosing, waiting for the drawer to choose, the reveal.
   $('chooseOverlay').hidden = !(v.phase === 'choosing' && v.isDrawer);
-  $('alsoCard').hidden = !(v.phase === 'choosing' && v.isDrawer);
+  // The confirm dialog is for one choice of one turn: gone with the turn (picked, the game over,
+  // removed by the host) or with the choice itself.
+  if (confirming && !(v.phase === 'choosing' && v.isDrawer && v.choices?.[confirming.index]?.name === confirming.name)) closeConfirm();
   if (v.phase === 'choosing' && v.isDrawer) {
-    // A new turn is a new character: last turn's other names would be wrong for it. New choices
-    // within the same turn keep what was typed -- it applies to whichever is picked.
-    if (turnChanged) $('alsoAccept').value = '';
     $('pick').innerHTML = v.choices
       .map((c, i) => `<button data-i="${i}"><div class="art">${characterArt(c)}</div><span>${esc(c.name)}</span><span class="hint" title="${esc(c.source)}">${esc(c.source)}</span></button>`)
       .join('');
@@ -573,12 +572,49 @@ function renderPlayers() {
   if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;
 }
 
+// Picking is two steps: the card, then the dialog saying what will count (the server's
+// acceptedNames, so it is the judge's own answer) with room for another name. The clock starts
+// only on Start Drawing.
+let confirming = null; // { index, name } of the choice the dialog is open for
+function openConfirm(index) {
+  const c = view?.choices?.[index];
+  if (!c) return;
+  confirming = { index, name: c.name };
+  $('confirmArt').innerHTML = characterArt(c);
+  $('confirmName').textContent = c.name;
+  $('confirmCounts').innerHTML = (c.accepts ?? [c.name]).map((n) => `<li>${esc(n)}</li>`).join('');
+  // Other names are for this character: starting blank each time, so Back and another pick
+  // cannot carry one character's names onto the next.
+  $('alsoAccept').value = '';
+  $('confirmGo').disabled = false;
+  $('confirmPick').showModal();
+  // Straight into the box with a keyboard to hand; on a phone the button keeps the focus
+  // (autofocus), so the on-screen keyboard does not cover the names on opening.
+  if (matchMedia('(pointer: fine)').matches) $('alsoAccept').focus();
+}
+function closeConfirm() {
+  confirming = null;
+  if ($('confirmPick').open) $('confirmPick').close();
+}
+$('confirmPick').addEventListener('close', () => {
+  confirming = null;
+});
+$('confirmBack').addEventListener('click', closeConfirm);
+$('confirmForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!confirming) return;
+  $('confirmGo').disabled = true; // once; the next view closes the dialog
+  socket.emit('draw:choose', { index: confirming.index, alsoAccept: $('alsoAccept').value }, (res) => {
+    if (res && !res.ok) {
+      $('confirmGo').disabled = false;
+      toast(esc(res.error));
+    }
+  });
+});
+
 $('pick').addEventListener('click', (e) => {
   const b = e.target.closest('[data-i]');
-  if (!b) return;
-  socket.emit('draw:choose', { index: Number(b.dataset.i), alsoAccept: $('alsoAccept').value }, (res) => {
-    if (res && !res.ok) toast(esc(res.error));
-  });
+  if (b) openConfirm(Number(b.dataset.i));
 });
 
 $('rerollChoicesBtn').addEventListener('click', () => {

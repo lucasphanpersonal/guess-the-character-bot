@@ -239,6 +239,21 @@ function aNameTheDrawerAcceptsCounts() {
   assert.equal(draw.viewFor(g, 'p1', names, T0).alsoAccept.join('|'), 'Serena|Sailor Moon', 'the drawer sees them');
 }
 
+function theDrawerIsToldWhatWillCountForEachChoice() {
+  const { poolIndex } = require('../src/compendium/answers');
+  const cast = poolIndex(['Uchiha Sasuke', 'Uchiha Itachi', 'Miles "Tails" Prower']);
+  const g = draw.createDrawGame({ order: ['p1', 'p2', 'p3'], castOf: () => cast });
+  draw.offerChoices(g, [head('Uchiha Sasuke'), head('Miles "Tails" Prower'), head('Pikachu')], T0);
+  const accepts = draw.viewFor(g, 'p1', names, T0).choices.map((c) => c.accepts);
+  assert.deepEqual(accepts[0], ['Uchiha Sasuke', 'Sasuke'], 'not Uchiha: Itachi has it too');
+  assert.ok(accepts[1].includes('Tails'), 'a nickname, without its quotes');
+  assert.deepEqual(accepts[2], ['Pikachu']);
+  // And each is what the judge then says.
+  draw.choose(g, 'p1', 0, T0);
+  assert.equal(draw.say(g, 'p2', 'Sasuke', T0 + 1000).verdict, 'correct');
+  assert.equal(draw.say(g, 'p3', 'Uchiha', T0 + 1000).verdict, 'close');
+}
+
 function otherNamesReachNobodyButTheDrawerUntilTheReveal() {
   const g = started();
   draw.choose(g, 'p1', 0, T0, 'Pika');
@@ -471,6 +486,7 @@ module.exports = {
   'longer names give up half their letters, short ones fewer': longerNamesGiveHalfTheirLettersShortOnesFewer,
   'whoever gave up talks only to those who know, and scores nothing': whoGaveUpTalksOnlyToThoseWhoKnow,
   'a name the drawer accepts counts': aNameTheDrawerAcceptsCounts,
+  'the drawer is told what will count for each choice': theDrawerIsToldWhatWillCountForEachChoice,
   'other names reach nobody but the drawer until the reveal': otherNamesReachNobodyButTheDrawerUntilTheReveal,
   'other names are a few real names': otherNamesAreAFewRealNames,
   'other names are for that turn only': otherNamesAreForThatTurnOnly,

@@ -21,11 +21,14 @@ without tangling into it. Two ways to play, from one server:
 And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
 order: the drawer picks one of three characters, taking as long as they like (no clock; a drawer
 who walks away is the host's to remove) — or asks for three new ones, as often as they like, never
-repeating a face already offered —
-then draws it with the character's picture beside the canvas as a reference only they can see;
+repeating a face already offered. Picking one opens a dialog listing what guessers can type and
+be right, with a box for other names the drawer will accept ("Endeavor" for Todoroki Enji, another
+sub's spelling); the clock starts on **Start Drawing**. They
+then draw it with the character's picture beside the canvas as a reference only they can see;
 everyone else types guesses into the chat. The checker judges them, and the name a character is
 known by counts on its own ("Sasuke", "Luffy") when nobody else in the character's own show has
-that word; a shared one ("Uzumaki") is only close. A wrong
+that word, or everyone who does is at least ten times less famous ("Uzumaki" for Naruto); one
+shared between stars ("Uchiha") is only close. A wrong
 guess is shown to everyone; a close one is told only to whoever typed it; a right one scores
 100–400 by how fast it came, and the drawer gets 60 for each person who gets it. Everyone sees
 the kind of work the character is from ("Anime") from the start, and the work itself from half

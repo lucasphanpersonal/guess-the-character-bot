@@ -17,14 +17,17 @@
 //
 // Guesses are judged by the compendium's checker (src/compendium/answers.js), and a character's
 // known name counts on its own -- "Sasuke" for Sasuke Uchiha, "Luffy" for Monkey D. Luffy -- when
-// no one else in the character's own show has that word: "Uzumaki" names half the Naruto cast,
-// so it stays close. Full names only was the rule at first, so that "Combat" could not win the
+// no one else in the character's own show has that word, or everyone who does is at least ten
+// times less famous: "Uzumaki" is Naruto, while "Uchiha", shared by Itachi and Sasuke, stays
+// close. Full names only was the rule at first, so that "Combat" could not win the
 // round for "Combat Carl" -- people guessing at a drawing type what they SEE -- but it marked
 // "close" the name everyone actually calls most characters by. Unique in the show, not in the
 // whole pool: across 25,000 characters somebody else is always called Fred, which says nothing
-// about whether "Fred" picks out this one. A close guess is told privately to whoever typed it ("you're close") and shown
-// to nobody else. Once you have it -- and for the drawer, always -- what you type goes only to
-// the others who know, because it may well contain the answer.
+// about whether "Fred" picks out this one. Before the clock starts, the drawer is shown what will
+// count (acceptedNames) and may add names of their own (alsoAccept). A close guess is told
+// privately to whoever typed it ("you're close"); of everyone else, only the drawer sees it.
+// Once you have it -- and for the drawer, always -- what you type goes only to the others who
+// know, because it may well contain the answer.
 
 const { judgeGuess, maskNameWords } = require('../../compendium/answers');
 const { normalizeLoose } = require('../../compendium/text');
@@ -129,6 +132,31 @@ const allDone = (g) => {
 /** Why a turn with nobody left guessing ended: everyone got it, or some gave up. */
 const doneReason = (g) => (allGuessed(g) ? 'all' : 'given-up');
 
+/** How guesses at this character are judged -- one place, so the drawer is told the same rules. */
+const judging = (g, character) => ({
+  singleWords: true,
+  others: g.castOf?.(character) ?? [],
+  // Anime and Manga names are romanised from Japanese: "Tanjiro" is "Tanjirou" there.
+  romanised: ROMANISED.has(character.origin?.category),
+});
+
+/**
+ * What a guesser can type and be right, as the drawer should be told before choosing whether to
+ * add another name: the name itself, then each word of it that counts alone -- asked of the judge
+ * itself, word by word, so the list cannot promise what say() would refuse. "Todoroki Enji" says
+ * only "Enji": nobody calls him Endeavor unless the drawer adds it.
+ */
+function acceptedNames(g, character) {
+  const opts = judging(g, character);
+  const out = [character.name];
+  for (const raw of String(character.name).split(/\s+/)) {
+    const word = raw.replace(/^["'(]+|["'),.]+$/g, '');
+    if (!word || out.some((o) => o.toLowerCase() === word.toLowerCase())) continue;
+    if (judgeGuess(word, character.name, opts).verdict === 'correct') out.push(word);
+  }
+  return out;
+}
+
 /** Start the current drawer's turn with these characters to choose from. */
 function offerChoices(g, choices, now) {
   g.phase = 'choosing';
@@ -216,13 +244,9 @@ function say(g, playerId, text, now) {
     return { ok: true, verdict: 'said' };
   }
 
-  const romanised = ROMANISED.has(g.character.origin?.category);
-  let { verdict } = judgeGuess(clean, g.character.name, {
-    singleWords: true,
-    others: g.castOf?.(g.character) ?? [],
-    // Anime and Manga names are romanised from Japanese: "Tanjiro" is "Tanjirou" there.
-    romanised,
-  });
+  const opts = judging(g, g.character);
+  const { romanised } = opts;
+  let { verdict } = judgeGuess(clean, g.character.name, opts);
   // A name the drawer said they would accept counts as the name -- as a whole name (any order,
   // case or accents), not word by word: they typed exactly what they meant.
   if (verdict !== 'correct' && (g.alsoAccept ?? []).some((name) => judgeGuess(clean, name, { romanised }).verdict === 'correct')) {
@@ -424,7 +448,8 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     isDrawer,
     secondsLeft: g.deadline ? Math.max(0, Math.round((g.deadline - now) / 1000)) : null,
     drawSeconds: g.drawSeconds,
-    choices: isDrawer && g.phase === 'choosing' ? g.choices.map(publicCharacter) : null,
+    // Each with what will count for it (acceptedNames): what the drawer is shown on picking one.
+    choices: isDrawer && g.phase === 'choosing' ? g.choices.map((c) => ({ ...publicCharacter(c), accepts: acceptedNames(g, c) })) : null,
     // -1 unlimited. Only the drawer has anything to reroll.
     rerollsLeft: isDrawer && g.phase === 'choosing' ? g.rerollsLeft : null,
     character: answerShown && g.character ? publicCharacter(g.character) : null,

@@ -71,10 +71,23 @@
     }
     .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center; overflow:hidden; }
     .pick .art img { width:100%; height:100%; object-fit:contain; }
-    .alsocard[hidden] { display:none; }
-    .alsocard .opt { font-weight:600; color:var(--muted); text-transform:none; letter-spacing:0; }
-    .alsocard input { width:100%; padding:8px 10px; font-size:.95rem; margin-top:6px; }
-    .alsocard .hint { font-size:.8rem; margin:8px 0 0; }
+    /* The pick, confirmed. Sized to the phone first: a 16px gutter, and it scrolls inside itself
+       rather than off the bottom when the keyboard takes half the screen. */
+    dialog.confirmpick { border:none; width:min(27rem, calc(100vw - 32px)); max-height:calc(100dvh - 32px);
+                         overflow-y:auto; overscroll-behavior:contain; }
+    dialog.confirmpick::backdrop { background:rgba(20,8,45,.62); }
+    .confirmhead { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+    .confirmhead .art { width:4.5rem; height:4.5rem; flex:none; border-radius:12px; background:var(--chip); overflow:hidden;
+                        display:flex; align-items:center; justify-content:center; }
+    .confirmhead .art img { width:100%; height:100%; object-fit:cover; object-position:50% 20%; }
+    .confirmhead .art .hint { font-size:.7rem; text-align:center; }
+    .confirmhead .hint { margin:0; }
+    .confirmhead h2 { margin:0; font-size:1.4rem; overflow-wrap:anywhere; }
+    .confirmpick .counts { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px; }
+    .confirmpick .counts li { background:var(--chip); border:2px solid var(--chip-edge); border-radius:999px; padding:3px 12px;
+                              font-weight:800; overflow-wrap:anywhere; }
+    .confirmpick .hint { font-size:.82rem; margin:6px 0 16px; }
+    .confirmactions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
     .refaccept { font-size:.85rem; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
     .reveal-art { width:14rem; height:11rem; border-radius:12px; background:var(--chip); overflow:hidden; display:flex;
                   align-items:center; justify-content:center; }
@@ -141,18 +154,20 @@
   </style>
 </head>
 <body>
-<!-- Dark mode: the corner switch, the same as the phones' page (styles in /shared/theme.css,
-     wired by GTC.bindThemeToggles). season.js applied the choice before first paint. -->
-<button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
-  <span class="knob" aria-hidden="true">◐</span>
-</button>
 <main>
   <div class="titlebar">
     <h1><a id="title" href="/">Draw the Character</a></h1>
-    <!-- Sound On / Off: wired and painted by /shared/sound.js. -->
-    <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
-      <span class="note" aria-hidden="true">♪</span><span class="label">Sound On</span>
-    </button>
+    <div class="titletools">
+      <!-- Sound On / Off: wired and painted by /shared/sound.js. -->
+      <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound">
+        <span class="note" aria-hidden="true">♪</span><span class="label">Sound On</span>
+      </button>
+      <!-- Dark mode: the same switch as the phones' page (styles in /shared/theme.css, wired by
+           GTC.bindThemeToggles). season.js applied the choice before first paint. -->
+      <button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode" title="Dark mode">
+        <span class="knob" aria-hidden="true">◐</span>
+      </button>
+    </div>
   </div>
 
   <!-- Landing -->
@@ -258,15 +273,6 @@
         <!-- The drawer's reference: the character's picture for the whole of their turn, so they
              draw what it looks like rather than from memory. Only ever filled from the drawer's
              own view, which is the only one that carries the character while drawing. -->
-        <!-- Before the drawing starts, because it is the drawer's call what else counts: the English
-             name of a character the library has in Japanese, a nickname. Beside the canvas, not on
-             it: the three choices already fill the 4:3 picture at narrow widths, and anything below
-             them there is cut off. -->
-        <div class="card alsocard" id="alsoCard" hidden>
-          <label for="alsoAccept">Also accept <span class="opt">(optional)</span></label>
-          <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. Serena, Bunny" />
-          <p class="hint">Other names that count, comma-separated: the English name, a nickname. For whichever one you pick.</p>
-        </div>
         <div class="card refcard" id="refCard" hidden>
           <div class="refart" id="refArt"></div>
           <div class="refname" id="refName"></div>
@@ -322,6 +328,32 @@
   </section>
 
   <!-- Results -->
+  <!-- Between picking and the clock: what will count, and the drawer's chance to add the name the
+       room actually uses -- "Endeavor" for Todoroki Enji, one sub's spelling of Grimmjow's surname.
+       It is the drawer's call because only they can see the character. A dialog over the page, not
+       a box on the canvas: the 4:3 picture has no room for a form at phone widths. -->
+  <dialog class="card confirmpick" id="confirmPick" aria-labelledby="confirmName">
+    <form id="confirmForm">
+      <div class="confirmhead">
+        <div class="art" id="confirmArt"></div>
+        <div>
+          <div class="hint">You're drawing</div>
+          <h2 id="confirmName"></h2>
+        </div>
+      </div>
+      <label>Guessers get it with</label>
+      <ul class="counts" id="confirmCounts"></ul>
+      <p class="hint">In any order, any capitals, with or without accents.</p>
+      <label for="alsoAccept">Known by another name?</label>
+      <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. a hero name, the dub's name" />
+      <p class="hint">Comma-separated, up to three. Nobody else sees them until the reveal.</p>
+      <div class="confirmactions">
+        <button type="button" class="ghost" id="confirmBack">Back</button>
+        <button type="submit" id="confirmGo" autofocus>Start Drawing</button>
+      </div>
+    </form>
+  </dialog>
+
   <section id="over" class="screen">
     <div class="cols">
       <div class="card stack">
