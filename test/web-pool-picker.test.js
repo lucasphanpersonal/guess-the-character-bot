@@ -74,6 +74,27 @@ function oneBadIdChangesNothing() {
   assert.equal(rm.excludedListIds.size, 0, 'not half of the request');
 }
 
+// A host's remembered opt-outs, put back into a new room by their browser.
+function rememberedListsGoBackOffInANewRoom() {
+  const { a1, a2 } = seed();
+  const rm = room();
+  assert.deepEqual(sorted(web.keepListsOff([a1, a2], rm).off), sorted([a1, a2]));
+  assert.equal(rm.excludedListIds.has(a1) && rm.excludedListIds.has(a2), true);
+  assert.equal(lists.getListsByIds([a1], web.WEB_SCOPE)[0].enabled, 1, "the web's selection is untouched");
+  // Again is harmless: off stays off, nothing flips back on.
+  web.keepListsOff([a1], rm);
+  assert.equal(rm.excludedListIds.has(a1), true);
+}
+
+function aRememberedListThatIsGoneIsSkippedNotFatal() {
+  const { a1, hidden } = seed();
+  const rm = room();
+  const res = web.keepListsOff([a1, hidden, 99999999, 'x'], rm);
+  assert.deepEqual(res, { ok: true, off: [a1] }, "another scope's list and a missing one are skipped; the rest still apply");
+  assert.deepEqual(sorted(rm.excludedListIds), [a1]);
+  assert.deepEqual(web.keepListsOff(undefined, rm), { ok: true, off: [] });
+}
+
 function aSingleTickStillFlips() {
   const { a1 } = seed();
   const rm = room();
@@ -89,4 +110,6 @@ module.exports = {
   'none then all switches every list in one go': noneThenAllSwitchesEveryListInOneGo,
   'one bad id changes nothing': oneBadIdChangesNothing,
   'a single tick still flips': aSingleTickStillFlips,
+  'remembered lists go back off in a new room': rememberedListsGoBackOffInANewRoom,
+  'a remembered list that is gone is skipped, not fatal': aRememberedListThatIsGoneIsSkippedNotFatal,
 };

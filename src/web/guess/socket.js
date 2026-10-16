@@ -426,6 +426,15 @@ function attachSockets(nsp, { registry, setup, variant }) {
       return ack?.(setup.setLists(payload.listIds, !!payload.playing, r));
     });
 
+    // The host's browser re-applying what they switched off last time: this room only, off only,
+    // and a list no longer in the selection is skipped rather than failing the rest.
+    socket.on('setup:keepOff', (payload = {}, ack) => {
+      const r = room();
+      if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
+      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can curate lists.' });
+      return ack?.(setup.keepOff(payload.listIds, r));
+    });
+
     // Host deals characters and moves the room into the confirm phase.
     socket.on('setup:start', (config = {}, ack) => {
       if (!dealBudget(socket)) return ack?.(SLOW_DOWN);

@@ -193,6 +193,14 @@ const connect = (playerId) => {
   res = await C.emitWithAck('setup:setLists', { listIds: [listId], playing: true });
   check(res.ok && res.playing[0] === true, 'and back on');
 
+  // What a host's browser remembers switching off goes back off in a new room -- off only, the
+  // rest still applied when one remembered list has since gone.
+  check((await D.emitWithAck('setup:keepOff', { listIds: [listId] })).ok === false, 'a non-host cannot re-apply remembered lists');
+  res = await C.emitWithAck('setup:keepOff', { listIds: [listId, 987654321] });
+  check(res.ok && res.off.length === 1 && res.off[0] === listId, 'remembered lists go back off; a gone one is skipped, not fatal');
+  check((await C.emitWithAck('setup:categoryLists', { category: 'TestToons' })).lists[0].playing === false, 'and the picker then shows them off');
+  await C.emitWithAck('setup:setLists', { listIds: [listId], playing: true }); // back on for the deal below
+
   // Host can call off a deal from the reroll phase; a non-host cannot.
   const notHostCancel = await D.emitWithAck('setup:cancel', {});
   check(notHostCancel.ok === false, 'a non-host cannot cancel setup');
@@ -962,7 +970,9 @@ const connect = (playerId) => {
   const reveal1 = nextMatching(P, 'draw:state', (v) => v.phase === 'reveal');
   res = await Q.emitWithAck('draw:say', { text: drawAnswer.toUpperCase() });
   check(res.ok && res.verdict === 'correct' && res.points > 0, 'the right name scores');
-  check((await qGotIt).playerId === pub('rQ'), "draw:correct says who got it, so the guesser's own page can tell");
+  const qGot = await qGotIt;
+  check(qGot.playerId === pub('rQ'), "draw:correct says who got it, so the guesser's own page can tell");
+  check(qGot.nth === 1, `draw:correct counts who has it, for the climbing cue (first: ${qGot.nth})`);
   check((await reveal1).lastTurn.character.name === drawAnswer, 'everyone guessed, so the turn ends with the reveal');
   const guesserLeaks = (() => {
     const until = Q.received.findIndex((e) => e.event === 'draw:correct');
@@ -1116,6 +1126,14 @@ const connect = (playerId) => {
     await K2.emitWithAck('room:join', { code: kCode, nickname: 'Dev' });
     await K3.emitWithAck('room:join', { code: kCode, nickname: 'Gus' });
 
+    // Drawing has the same remembered opt-outs as guessing (shared/pickers.js serves both).
+    const drawList = (await K1.emitWithAck('setup:categoryLists', { category: 'TestToons' })).lists[0].id;
+    check(!(await K2.emitWithAck('setup:keepOff', { listIds: [drawList] })).ok, 'draw: a non-host cannot re-apply remembered lists');
+    res = await K1.emitWithAck('setup:keepOff', { listIds: [drawList] });
+    check(res.ok && res.off[0] === drawList && (await K1.emitWithAck('setup:categoryLists', { category: 'TestToons' })).lists[0].playing === false,
+      'draw: the host\'s remembered lists go back off in a new room');
+    await K1.emitWithAck('setup:setLists', { listIds: [drawList], playing: true }); // the game below deals from it
+
     check(!(await K2.emitWithAck('room:kick', { playerId: pub('kGus') })).ok, 'draw kick: a non-host cannot remove anyone');
     check(!(await K1.emitWithAck('room:kick', { playerId: pub('kHost') })).ok, 'draw kick: the host cannot remove themselves');
     check(!(await K1.emitWithAck('room:kick', { playerId: pub('kNobody') })).ok, 'draw kick: only someone in the room can be removed');
@@ -1139,8 +1157,11 @@ const connect = (playerId) => {
     await K1.emitWithAck('draw:choose', { index: 0 });
     await gusSeesDrawing;
     const devChoosing = nextMatching(K2, 'draw:state', (v) => v.phase === 'choosing' && v.isDrawer);
+    // Matched by who: the ack comes before the broadcast, so Dev's own may still be on its way.
+    const secondGot = nextMatching(K1, 'draw:correct', (e) => e.playerId === pub('kGus'));
     await K2.emitWithAck('draw:say', { text: kAnswer });
     await K3.emitWithAck('draw:say', { text: kAnswer });
+    check((await secondGot).nth === 2, 'draw kick: the second to get it is counted second, a step up the climb');
     await devChoosing;
 
     // The player whose turn it is: the turn ends, the board keeps their score, the next one draws.

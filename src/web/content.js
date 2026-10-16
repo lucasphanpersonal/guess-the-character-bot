@@ -129,6 +129,28 @@ function setListsPlaying(listIds, playing, room) {
   return { ok: true, playing: ids.map((id) => !room.excludedListIds.has(id)) };
 }
 
+/**
+ * The host's remembered opt-outs, re-applied to a new room: lists their browser says they
+ * switched off last time (pickers.js keeps them). Kept to this room, like any tick -- a host's
+ * habits are theirs, and never reach the web's selection or anyone else's room.
+ *
+ * Not all-or-nothing, unlike setListsPlaying: a remembered list can since have left the web's
+ * selection, and one such id must not cost the host every other choice they made. Unknown ids
+ * are skipped, never acted on. And it only switches lists OFF -- what a browser remembers can
+ * narrow a room, never widen it.
+ */
+const KEEP_OFF_MAX = 2500;
+function keepListsOff(listIds, room) {
+  const ids = [...new Set((Array.isArray(listIds) ? listIds : []).map(Number))].filter(Number.isInteger).slice(0, KEEP_OFF_MAX);
+  if (!ids.length) return { ok: true, off: [] };
+  const valid = characterLists
+    .getListsByIds(ids, WEB_SCOPE)
+    .filter((l) => characterLists.isVisibleTo(l, WEB_SCOPE) && l.enabled === 1)
+    .map((l) => l.id);
+  for (const id of valid) room.excludedListIds.add(id);
+  return { ok: true, off: valid };
+}
+
 module.exports = {
   WEB_SCOPE,
   DEFAULT_DIFFICULTY: characterLists.DEFAULT_DIFFICULTY,
@@ -138,4 +160,5 @@ module.exports = {
   listsInCategory,
   toggleList,
   setListsPlaying,
+  keepListsOff,
 };

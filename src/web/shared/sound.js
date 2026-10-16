@@ -53,13 +53,14 @@
   // "your turn" cue.
   let cueStart = 0; // where on the audio clock the cue being played begins (see play)
   let quietAt = 0;  // when the last note scheduled so far ends
-  function tone(freq, ms, { gain = 0.25, type = 'sine', at = 0 } = {}) {
+  // `free`: placed now and kept out of the queue below, for sounds too small to wait for (pop).
+  function tone(freq, ms, { gain = 0.25, type = 'sine', at = 0, free = false } = {}) {
     if (muted || !ctx || ctx.state !== 'running') return;
     try {
       const o = ctx.createOscillator(), g = ctx.createGain();
       o.type = type; o.frequency.value = freq; o.connect(g); g.connect(out());
       const t = Math.max(ctx.currentTime, cueStart) + at;
-      quietAt = Math.max(quietAt, t + ms / 1000);
+      if (!free) quietAt = Math.max(quietAt, t + ms / 1000);
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(gain, t + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, t + ms / 1000);
@@ -70,13 +71,19 @@
   // The vocabulary both games share, so the same moment sounds the same in either. Each is
   // distinct by SHAPE, not just pitch: rising for yours, falling for a miss, level for "held",
   // repeated for "look up".
+  //
+  // `nth` (Draw): the got-it cues climb a step of the major scale for each person who has it this
+  // turn, so the room hears how far round it has gone -- the first a C, the seventh a B. Without
+  // it (Desk) they sound where they always have.
+  const STEPS = [0, 2, 4, 5, 7, 9, 11, 12];
+  const climb = (nth) => 2 ** (STEPS[Math.min(STEPS.length, Math.max(1, nth || 1)) - 1] / 12);
   const CUES = {
     // Your turn: a soft rising pair. The one cue meant to reach someone looking elsewhere.
     turn() { tone(523, 160, { gain: 0.3 }); tone(784, 260, { gain: 0.3, at: 0.13 }); },
     // Somebody got it: a bright rising triad.
-    got() { [523, 659, 784].forEach((f, i) => tone(f, i === 2 ? 320 : 150, { gain: 0.26, type: 'triangle', at: i * 0.1 })); },
+    got(nth) { const k = climb(nth); [523, 659, 784].forEach((f, i) => tone(f * k, i === 2 ? 320 : 150, { gain: 0.26, type: 'triangle', at: i * 0.1 })); },
     // You got it: the same triad with the octave on top, so yours is recognisably yours.
-    gotMine() { [523, 659, 784, 1047].forEach((f, i) => tone(f, i === 3 ? 380 : 140, { gain: 0.28, type: 'triangle', at: i * 0.09 })); },
+    gotMine(nth) { const k = climb(nth); [523, 659, 784, 1047].forEach((f, i) => tone(f * k, i === 3 ? 380 : 140, { gain: 0.28, type: 'triangle', at: i * 0.09 })); },
     // A miss: one low falling step, short. Heard often, so it is the quietest thing here.
     miss() { tone(330, 120, { gain: 0.16 }); tone(262, 180, { gain: 0.16, at: 0.1 }); },
     // Close -- held for a ruling: two level notes, a question rather than an answer.
@@ -94,12 +101,35 @@
   // to be about something that has already passed.
   const GAP_S = 0.08;
   const MAX_WAIT_S = 1.2;
-  function play(name) {
+  function play(name, ...args) {
     const cue = CUES[name];
     if (!cue || muted || !ctx || ctx.state !== 'running') return;
     const now = ctx.currentTime;
     cueStart = Math.min(Math.max(now, quietAt + GAP_S), now + MAX_WAIT_S);
-    try { cue(); } finally { cueStart = 0; }
+    try { cue(...args); } finally { cueStart = 0; }
+  }
+
+  // --- reactions (Draw) ------------------------------------------------------------------------
+  // A guesser's reaction, as the drawer hears it: a tiny pop, so they know people are watching
+  // without looking up from the canvas. Played only on the drawer's screen (the page decides).
+  // Each its own shape, like the cues. Quieter than a miss and outside the queue: reactions come
+  // in flurries, and queued they would push a "got it" back behind a dozen pops. One at a time,
+  // a flurry thinned to a patter.
+  const POPS = {
+    star() { tone(1568, 70, { gain: 0.09, at: 0, free: true }); tone(2093, 90, { gain: 0.07, at: 0.05, free: true }); },
+    wow() { tone(880, 50, { gain: 0.08, free: true }); tone(1175, 70, { gain: 0.08, at: 0.06, free: true }); },
+    huh() { tone(988, 60, { gain: 0.08, free: true }); tone(784, 80, { gain: 0.07, at: 0.07, free: true }); },
+    ha() { tone(1047, 45, { gain: 0.08, type: 'triangle', free: true }); tone(1047, 45, { gain: 0.08, type: 'triangle', at: 0.09, free: true }); },
+  };
+  const POP_GAP_MS = 120;
+  let poppedAt = 0;
+  function pop(kind) {
+    const p = POPS[kind];
+    if (!p || muted || !ctx || ctx.state !== 'running') return;
+    const now = performance.now();
+    if (now - poppedAt < POP_GAP_MS) return;
+    poppedAt = now;
+    p();
   }
 
   // --- the pen on paper (Draw) -----------------------------------------------------------------
@@ -136,8 +166,9 @@
   }
   /**
    * The pen moved. `speed`: canvas widths per second. `size`: the brush (3 thin .. 36 fat).
+   * `rub`: the eraser -- low and soft, a rubber's rub rather than a lead's scratch, and quieter.
    */
-  function scribble(speed, size = 8) {
+  function scribble(speed, size = 8, { rub = false } = {}) {
     if (muted || !ctx || ctx.state !== 'running' || !(speed > 0)) return;
     try {
       if (!pencil) {
@@ -155,8 +186,13 @@
       }
       const now = ctx.currentTime;
       const pace = Math.min(1, speed / 2);
-      const level = SCRIBBLE_PEAK * Math.sqrt(pace);
-      const pitch = (4200 - Math.min(36, Math.max(3, size)) * 70) * (0.8 + 0.4 * pace);
+      const level = SCRIBBLE_PEAK * Math.sqrt(pace) * (rub ? 0.8 : 1);
+      const pitch = rub
+        ? 500 + 500 * pace
+        : (4200 - Math.min(36, Math.max(3, size)) * 70) * (0.8 + 0.4 * pace);
+      // Switching between pen and eraser happens between strokes, while the level is at nothing.
+      const type = rub ? 'lowpass' : 'bandpass';
+      if (pencil.filter.type !== type) pencil.filter.type = type;
       pencil.filter.frequency.setTargetAtTime(pitch, now, 0.03);
       const g = pencil.gain.gain;
       g.cancelScheduledValues(now);
@@ -193,5 +229,5 @@
     paint();
   }
 
-  window.GTCSound = { tone, play, scribble, mountToggle, isMuted: () => muted, CUES: Object.keys(CUES) };
+  window.GTCSound = { tone, play, scribble, pop, mountToggle, isMuted: () => muted, CUES: Object.keys(CUES) };
 })();

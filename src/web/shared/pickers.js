@@ -28,7 +28,8 @@
    * @param {object} opts
    * @param {{categories: {category: string, enabled: number}[]}} opts.options  the server's setup options
    * @param {(event: string, payload: object) => Promise<any>} opts.request     an acknowledged socket emit
-   * @param {string} [opts.storageKey]  remembers the host's last choice between games (a convenience)
+   * @param {string} [opts.storageKey]  remembers the host's last choice between games (a convenience),
+   *   and, under `${storageKey}_off`, the lists they switched off -- re-applied to each new room
    * @returns {{ value(): {poolType: string, categories?: string[]} }}
    */
   function poolPicker(root, { options, request, storageKey = 'gtc_pool' }) {
@@ -51,6 +52,32 @@
     // category -> lists as the server last said ({id, name, count, playing}); filled on demand.
     const lists = new Map();
     const open = new Set(); // which fine-tune sections the host has opened
+
+    // The lists this host has switched off, remembered in their browser so a new room starts the
+    // way they left the last one. The room is still what the server deals from (Room.
+    // excludedListIds): this only re-applies the host's own ticks to it, at mount, before any
+    // list is shown -- so a tick on screen is never one the server is about to change.
+    const offKey = `${storageKey}_off`;
+    let off = new Set();
+    try {
+      off = new Set((JSON.parse(store.get(offKey) || '[]') || []).map(Number).filter(Number.isInteger));
+    } catch { /* a stale or foreign value: remember nothing */ }
+    const saveOff = () => store.set(offKey, JSON.stringify([...off]));
+    // The ones switched off in THIS room -- the remembered ones the server took (a list can have
+    // left the selection since), plus any ticked off here. What the summary counts.
+    const offHere = new Set();
+    // What the server said after a tick: each list's playing state, remembered as it now stands.
+    const remember = (ids, playing) => {
+      ids.forEach((id, i) => {
+        if (playing[i]) { off.delete(id); offHere.delete(id); } else { off.add(id); offHere.add(id); }
+      });
+      saveOff();
+    };
+    const restored = off.size
+      ? request('setup:keepOff', { listIds: [...off] })
+          .then((res) => { if (res?.ok) res.off.forEach((id) => offHere.add(id)); })
+          .catch(() => {})
+      : Promise.resolve();
 
     root.classList.add('pp');
     root.innerHTML = `
@@ -85,10 +112,13 @@
     function paintSummary() {
       let text = '';
       let warn = false;
-      if (mode === 'random') text = 'A random category is picked when you deal.';
+      // In the two modes that show no lists, the ones switched off would otherwise be invisible --
+      // and they stay off in these too.
+      const leftOut = offHere.size ? ` ${fmt(offHere.size)} list${offHere.size === 1 ? '' : 's'} you switched off stay${offHere.size === 1 ? 's' : ''} off.` : '';
+      if (mode === 'random') text = `A random category is picked when you deal.${leftOut}`;
       else if (mode === 'everything') {
         const total = categories.reduce((n, c) => n + c.lists, 0);
-        text = `Every category — ${fmt(total)} lists.`;
+        text = offHere.size ? `Every category — ${fmt(Math.max(0, total - offHere.size))} of ${fmt(total)} lists.${leftOut}` : `Every category — ${fmt(total)} lists.`;
       } else {
         const loaded = chosen.map((c) => lists.get(c)).filter(Boolean);
         const on = loaded.flatMap((ls) => ls.filter((l) => l.playing));
@@ -147,6 +177,8 @@
 
     async function load(category) {
       if (lists.has(category)) return;
+      await restored; // the ticks shown must already include the remembered ones
+      if (lists.has(category)) return;
       const res = await request('setup:categoryLists', { category }).catch(() => null);
       lists.set(category, res?.ok ? res.lists : []);
       paintSummary();
@@ -188,6 +220,7 @@
       const res = await request('setup:toggleList', { listId: id }).catch(() => null);
       cb.disabled = false;
       for (const ls of lists.values()) for (const l of ls) if (l.id === id && res?.ok) l.playing = res.playing;
+      if (res?.ok) remember([id], [res.playing]);
       refreshCounts(); // and a failed tick is put back to what the server holds
     });
     detail.addEventListener('click', async (e) => {
@@ -199,12 +232,16 @@
       b.disabled = true;
       const res = await request('setup:setLists', { listIds: ls.map((l) => l.id), playing }).catch(() => null);
       b.disabled = false;
-      if (res?.ok) ls.forEach((l, i) => { l.playing = res.playing[i]; });
+      if (res?.ok) {
+        ls.forEach((l, i) => { l.playing = res.playing[i]; });
+        remember(ls.map((l) => l.id), res.playing);
+      }
       refreshCounts();
     });
 
     paint();
     for (const c of chosen) load(c);
+    restored.then(paintSummary); // the count of what stays off, once the server has taken it
 
     return {
       value() {

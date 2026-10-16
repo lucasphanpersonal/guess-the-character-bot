@@ -337,6 +337,8 @@ function attachDrawSockets(nsp, { registry }) {
     socket.on('setup:categoryLists', curate((p, r) => (p.category ? { ok: true, lists: web.listsInCategory(p.category, r) } : { ok: false, error: 'No category given.' })));
     socket.on('setup:toggleList', curate((p, r) => web.toggleList(p.listId, r)));
     socket.on('setup:setLists', curate((p, r) => web.setListsPlaying(p.listIds, !!p.playing, r)));
+    // The host's browser re-applying what they switched off last time (content.js keepListsOff).
+    socket.on('setup:keepOff', curate((p, r) => web.keepListsOff(p.listIds, r)));
 
     socket.on('draw:start', (config = {}, ack) => {
       if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
@@ -412,7 +414,9 @@ function attachDrawSockets(nsp, { registry }) {
       // to nobody still guessing, for whom "Sasuek" would be a hint.
       if (res.verdict === 'correct') {
         // The playerId lets the guesser's own page tell this apart from someone else getting it.
-        nsp.to(r.code).emit('draw:correct', { playerId, name: namesOf(r)[playerId] ?? 'Player', points: res.points });
+        // `nth`: how many have it now, this one included -- each one's cue climbs a step, so the
+        // room hears how far round it has gone. Public already: the player list tags them all.
+        nsp.to(r.code).emit('draw:correct', { playerId, name: namesOf(r)[playerId] ?? 'Player', points: res.points, nth: r.game.guessed.size });
         if (res.allDone) draw.endTurn(r.game, Date.now(), res.doneReason);
         emitViews(r);
         return schedule(r);
@@ -457,6 +461,7 @@ function attachDrawSockets(nsp, { registry }) {
       if (playerId === draw.drawerOf(g) || !g.order.includes(playerId) || g.gone.has(playerId)) {
         return ack?.({ ok: false, error: 'Only the guessers react.' });
       }
+      draw.noteReaction(g, playerId); // for Crowd Pleaser at the end
       nsp.to(r.code).emit('draw:reaction', { kind });
       ack?.({ ok: true });
     });

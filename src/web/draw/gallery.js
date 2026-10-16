@@ -14,7 +14,12 @@ const MAX_POINTS = 3000; // per drawing, once simplified
 const CLUTCH_MS = 5000; // a right guess with this little time left
 const MIN_CLOSE_CALLS = 3;
 const MIN_ABSTRACT_STROKES = 3; // a drawing nobody got, but that was really drawn
-const MAX_ACCOLADES = 4;
+const MIN_REACTIONS = 4; // Crowd Pleaser: this many reactions...
+const MIN_REACTORS = 2; // ...from at least this many people, not one player holding the button
+const MAX_MINIMAL_STROKES = 6; // Minimalist: got from this few strokes at most
+const MIN_LABOUR_STROKES = 25; // Labour of Love: this many strokes on a drawing someone got
+const MIN_RAINBOW_COLOURS = 5; // Rainbow: this many colours in one drawing
+const MAX_ACCOLADES = 6;
 const MAX_PER_PLAYER = 2; // the night's best player still leaves room for everyone else
 
 // Perpendicular distance from p to the segment a-b.
@@ -86,15 +91,19 @@ function simplifyStrokes(strokes, maxPoints = MAX_POINTS) {
 /**
  * One finished drawing, as the gallery keeps it.
  * @param {object} turn  { drawerId, character, strokes, guessed: [[playerId, ms]] in order,
- *   gaveUp: [ids], guessers: how many could have guessed, reason, drawSeconds }
+ *   gaveUp: [ids], reactors: Map playerId -> reactions, guessers: how many could have guessed,
+ *   reason, drawSeconds }
  */
 function record(turn) {
+  const reactors = [...(turn.reactors ?? new Map()).values()];
   return {
     drawerId: turn.drawerId,
     character: turn.character,
     strokes: simplifyStrokes(turn.strokes ?? []),
     guessed: (turn.guessed ?? []).map(([playerId, ms]) => ({ playerId, ms })),
     gaveUp: [...(turn.gaveUp ?? [])],
+    reactions: reactors.reduce((n, k) => n + k, 0),
+    reactors: reactors.length,
     guessers: turn.guessers ?? 0,
     reason: turn.reason,
     drawSeconds: turn.drawSeconds,
@@ -117,6 +126,9 @@ function accolades(drawings, closeCalls, nameOf) {
   const found = [];
   const award = (title, playerId, detail, drawing = null) => found.push({ title, playerId, name: nameOf(playerId), detail, drawing });
   const title = (d) => d.character?.name ?? 'it';
+  const indexed = drawings.map((d, i) => ({ d, i }));
+  const linesIn = (d) => d.strokes.filter((s) => s.kind !== 'fill').length;
+  const gotByAll = (d) => d.guessers > 0 && d.guessed.length === d.guessers;
 
   // The drawing the most of the room got (as a share of who could), the first guess breaking ties.
   const got = drawings.map((d, i) => ({ d, i })).filter(({ d }) => d.guessed.length && d.guessers);
@@ -142,12 +154,36 @@ function accolades(drawings, closeCalls, nameOf) {
     award('Mind Reader', playerId, n === chances ? 'Got every drawing' : `Got ${n} of ${chances} drawings`);
   }
 
+  // The drawing the room reacted to most -- and from more than one of them, so it is the room's
+  // delight and not one player holding the button down.
+  const loved = indexed
+    .filter(({ d }) => (d.reactions ?? 0) >= MIN_REACTIONS && (d.reactors ?? 0) >= MIN_REACTORS)
+    .sort((a, b) => b.d.reactions - a.d.reactions)[0];
+  if (loved) award('Crowd Pleaser', loved.d.drawerId, `${loved.d.reactions} reactions to ${title(loved.d)}`, loved.i);
+
+  // Everyone got every one of a player's drawings, two at least. The most drawings wins; a tie
+  // names nobody, as Mind Reader's does.
+  const byDrawer = new Map();
+  for (const d of drawings) byDrawer.set(d.drawerId, [...(byDrawer.get(d.drawerId) ?? []), d]);
+  const sweeps = [...byDrawer].filter(([, ds]) => ds.length >= 2 && ds.every(gotByAll)).sort((a, b) => b[1].length - a[1].length);
+  if (sweeps.length && (sweeps.length === 1 || sweeps[1][1].length < sweeps[0][1].length)) {
+    const [playerId, ds] = sweeps[0];
+    award('Clean Sweep', playerId, `Everyone got all ${ds.length} of theirs`);
+  }
+
   // The latest right guess, if it came with only seconds to spare.
   const late = guesses
     .map((x) => ({ ...x, left: x.d.drawSeconds * 1000 - x.ms }))
     .filter((x) => x.left > 0 && x.left <= CLUTCH_MS)
     .sort((a, b) => a.left - b.left)[0];
   if (late) award('Clutch', late.playerId, `Got ${title(late.d)} with ${seconds(late.left)} left`, late.i);
+
+  // Said the most with the least: half the room or more got it, from a handful of lines.
+  const minimal = indexed
+    .map((x) => ({ ...x, n: linesIn(x.d) }))
+    .filter(({ d, n }) => n >= 1 && n <= MAX_MINIMAL_STROKES && d.guessers > 0 && d.guessed.length * 2 >= d.guessers)
+    .sort((a, b) => a.n - b.n || pointCount(a.d.strokes) - pointCount(b.d.strokes))[0];
+  if (minimal) award('Minimalist', minimal.d.drawerId, `${title(minimal.d)} in ${minimal.n} stroke${minimal.n === 1 ? '' : 's'}`, minimal.i);
 
   const nearest = [...closeCalls].filter(([, n]) => n >= MIN_CLOSE_CALLS).sort((a, b) => b[1] - a[1])[0];
   if (nearest) award('So Close', nearest[0], `${nearest[1]} close calls`);
@@ -158,6 +194,19 @@ function accolades(drawings, closeCalls, nameOf) {
     .filter(({ d }) => !d.guessed.length && d.strokes.length >= MIN_ABSTRACT_STROKES)
     .sort((a, b) => pointCount(b.d.strokes) - pointCount(a.d.strokes))[0];
   if (missed) award('Abstract Artist', missed.d.drawerId, `Nobody got ${title(missed.d)}`, missed.i);
+
+  // The most work that paid off: a great many strokes on a drawing somebody got.
+  const labour = indexed
+    .filter(({ d }) => d.strokes.length >= MIN_LABOUR_STROKES && d.guessed.length)
+    .sort((a, b) => b.d.strokes.length - a.d.strokes.length)[0];
+  if (labour) award('Labour of Love', labour.d.drawerId, `${labour.d.strokes.length} strokes on ${title(labour.d)}`, labour.i);
+
+  // The most colours in one drawing. White is the paper: drawn or erased, it adds no colour.
+  const colourful = indexed
+    .map((x) => ({ ...x, n: new Set(x.d.strokes.map((st) => st.color).filter((c) => c !== '#ffffff')).size }))
+    .filter(({ n }) => n >= MIN_RAINBOW_COLOURS)
+    .sort((a, b) => b.n - a.n)[0];
+  if (colourful) award('Rainbow', colourful.d.drawerId, `${colourful.n} colours in ${title(colourful.d)}`, colourful.i);
 
   const per = new Map();
   const out = [];

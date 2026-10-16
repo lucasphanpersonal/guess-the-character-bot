@@ -54,7 +54,8 @@ class Room {
     // permanently change what every later party gets -- and the web app is reachable by anyone
     // with the room link. (It was worse still when the selection was an `enabled` column the
     // Discord bot shared.) An exclusion set keeps the choice where it belongs: this room, this
-    // session.
+    // session. What makes a host's ticks "stay" is their own browser re-applying them to each new
+    // room they host (shared/pickers.js, content.js keepListsOff) -- still never the selection.
     this.excludedListIds = new Set();
     // playerId -> { playerId, nickname, connected, joinedAt }
     this.players = new Map();

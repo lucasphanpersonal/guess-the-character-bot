@@ -15,6 +15,7 @@ const setup = {
   listsInCategory: (category, room) => web.listsInCategory(category, room),
   toggleList: (listId, room) => web.toggleList(listId, room),
   setLists: (listIds, playing, room) => web.setListsPlaying(listIds, playing, room),
+  keepOff: (listIds, room) => web.keepListsOff(listIds, room),
 
   // preferImages is OFF unless the host asks for it: restricting the draw to characters that
   // happen to have artwork silently shrinks the pool and biases it toward the better-documented

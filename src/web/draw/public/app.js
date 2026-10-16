@@ -38,7 +38,7 @@ GTC.bindThemeToggles();
 
 // Sound (/shared/sound.js): your turn to draw, someone getting it, time nearly up, the reveal.
 // Optional-chained: a missing sound script costs the cues, never the game, and hides the switch.
-const sound = (cue) => window.GTCSound?.play(cue);
+const sound = (cue, ...args) => window.GTCSound?.play(cue, ...args);
 $('soundToggle').hidden = !window.GTCSound;
 window.GTCSound?.mountToggle($('soundToggle'));
 
@@ -407,11 +407,13 @@ setInterval(() => pads.forEach((pad) => pad.flush()), PIECE_MS);
 
 // The pen-on-paper sound (sound.js scribble) for a run of points drawn over `seconds`: as loud as
 // the pen was fast. A pause between moves reads as a slow stroke, not a fast one.
-function scribbleOver(points, seconds, size) {
+// The eraser rubs rather than scratches: known by its palette name, as the server publishes it.
+function scribbleOver(points, seconds, size, color) {
   if (!window.GTCSound?.scribble || points.length < 2) return;
   let dist = 0;
   for (let i = 1; i < points.length; i++) dist += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
-  window.GTCSound.scribble(dist / Math.max(0.016, seconds), size);
+  const rub = PALETTE.some(([c, name]) => c === color && name === 'Eraser');
+  window.GTCSound.scribble(dist / Math.max(0.016, seconds), size, { rub });
 }
 
 function makePad(cv, { canDraw, send, undo, clear }) {
@@ -460,7 +462,7 @@ function makePad(cv, { canDraw, send, undo, clear }) {
     strokeOn(cv, live, live.points.length - 1);
     // Your own pen is heard at once, from your hand, not after the server echoes it.
     const t = performance.now();
-    scribbleOver([last, p], (t - (pad.movedAt ?? t - 16)) / 1000, live.size);
+    scribbleOver([last, p], (t - (pad.movedAt ?? t - 16)) / 1000, live.size, live.color);
     pad.movedAt = t;
   });
   const endStroke = () => {
@@ -498,7 +500,7 @@ socket.on('draw:stroke', (piece) => {
   strokeSegment(s, from);
   // The drawer's pen, heard as the picture grows. A piece covers PIECE_MS of their drawing, and
   // starts where the last one ended.
-  if (s.kind !== 'fill') scribbleOver(s.points.slice(Math.max(0, from - 1)), PIECE_MS / 1000, s.size);
+  if (s.kind !== 'fill') scribbleOver(s.points.slice(Math.max(0, from - 1)), PIECE_MS / 1000, s.size, s.color);
 });
 // The whole picture: a new turn (empty), an undo or clear, or a reconnect catching up.
 socket.on('draw:canvas', ({ strokes: all }) => {
@@ -569,6 +571,8 @@ socket.on('draw:reaction', ({ kind } = {}) => {
   f.addEventListener('animationend', () => f.remove());
   setTimeout(() => f.remove(), 2500); // and if no animation runs at all
   wrap.append(f);
+  // The drawer hears it too: they are looking at the canvas, not at the floats over it.
+  if (view?.isDrawer) window.GTCSound?.pop(kind);
 });
 
 // --- the game --------------------------------------------------------------------------------
@@ -804,7 +808,7 @@ function renderPlayers() {
             ? '<span class="tag gaveup">Gave up</span>'
             : '';
       const name = `${esc(p.name)}${p.playerId === me ? ' (you)' : ''}`;
-      return `<li class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
+      return `<li data-pid="${esc(p.playerId)}" class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
     })
     .join('');
   if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;
@@ -916,13 +920,46 @@ function localLine(cls, html) {
 // chat box: in a room of six, one turn's worth of them pushed the guesses off the top, and they
 // piled up turn after turn. Who has it stays visible where it belongs -- the player list's tag.
 // The guesser's own comes from here too (the ack says nothing), so they see it once.
-socket.on('draw:correct', ({ playerId: who, name, points }) => {
+socket.on('draw:correct', ({ playerId: who, name, points, nth }) => {
   // Two at most: a room guessing it in a burst would stack them up over the chat box above.
   toast(who === me ? `✓ You got it! +${points}` : `✓ ${esc(name)} got it! +${points}`, 3500, { max: 2 });
   // To everyone, the guesser included -- so the guesser's own cue is played here too, not on the
-  // ack, or they would hear two.
-  sound(who === me ? 'gotMine' : 'got');
+  // ack, or they would hear two. Each one a step higher than the last (sound.js climb).
+  sound(who === me ? 'gotMine' : 'got', nth);
+  burst(who, who === me);
 });
+
+// A few pieces of colour flung out from whoever got it: their row in the player list, or the
+// picture when that row is off screen (one column, scrolled). Decoration only -- the toast and
+// the row's tag say who -- so nothing at all for anyone who asks for reduced motion. Laid over
+// the page (fixed), because the row is rewritten by the view that follows a moment later.
+const BURST_COLOURS = ['var(--red)', 'var(--blue)', 'var(--amber)', 'var(--green)'];
+function burst(who, mine) {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const row = $('players').querySelector(`[data-pid="${CSS.escape(String(who))}"]`);
+  const seen = (el) => {
+    const r = el?.getBoundingClientRect();
+    return r && r.width && r.bottom > 0 && r.top < innerHeight ? r : null;
+  };
+  const fromRow = seen(row);
+  const r = fromRow ?? seen(canvas);
+  if (!r) return;
+  // From the name on the row; from low on the picture, where the reactions rise from.
+  const x = fromRow ? r.left + Math.min(r.width * 0.3, 90) : r.left + r.width / 2;
+  const y = r.top + (fromRow ? r.height / 2 : r.height * 0.8);
+  const n = mine ? 16 : 9;
+  for (let i = 0; i < n; i++) {
+    const b = document.createElement('i');
+    b.className = `bit${i % 2 ? ' sq' : ''}`;
+    b.setAttribute('aria-hidden', 'true');
+    const angle = (i / n) * Math.PI * 2 + Math.random() * 0.5;
+    const dist = (mine ? 70 : 45) + Math.random() * 30;
+    b.style.cssText = `left:${x}px;top:${y}px;background:${BURST_COLOURS[i % 4]};--dx:${Math.cos(angle) * dist}px;--dy:${Math.sin(angle) * dist}px;--spin:${Math.round(Math.random() * 360)}deg`;
+    b.addEventListener('animationend', () => b.remove());
+    setTimeout(() => b.remove(), 1500); // and if no animation runs at all
+    document.body.append(b);
+  }
+}
 
 // Giving up shows you the answer, which cannot be taken back -- so it asks first.
 $('giveUpBtn').addEventListener('click', () => {

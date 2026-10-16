@@ -47,9 +47,12 @@ reading ("Blanks at 40s"). The turn ends
 when everyone has it or the clock runs out, then a short reveal (`WEB_DRAW_REVEAL_SECONDS`, 6 s).
 Once you have it — and for the drawer, always — what you type goes only to the others who know.
 The host sets rounds (1–5) and drawing time (60–120 s). At the end, everyone gets the night's
-drawings (each turn's strokes, simplified and kept as it ends) with up to four accolades — Most
-Recognisable, Speed Demon, Mind Reader, Clutch, So Close, Abstract Artist, each only when it is
-true and no more than two per player — and any drawing opens big, with **Save Image** (a PNG with
+drawings (each turn's strokes, simplified and kept as it ends) with up to six accolades — Most
+Recognisable, Speed Demon, Mind Reader, Crowd Pleaser (most reactions, from two people or more),
+Clean Sweep (everyone got all of someone's drawings), Clutch, Minimalist (got from six strokes or
+fewer), So Close, Abstract Artist, Labour of Love (25+ strokes, and got) and Rainbow (five colours
+or more), in that order of preference, each only when it is true and no more than two per
+player — and any drawing opens big, with **Save Image** (a PNG with
 its name and drawer under it). Everyone can ★ their favourite drawing there: one vote each,
 changeable, never for your own, only the tally published, and **Crowd Favourite** heads the
 accolades as votes come in. The drawer has a **Fill** bucket beside the brush sizes (a fill is one
@@ -107,7 +110,10 @@ wins (equal turns: most time left when they got it), and the end screen reveals 
 (`poolType: 'categories'`). A chosen category's lists can be switched off for this room under
 *Choose Lists*, one at a time or with All / None (`setup:setLists`, all or nothing); a live line
 says how many lists and up to how many characters that leaves. The host's last choice is
-remembered on that device.
+remembered on that device, and so are the lists they switched off: each new room they host starts
+with those off again (`setup:keepOff` — off only, and a list that has since left the web's
+selection is skipped). It stays in that host's browser and that room; the web's selection is
+never written.
 
 Or pick for each other: **Pick for each other** on the config screen deals nothing. Each player
 chooses the character of the player they check — searched, typed, or **Pick at Random** from the

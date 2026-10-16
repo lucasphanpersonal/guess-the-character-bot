@@ -204,6 +204,7 @@ function offerChoices(g, choices, now) {
   g.guessed = new Map();
   g.guessMs = new Map();
   g.gaveUp = new Set();
+  g.reactors = new Map(); // playerId -> reactions to this drawing (Crowd Pleaser)
   g.alsoAccept = [];
   g.shownAs = null;
   g.revealed = [];
@@ -356,6 +357,15 @@ function say(g, playerId, text, now) {
  *
  * @returns {{ok: false, error} | {ok: true, allDone: boolean, doneReason: string}}
  */
+/**
+ * A guesser reacted to the drawing (the socket has already checked who and when). Counted per
+ * person, so the end screen can tell a room's delight from one player holding the button down.
+ */
+function noteReaction(g, playerId) {
+  if (!g.reactors) g.reactors = new Map();
+  g.reactors.set(playerId, (g.reactors.get(playerId) ?? 0) + 1);
+}
+
 function giveUp(g, playerId) {
   if (isPaused(g)) return PAUSED;
   if (g.phase !== 'drawing') return { ok: false, error: 'There is no drawing to give up on.' };
@@ -464,6 +474,7 @@ function endTurn(g, now, reason) {
         strokes: g.strokes,
         guessed: [...g.guessMs],
         gaveUp: g.gaveUp,
+        reactors: g.reactors,
         guessers: guessersOf(g).length,
         reason,
         drawSeconds: g.drawSeconds,
@@ -656,6 +667,7 @@ function viewFor(g, viewerId, names, now = Date.now()) {
 
 module.exports = {
   createDrawGame,
+  noteReaction,
   pause,
   resume,
   isPaused,
