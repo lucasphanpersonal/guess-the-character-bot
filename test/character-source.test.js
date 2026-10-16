@@ -118,6 +118,57 @@ module.exports = {
     assert.equal(lists.getCharacterSource(guildId, 'Somebody'), 'Homebrew');
   },
 
+  // Dealt from a game, Luke is still from the film: the best-known work of his franchise.
+  'a character is named from the best-known work of the franchise they were dealt from'() {
+    const guildId = freshGuild();
+    const film = seed(guildId, 'Star Wars: Episode VII', 'Movies', ['Luke Skywalker', 'Han Solo', 'Leia Organa', 'Rey']);
+    const lego = seed(guildId, 'Lego Star Wars', 'Video Games', ['Luke Skywalker', 'Han Solo', 'Leia Organa', 'Chewbacca']);
+    const games = seed(guildId, 'Star Wars', 'Video Games', ['Luke Skywalker', 'Han Solo', 'Leia Organa', 'Darth Vader']);
+    lists.setListReach(film, 1_160_000);
+    lists.setListReach(lego, 386_000);
+    lists.setListReach(games, 700_000); // its best single game, not twenty games added up
+    assert.equal(lists.getCharacterSource(guildId, 'Luke Skywalker', lego), 'Star Wars: Episode VII (Movies)');
+    assert.equal(lists.getCharacterSource(guildId, 'Luke Skywalker', games), 'Star Wars: Episode VII (Movies)');
+    // The live seed filed the film itself among the games, so both lists' best work is the film.
+    lists.setListReach(games, 1_160_000);
+    assert.equal(lists.getCharacterSource(guildId, 'Luke Skywalker', lego), 'Star Wars: Episode VII (Movies)', 'a tie is one shared work: name it by its own medium');
+  },
+
+  // ONE PIECE has a Batman too. However well-known ONE PIECE is, it shares nobody with the Batman
+  // games, so it is not where the Batman dealt from them comes from.
+  'a better-known namesake in another franchise never names them'() {
+    const guildId = freshGuild();
+    const onePiece = seed(guildId, 'ONE PIECE', 'Anime', ['Batman', 'Monkey D. Luffy', 'Roronoa Zoro', 'Nami']);
+    const arkham = seed(guildId, 'Batman: Arkham', 'Video Games', ['Batman', 'Robin', 'The Joker', 'Alfred Pennyworth']);
+    const cartoon = seed(guildId, 'Beware the Batman', 'Cartoon', ['Batman', 'Alfred Pennyworth', 'The Joker']);
+    lists.setListReach(onePiece, 5_000_000);
+    lists.setListReach(arkham, 266_000);
+    lists.setListReach(cartoon, 70_000);
+    assert.equal(lists.getCharacterSource(guildId, 'Batman', arkham), 'Batman: Arkham (Video Games)', 'the best-known of HIS lists');
+    assert.equal(lists.getCharacterSource(guildId, 'Batman', onePiece), 'ONE PIECE (Anime)', "and ONE PIECE's Batman is still ONE PIECE's");
+  },
+
+  // The games list is named "Batman", so it cannot be shown as his source -- but it still says
+  // which Batman he is. Without that, the biggest other "Batman" list answered: ONE PIECE.
+  'a list named after them still decides which character they are'() {
+    const guildId = freshGuild();
+    const onePiece = seed(guildId, 'ONE PIECE', 'Anime', ['Batman', 'Monkey D. Luffy', 'Roronoa Zoro', 'Nami', 'Usopp']);
+    const games = seed(guildId, 'Batman', 'Video Games', ['Batman', 'Robin', 'The Joker', 'Alfred Pennyworth']);
+    seed(guildId, 'Beware the Batman', 'Cartoon', ['Batman', 'Alfred Pennyworth', 'The Joker']);
+    lists.setListReach(onePiece, 5_000_000);
+    assert.equal(lists.getCharacterSource(guildId, 'Batman', games), 'Beware the Batman (Cartoon)', 'his own franchise, not the bigger namesake');
+    const solo = seed(guildId, 'Lone Wolf', 'Video Games', ['Lone Wolf', 'Nobody Else']);
+    seed(guildId, 'Unrelated Saga', 'Anime', ['Lone Wolf', 'Somebody', 'Someone Else']);
+    assert.equal(lists.getCharacterSource(guildId, 'Lone Wolf', solo), 'Video Games', 'their own list is a title list: the kind of work, never a namesake\'s show');
+  },
+
+  'with no reach known, the list they were dealt from stands'() {
+    const guildId = freshGuild();
+    seed(guildId, 'Naruto', 'Anime', ['Uzumaki Naruto', 'Uchiha Sasuke', 'Haruno Sakura', 'Hatake Kakashi']);
+    const boruto = seed(guildId, 'Boruto', 'Anime', ['Uzumaki Naruto', 'Uchiha Sasuke', 'Haruno Sakura', 'Uzumaki Boruto']);
+    assert.equal(lists.getCharacterSource(guildId, 'Uzumaki Naruto', boruto), 'Boruto (Anime)');
+  },
+
   'lookup is case-insensitive, like every other name match in the bot'() {
     const guildId = freshGuild();
     seed(guildId, 'Cowboy Bebop', 'Anime', ['Spike Spiegel', 'Faye Valentine', 'Ed']);

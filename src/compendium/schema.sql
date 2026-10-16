@@ -19,11 +19,20 @@ CREATE TABLE IF NOT EXISTS character_lists (
   created_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   category TEXT,
-  -- Fame score used to sort the /list-filter page most-recognisable-first, so the lists
-  -- worth enabling surface on page 1. Scale differs per source (AniList user counts vs
-  -- summed Wikipedia sitelinks) and is only ever compared within a category. NULL for
-  -- hand-made lists, which sort last. Populated by `npm run backfill:popularity`.
-  popularity INTEGER
+  -- Fame score used to sort lists most-recognisable-first (the /list-filter page, the web's
+  -- picker and library), so the lists worth enabling surface on page 1. Scale differs per
+  -- category (AniList user counts for Anime and Manga; a year of English Wikipedia readers,
+  -- summed over a franchise's works, for TV, Cartoon, Movies and Games; summed sitelinks for
+  -- Real People) and is only ever compared within a category. NULL for hand-made lists, which
+  -- sort last. Populated by `npm run backfill:popularity` and scripts/fetch-work-fame.js.
+  popularity INTEGER,
+  -- How many people know the list's single best-known work: a year of English Wikipedia
+  -- readers of it, on ONE scale across every category -- which is what popularity cannot be.
+  -- Decides which of a character's lists names them (getCharacterOrigin): Luke Skywalker is in
+  -- a film list and four game lists, and is from the film. The best single work, not a
+  -- franchise's total, or twenty Star Wars games would outweigh the film. NULL when unknown.
+  -- Populated by scripts/fetch-work-fame.js.
+  reach INTEGER
 );
 
 -- One name per owner. An expression rather than a plain UNIQUE(owner_scope, name) because SQL

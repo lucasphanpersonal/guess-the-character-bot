@@ -91,8 +91,12 @@ rather than an empty one. That happens in `npm run backfill:popularity -- <serve
 ranks the shared lists by fame and then switches on the best-known 100 per category for that
 server (`--top=N` to move the line, `--no-enable` to rank without touching the selection; with
 no id it only ranks). The ranking reads the seed files — AniList audience size for Anime and
-Manga, summed Wikipedia sitelinks across the cast for everything else. Unranked lists sort last
-and still work.
+Manga; for TV, Cartoon, Movies and Video Games, a year of English Wikipedia readers of the work
+itself (summed over a franchise's works), from `npm run fetch:work-fame` and its
+`data/seed/work-fame.json`; summed sitelinks for Real People. Readers rather than the cast's
+sitelinks, which ranked a big cast over a famous show (Glee above Breaking Bad), and rather than
+how many Wikipedias cover the work, which bulk-made stubs inflate (Go, Dog. Go! is in 160 of
+them, Breaking Bad 93). Unranked lists sort last and still work.
 
 From there curation is exceptions, and there are three ways to do it, in rough order of how
 often you'll want them:
@@ -167,6 +171,25 @@ Run against every character in the compendium, it never accepts one character's 
 different character's. The same rules decide which two names are one character when a game is
 dealt, so nobody is dealt "Noelle Silva" while somebody else wears "Silva Noelle".
 
+## Where a character is from
+
+A character is shown with the work they come from — "Luke Skywalker, Star Wars: Episode VII
+(Movies)" — and Draw hands the same thing out as hints. Most characters sit in several lists
+(Luke is in a film, a Lego show and four games lists), so one is chosen
+(`getCharacterOrigin`):
+
+- **Only lists of the same franchise as the one they were dealt from count**: ones sharing at
+  least two other characters with it. Names collide across franchises — ONE PIECE has a Batman,
+  Ben 10 a Ditto — and the dealt list is the one thing that knows which character this is. That
+  holds even when the dealt list cannot be shown because it is named after them (the Batman
+  games list is called "Batman").
+- **Among those, the best-known work wins**: each list's `reach`, the English Wikipedia readers
+  of its single best-known work over a year, measured for every category on one scale by
+  `npm run fetch:work-fame`. The best single work, not the franchise total, or twenty Star Wars
+  games added up would outweigh the film.
+- Without reach to go on, the list they were dealt from stands; looked up by name alone, the
+  biggest list wins.
+
 ## Seeding character lists
 
 Bundled importers, all idempotent — re-running only adds what's missing, so they're safe to
@@ -179,9 +202,16 @@ backfill:popularity -- <server-id>` does that in bulk — see
 npm run seed:people     # ~2,900 famous real people, with photographs
 npm run seed:pokemon    # 1,025 Pokémon, with official artwork
 npm run seed:lol        # 173 League of Legends champions, with splash art
+npm run seed:dota2      # 127 Dota 2 heroes, with portraits
+npm run seed:deadlock   # Deadlock's playable heroes, with hero cards
 npm run seed:wikidata   # Western TV/film/game casts, one list per title
 npm run seed:anilist    # anime/manga casts, one list per title
 ```
+
+The hero games come from small roster files in `data/seed/` (`dota-2.json`, `deadlock.json`),
+refreshed with `npm run fetch:rosters` — OpenDota's hero constants and deadlock-api.com's assets,
+names and image links only. Deadlock's list carries test, cut and in-development heroes; only the
+ones a player can pick are kept, since a character nobody has seen is not one anyone can guess.
 
 These used to take a server id first. An old command that still passes one is fine: the id is
 recognised, ignored with a note, and the lists land in the shared compendium as usual.

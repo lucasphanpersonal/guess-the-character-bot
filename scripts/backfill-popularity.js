@@ -108,8 +108,12 @@ function workFame() {
   const data = readSeed('work-fame.json');
   const categories = new Set();
   const scores = new Map();
+  // Only the categories whose popularity these readers are: the file also measures Anime and
+  // Manga, for reach alone, and AniList stays their scale.
+  const ranked = new Set(data?.rankedCategories ?? []);
   for (const [k, w] of Object.entries(data?.works ?? {})) {
     const [category, label] = k.split('<|>');
+    if (data?.rankedCategories && !ranked.has(category)) continue;
     categories.add(category);
     if (w.status === 'ok') collect(scores, category, label, w.readers);
   }

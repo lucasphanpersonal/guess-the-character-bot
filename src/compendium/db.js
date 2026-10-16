@@ -25,6 +25,12 @@ function migrate(handle) {
   if (characterColumns.length && !characterColumns.includes('fame')) {
     handle.exec('ALTER TABLE characters ADD COLUMN fame INTEGER');
   }
+  // Columns added to the scoped character_lists after it shipped. (The guild layout below gets
+  // them from the rebuild, which writes the scoped table whole.)
+  const scopedListColumns = columnsOf(handle, 'character_lists');
+  if (scopedListColumns.length && !scopedListColumns.includes('guild_id') && !scopedListColumns.includes('reach')) {
+    handle.exec('ALTER TABLE character_lists ADD COLUMN reach INTEGER');
+  }
 
   // Everything below applies only to the guild-scoped layout, which `guild_id` identifies. It is
   // first brought up to its own last shape, because the conversion reads those columns.
@@ -83,7 +89,8 @@ function migrateToScopes(handle) {
           created_by TEXT NOT NULL,
           created_at INTEGER NOT NULL,
           category TEXT,
-          popularity INTEGER
+          popularity INTEGER,
+          reach INTEGER
         );
         CREATE TABLE IF NOT EXISTS list_selection (
           scope TEXT NOT NULL,

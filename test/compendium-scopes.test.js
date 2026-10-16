@@ -247,7 +247,25 @@ function theMigrationIsIdempotentAndMatchesAFreshDatabase() {
   assert.equal(old.prepare('SELECT COUNT(*) AS n FROM character_lists').get().n, 5, 'and the second run changed nothing');
 }
 
+// The live database is already scoped; what it lacks is the column added since. The migration
+// must add it there too -- not only on the legacy rebuild -- and leave the rows alone.
+function aScopedDatabaseGainsReachAndKeepsItsLists() {
+  const schema = fs.readFileSync(path.join(__dirname, '..', 'src', 'compendium', 'schema.sql'), 'utf8');
+  const h = new Database(':memory:');
+  h.exec(schema.replace(/,\s*--[^\n]*\n(?:\s*--[^\n]*\n)*\s*reach INTEGER/, '')); // the layout before reach
+  assert.ok(!h.prepare('PRAGMA table_info(character_lists)').all().some((c) => c.name === 'reach'), 'the fixture starts without it');
+  h.prepare("INSERT INTO character_lists (id, owner_scope, name, created_by, created_at, popularity) VALUES (1, NULL, 'Kept', 't', 0, 7)").run();
+  migrate(h);
+  migrate(h);
+  const fresh = new Database(':memory:');
+  fresh.exec(schema);
+  const columns = (db) => db.prepare('PRAGMA table_info(character_lists)').all().map((c) => `${c.name}:${c.type}`);
+  assert.deepEqual(columns(h), columns(fresh), 'the fresh layout, column for column');
+  assert.deepEqual(h.prepare('SELECT name, popularity, reach FROM character_lists').get(), { name: 'Kept', popularity: 7, reach: null });
+}
+
 module.exports = {
+  'migration: a scoped database gains reach and keeps its lists': aScopedDatabaseGainsReachAndKeepsItsLists,
   'a shared list is visible to every scope': aSharedListIsVisibleToEveryScope,
   'a private list is visible only to its owner': aPrivateListIsVisibleOnlyToItsOwner,
   "a scope's own list wins a name clash with a shared one": aScopesOwnListWinsANameClashWithASharedOne,

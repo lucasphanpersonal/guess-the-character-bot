@@ -180,10 +180,17 @@ function formatListLabel(list) {
  *
  * The same character usually sits in several lists at once -- a show and the film spun off
  * from it, or Pikachu in both "Pokémon" and an anime title -- so this picks the most useful
- * one.
- * A franchise list (name differs from its category) beats a bare category list, and among
- * franchise lists the *biggest* wins.
+ * one. A franchise list (name differs from its category) beats a bare category list.
  *
+ * Among a dealt character's lists, the one whose best-known work most people know wins (each
+ * list's `reach`, one scale for every category) -- but only among lists of the SAME franchise
+ * as the list they were dealt from: ones sharing at least SAME_FRANCHISE other characters with
+ * it. Luke Skywalker dealt from a Lego Star Wars game is from Star Wars: Episode VII, the film
+ * list sharing Han, Leia and Chewbacca; Batman dealt from a Batman game is never "from ONE
+ * PIECE", whose Batman is someone else and shares nobody. Without reach to go on, the list
+ * they were dealt from stands, as it always did.
+ *
+ * With no dealt list (a name looked up on its own), the *biggest* franchise list wins.
  * Biggest, not smallest, and that was a real bug rather than a preference. Spin-offs and
  * tie-in films have far smaller casts than the show they came from, so ranking by smallest
  * confidently answered "Squidward Tentacles, from The Patrick Star Show" and "Blossom, from
@@ -210,10 +217,40 @@ function getCharacterSource(scope, characterName, drawnListId = null) {
  * In parts because a game can hand them out separately -- Draw shows the category a quarter of
  * the way into a drawing and the work only in its last quarter.
  */
+// Other characters two lists must share to be one franchise, for getCharacterOrigin: enough
+// that a namesake in an unrelated show (ONE PIECE's Batman, Ben 10's Ditto) never qualifies,
+// few enough that a short spin-off cast still does -- and a share of the smaller cast as well,
+// because two names alone are a coincidence between big casts: Disney Infinity's hundreds and
+// an unrelated anime share two first names, which made Elsa "from BNA".
+const SAME_FRANCHISE = 2;
+const SAME_FRANCHISE_SHARE = 0.15;
+
+/** Which of `otherIds` share at least SAME_FRANCHISE characters with list `listId`, besides `exceptName`. */
+function sameFranchise(listId, otherIds, exceptName) {
+  if (!otherIds.length) return new Set();
+  const ids = [listId, ...otherIds];
+  const rows = db.prepare(`SELECT list_id, name FROM characters WHERE list_id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+  const skip = normalizeForMatch(exceptName);
+  const casts = new Map(ids.map((id) => [id, new Set()]));
+  for (const r of rows) {
+    const k = normalizeForMatch(r.name);
+    if (k !== skip) casts.get(r.list_id).add(k);
+  }
+  const mine = casts.get(listId);
+  return new Set(
+    otherIds.filter((id) => {
+      const theirs = casts.get(id);
+      let shared = 0;
+      for (const k of theirs) if (mine.has(k)) shared++;
+      return shared >= SAME_FRANCHISE && shared >= SAME_FRANCHISE_SHARE * Math.min(mine.size, theirs.size);
+    })
+  );
+}
+
 function getCharacterOrigin(scope, characterName, drawnListId = null) {
   const rows = db
     .prepare(
-      `SELECT cl.id, cl.name, cl.category, COUNT(c2.id) AS size
+      `SELECT cl.id, cl.name, cl.category, cl.reach, COUNT(c2.id) AS size
          FROM characters ch
          JOIN character_lists cl ON cl.id = ch.list_id
          JOIN characters c2 ON c2.list_id = cl.id
@@ -232,12 +269,32 @@ function getCharacterOrigin(scope, characterName, drawnListId = null) {
   // named after something, so "Pokémon" beats falling through to a bare category name.
   const isWork = (row) => !row.category || row.category !== row.name;
 
-  // The list the character was actually dealt from settles it outright, when it names a
-  // work. Two unrelated characters can share a name -- there is a Ditto in Pokémon and a
-  // different Ditto in Ben 10 -- and no amount of ranking over the name alone can tell them
-  // apart. Which list it came from can.
-  const drawn = drawnListId != null && candidates.find((row) => row.id === drawnListId);
-  const best = (drawn && isWork(drawn) && drawn) || candidates.find(isWork) || candidates[0];
+  // The list the character was actually dealt from decides which character this is. Two
+  // unrelated characters can share a name -- there is a Ditto in Pokémon and a different Ditto
+  // in Ben 10 -- and no ranking over the name alone can tell them apart; the dealt list's
+  // franchise can. Within it, the best-known work names them.
+  //
+  // The dealt list counts for this even when it cannot be shown -- the Batman games list is
+  // called "Batman" -- or the one list that knows which Batman this is would drop out, and the
+  // biggest list anywhere named "Batman" would answer: ONE PIECE's.
+  const dealt = drawnListId != null && rows.find((row) => row.id === drawnListId);
+  if (dealt) {
+    const kin = sameFranchise(dealt.id, candidates.filter((c) => c.id !== dealt.id).map((c) => c.id), characterName);
+    const family = candidates.filter((c) => (c.id === dealt.id || kin.has(c.id)) && isWork(c));
+    // A tie is two lists sharing one best work: the Wikidata seed filed The Force Awakens itself
+    // among the Star Wars GAMES, so that games list and the film's list reach exactly as far.
+    // The work is a film, and naming a games list for it is the very thing this is here to stop.
+    const game = (c) => (c.category === 'Video Games' ? 1 : 0);
+    const best =
+      [...family].filter((c) => c.reach != null).sort((a, b) => b.reach - a.reach || game(a) - game(b))[0] ??
+      family.find((c) => c.id === dealt.id) ??
+      family[0]; // biggest first, as the rows are ordered
+    if (best) return { work: best.name, category: best.category ?? null };
+    // Nothing of theirs can be named (they are the title of the only list they are in): the kind
+    // of work is still true, and a namesake's show would not be.
+    if (dealt.category) return { work: null, category: dealt.category };
+  }
+  const best = candidates.find(isWork) || candidates[0];
   return isWork(best) ? { work: best.name, category: best.category ?? null } : { work: null, category: best.name };
 }
 
@@ -638,6 +695,13 @@ function setListPopularity(listId, popularity) {
   return db.prepare('UPDATE character_lists SET popularity = ? WHERE id = ?').run(popularity, listId).changes > 0;
 }
 
+// How many people know a list's single best-known work (see `reach` in schema.sql). `null`
+// when unknown, which getCharacterOrigin then never prefers.
+function setListReach(listId, reach) {
+  localWrites++;
+  return db.prepare('UPDATE character_lists SET reach = ? WHERE id = ?').run(reach, listId).changes > 0;
+}
+
 function setPopularityByName(scope, name, popularity) {
   return (
     db
@@ -801,6 +865,7 @@ module.exports = {
   disableAllLists,
   setPopularityByName,
   setListPopularity,
+  setListReach,
   clearPopularity,
   getRandomCategory,
   getCharacterByNameInLists,

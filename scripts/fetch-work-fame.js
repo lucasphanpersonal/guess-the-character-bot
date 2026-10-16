@@ -39,6 +39,17 @@
 //
 // Scores are compared only within a category (see backfill-popularity.js), so each category is
 // replaced whole: a list with no work found is unranked (sorts last), never left on the old scale.
+//
+// It also measures every list's REACH: the readers of its single best-known work, for Anime and
+// Manga too, on one scale across every category -- which popularity cannot be. Reach is what
+// decides which of a character's lists names them (getCharacterOrigin): Luke Skywalker, dealt
+// from a Lego game, is from the Star Wars film. The best single work rather than the franchise's
+// total, or twenty Star Wars games added up would outweigh the film. Anime and Manga keep
+// AniList's popularity for their order; only their reach is written.
+//
+// A list's reach counts only works of its own kind -- games for a games list. The Wikidata seed
+// filed The Force Awakens itself among the Star Wars GAMES, and that list then reached exactly as
+// far as the film, so Darth Vader, dealt from a Lego game, was "from Star Wars (Video Games)".
 
 const fs = require('fs');
 const path = require('path');
@@ -51,7 +62,7 @@ const WBAPI = 'https://www.wikidata.org/w/api.php';
 const PAGEVIEWS = 'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user';
 // What the scores in the file measure. A file from an older measure is not reused: its numbers
 // are on another scale.
-const MEASURE = 'enwiki-readers-12-months-summed-namesake';
+const MEASURE = 'enwiki-readers-12-months-summed-namesake-best-of-kind';
 // Wikimedia asks for a descriptive User-Agent identifying the tool and a contact point.
 const USER_AGENT =
   'guess-the-character-bot/1.0 (Discord party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
@@ -61,15 +72,19 @@ const ENTITY_CHUNK = 50;
 const MAX_RETRIES = 5;
 const GAP_MS = 120; // between searches: polite, and well under the API's limits
 
-// The categories this ranks. Anime and Manga keep AniList's popularity; Real People are fields
-// ("Actors"), not works, and keep theirs.
-const CATEGORIES = new Set(['Television Shows', 'Cartoon', 'Movies', 'Video Games']);
+// The categories whose popularity this writes. Anime and Manga keep AniList's; Real People are
+// fields ("Actors"), not works, and keep theirs.
+const RANKED = new Set(['Television Shows', 'Cartoon', 'Movies', 'Video Games']);
+// The categories whose reach it writes: every category made of works.
+const REACHED = new Set([...RANKED, 'Anime', 'Manga']);
 // What a search result's description must say to be this category's kind of work.
 const FITS = {
   'Television Shows': /\b(television|tv|sitcom|series|show|soap opera|telenovela|miniseries|drama|programme|program)\b/i,
   Cartoon: /\b(animated|animation|cartoon|television|tv|series|show)\b/i,
   Movies: /\b(film|movie|motion picture)\b/i,
   'Video Games': /\b(video game|game|games)\b/i,
+  Anime: /\b(anime|animated|animation|television|tv|series|film|ova|ona|show|manga)\b/i,
+  Manga: /\b(manga|manhwa|manhua|comic|comics|light novel|webtoon|series)\b/i,
 };
 // Second best: the list is named for a franchise or a character rather than one work.
 const FRANCHISE = /\b(franchise|media mix|series|fictional|superhero|supervillain|comic|character|mascot)\b/i;
@@ -98,14 +113,16 @@ async function api(params) {
 const OTHER_WIKIS = new Set(['commonswiki', 'specieswiki', 'metawiki', 'mediawikiwiki', 'wikidatawiki', 'sourceswiki', 'wikimaniawiki', 'outreachwiki', 'incubatorwiki', 'foundationwiki']);
 const wikipedias = (entity) => Object.keys(entity?.sitelinks ?? {}).filter((k) => /^[a-z_]+wiki$/.test(k) && !OTHER_WIKIS.has(k)).length;
 
-/** qid -> { wikipedias, title (English Wikipedia's, if any) }, 50 a call. Failed ids are left out. */
+/** qid -> { wikipedias, title (English Wikipedia's, if any), description }, 50 a call. Failed ids are left out. */
 async function entityInfo(qids) {
   const out = new Map();
   const ids = [...new Set(qids)];
   for (let i = 0; i < ids.length; i += ENTITY_CHUNK) {
-    const body = await api({ action: 'wbgetentities', ids: ids.slice(i, i + ENTITY_CHUNK).join('|'), props: 'sitelinks' });
+    const body = await api({ action: 'wbgetentities', ids: ids.slice(i, i + ENTITY_CHUNK).join('|'), props: 'sitelinks|descriptions', languages: 'en' });
     for (const [qid, entity] of Object.entries(body?.entities ?? {})) {
-      if (!entity.missing) out.set(qid, { wikipedias: wikipedias(entity), title: entity.sitelinks?.enwiki?.title ?? null });
+      if (!entity.missing) {
+        out.set(qid, { wikipedias: wikipedias(entity), title: entity.sitelinks?.enwiki?.title ?? null, description: entity.descriptions?.en?.value ?? '' });
+      }
     }
   }
   return out;
@@ -175,7 +192,7 @@ function readPrevious() {
 
 async function main() {
   const apply = process.argv.includes('--apply');
-  const targets = lists.listLists(null).filter((l) => CATEGORIES.has(l.category));
+  const targets = lists.listLists(null).filter((l) => REACHED.has(l.category));
   const seeded = seededWorks();
   const previous = readPrevious();
   const works = {};
@@ -230,7 +247,12 @@ async function main() {
     }
     const qid = english.reduce((a, b) => (info.get(b).wikipedias > info.get(a).wikipedias ? b : a));
     const measured = p.how === 'seed' ? english : [qid];
-    chosen.push({ ...p, qid, title: info.get(qid).title, titles: [...new Set(measured.map((q) => info.get(q).title))] });
+    const category = p.k.split('<|>')[0];
+    // Which of them count towards reach: those of the list's own kind. A searched list's one work
+    // was already chosen to fit; a seeded list's members can be anything the seed filed there.
+    const ofKind = (q) => p.how !== 'seed' || FITS[category].test(info.get(q).description);
+    const articles = [...new Map(measured.map((q) => [info.get(q).title, { title: info.get(q).title, ofKind: ofKind(q) }])).values()];
+    chosen.push({ ...p, qid, title: info.get(qid).title, articles });
   }
 
   // Pass 3: a year of readers for each chosen work, added up per list. The score. Any one
@@ -239,26 +261,36 @@ async function main() {
   let looked = 0;
   for (const c of chosen) {
     let total = 0;
-    for (const title of c.titles) {
-      const views = await readers(title, span);
+    let best = 0; // the best-known work OF ITS KIND: the list's reach
+    let bestAny = 0; // ...falling back to any of its works when none is of its kind
+    for (const work of c.articles) {
+      const views = await readers(work.title, span);
       if (views == null) { total = null; break; }
       total += views;
+      bestAny = Math.max(bestAny, views);
+      if (work.ofKind) best = Math.max(best, views);
       if (++looked % 250 === 0) console.log(`  readers for ${looked} articles...`);
       await sleep(25);
     }
     if (total == null) works[c.k] = { status: 'unknown' };
-    else works[c.k] = { status: total > 0 ? 'ok' : 'none', qid: c.qid, title: c.title, works: c.titles.length, readers: total, how: c.how };
+    else works[c.k] = { status: total > 0 ? 'ok' : 'none', qid: c.qid, title: c.title, works: c.articles.length, readers: total, best: best || bestAny, how: c.how };
   }
 
   writeFileAtomic(
     OUT_PATH,
-    JSON.stringify({ source: "English Wikipedia readers of each list's work", measure: MEASURE, span, updatedAt: new Date().toISOString(), works }, null, 1)
+    JSON.stringify(
+      // `rankedCategories`: whose popularity these readers ARE (backfill-popularity.js reads it);
+      // the rest are measured for reach alone.
+      { source: "English Wikipedia readers of each list's work", measure: MEASURE, span, rankedCategories: [...RANKED], updatedAt: new Date().toISOString(), works },
+      null,
+      1
+    )
   );
 
   const tally = { ok: 0, none: 0, unknown: 0 };
   for (const w of Object.values(works)) tally[w.status]++;
   console.log(`${targets.length} lists: ${tally.ok} scored, ${tally.none} with no work found, ${tally.unknown} unknown (a failed request). Wrote ${path.relative(process.cwd(), OUT_PATH)}.`);
-  for (const category of CATEGORIES) {
+  for (const category of REACHED) {
     const inCat = targets.filter((l) => l.category === category);
     const scored = inCat.filter((l) => works[key(category, l.name)]?.status === 'ok').length;
     console.log(`  ${category}: ${scored} of ${inCat.length} scored`);
@@ -275,18 +307,22 @@ async function main() {
   const db = require('../src/compendium/db');
   let ranked = 0;
   let unranked = 0;
+  let reached = 0;
   db.transaction(() => {
     for (const list of targets) {
       const w = works[key(list.category, list.name)];
-      const score = w?.status === 'ok' ? w.readers : null;
-      lists.setListPopularity(list.id, score);
-      if (score == null) unranked++;
-      else ranked++;
+      const ok = w?.status === 'ok';
+      lists.setListReach(list.id, ok ? w.best : null);
+      if (ok) reached++;
+      if (!RANKED.has(list.category)) continue;
+      lists.setListPopularity(list.id, ok ? w.readers : null);
+      if (ok) ranked++;
+      else unranked++;
     }
   })();
-  console.log(`Applied: ${ranked} lists ranked by their work, ${unranked} unranked (they sort last).`);
+  console.log(`Applied: ${ranked} lists ranked by their work, ${unranked} unranked (they sort last); reach for ${reached} of ${targets.length}.`);
 }
 
-module.exports = { searchWorks, wikipedias, lastYear, FITS, FRANCHISE, MEASURE };
+module.exports = { searchWorks, wikipedias, lastYear, FITS, FRANCHISE, MEASURE, RANKED, REACHED };
 
 if (require.main === module) main().catch((err) => { console.error(err); process.exit(1); });
