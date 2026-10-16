@@ -3,7 +3,8 @@
 // different: the wearer cannot see the screen, so sound carries the clock and a bed runs under
 // the whole turn. Here everyone can see the screen, so there is no bed and no ticking -- only
 // short one-shot cues for the moments worth looking up for. Often that is a player in another
-// tab, on a call, waiting for their turn.
+// tab, on a call, waiting for their turn. The one exception is Draw's pen on paper (scribble),
+// which sounds only while a pen is actually moving.
 //
 // Sound sits under the room, not over it. These play on computers that are usually also carrying
 // a voice call, often into headphones, several of them in one room, so every cue is soft sine or
@@ -101,6 +102,71 @@
     try { cue(); } finally { cueStart = 0; }
   }
 
+  // --- the pen on paper (Draw) -----------------------------------------------------------------
+  // The one sound here that is not a cue: noise, band-passed to a pencil's scratch, heard only
+  // while a pen is moving and as loud as it is fast -- a slow line a whisper, scribbling a rasp.
+  // It stops the moment the pen does, so it is never a bed. It is quieter than the quietest cue
+  // (a miss), because it plays on every screen in the room for as long as someone draws.
+  // Thin brushes sound higher than fat ones: a pencil, not a marker.
+  //
+  // One looping noise source while anyone draws, wound down after a moment's stillness. The level
+  // is set on the audio clock, not by timers, so a background tab's slow timers cannot leave it
+  // stuck on: every call schedules its own fade.
+  const SCRIBBLE_PEAK = 0.09;
+  const SCRIBBLE_HOLD_S = 0.07; // how long one movement is heard before it fades
+  const SCRIBBLE_IDLE_MS = 1500; // stillness before the source itself stops
+  let pencil = null; // { src, filter, gain, idle }
+  function noiseBuffer() {
+    const len = ctx.sampleRate; // a second of noise, looped
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    // Grainy rather than smooth: paper has a tooth, so the noise comes in uneven clumps.
+    let grain = 1;
+    for (let i = 0; i < len; i++) {
+      if (i % 220 === 0) grain = 0.35 + Math.random() * 0.65;
+      d[i] = (Math.random() * 2 - 1) * grain;
+    }
+    return buf;
+  }
+  function stopScribble() {
+    if (!pencil) return;
+    clearTimeout(pencil.idle);
+    try { pencil.src.stop(); pencil.gain.disconnect(); } catch { /* fine */ }
+    pencil = null;
+  }
+  /**
+   * The pen moved. `speed`: canvas widths per second. `size`: the brush (3 thin .. 36 fat).
+   */
+  function scribble(speed, size = 8) {
+    if (muted || !ctx || ctx.state !== 'running' || !(speed > 0)) return;
+    try {
+      if (!pencil) {
+        const src = ctx.createBufferSource();
+        src.buffer = noiseBuffer();
+        src.loop = true;
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 0.9;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        src.connect(filter); filter.connect(gain); gain.connect(out());
+        src.start();
+        pencil = { src, filter, gain, idle: null };
+      }
+      const now = ctx.currentTime;
+      const pace = Math.min(1, speed / 2);
+      const level = SCRIBBLE_PEAK * Math.sqrt(pace);
+      const pitch = (4200 - Math.min(36, Math.max(3, size)) * 70) * (0.8 + 0.4 * pace);
+      pencil.filter.frequency.setTargetAtTime(pitch, now, 0.03);
+      const g = pencil.gain.gain;
+      g.cancelScheduledValues(now);
+      g.setTargetAtTime(level, now, 0.015);
+      g.setTargetAtTime(0, now + SCRIBBLE_HOLD_S, 0.03);
+      clearTimeout(pencil.idle);
+      pencil.idle = setTimeout(stopScribble, SCRIBBLE_IDLE_MS);
+    } catch { /* fine */ }
+  }
+
   /**
    * A Sound On / Sound Off switch. The button is in each page's markup; this wires and paints it.
    * Turning it on plays a cue straight away: the point of the control is hearing what you chose,
@@ -117,6 +183,7 @@
       store.set('gtc_muted', muted ? '1' : '0');
       if (muted && master) {
         // Cut whatever is sounding, and start a fresh output next time.
+        stopScribble();
         try { master.disconnect(); } catch { /* fine */ }
         master = null;
       }
@@ -126,5 +193,5 @@
     paint();
   }
 
-  window.GTCSound = { tone, play, mountToggle, isMuted: () => muted, CUES: Object.keys(CUES) };
+  window.GTCSound = { tone, play, scribble, mountToggle, isMuted: () => muted, CUES: Object.keys(CUES) };
 })();

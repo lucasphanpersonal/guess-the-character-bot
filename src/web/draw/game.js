@@ -66,8 +66,9 @@ function hintFractions(letterCount) {
 // The work the character is from: the strongest of the hints, so the last quarter.
 const WORK_AT = 0.75;
 // Other names the drawer accepts for their character, typed while choosing: the English name of a
-// character the library has in Japanese ("Serena" for Usagi), a nickname the room uses. A few,
-// short, and each a real name rather than a letter that would let anything through.
+// character the library has in Japanese ("Serena" for Usagi), a nickname the room uses. A few and
+// short. One letter is a name too: the library has "Lawliet L", and the room calls him L. It lets
+// nothing else through, because a drawer's name counts only as a whole name: against "L", only "L".
 const ALSO_MAX = 3;
 const ALSO_LEN = 40;
 /**
@@ -89,7 +90,7 @@ function cleanAlsoAccept(text) {
   const names = String(text ?? '')
     .split(/[,\n]/)
     .map((s) => s.trim().slice(0, ALSO_LEN))
-    .filter((s) => normalizeLoose(s).length >= 2);
+    .filter((s) => normalizeLoose(s).length >= 1);
   return [...new Set(names)].slice(0, ALSO_MAX);
 }
 const CHAT_KEPT = 60;

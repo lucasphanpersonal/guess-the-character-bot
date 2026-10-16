@@ -405,6 +405,15 @@ const PIECE_MS = 50;
 const pads = [];
 setInterval(() => pads.forEach((pad) => pad.flush()), PIECE_MS);
 
+// The pen-on-paper sound (sound.js scribble) for a run of points drawn over `seconds`: as loud as
+// the pen was fast. A pause between moves reads as a slow stroke, not a fast one.
+function scribbleOver(points, seconds, size) {
+  if (!window.GTCSound?.scribble || points.length < 2) return;
+  let dist = 0;
+  for (let i = 1; i < points.length; i++) dist += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+  window.GTCSound.scribble(dist / Math.max(0.016, seconds), size);
+}
+
 function makePad(cv, { canDraw, send, undo, clear }) {
   const pad = { cv, strokes: [], live: null, pending: [], canDraw };
   const pointOf = (e) => {
@@ -437,6 +446,7 @@ function makePad(cv, { canDraw, send, undo, clear }) {
     pad.live = { id: `${STROKE_TAG}-${++seq}`, color: pen.color, size: pen.size, points: [pointOf(e)] };
     pad.strokes.push(pad.live);
     pad.pending = [...pad.live.points];
+    pad.movedAt = performance.now();
     strokeOn(cv, pad.live, 0);
   });
   cv.addEventListener('pointermove', (e) => {
@@ -448,6 +458,10 @@ function makePad(cv, { canDraw, send, undo, clear }) {
     live.points.push(p);
     pad.pending.push(p);
     strokeOn(cv, live, live.points.length - 1);
+    // Your own pen is heard at once, from your hand, not after the server echoes it.
+    const t = performance.now();
+    scribbleOver([last, p], (t - (pad.movedAt ?? t - 16)) / 1000, live.size);
+    pad.movedAt = t;
   });
   const endStroke = () => {
     pad.flush();
@@ -482,6 +496,9 @@ socket.on('draw:stroke', (piece) => {
   const from = s.points.length;
   s.points.push(...piece.points);
   strokeSegment(s, from);
+  // The drawer's pen, heard as the picture grows. A piece covers PIECE_MS of their drawing, and
+  // starts where the last one ended.
+  if (s.kind !== 'fill') scribbleOver(s.points.slice(Math.max(0, from - 1)), PIECE_MS / 1000, s.size);
 });
 // The whole picture: a new turn (empty), an undo or clear, or a reconnect catching up.
 socket.on('draw:canvas', ({ strokes: all }) => {
@@ -821,7 +838,7 @@ function spellingOptions(c) {
   const typed = $('alsoAccept')
     .value.split(/[,\n]/)
     .map((s) => s.trim().slice(0, 40))
-    .filter((s) => s.replace(/[^\p{L}\p{N}]/gu, '').length >= 2);
+    .filter((s) => s.replace(/[^\p{L}\p{N}]/gu, '').length >= 1);
   const out = [c.name, ...(c.swapped ? [c.swapped] : [])];
   for (const n of [...new Set(typed)].slice(0, 3)) if (!out.some((o) => o.toLowerCase() === n.toLowerCase())) out.push(n);
   return out;

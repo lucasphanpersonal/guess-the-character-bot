@@ -252,6 +252,20 @@ function aNameTheDrawerAcceptsCounts() {
   assert.equal(draw.viewFor(g, 'p1', names, T0).alsoAccept.join('|'), 'Serena|Sailor Moon', 'the drawer sees them');
 }
 
+// The library has "Lawliet L"; the room calls him L. A one-letter name has to work as the
+// spelling and as an answer -- and still let nothing through but itself.
+function aOneLetterNameCountsAndOnlyAsItself() {
+  const g = started();
+  g.choices[0] = { ...head('Lawliet L'), origin: { work: 'Death Note', category: 'Anime' } };
+  draw.choose(g, 'p1', 0, T0, 'L', 'L');
+  assert.equal(draw.viewFor(g, 'p1', names, T0).shownAs, 'L', 'the blanks spell L');
+  for (const near of ['I', '1', 'LL', 'el', 'its L', 'Light Yagami']) {
+    assert.notEqual(draw.say(g, 'p2', near, T0 + 1000).verdict, 'correct', `"${near}" is not L`);
+  }
+  assert.equal(draw.say(g, 'p2', 'l', T0 + 1000).verdict, 'correct');
+  assert.equal(draw.say(g, 'p3', 'L.', T0 + 1000).verdict, 'correct');
+}
+
 function theDrawerIsToldWhatWillCountForEachChoice() {
   const { poolIndex } = require('../src/compendium/answers');
   const cast = poolIndex(['Uchiha Sasuke', 'Uchiha Itachi', 'Miles "Tails" Prower']);
@@ -343,7 +357,8 @@ function otherNamesReachNobodyButTheDrawerUntilTheReveal() {
 }
 
 function otherNamesAreAFewRealNames() {
-  assert.deepEqual(draw.cleanAlsoAccept('a, Serena , ,Serena, Bunny, Usako, Moon'), ['Serena', 'Bunny', 'Usako'], 'no single letters, no repeats, at most three');
+  assert.deepEqual(draw.cleanAlsoAccept('?, Serena , ,Serena, Bunny, Usako, Moon'), ['Serena', 'Bunny', 'Usako'], 'no blanks or bare punctuation, no repeats, at most three');
+  assert.deepEqual(draw.cleanAlsoAccept('L'), ['L'], 'one letter is a name: L, from Death Note');
   assert.equal(draw.cleanAlsoAccept('x'.repeat(100))[0].length, 40);
   assert.deepEqual(draw.cleanAlsoAccept(undefined), []);
 }
@@ -564,6 +579,7 @@ module.exports = {
   'names give up a third of their letters': namesGiveUpAThirdOfTheirLetters,
   'whoever gave up talks only to those who know, and scores nothing': whoGaveUpTalksOnlyToThoseWhoKnow,
   'a name the drawer accepts counts': aNameTheDrawerAcceptsCounts,
+  'a one-letter name counts, and only as itself': aOneLetterNameCountsAndOnlyAsItself,
   'the drawer is told what will count for each choice': theDrawerIsToldWhatWillCountForEachChoice,
   'the blanks spell the name the drawer picked': theBlanksSpellTheNameTheDrawerPicked,
   'the blanks take only a spelling that counts': theBlanksTakeOnlyASpellingThatCounts,
