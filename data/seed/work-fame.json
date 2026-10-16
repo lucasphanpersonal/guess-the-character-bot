@@ -11,7 +11,7 @@
   "Movies",
   "Video Games"
  ],
- "updatedAt": "2026-10-16T20:47:49.024Z",
+ "updatedAt": "2026-10-16T21:08:41.957Z",
  "works": {
   "Television Shows<|>'Twas the Night": {
    "status": "ok",
@@ -9474,6 +9474,28 @@
    "readers": 837277,
    "best": 837277,
    "how": "search"
+  },
+  "Video Games<|>Persona": {
+   "status": "ok",
+   "qid": "Q910889",
+   "title": "Persona 3",
+   "works": 11,
+   "readers": 1831568,
+   "best": 585034,
+   "how": "override",
+   "qids": [
+    "Q1083352",
+    "Q15225985",
+    "Q63385672",
+    "Q74109258",
+    "Q910889",
+    "Q119294958",
+    "Q63120969",
+    "Q568609",
+    "Q63228434",
+    "Q767086",
+    "Q19997467"
+   ]
   },
   "Video Games<|>Pesterquest": {
    "status": "ok",

@@ -1,0 +1,2043 @@
+{
+ "list": "Persona",
+ "category": "Video Games",
+ "source": "Megami Tensei wiki (megamitensei.fandom.com), the games' character categories",
+ "fetchedAt": "2026-10-16T21:07:16.927Z",
+ "characters": [
+  {
+   "name": "Ai Ebihara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9d/P4_Ai.png/revision/latest?cb=20240427043332",
+   "fame": 14124
+  },
+  {
+   "name": "Ai Kurogami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0a/PxD_Manga_-_Ai_Kurogami2.jpg/revision/latest?cb=20201012071033",
+   "fame": 1376
+  },
+  {
+   "name": "Aigis",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/22/P3_Aigis.png/revision/latest?cb=20230205053002",
+   "fame": 59238
+  },
+  {
+   "name": "Aika Nakamura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/57/P4RE_Aika_Nakamura.webp/revision/latest?cb=20260920000205",
+   "fame": 8325
+  },
+  {
+   "name": "Airi Fujieda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/3e/Airi_Fujieda_when_she_was_in_school.png/revision/latest?cb=20260403013814",
+   "fame": 10491
+  },
+  {
+   "name": "Akane Hasegawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e3/Akane_Hasegawa_C_Art.png/revision/latest?cb=20250917231243",
+   "fame": 23232
+  },
+  {
+   "name": "Akari Hoshi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a9/P2I-hoshiAkari.jpg/revision/latest?cb=20110819000431",
+   "fame": 6497
+  },
+  {
+   "name": "Akari Torikiri",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e7/Rose-futaba.png/revision/latest?cb=20170311021733",
+   "fame": 2467
+  },
+  {
+   "name": "Akemi Fujishima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6b/Tengdao.png/revision/latest?cb=20240912165208",
+   "fame": 266
+  },
+  {
+   "name": "Aki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5f/Aki_Manga.jpg/revision/latest?cb=20140505232832",
+   "fame": 4762
+  },
+  {
+   "name": "Akihiko Sanada",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/96/P3_Akihiko_Sanada.png/revision/latest?cb=20230205052954",
+   "fame": 46619
+  },
+  {
+   "name": "Akimitsu Tsuda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/81/Akimitsu_Tsuda.png/revision/latest?cb=20200823004010",
+   "fame": 893
+  },
+  {
+   "name": "Akinari Kamiki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/40/P3-Akinari_Render.png/revision/latest?cb=20141130213922",
+   "fame": 8164
+  },
+  {
+   "name": "Akinari Kashihara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f1/KashiharaISPortrait.png/revision/latest?cb=20140210012556",
+   "fame": 7038
+  },
+  {
+   "name": "Akira Konoe",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/06/P5S_Akira_Konoe.png/revision/latest?cb=20210909194758",
+   "fame": 22326
+  },
+  {
+   "name": "Alex Brown",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c8/Alex_Brown.png/revision/latest?cb=20150125051127",
+   "fame": 1356
+  },
+  {
+   "name": "Alice Hiiragi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1b/Alice_Hiiragi_Persona_5_Strikers.png/revision/latest?cb=20220830132101",
+   "fame": 21655
+  },
+  {
+   "name": "Anderson",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4d/Anderson.png/revision/latest?cb=20240528203007",
+   "fame": 2185
+  },
+  {
+   "name": "Andre Laurent Jean Geraux",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/dd/P3_Bebe_Render.png/revision/latest?cb=20140903231208",
+   "fame": 10891
+  },
+  {
+   "name": "Angel and Julian",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/94/Angeljulian.png/revision/latest?cb=20200710223444",
+   "fame": 6932
+  },
+  {
+   "name": "Ango Natsume",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/21/Ango_Natsume.png/revision/latest?cb=20210909182931",
+   "fame": 20322
+  },
+  {
+   "name": "Ann Takamaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/be/An_takamaki.png/revision/latest?cb=20170426203909",
+   "fame": 55801
+  },
+  {
+   "name": "Anna Yoshizaka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/30/P2IS-AnnaYoshizaka.jpg/revision/latest?cb=20170312153129",
+   "fame": 8324
+  },
+  {
+   "name": "Aoi Hasegawa",
+   "image": null,
+   "fame": 1904
+  },
+  {
+   "name": "Aran Hirano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/31/P5X_Aran_Hirano.png/revision/latest?cb=20260402040323",
+   "fame": 38746
+  },
+  {
+   "name": "Asterius",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/03/Asterios.png/revision/latest?cb=20240403120108",
+   "fame": 9263
+  },
+  {
+   "name": "Audience Surrogate",
+   "image": null,
+   "fame": 1236
+  },
+  {
+   "name": "Ayaka Sakai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/19/Ayaka_Sakai_civilian_full_appearance.png/revision/latest?cb=20240718100900",
+   "fame": 3944
+  },
+  {
+   "name": "Ayane Matsunaga",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bb/Ayane_P4.png/revision/latest?cb=20240427043357",
+   "fame": 9097
+  },
+  {
+   "name": "Baofu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/68/P2I-sagaKaoru.jpg/revision/latest?cb=20110323032422",
+   "fame": 12428
+  },
+  {
+   "name": "BB",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e7/BB.png/revision/latest?cb=20220619150228",
+   "fame": 4034
+  },
+  {
+   "name": "Belladonna",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/85/P2I-belladonna.jpg/revision/latest?cb=20110223235316",
+   "fame": 2912
+  },
+  {
+   "name": "Bernie",
+   "image": null,
+   "fame": 2381
+  },
+  {
+   "name": "Besa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f0/Besa.png/revision/latest?cb=20250123220525",
+   "fame": 2729
+  },
+  {
+   "name": "Boy with Earring",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/21/Naoya_Toudou_render.png/revision/latest?cb=20241201204554",
+   "fame": 17517
+  },
+  {
+   "name": "Bunkichi and Mitsuko",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/ba/P3_Bunkichi_and_Mitsuko_Render.png/revision/latest?cb=20131221020747",
+   "fame": 8335
+  },
+  {
+   "name": "Captain Shimazu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/dd/Shimazu.png/revision/latest?cb=20150423064424",
+   "fame": 3411
+  },
+  {
+   "name": "Caroline & Justine",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9b/P5_Caroline_and_Justine.png/revision/latest?cb=20160820081904",
+   "fame": 74988
+  },
+  {
+   "name": "Cetus",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d2/Ceto.png/revision/latest?cb=20260401013151",
+   "fame": 6074
+  },
+  {
+   "name": "Chandraputra",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2e/Chandraputra_EPP.png/revision/latest?cb=20140302035258",
+   "fame": 2064
+  },
+  {
+   "name": "Chidori Yoshino",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/93/P3_Chidori_Render.png/revision/latest?cb=20141130003403",
+   "fame": 21018
+  },
+  {
+   "name": "Chie Satonaka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c6/Chie_Satonaka.png/revision/latest?cb=20230208003757",
+   "fame": 55115
+  },
+  {
+   "name": "Chihaya Mifune",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2a/Chihaya_Mifune.png/revision/latest?cb=20161220023405",
+   "fame": 10168
+  },
+  {
+   "name": "Chihiro Fushimi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d9/P3_Chihiro_Render.png/revision/latest?cb=20141203221932",
+   "fame": 8777
+  },
+  {
+   "name": "Chika Ueda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c4/Chika_Ueda.jpg/revision/latest?cb=20111230031049",
+   "fame": 2065
+  },
+  {
+   "name": "Chisato Kasai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/36/Chisato_Kasai_concept.png/revision/latest?cb=20200608152412",
+   "fame": 5636
+  },
+  {
+   "name": "Chizuko Nagao",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/77/Chizuko_Nagao_real_world_version.png/revision/latest?cb=20240620125559",
+   "fame": 7695
+  },
+  {
+   "name": "Chizuru Ishigami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d4/Chizuru_Ishigami_%28Normal%29.png/revision/latest?cb=20250127081725",
+   "fame": 5121
+  },
+  {
+   "name": "Chronos",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/ab/ChronosP2.png/revision/latest?cb=20240412120835",
+   "fame": 9459
+  },
+  {
+   "name": "Clockwork God",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7f/Clockwork_God_PQ.png/revision/latest?cb=20140925220936",
+   "fame": 8922
+  },
+  {
+   "name": "Coach Hiraguchi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/fb/P5R_Coach_Hirakuchi.png/revision/latest?cb=20200413144416",
+   "fame": 4920
+  },
+  {
+   "name": "Daichi Osaka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/84/P5X_Daichi_Osaka_normal.png/revision/latest?cb=20251127150708",
+   "fame": 15723
+  },
+  {
+   "name": "Daisuke Nagase",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/95/Daisuke.png/revision/latest?cb=20240427043418",
+   "fame": 10228
+  },
+  {
+   "name": "Daisuke Todoroki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6e/DaisukeTodoroki.png/revision/latest?cb=20140209000855",
+   "fame": 3536
+  },
+  {
+   "name": "Dance Instructor",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/65/P4D_Dancer_instructor_portrait.png/revision/latest?cb=20160511230253",
+   "fame": 1434
+  },
+  {
+   "name": "Death",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/17/Death_%28Shadow_Form%29.png/revision/latest?cb=20220907193655",
+   "fame": 17090
+  },
+  {
+   "name": "Demiurge",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/41/Demiurge_%28Dx2_Art%29.png/revision/latest?cb=20210714081749",
+   "fame": 79436
+  },
+  {
+   "name": "Demon Painter",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/11/P2I-demonArtist.jpg/revision/latest?cb=20110223234613",
+   "fame": 2207
+  },
+  {
+   "name": "Doctor Nicholai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bb/NicholaiManga.jpg/revision/latest?cb=20171101084429",
+   "fame": 2558
+  },
+  {
+   "name": "Doe",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7f/PQ2_Doe.png/revision/latest?cb=20190701070608",
+   "fame": 17520
+  },
+  {
+   "name": "Eiichiro Takeba",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9e/Eiichiro.png/revision/latest?cb=20141203222152",
+   "fame": 9757
+  },
+  {
+   "name": "Eikichi Mishina",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d2/Eikichi_Mishina.png/revision/latest?cb=20230408205319",
+   "fame": 16409
+  },
+  {
+   "name": "Eita Sanada",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/be/Pmo_1.gif/revision/latest?cb=20200216184000",
+   "fame": 1242
+  },
+  {
+   "name": "Elizabeth",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/67/Elizabeth_render.png/revision/latest?cb=20240128235515",
+   "fame": 59382
+  },
+  {
+   "name": "Emiri Kanou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f3/Emiri_Kanou.png/revision/latest?cb=20120803150548",
+   "fame": 2842
+  },
+  {
+   "name": "EMMA",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/P5S_EMMA_Logo.png/revision/latest?cb=20200212192524",
+   "fame": 23669
+  },
+  {
+   "name": "Ena Kageyama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/69/Ena_Kageyama_New.png/revision/latest?cb=20240421004549",
+   "fame": 3007
+  },
+  {
+   "name": "Enlil",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/81/Enlil.png/revision/latest?cb=20190306185820",
+   "fame": 17787
+  },
+  {
+   "name": "Eri Minami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/da/Eri.png/revision/latest?cb=20141205132838",
+   "fame": 7788
+  },
+  {
+   "name": "Eri Natsuhara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/04/Eri_Natsuhara_Portrait.png/revision/latest?cb=20231207020831",
+   "fame": 10529
+  },
+  {
+   "name": "Eriko Kirishima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5e/ErikoP1.png/revision/latest?cb=20240415103857",
+   "fame": 17456
+  },
+  {
+   "name": "Erina",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/32/P5T_Elle_Art.png/revision/latest?cb=20230612025134",
+   "fame": 9270
+  },
+  {
+   "name": "Eris",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/92/Eris_battle_sprite.png/revision/latest?cb=20200216205448",
+   "fame": 831
+  },
+  {
+   "name": "Fox",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/35/Fox_P4.png/revision/latest?cb=20231223232405",
+   "fame": 7571
+  },
+  {
+   "name": "Fuhrer",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/82/P2-Hitler.jpg/revision/latest?cb=20090606063126",
+   "fame": 7284
+  },
+  {
+   "name": "Fumi Ogata",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/32/Ayumi1.png/revision/latest?cb=20240913191308",
+   "fame": 286
+  },
+  {
+   "name": "Fumiyo Tosabayashi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/42/Fumiyo_Tosabayashi.png/revision/latest?cb=20240528204217",
+   "fame": 325
+  },
+  {
+   "name": "Futaba Sakura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/62/Futaba_Sakura.png/revision/latest?cb=20230219085927",
+   "fame": 56778
+  },
+  {
+   "name": "Fuuka Yamagishi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/81/Fuuka_Yamagishi.png/revision/latest?cb=20230205052918",
+   "fame": 33186
+  },
+  {
+   "name": "Garcon Soejima",
+   "image": null,
+   "fame": 165
+  },
+  {
+   "name": "General Sugawara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/eb/General_Sugiwara.png/revision/latest?cb=20150203042942",
+   "fame": 3396
+  },
+  {
+   "name": "Ginji Sasaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f5/P2IS-GinjiSasaki.jpg/revision/latest?cb=20170312154237",
+   "fame": 6306
+  },
+  {
+   "name": "Goro Akechi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/15/Gor%C5%8D_Akechi.png/revision/latest?cb=20230603111738",
+   "fame": 112271
+  },
+  {
+   "name": "Guernica",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e6/P5T_Guernica_Character_Art.png/revision/latest?cb=20231222050208",
+   "fame": 16880
+  },
+  {
+   "name": "Hakozaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/13/P5X_Hakozaki_normal.png/revision/latest?cb=20260810163311",
+   "fame": 1444
+  },
+  {
+   "name": "Hanako Ohtani",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9c/Hanako.png/revision/latest?cb=20161228095205",
+   "fame": 6693
+  },
+  {
+   "name": "Haru Okumura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/77/P5_Haru_Okumura.png/revision/latest?cb=20240307215250",
+   "fame": 46717
+  },
+  {
+   "name": "Haruna Nishimori",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/ba/Hana_Nishimori.png/revision/latest?cb=20240402070643",
+   "fame": 4334
+  },
+  {
+   "name": "Haruo Weyland",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/cf/Haruo_Render.png/revision/latest?cb=20180131104937",
+   "fame": 725
+  },
+  {
+   "name": "Hatsune Miku",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/3c/P4D_Hatsune_Miku.png/revision/latest?cb=20150802040339",
+   "fame": 15874
+  },
+  {
+   "name": "Head Monk",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6d/HeadMonk.png/revision/latest?cb=20140209001057",
+   "fame": 2444
+  },
+  {
+   "name": "Herbivore Dinosaurs",
+   "image": null,
+   "fame": 11095
+  },
+  {
+   "name": "Hidehiko Uesugi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a5/HidehikoP1.png/revision/latest?cb=20240415103843",
+   "fame": 10734
+  },
+  {
+   "name": "Hidetoshi Odagiri",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b7/P3_Hidetoshi.png/revision/latest?cb=20140902021851",
+   "fame": 10759
+  },
+  {
+   "name": "Hifumi Togo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/78/Hifumi_Togo.png/revision/latest?cb=20161220031634",
+   "fame": 11105
+  },
+  {
+   "name": "Hikari",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/51/PQ2_Hikari.png/revision/latest?cb=20180827150818",
+   "fame": 33345
+  },
+  {
+   "name": "Hikari's Father",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/76/Hikari%27s_Father.png/revision/latest?cb=20190630153639",
+   "fame": 4646
+  },
+  {
+   "name": "Hinokagutsuchi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2e/Hinokagutsuchi_%28Dx2_Art%29.png/revision/latest?cb=20221201122040",
+   "fame": 15831
+  },
+  {
+   "name": "Hiroki Sugimoto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c7/Hiroki_Sugimoto_%28Normal%29.png/revision/latest?cb=20250128012453",
+   "fame": 4709
+  },
+  {
+   "name": "Hiromu Miyazawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2f/Miyazawa_Hiromu.png/revision/latest?cb=20230828141250",
+   "fame": 41521
+  },
+  {
+   "name": "Hisano Kuroda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/38/Hisano.png/revision/latest?cb=20170626000830",
+   "fame": 9742
+  },
+  {
+   "name": "Hit-and-Run Rider",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2b/Hit-and-Run_Rider.png/revision/latest?cb=20260820194015",
+   "fame": 2806
+  },
+  {
+   "name": "Hiyori Koide",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8f/Hiyori_Koide.png/revision/latest?cb=20240528204028",
+   "fame": 431
+  },
+  {
+   "name": "Ichigo Shikano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0f/Ichigo_Shikano.png/revision/latest?cb=20250620201559",
+   "fame": 5052
+  },
+  {
+   "name": "Ichiko Ohya",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9c/Ichiko_Oya.png/revision/latest?cb=20161220185914",
+   "fame": 10412
+  },
+  {
+   "name": "Ichiro Nakabachi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/de/Ichiro_Nakabachi.png/revision/latest?cb=20250330193028",
+   "fame": 7160
+  },
+  {
+   "name": "Ichiryusai Madarame",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/ec/Madarame.png/revision/latest?cb=20170227020136",
+   "fame": 41224
+  },
+  {
+   "name": "Igor",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/68/Igor_%28Persona_Art%29.png/revision/latest?cb=20220227125743",
+   "fame": 28420
+  },
+  {
+   "name": "Isako Toriumi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f8/P3_Isako_Toriumi_Render.png/revision/latest?cb=20141130213313",
+   "fame": 15705
+  },
+  {
+   "name": "Izanami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/55/DDS-MegamiTensei_109.jpg/revision/latest?cb=20170121111657",
+   "fame": 37336
+  },
+  {
+   "name": "Izumi",
+   "image": null,
+   "fame": 2651
+  },
+  {
+   "name": "Jerri",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/26/P5T_Jerry_1.png/revision/latest?cb=20240717122114",
+   "fame": 6985
+  },
+  {
+   "name": "Jin Shirato",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/cc/P3_Jin_Render.png/revision/latest?cb=20141102201837",
+   "fame": 21113
+  },
+  {
+   "name": "John Harris",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/53/Harris1.png/revision/latest?cb=20240913194227",
+   "fame": 3589
+  },
+  {
+   "name": "Joker",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1c/JokerPersona2.png/revision/latest?cb=20240219011756",
+   "fame": 11169
+  },
+  {
+   "name": "Jose",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/59/Jos%C3%A9.png/revision/latest?cb=20190809211150",
+   "fame": 7578
+  },
+  {
+   "name": "Jun Kurosu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/24/Jun_Kurosu_render_2.png/revision/latest?cb=20121219203516",
+   "fame": 19395
+  },
+  {
+   "name": "Junko Kurosu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7c/P2IS-JunkoKurosu.jpg/revision/latest?cb=20090822042855",
+   "fame": 6087
+  },
+  {
+   "name": "Junpei Iori",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e5/Junpei_Iori.png/revision/latest?cb=20230205052918",
+   "fame": 43297
+  },
+  {
+   "name": "Junya Kaneshiro",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9e/Junya.png/revision/latest?cb=20160918132435",
+   "fame": 33810
+  },
+  {
+   "name": "Jyun Owada",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/Jyun_Owada.png/revision/latest?cb=20210909195139",
+   "fame": 5322
+  },
+  {
+   "name": "Kaho Nanase",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/84/Kaho%E2%80%98s_friend_and_her_mother_give_her_flowers_at_where_she_died.jpeg/revision/latest?cb=20231221000345",
+   "fame": 1548
+  },
+  {
+   "name": "Kain Junsa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/Kain.png/revision/latest?cb=20220619152227",
+   "fame": 2756
+  },
+  {
+   "name": "Kaito Isomura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/08/Kaito-Smiling.png/revision/latest?cb=20250911161334",
+   "fame": 4416
+  },
+  {
+   "name": "Kamoshidaman",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5c/Kamoshidaman_PQ2.png/revision/latest?cb=20190630194131",
+   "fame": 15447
+  },
+  {
+   "name": "Kanami Mashita",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0a/Kanami.png/revision/latest?cb=20150731035507",
+   "fame": 12310
+  },
+  {
+   "name": "Kaneko",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f2/Sub13_kaneko.jpg/revision/latest?cb=20120114010225",
+   "fame": 1481
+  },
+  {
+   "name": "Kanji Tatsumi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/29/Kanji_Tatsumi.png/revision/latest?cb=20230208003759",
+   "fame": 56573
+  },
+  {
+   "name": "Kankichi Mishina",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b5/Kankichi_IS.png/revision/latest?cb=20140516101530",
+   "fame": 3933
+  },
+  {
+   "name": "Kaoru Hioka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4a/PxD_Manga_-_Kaoru.png/revision/latest?cb=20140125045158",
+   "fame": 1246
+  },
+  {
+   "name": "Kasumi Yoshizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/49/Real_Kasumi_Persona_5.png/revision/latest?cb=20200410175054",
+   "fame": 9286
+  },
+  {
+   "name": "Katsue Kaneda",
+   "image": null,
+   "fame": 1840
+  },
+  {
+   "name": "Katsuya Suou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c3/P2I-suouKatsuya.jpg/revision/latest?cb=20110323032624",
+   "fame": 12769
+  },
+  {
+   "name": "Kayo Tomiyama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d0/Kayo-Render.png/revision/latest?cb=20240318195549",
+   "fame": 4461
+  },
+  {
+   "name": "Kazuhiko Tsuda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/94/Kazuhiko_Tsuda.png/revision/latest?cb=20240528202855",
+   "fame": 389
+  },
+  {
+   "name": "Kazushi Miyamoto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/20/P3_Kazushi_Miyamoto_Render.png/revision/latest?cb=20140903225737",
+   "fame": 7987
+  },
+  {
+   "name": "Kazuya Makigami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/cd/Shadow_Makigami.png/revision/latest?cb=20200902011039",
+   "fame": 5800
+  },
+  {
+   "name": "Kazuya Toudou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/ba/Kazuya.jpg/revision/latest?cb=20140507020449",
+   "fame": 3404
+  },
+  {
+   "name": "Kei Akashi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c0/Real_world_Kei_Akashi.png/revision/latest?cb=20240718220425",
+   "fame": 46854
+  },
+  {
+   "name": "Kei Nanjo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0f/KeiP1.png/revision/latest?cb=20240415103917",
+   "fame": 18346
+  },
+  {
+   "name": "Keisuke Hiraga",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2f/P3_Keisuke.png/revision/latest?cb=20140903225922",
+   "fame": 8443
+  },
+  {
+   "name": "Ken Amada",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2b/Ken_Amada.png/revision/latest?cb=20230205052917",
+   "fame": 48588
+  },
+  {
+   "name": "Kenji Tomochika",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1a/P3_Kenji.png/revision/latest?cb=20140903225008",
+   "fame": 9873
+  },
+  {
+   "name": "Kenta Yokouchi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/02/Goro.PNG/revision/latest?cb=20180702000215",
+   "fame": 5311
+  },
+  {
+   "name": "Kikuno Saikawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/87/Kikuno_Saika_P4AU.png/revision/latest?cb=20140929002038",
+   "fame": 3967
+  },
+  {
+   "name": "Kinshiro Morooka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/82/P4-Morooka.png/revision/latest?cb=20150920222043",
+   "fame": 8195
+  },
+  {
+   "name": "Kira Kitazato",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d8/P5X_Kira_Kitazato.png/revision/latest?cb=20240912022221",
+   "fame": 5959
+  },
+  {
+   "name": "Kiyoshi Kurotani",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d0/Kiyoshi-Render.png/revision/latest?cb=20240318195451",
+   "fame": 4193
+  },
+  {
+   "name": "Kiyoshi Sakuma",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c7/Kiyoshi_portrait.png/revision/latest?cb=20260424230824",
+   "fame": 3358
+  },
+  {
+   "name": "Kiyotada Sumaru",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7b/Kiyotada_Sumaru.jpg/revision/latest?cb=20111106004116",
+   "fame": 3616
+  },
+  {
+   "name": "Kobayakawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bd/P5_Principal_of_Syujin_High_School.png/revision/latest?cb=20200611140047",
+   "fame": 9301
+  },
+  {
+   "name": "Kokoro",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/79/Pink_haired_man_with_sunglasses.png/revision/latest?cb=20250328183834",
+   "fame": 9908
+  },
+  {
+   "name": "Koromaru",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/13/Koromaru.png/revision/latest?cb=20230205052912",
+   "fame": 22920
+  },
+  {
+   "name": "Kotone Montagne",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0b/Kotone-Reality_2.png/revision/latest?cb=20241121184758",
+   "fame": 5082
+  },
+  {
+   "name": "Kotone Shiomi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/31/Protagonist_%28Female%29.png/revision/latest?cb=20230205052924",
+   "fame": 27272
+  },
+  {
+   "name": "Kou Ichijo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/25/P4_Kou.png/revision/latest?cb=20240427043439",
+   "fame": 12156
+  },
+  {
+   "name": "Kouetsu Kirijo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f1/P3-Kouetsu.png/revision/latest?cb=20170318120117",
+   "fame": 3219
+  },
+  {
+   "name": "Kouji Nakamura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/ce/Kouji_Nakamura_EPP.png/revision/latest?cb=20140302040235",
+   "fame": 1069
+  },
+  {
+   "name": "Kumi Hirose",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1b/KumiManga.jpg/revision/latest?cb=20210619102659",
+   "fame": 1741
+  },
+  {
+   "name": "Kumi Katayama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/ee/P5X_Kumi_Katayama_Artwork.png/revision/latest?cb=20250904041653",
+   "fame": 38619
+  },
+  {
+   "name": "Kunikazu Okumura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f3/Kunikazu_Okumura.png/revision/latest?cb=20170227020335",
+   "fame": 50045
+  },
+  {
+   "name": "Kuon Ichinose",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4a/Kuon_Ichinose.png/revision/latest?cb=20210909182149",
+   "fame": 18664
+  },
+  {
+   "name": "Kurosawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d9/OfficerKurosawa.png/revision/latest?cb=20091114070533",
+   "fame": 5818
+  },
+  {
+   "name": "Kyoka Ochimizu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/49/P4D_Ochimizu_protrait.png/revision/latest?cb=20160511230120",
+   "fame": 5044
+  },
+  {
+   "name": "Kyouhei Hioka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/fd/PxD_Manga_-_Kyouhei.png/revision/latest?cb=20140125050910",
+   "fame": 1719
+  },
+  {
+   "name": "Kyouka Sayama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/85/Ss-006.jpg/revision/latest?cb=20110404015348",
+   "fame": 1740
+  },
+  {
+   "name": "Labrys",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/01/Labrysp4a.png/revision/latest?cb=20140521135010",
+   "fame": 26975
+  },
+  {
+   "name": "Lala Escargot",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/be/Lala_in_p5.jpeg/revision/latest?cb=20200621203006",
+   "fame": 6078
+  },
+  {
+   "name": "Leo Kamiyama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/10/P5X_Leo_portrait_full.png/revision/latest?cb=20260615073346",
+   "fame": 4373
+  },
+  {
+   "name": "Lieutenant General Zula",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/ee/Lieutenant_General_Zulu_EPP.png/revision/latest?cb=20140302040437",
+   "fame": 1859
+  },
+  {
+   "name": "Lisa Silverman",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0f/Lisa_Silverman_render_2.png/revision/latest?cb=20240413082542",
+   "fame": 14327
+  },
+  {
+   "name": "Luca",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1c/P5T_Luca_Character_Art.png/revision/latest?cb=20231222050241",
+   "fame": 6394
+  },
+  {
+   "name": "Lufel",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e3/P5X_Cattle.png/revision/latest?cb=20230317040432",
+   "fame": 28987
+  },
+  {
+   "name": "Magatsukami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/eb/Maga_Kokoro_unamused.png/revision/latest?cb=20260730175841",
+   "fame": 25564
+  },
+  {
+   "name": "Mai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/12/Mai_Manga_2.jpg/revision/latest?cb=20140506231813",
+   "fame": 3624
+  },
+  {
+   "name": "Maiko Oohashi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/ae/P3_Maiko_Render.png/revision/latest?cb=20140903230226",
+   "fame": 8410
+  },
+  {
+   "name": "Maki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7b/Maki_Profile.png/revision/latest?cb=20260424230914",
+   "fame": 3387
+  },
+  {
+   "name": "Maki Sonomura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2a/Maki_Sonomura.png/revision/latest?cb=20241201203600",
+   "fame": 23916
+  },
+  {
+   "name": "Makoto Kuwahara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4b/Stalker.png/revision/latest?cb=20150220195152",
+   "fame": 3133
+  },
+  {
+   "name": "Makoto Niijima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/04/Makoto_Nijima.png/revision/latest?cb=20230428014332",
+   "fame": 54033
+  },
+  {
+   "name": "Makoto Yuki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c1/P3_Protagonist.png/revision/latest?cb=20230205054436",
+   "fame": 67525
+  },
+  {
+   "name": "Mami Shibata",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/37/Muses.jpg/revision/latest?cb=20110608222749",
+   "fame": 2090
+  },
+  {
+   "name": "Mamoru Hayase",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/63/P3_Mamoru_Render.png/revision/latest?cb=20140902183339",
+   "fame": 8818
+  },
+  {
+   "name": "Manaka Nagao",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/70/Manaka_Protrait_Full.png/revision/latest?cb=20250410074105",
+   "fame": 11453
+  },
+  {
+   "name": "Margaret",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/41/Margaret_Render.png/revision/latest?cb=20231218230237",
+   "fame": 48521
+  },
+  {
+   "name": "Marie",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b9/Marie_portrait.png/revision/latest?cb=20140901234218",
+   "fame": 44656
+  },
+  {
+   "name": "Marie Anto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1d/Persona_5_Tactica_Marie_1.jpg/revision/latest?cb=20230802092146",
+   "fame": 11680
+  },
+  {
+   "name": "Mariko Hyodo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/ff/P5S_Mariko_Hyodo.png/revision/latest?cb=20210909185825",
+   "fame": 14369
+  },
+  {
+   "name": "Mariko Yabe",
+   "image": null,
+   "fame": 1498
+  },
+  {
+   "name": "Marthym",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/Marthym.png/revision/latest?cb=20240418093516",
+   "fame": 2823
+  },
+  {
+   "name": "Masa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/35/Masa.png/revision/latest?cb=20240517111405",
+   "fame": 6849
+  },
+  {
+   "name": "Masaki Ashiya",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9a/P5X_Masaki_Ashiya_%28No_Leg_Shadow%29.png/revision/latest?cb=20250628101818",
+   "fame": 4070
+  },
+  {
+   "name": "Masao Inaba",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/27/Masao_Inaba_%28Mark%29.png/revision/latest?cb=20230711084958",
+   "fame": 10873
+  },
+  {
+   "name": "Masataka Amano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/99/Masataka_Amano.jpg/revision/latest?cb=20120523035258",
+   "fame": 2148
+  },
+  {
+   "name": "Masataka Takeda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/22/Masataka.png/revision/latest?cb=20241116193816",
+   "fame": 469
+  },
+  {
+   "name": "Masayoshi Shido",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/31/Masayoshi_Shidou.png/revision/latest?cb=20170227020427",
+   "fame": 67443
+  },
+  {
+   "name": "Master Daidara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/22/Daidara.png/revision/latest?cb=20161228092302",
+   "fame": 2233
+  },
+  {
+   "name": "Matsukasa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6e/Matsukasa.png/revision/latest?cb=20210424182505",
+   "fame": 816
+  },
+  {
+   "name": "Matsuoka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/48/Matsuoka.png/revision/latest?cb=20170315124129",
+   "fame": 796
+  },
+  {
+   "name": "Maya Amano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/ca/Maya_Amano_%28IS%29.png/revision/latest?cb=20220831030300",
+   "fame": 19582
+  },
+  {
+   "name": "Maya Okamura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/07/P2IS-MayaOkamura.jpg/revision/latest?cb=20090822064921",
+   "fame": 4416
+  },
+  {
+   "name": "Mayumi Hashimoto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/34/P5X_Mayumi_Hashimoto.png/revision/latest?cb=20250327065201",
+   "fame": 3676
+  },
+  {
+   "name": "Mayumi Yamano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/61/P4_Mayumi.png/revision/latest?cb=20141130210440",
+   "fame": 8088
+  },
+  {
+   "name": "Merope",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/52/P5X_Merope.png/revision/latest?cb=20230818062358",
+   "fame": 4881
+  },
+  {
+   "name": "Meteor Masa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c2/Meteor_Masa.png/revision/latest?cb=20170312151251",
+   "fame": 3194
+  },
+  {
+   "name": "Metis",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5f/Metis_render.png/revision/latest?cb=20240226055905",
+   "fame": 18516
+  },
+  {
+   "name": "Michiko Matsudaira",
+   "image": null,
+   "fame": 2012
+  },
+  {
+   "name": "Miho Ogishima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/88/Miho_4.png/revision/latest?cb=20170314063050",
+   "fame": 2000
+  },
+  {
+   "name": "Mika",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c8/Mika.png/revision/latest?cb=20200610233314",
+   "fame": 6146
+  },
+  {
+   "name": "Miki Asai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/67/MikiVisit.png/revision/latest?cb=20170314075517",
+   "fame": 2842
+  },
+  {
+   "name": "Mikuratana-no-Kami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/80/P4D_Mikuratana-no-Kami_true_form.jpg/revision/latest?cb=20151003194723",
+   "fame": 3565
+  },
+  {
+   "name": "Minami Miyashita",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/aa/P5X_Minami_Miyashita_Marian_1.png/revision/latest?cb=20240508045757",
+   "fame": 4012
+  },
+  {
+   "name": "Minato",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/25/Minato.png/revision/latest?cb=20170311022531",
+   "fame": 1268
+  },
+  {
+   "name": "Minoru Inoue",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/67/Inoue_P4AU.png/revision/latest?cb=20160511224114",
+   "fame": 2856
+  },
+  {
+   "name": "Mio Natsukawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e2/Mio-1.png/revision/latest?cb=20250226145639",
+   "fame": 8291
+  },
+  {
+   "name": "Misuzu Hiiragi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/14/Misuzu.png/revision/latest?cb=20150909032202",
+   "fame": 3167
+  },
+  {
+   "name": "Mitsuo Kubo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/23/Mitsuo_render.png/revision/latest?cb=20161225081742",
+   "fame": 22452
+  },
+  {
+   "name": "Mitsuo Shimazaki",
+   "image": null,
+   "fame": 2006
+  },
+  {
+   "name": "Mitsuru Kirijo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/12/P3_Mitsuru_Kirijo.png/revision/latest?cb=20230205052956",
+   "fame": 46393
+  },
+  {
+   "name": "Miyabi Hanakouji",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6e/Kozy1.png/revision/latest?cb=20180123030244",
+   "fame": 3032
+  },
+  {
+   "name": "Miyako Kaburagi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/cf/P5S_Miyako_Kaburagi.png/revision/latest?cb=20210909184738",
+   "fame": 4137
+  },
+  {
+   "name": "Miyu Sahara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/98/Miyu_Sahara.png/revision/latest?cb=20240402065621",
+   "fame": 6594
+  },
+  {
+   "name": "Miyuki Midorikawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/87/PxD_Manga_-_Miyuki_2.png/revision/latest?cb=20140125052507",
+   "fame": 1470
+  },
+  {
+   "name": "Moel Gas Station Attendant",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/16/Attendant_Portrait.png/revision/latest?cb=20211205014934",
+   "fame": 22013
+  },
+  {
+   "name": "Morgana",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/68/P5_Morgana_character_artwork.png/revision/latest?cb=20200603184558",
+   "fame": 269297
+  },
+  {
+   "name": "Mother Computer",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e3/Mother_Computer_2.png/revision/latest?cb=20200623144808",
+   "fame": 13440
+  },
+  {
+   "name": "Motoha Arai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/75/P5X_Motoha_Arai.png/revision/latest?cb=20230317033918",
+   "fame": 25319
+  },
+  {
+   "name": "Motoko Mitsugi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c4/Motoko_Mitsugi.png/revision/latest?cb=20170311022919",
+   "fame": 1563
+  },
+  {
+   "name": "Mr. Edogawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/73/P3_Edogawa_Render.png/revision/latest?cb=20160518090432",
+   "fame": 5073
+  },
+  {
+   "name": "Mr. Ekoda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/41/Ekoda.png/revision/latest?cb=20160921135052",
+   "fame": 3832
+  },
+  {
+   "name": "Mr. Miyahara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/ce/Miyahara.png/revision/latest?cb=20160921070824",
+   "fame": 2188
+  },
+  {
+   "name": "Mr. Ono",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8f/Ono.png/revision/latest?cb=20160921065333",
+   "fame": 1396
+  },
+  {
+   "name": "Mr. Takenozuka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1c/Takenozuka.png/revision/latest?cb=20160921065756",
+   "fame": 878
+  },
+  {
+   "name": "Mrs. Terauchi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/52/Terauchi.png/revision/latest?cb=20160921070556",
+   "fame": 1418
+  },
+  {
+   "name": "Ms. Ounishi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/81/Ounishi.png/revision/latest?cb=20160921070208",
+   "fame": 1075
+  },
+  {
+   "name": "Munehisa Iwai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/ba/P5_Munehisa_Iwai.png/revision/latest?cb=20161220025304",
+   "fame": 12778
+  },
+  {
+   "name": "Musubi Matsukata",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4b/P5X_Musubi_Matsukata_Artwork.png/revision/latest?cb=20250914154906",
+   "fame": 4062
+  },
+  {
+   "name": "Musubu Torikiri",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5d/Musubu_Torikiri.png/revision/latest?cb=20170311023254",
+   "fame": 2200
+  },
+  {
+   "name": "Mutatsu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b7/P3_Mutatsu_Render.png/revision/latest?cb=20131222145055",
+   "fame": 5967
+  },
+  {
+   "name": "Nagi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b5/PQ2_Nagi.png/revision/latest?cb=20180827150833",
+   "fame": 9765
+  },
+  {
+   "name": "Nagisa Kamisiro",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b0/P5X_Protag.png/revision/latest?cb=20230317033918",
+   "fame": 39533
+  },
+  {
+   "name": "Nameless",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/66/Nameless.png/revision/latest?cb=20170708094617",
+   "fame": 3026
+  },
+  {
+   "name": "Namie Komatsu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d0/Namie_Komatsu.png/revision/latest?cb=20240528205334",
+   "fame": 441
+  },
+  {
+   "name": "Nanako Dojima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/40/NanakoDojima.png/revision/latest?cb=20240427043538",
+   "fame": 44286
+  },
+  {
+   "name": "Naoki Konishi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8a/Naoki_render.png/revision/latest?cb=20141209154931",
+   "fame": 8925
+  },
+  {
+   "name": "Naoto Shirogane",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bb/Naoto_Shirogane.png/revision/latest?cb=20230208003759",
+   "fame": 70975
+  },
+  {
+   "name": "Naoya Makigami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/21/P5_anime_Naoya_Makigami.jpg/revision/latest?cb=20160904171330",
+   "fame": 2859
+  },
+  {
+   "name": "Naozumi Kariyazaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/ec/Naozumi-kariyazaki.png/revision/latest?cb=20170311023653",
+   "fame": 2562
+  },
+  {
+   "name": "Narumi Nashimoto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/13/Narumi-Reality.png/revision/latest?cb=20260126211756",
+   "fame": 4603
+  },
+  {
+   "name": "Natsuhiko Nakanohara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/Natsuhiko_Nakanohara.png/revision/latest?cb=20200611135045",
+   "fame": 3932
+  },
+  {
+   "name": "Natsuki Moriyama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/39/P3_Natsuki_Render.png/revision/latest?cb=20140903230445",
+   "fame": 7962
+  },
+  {
+   "name": "Natsumi Yoshino",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/02/Natsumi_P1_Manga.png/revision/latest?cb=20171008191944",
+   "fame": 1555
+  },
+  {
+   "name": "Neko Takahashi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/3e/Neiko1.png/revision/latest?cb=20240929175208",
+   "fame": 1033
+  },
+  {
+   "name": "Nishida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/88/Nishida.jpg/revision/latest?cb=20151027201305",
+   "fame": 1061
+  },
+  {
+   "name": "Noriko Kashiwagi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b6/Noriko.png/revision/latest?cb=20161225083048",
+   "fame": 8259
+  },
+  {
+   "name": "Noriko Katayama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/ff/NorikoPortrait.png/revision/latest?cb=20170211155423",
+   "fame": 7195
+  },
+  {
+   "name": "Nozomi Nakahara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/12/P4D_Nozomi_Nakahara_portrait.png/revision/latest?cb=20160511225713",
+   "fame": 3788
+  },
+  {
+   "name": "Nozomi Suemitsu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/95/P3_Nozomi_%28Summer%29_Render.png/revision/latest?cb=20140903230655",
+   "fame": 13293
+  },
+  {
+   "name": "Nyarlathotep",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5b/Nyarlathotep_%28SMTII_Art%29.png/revision/latest?cb=20211107101833",
+   "fame": 53506
+  },
+  {
+   "name": "Old Lady Shiroku",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e8/Shiroku.png/revision/latest?cb=20161228093212",
+   "fame": 2758
+  },
+  {
+   "name": "Orange Tabby",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/ba/Chatai.png/revision/latest?cb=20240528203201",
+   "fame": 1599
+  },
+  {
+   "name": "Osamu Haida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/50/PxD_Manga_-_Osamu.png/revision/latest?cb=20140128024306",
+   "fame": 1307
+  },
+  {
+   "name": "Otsuki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/68/Otsuki_4_SMT.png/revision/latest?cb=20171215151747",
+   "fame": 4618
+  },
+  {
+   "name": "Overseer",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f5/Overseer.png/revision/latest?cb=20190822102224",
+   "fame": 6379
+  },
+  {
+   "name": "Pharos",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/9e/P3_Phaos_Render.png/revision/latest?cb=20160515220828",
+   "fame": 9802
+  },
+  {
+   "name": "Philemon",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/18/Philemon.png/revision/latest?cb=20170203225018",
+   "fame": 57814
+  },
+  {
+   "name": "Pluvi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/94/Pluvi.png/revision/latest?cb=20261008110317",
+   "fame": 1769
+  },
+  {
+   "name": "President Tanaka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6a/P3_Tanaka_Render.png/revision/latest?cb=20181004234548",
+   "fame": 10844
+  },
+  {
+   "name": "Principal Ooishi",
+   "image": null,
+   "fame": 1340
+  },
+  {
+   "name": "Rago",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bb/Rago.jpg/revision/latest?cb=20200818190415",
+   "fame": 2903
+  },
+  {
+   "name": "Rea",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a0/Rea.png/revision/latest?cb=20220619150351",
+   "fame": 2832
+  },
+  {
+   "name": "Rei",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5d/PQ_Rei.png/revision/latest?cb=20240614234918",
+   "fame": 15818
+  },
+  {
+   "name": "Reiji Kido",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/50/Reiji1.png/revision/latest?cb=20240802175421",
+   "fame": 14556
+  },
+  {
+   "name": "Ren Amamiya",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/63/Persona_5_Hero.png/revision/latest?cb=20240407105006",
+   "fame": 179835
+  },
+  {
+   "name": "Ribbon",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8c/Ribbon.png/revision/latest?cb=20190630153912",
+   "fame": 9789
+  },
+  {
+   "name": "Riko Tanemura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/78/Riko_Tanemura_P5X.png/revision/latest?cb=20241005220617",
+   "fame": 26992
+  },
+  {
+   "name": "Rikuto Shimizu",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/da/Rikuto_Shimizu.png/revision/latest?cb=20240528203757",
+   "fame": 2822
+  },
+  {
+   "name": "Rio Iwasaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/48/Rio_Render.png/revision/latest?cb=20230321210212",
+   "fame": 7654
+  },
+  {
+   "name": "Rise Kujikawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/de/Rise_Kujikawa.png/revision/latest?cb=20230208003759",
+   "fame": 52350
+  },
+  {
+   "name": "Ritsuka Takanashi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/72/Ritsuka_Takanashi.png/revision/latest?cb=20240528205227",
+   "fame": 2813
+  },
+  {
+   "name": "Rose Futaba",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e7/Rose-futaba.png/revision/latest?cb=20170311021733",
+   "fame": 1959
+  },
+  {
+   "name": "Rumi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bc/P5R_Rumi_2.png/revision/latest?cb=20200414064718",
+   "fame": 3623
+  },
+  {
+   "name": "Rumormonger",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/39/Rumormongers.jpg/revision/latest?cb=20111230032412",
+   "fame": 2209
+  },
+  {
+   "name": "Runa Dogenzaka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/93/Runa-2.png/revision/latest?cb=20241205101811",
+   "fame": 5140
+  },
+  {
+   "name": "Ryoji Mochizuki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1d/Ryoji_render.png/revision/latest?cb=20230321003815",
+   "fame": 28453
+  },
+  {
+   "name": "Ryotaro Dojima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/42/P4DojimaRender.png/revision/latest?cb=20240427043612",
+   "fame": 23637
+  },
+  {
+   "name": "Ryuji Sakamoto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bc/Ryuji_Sakamoto.png/revision/latest?cb=20240806005553",
+   "fame": 69774
+  },
+  {
+   "name": "Saburou Yoshita",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/22/Saburou_sprite.gif/revision/latest?cb=20200216214311",
+   "fame": 1323
+  },
+  {
+   "name": "Sadayo Kawakami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/43/Sadayo_Kawakami.png/revision/latest?cb=20161220030038",
+   "fame": 19102
+  },
+  {
+   "name": "Sae Niijima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/dd/Sae_body.png/revision/latest?cb=20170430164516",
+   "fame": 59330
+  },
+  {
+   "name": "Saeko Takami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/16/Saeko.png/revision/latest?cb=20240205233743",
+   "fame": 4489
+  },
+  {
+   "name": "Saki Konishi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/62/Saki_P4.png/revision/latest?cb=20161225083531",
+   "fame": 13376
+  },
+  {
+   "name": "Saki Shirai",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4a/Saki-Shirai.png/revision/latest?cb=20241206205114",
+   "fame": 352
+  },
+  {
+   "name": "Salmael",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6a/P5T_Salmael_1.png/revision/latest?cb=20231118020018",
+   "fame": 5837
+  },
+  {
+   "name": "Saori Hasegawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/48/Saori_Render.png/revision/latest?cb=20230321205803",
+   "fame": 10154
+  },
+  {
+   "name": "Sayoko Uehara",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f9/Sayoko.png/revision/latest?cb=20240427043626",
+   "fame": 10515
+  },
+  {
+   "name": "Seiji Shiratori",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/db/Seiji-Portrait_full.png/revision/latest?cb=20260615073120",
+   "fame": 3974
+  },
+  {
+   "name": "Setsuko Sonomura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a6/Setsuko_Manga.png/revision/latest?cb=20171101093532",
+   "fame": 2501
+  },
+  {
+   "name": "Shedim",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/16/Shedim_appeared_in_front_of_the_house.jpeg/revision/latest?cb=20250321020021",
+   "fame": 10863
+  },
+  {
+   "name": "Shibusawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/51/P5R_Shibusawa.png/revision/latest?cb=20200416175446",
+   "fame": 2922
+  },
+  {
+   "name": "Shiho Suzui",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/da/Shiho_portrait.png/revision/latest?cb=20200611214916",
+   "fame": 14664
+  },
+  {
+   "name": "Shimotsuna’s Parents",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7e/Shimotsuna-Father.png/revision/latest?cb=20251102224255",
+   "fame": 15401
+  },
+  {
+   "name": "Shinichi Yoshizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b1/P5R_Shinichi_Yoshizawa.png/revision/latest?cb=20200417105015",
+   "fame": 4714
+  },
+  {
+   "name": "Shinjiro Aragaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/eb/Shinjiro_Aragaki.png/revision/latest?cb=20230205052918",
+   "fame": 36997
+  },
+  {
+   "name": "Shinta Ezaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/38/Arata-Ezaki.png/revision/latest?cb=20241206205601",
+   "fame": 332
+  },
+  {
+   "name": "Shinya Oda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8a/Shinya_Oda.png/revision/latest?cb=20161220054035",
+   "fame": 11059
+  },
+  {
+   "name": "Shiori Miyashiro",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/14/Shiori_Miyashiro_EPP.png/revision/latest?cb=20140302035923",
+   "fame": 5402
+  },
+  {
+   "name": "Shiro Asakura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/69/Shiro_Asakura_P5MM_1.png/revision/latest?cb=20231201185842",
+   "fame": 1428
+  },
+  {
+   "name": "Shirou Konno",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/59/PxD_Manga_-_Shirou.png/revision/latest?cb=20140125053501",
+   "fame": 1723
+  },
+  {
+   "name": "Sho Minazuki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/81/P4A_Sho_Render.png/revision/latest?cb=20250202103830",
+   "fame": 49253
+  },
+  {
+   "name": "Shoki Ikenami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f6/Shoki_Ikenami_P5X.png/revision/latest?cb=20250410091350",
+   "fame": 20652
+  },
+  {
+   "name": "Shu Nakajima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/29/Shu.png/revision/latest?cb=20141205134502",
+   "fame": 5990
+  },
+  {
+   "name": "Shuji Ikutsuki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/60/P3_Ikutsuki_protrait_Render.png/revision/latest?cb=20140119053058",
+   "fame": 14024
+  },
+  {
+   "name": "Shun Kano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bb/Shun_Kanou2.png/revision/latest?cb=20230814165354",
+   "fame": 24525
+  },
+  {
+   "name": "Shuzo Ubukata",
+   "image": null,
+   "fame": 2454
+  },
+  {
+   "name": "SIU Director",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/31/Director_of_District_Public_Prosecutors_Office.png/revision/latest?cb=20200611140758",
+   "fame": 3800
+  },
+  {
+   "name": "Sojiro Sakura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0d/P5_Sojiro_Sakura.png/revision/latest?cb=20161220024421",
+   "fame": 27279
+  },
+  {
+   "name": "Sophia",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e0/P5S_Sophia.png/revision/latest?cb=20210222140618",
+   "fame": 18534
+  },
+  {
+   "name": "Sousei Kurogami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e8/Sousei_Kurogami_image.jpg/revision/latest?cb=20120616223409",
+   "fame": 6225
+  },
+  {
+   "name": "Souta Aizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a2/Aegis0003.jpg/revision/latest?cb=20150104223254",
+   "fame": 1254
+  },
+  {
+   "name": "Sugimura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0d/Haru%27s_Fiance.png/revision/latest?cb=20200611141444",
+   "fame": 8202
+  },
+  {
+   "name": "Suguru Kamoshida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e2/Suguru.png/revision/latest?cb=20261015211909",
+   "fame": 39299
+  },
+  {
+   "name": "Sumaru Genie",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/41/Sumaru_Genie.png/revision/latest?cb=20140209012143",
+   "fame": 4008
+  },
+  {
+   "name": "Sumire Yoshizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/ab/Kasumi_Yoshizawa.png/revision/latest?cb=20230607090728",
+   "fame": 54633
+  },
+  {
+   "name": "Sumizou Yakitori",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5f/Sumizou_Yakitori.png/revision/latest?cb=20240528204444",
+   "fame": 329
+  },
+  {
+   "name": "Sumomo Ujima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b3/P4D_Sumomo_Ujima_portrait.png/revision/latest?cb=20160511225357",
+   "fame": 4364
+  },
+  {
+   "name": "Suou's father",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5e/Suou_Father.png/revision/latest?cb=20141223051631",
+   "fame": 1677
+  },
+  {
+   "name": "Tadashi Satomi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/e9/SatomiManga.png/revision/latest?cb=20170316205321",
+   "fame": 3966
+  },
+  {
+   "name": "Tae Takemi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/eb/P5_Tae_Takemi.png/revision/latest?cb=20161220150151",
+   "fame": 16565
+  },
+  {
+   "name": "Takahisa Kandori",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7e/KandoriP1.png/revision/latest?cb=20230924015544",
+   "fame": 11764
+  },
+  {
+   "name": "Takami Shimotsuna",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/dd/Real_world_Takami_Shimotsuna.png/revision/latest?cb=20250410085430",
+   "fame": 29033
+  },
+  {
+   "name": "Takashi Hanya",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c1/Hanya_P1_Manga.png/revision/latest?cb=20171120072454",
+   "fame": 7937
+  },
+  {
+   "name": "Takashi Tomari",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/63/Tomari.png/revision/latest?cb=20191115071511",
+   "fame": 2184
+  },
+  {
+   "name": "Takaya Sakaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c0/Takaya_Sakaki_render.png/revision/latest?cb=20120702025345",
+   "fame": 31588
+  },
+  {
+   "name": "Takeda",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6b/Takeda_Manga.png/revision/latest?cb=20171101083956",
+   "fame": 4055
+  },
+  {
+   "name": "Takeharu Kirijo",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f0/Takeharu.png/revision/latest?cb=20160329174716",
+   "fame": 7721
+  },
+  {
+   "name": "Takeyuki Kiuchi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/27/Kiuchi.png/revision/latest?cb=20230329051934",
+   "fame": 24367
+  },
+  {
+   "name": "Takumi Serizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8f/Takumi_Serizawa.png/revision/latest?cb=20240514100259",
+   "fame": 563
+  },
+  {
+   "name": "Takuto Maruki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/09/Persona_5_Royal_Takuto.png/revision/latest?cb=20230705025434",
+   "fame": 57616
+  },
+  {
+   "name": "Tamaizu Nirasawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/77/Nirasawa.png/revision/latest?cb=20170312224920",
+   "fame": 1494
+  },
+  {
+   "name": "Tamaki Uchida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b6/Tamaki_SNES.png/revision/latest?cb=20240413110232",
+   "fame": 21474
+  },
+  {
+   "name": "Tamami Uesugi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/28/P4D_Tamami_Uesugi_portrait.png/revision/latest?cb=20160511225618",
+   "fame": 5590
+  },
+  {
+   "name": "Tamayo Yoshida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d5/Jitianzhudai.png/revision/latest?cb=20240124004342",
+   "fame": 793
+  },
+  {
+   "name": "Taro Namatame",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/39/Namatame.png/revision/latest?cb=20230318233317",
+   "fame": 28447
+  },
+  {
+   "name": "Tarou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8e/Tarou_sprite.gif/revision/latest?cb=20200217005518",
+   "fame": 1129
+  },
+  {
+   "name": "Tatsuya Sudou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a0/Tatsuya2.JPG/revision/latest?cb=20111102043008",
+   "fame": 12616
+  },
+  {
+   "name": "Tatsuya Suou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2a/Tatsuya_Suou_render_2.png/revision/latest?cb=20240413105541",
+   "fame": 25726
+  },
+  {
+   "name": "Tatsuzou Sudou",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/cd/P2TatsuzouSudou.jpg/revision/latest?cb=20090820173009",
+   "fame": 4200
+  },
+  {
+   "name": "Teddie",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/P4_Teddie_Full.png/revision/latest?cb=20230208004704",
+   "fame": 63268
+  },
+  {
+   "name": "Tetsuma Tsuge",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/71/PxD_Manga_-_Tetsuma.png/revision/latest?cb=20140110043931",
+   "fame": 1692
+  },
+  {
+   "name": "Tetsunojo Shishida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f5/Tetsunojo.png/revision/latest?cb=20241116194241",
+   "fame": 5721
+  },
+  {
+   "name": "Theodore",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a2/P3P_Theo_Render.png/revision/latest?cb=20160922161456",
+   "fame": 24734
+  },
+  {
+   "name": "Time Count",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4a/Time_Count_Full.png/revision/latest?cb=20240216124030",
+   "fame": 2730
+  },
+  {
+   "name": "Tohru Adachi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d6/Adachi.png/revision/latest?cb=20141127052110",
+   "fame": 69157
+  },
+  {
+   "name": "Tomoe Sayama",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/57/P4D_Tomoe_Sayama_portrait.png/revision/latest?cb=20160511225531",
+   "fame": 4223
+  },
+  {
+   "name": "Tomoko Noge",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/bc/Tomoko-Render.png/revision/latest?cb=20240318195423",
+   "fame": 7541
+  },
+  {
+   "name": "Tomomi Fujimori",
+   "image": null,
+   "fame": 2182
+  },
+  {
+   "name": "Toranosuke Yoshida",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/8c/Toranosuke_Yoshida.png/revision/latest?cb=20161220190823",
+   "fame": 11110
+  },
+  {
+   "name": "Toshiro Kasukabe",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/e/eb/P5T_Toshiro.png/revision/latest?cb=20230712111545",
+   "fame": 19543
+  },
+  {
+   "name": "Toshiya Sumi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/ff/Toshiya_Sumi_civilian_full_appearance.png/revision/latest?cb=20240718101122",
+   "fame": 4727
+  },
+  {
+   "name": "Touko Aoi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2d/Touko_Aio.image.png/revision/latest?cb=20120617174435",
+   "fame": 2143
+  },
+  {
+   "name": "Trish",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/7b/Trish_%28Persona_Art%29.png/revision/latest?cb=20240415104028",
+   "fame": 5443
+  },
+  {
+   "name": "Trismegistus",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/15/P3-Trismegistus.png/revision/latest?cb=20090209133520",
+   "fame": 10966
+  },
+  {
+   "name": "Tsutomu Kurouri",
+   "image": null,
+   "fame": 1939
+  },
+  {
+   "name": "Ujiya",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/76/Ujiya.png/revision/latest?cb=20220619145832",
+   "fame": 1976
+  },
+  {
+   "name": "Ulala Serizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/3/37/UlalaEPPSX.png/revision/latest?cb=20210912231920",
+   "fame": 15194
+  },
+  {
+   "name": "Umiko Shiyama",
+   "image": null,
+   "fame": 110
+  },
+  {
+   "name": "Unit 024",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/50/Unit_024.png/revision/latest?cb=20150918030500",
+   "fame": 3291
+  },
+  {
+   "name": "Vincent Brooks",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/06/Vincent_full_body_transparent.png/revision/latest?cb=20120506032740",
+   "fame": 6557
+  },
+  {
+   "name": "Wakaba Isshiki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/79/P5_portrait_of_Wakaba_Isshiki.png/revision/latest?cb=20170227020713",
+   "fame": 26710
+  },
+  {
+   "name": "Yakumo Kusaka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/ba/Yakumo.png/revision/latest?cb=20220619152905",
+   "fame": 9644
+  },
+  {
+   "name": "Yamagoshi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/dd/Yamagoshi.png/revision/latest?cb=20240517111019",
+   "fame": 5862
+  },
+  {
+   "name": "Yamanashi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/13/The_principal_of_Kokatsu_Academy.png/revision/latest?cb=20260401212520",
+   "fame": 4270
+  },
+  {
+   "name": "Yamaoka",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5c/Yamaoka_Manga.jpg/revision/latest?cb=20140506011813",
+   "fame": 4851
+  },
+  {
+   "name": "Yaoling Li",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/1b/Yaoling-Render.png/revision/latest?cb=20240318195620",
+   "fame": 5638
+  },
+  {
+   "name": "Yasuo Inoue",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/1/12/Yasuo.jpg/revision/latest?cb=20170312231348",
+   "fame": 4741
+  },
+  {
+   "name": "Yoshiki Kasukabe",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/d4/P5T_Yoshiki.png/revision/latest?cb=20230805045349",
+   "fame": 13078
+  },
+  {
+   "name": "Yosuke Hanamura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/95/Yosuke_Hanamura.png/revision/latest?cb=20230208003803",
+   "fame": 63219
+  },
+  {
+   "name": "Yosuke Naito",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/89/Naito_P1_Manga.png/revision/latest?cb=20171101054156",
+   "fame": 2122
+  },
+  {
+   "name": "Yosukesaurus",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/74/Yosukesaurus.png/revision/latest?cb=20190630154534",
+   "fame": 13098
+  },
+  {
+   "name": "Yota Kurosawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/2f/Yota_Kurosawa.png/revision/latest?cb=20240630220323",
+   "fame": 1893
+  },
+  {
+   "name": "Youichi Makimura",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a6/Persona_2_IS_Makimura.png/revision/latest?cb=20140514131225",
+   "fame": 4411
+  },
+  {
+   "name": "Yu Narukami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/01/P4_Protagonist.png/revision/latest?cb=20230208003759",
+   "fame": 91325
+  },
+  {
+   "name": "Yui",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/0/0a/YUI-Render.png/revision/latest?cb=20240319174619",
+   "fame": 7912
+  },
+  {
+   "name": "Yuka Ayase",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f3/Yuka_Ayase.png/revision/latest?cb=20230303033927",
+   "fame": 11539
+  },
+  {
+   "name": "Yukari Takeba",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6d/Yukari_Takeba_render.png/revision/latest?cb=20220927012514",
+   "fame": 61801
+  },
+  {
+   "name": "Yuki Kasukabe",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/7/73/Lady_Yuki_%28P5T%29.png/revision/latest?cb=20250330184820",
+   "fame": 4011
+  },
+  {
+   "name": "Yukiko Amagi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/67/Yukiko_Amagi.png/revision/latest?cb=20230208003801",
+   "fame": 53855
+  },
+  {
+   "name": "Yukimi Fujikawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f6/Yukimi_without_her_glasses.png/revision/latest?cb=20240124005634",
+   "fame": 3734
+  },
+  {
+   "name": "Yukino Mayuzumi",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/22/Yukino_Mayuzumi.png/revision/latest?cb=20230411194038",
+   "fame": 18726
+  },
+  {
+   "name": "Yuko Himeno",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/8/86/YukoManga.png/revision/latest?cb=20170316205118",
+   "fame": 2118
+  },
+  {
+   "name": "Yuko Nishiwaki",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f8/P3_Yuko_Nishi_Render.png/revision/latest?cb=20160920103400",
+   "fame": 6213
+  },
+  {
+   "name": "Yuko Osada",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b7/Yuko_on_the_dvd.png/revision/latest?cb=20171212130543",
+   "fame": 1750
+  },
+  {
+   "name": "Yumi Ozawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/c/c8/Yumi_P4.png/revision/latest?cb=20240427043651",
+   "fame": 8439
+  },
+  {
+   "name": "Yumi Shiina",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/b/b2/Yumi_Shiina-Render.png/revision/latest?cb=20240711160840",
+   "fame": 4031
+  },
+  {
+   "name": "Yung Pao",
+   "image": null,
+   "fame": 2503
+  },
+  {
+   "name": "Yuri Kurano",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/9/90/Yuri_Kurano.png/revision/latest?cb=20250330192627",
+   "fame": 2891
+  },
+  {
+   "name": "Yuriko Yamamoto",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/56/YurikoManga.jpg/revision/latest?cb=20140520102256",
+   "fame": 1996
+  },
+  {
+   "name": "Yusuke Kitagawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/5/5c/Yusuke-Kitagawa.png/revision/latest?cb=20160505181913",
+   "fame": 62768
+  },
+  {
+   "name": "Yuta Sato",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/6/6e/Yuta_Satou.png/revision/latest?cb=20240528203619",
+   "fame": 1122
+  },
+  {
+   "name": "Yuu Kimijima",
+   "image": null,
+   "fame": 3534
+  },
+  {
+   "name": "Yuuki Mishima",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/a/a5/Yuki_Mishima.png/revision/latest?cb=20161220033104",
+   "fame": 20700
+  },
+  {
+   "name": "Yuuko Takizawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/d/dd/PxD_Manga_-_Yuuko.png/revision/latest?cb=20140125041910",
+   "fame": 1473
+  },
+  {
+   "name": "Yuuta Minami",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/26/P4A-YuutaMinamiConcept.jpg/revision/latest?cb=20150312225048",
+   "fame": 5373
+  },
+  {
+   "name": "Yuzuru Haigamine",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/f/f3/P5X_Yuzuru_Haigamine.png/revision/latest?cb=20260410105915",
+   "fame": 7271
+  },
+  {
+   "name": "Zen",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/2/23/PQ_Zen_Render.png/revision/latest?cb=20240614234922",
+   "fame": 18836
+  },
+  {
+   "name": "Zenkichi Hasegawa",
+   "image": "https://static.wikia.nocookie.net/megamitensei/images/4/4d/P5S_Zenkichi.png/revision/latest?cb=20210410170122",
+   "fame": 24963
+  }
+ ]
+}

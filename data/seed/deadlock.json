@@ -2,7 +2,7 @@
  "list": "Deadlock",
  "category": "Video Games",
  "source": "deadlock-api.com assets (api.deadlock-api.com/v1/assets/heroes)",
- "fetchedAt": "2026-10-16T19:57:59.047Z",
+ "fetchedAt": "2026-10-16T21:09:42.408Z",
  "characters": [
   {
    "name": "Abrams",
@@ -11,6 +11,10 @@
   {
    "name": "Apollo",
    "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/fencer_card.png"
+  },
+  {
+   "name": "Baba",
+   "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/baba_card.png"
   },
   {
    "name": "Bebop",
@@ -93,6 +97,10 @@
    "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/digger_card.png"
   },
   {
+   "name": "Nurse Harrow",
+   "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/nurse_vertical.png"
+  },
+  {
    "name": "Paige",
    "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/bookworm_card.png"
   },
@@ -147,6 +155,10 @@
   {
    "name": "Vindicta",
    "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/hornet_card.png"
+  },
+  {
+   "name": "Violet",
+   "image": "https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/artist_vertical.png"
   },
   {
    "name": "Viscous",

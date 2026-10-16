@@ -21,7 +21,8 @@
 // The Last Airbender, Ben 10, Bridgerton) had no score at all, so they sorted last, A-Z. The
 // work's own readership is one signal for every list, from every source.
 //
-// How a list finds its work:
+// How a list finds its work (data/seed/work-overrides.json first: a list given its works by hand,
+// for a name too generic to search -- "Persona" is first a term in psychology):
 //   seeded from Wikidata   the series ids it was built from (mergeFranchises keeps them): the
 //                          best-known of them scores the list. Exact, no guessing.
 //   anything else          a title search, kept only when a result's label or alias IS the
@@ -181,6 +182,16 @@ function seededWorks() {
   return out;
 }
 
+// Lists given their works by hand: { "Category<|>List": [qids] }.
+function readOverrides() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'work-overrides.json'), 'utf8')).works ?? {};
+  } catch {
+    return {};
+  }
+}
+const sameIds = (a = [], b = []) => a.length === b.length && [...a].sort().join() === [...b].sort().join();
+
 function readPrevious() {
   try {
     const data = JSON.parse(fs.readFileSync(OUT_PATH, 'utf8'));
@@ -194,6 +205,7 @@ async function main() {
   const apply = process.argv.includes('--apply');
   const targets = lists.listLists(null).filter((l) => REACHED.has(l.category));
   const seeded = seededWorks();
+  const overrides = readOverrides();
   const previous = readPrevious();
   const works = {};
 
@@ -203,6 +215,13 @@ async function main() {
   for (const list of targets) {
     const k = key(list.category, list.name);
     const before = previous[k];
+    const given = overrides[k];
+    if (given) {
+      // Given by hand: measured like a seeded franchise, re-measured whenever the hand changes.
+      if (before?.how === 'override' && before.status !== 'unknown' && sameIds(before.qids, given)) works[k] = before;
+      else pending.push({ k, how: 'override', qids: given });
+      continue;
+    }
     if (before && before.status !== 'unknown') {
       works[k] = before; // already settled: a re-run only retries what failed
       continue;
@@ -246,11 +265,12 @@ async function main() {
       continue;
     }
     const qid = english.reduce((a, b) => (info.get(b).wikipedias > info.get(a).wikipedias ? b : a));
-    const measured = p.how === 'seed' ? english : [qid];
+    const many = p.how === 'seed' || p.how === 'override';
+    const measured = many ? english : [qid];
     const category = p.k.split('<|>')[0];
     // Which of them count towards reach: those of the list's own kind. A searched list's one work
     // was already chosen to fit; a seeded list's members can be anything the seed filed there.
-    const ofKind = (q) => p.how !== 'seed' || FITS[category].test(info.get(q).description);
+    const ofKind = (q) => !many || FITS[category].test(info.get(q).description);
     const articles = [...new Map(measured.map((q) => [info.get(q).title, { title: info.get(q).title, ofKind: ofKind(q) }])).values()];
     chosen.push({ ...p, qid, title: info.get(qid).title, articles });
   }
@@ -273,7 +293,12 @@ async function main() {
       await sleep(25);
     }
     if (total == null) works[c.k] = { status: 'unknown' };
-    else works[c.k] = { status: total > 0 ? 'ok' : 'none', qid: c.qid, title: c.title, works: c.articles.length, readers: total, best: best || bestAny, how: c.how };
+    else {
+      works[c.k] = {
+        status: total > 0 ? 'ok' : 'none', qid: c.qid, title: c.title, works: c.articles.length, readers: total, best: best || bestAny, how: c.how,
+        ...(c.how === 'override' ? { qids: c.qids } : {}), // so a changed hand is noticed next run
+      };
+    }
   }
 
   writeFileAtomic(

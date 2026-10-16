@@ -17,6 +17,7 @@
     "seed:lol": "node scripts/seed-league-of-legends.js",
     "seed:dota2": "node scripts/seed-roster.js data/seed/dota-2.json",
     "seed:deadlock": "node scripts/seed-roster.js data/seed/deadlock.json",
+    "seed:persona": "node scripts/seed-roster.js data/seed/persona.json",
     "seed:wikidata": "node scripts/seed-wikidata-characters.js",
     "seed:anilist": "node scripts/seed-anilist-characters.js",
     "seed:people": "node scripts/seed-wikidata-people.js",

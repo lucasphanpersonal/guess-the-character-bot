@@ -1,6 +1,7 @@
 // Seeds one shared list from a roster file in data/seed/ (scripts/fetch-hero-rosters.js writes
-// them): { list, category, characters: [{ name, image }] }. Safe to re-run -- characters already
-// in the list are skipped, and only a missing picture is filled in.
+// them): { list, category, characters: [{ name, image, fame? }] }. Safe to re-run -- characters
+// already in the list are skipped, and only a missing picture is filled in. `fame`, when the
+// roster has one, is set every run: it is what difficulty cuts on, and the source can change.
 //
 //   node scripts/seed-roster.js data/seed/dota-2.json
 //   node scripts/seed-roster.js data/seed/deadlock.json
@@ -10,7 +11,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { createList, getListByName, addCharacter, setCharacterImage, getCharacters } = require('../src/compendium/characterLists');
+const { createList, getListByName, addCharacter, setCharacterImage, setCharacterFame, getCharacters } = require('../src/compendium/characterLists');
 
 function main() {
   const file = process.argv[2];
@@ -30,8 +31,10 @@ function main() {
   let added = 0;
   let pictured = 0;
   let skipped = 0;
-  for (const { name, image } of characters) {
+  let famed = 0;
+  for (const { name, image, fame } of characters) {
     const already = existing.get(name.toLowerCase());
+    if (Number.isFinite(fame)) famed++;
     if (already) {
       if (!already.image_url && image) {
         setCharacterImage(list.id, name, image);
@@ -43,7 +46,8 @@ function main() {
     addCharacter(list.id, name, 'seed-script', image ?? null);
     added++;
   }
-  console.log(`${listName}: ${added} added, ${skipped} already there${pictured ? ` (${pictured} given a picture)` : ''}.`);
+  for (const { name, fame } of characters) if (Number.isFinite(fame)) setCharacterFame(list.id, name, fame);
+  console.log(`${listName}: ${added} added, ${skipped} already there${pictured ? ` (${pictured} given a picture)` : ''}${famed ? `; fame set for ${famed}` : ''}.`);
 }
 
 main();

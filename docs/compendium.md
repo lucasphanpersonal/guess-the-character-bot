@@ -203,15 +203,26 @@ npm run seed:people     # ~2,900 famous real people, with photographs
 npm run seed:pokemon    # 1,025 Pokémon, with official artwork
 npm run seed:lol        # 173 League of Legends champions, with splash art
 npm run seed:dota2      # 127 Dota 2 heroes, with portraits
-npm run seed:deadlock   # Deadlock's playable heroes, with hero cards
+npm run seed:deadlock   # Deadlock's heroes (all but cut and test ones), with portraits
+npm run seed:persona    # ~400 Persona characters from the games, with artwork
 npm run seed:wikidata   # Western TV/film/game casts, one list per title
 npm run seed:anilist    # anime/manga casts, one list per title
 ```
 
 The hero games come from small roster files in `data/seed/` (`dota-2.json`, `deadlock.json`),
 refreshed with `npm run fetch:rosters` — OpenDota's hero constants and deadlock-api.com's assets,
-names and image links only. Deadlock's list carries test, cut and in-development heroes; only the
-ones a player can pick are kept, since a character nobody has seen is not one anyone can guess.
+names and image links only. Deadlock's list carries cut and test heroes, marked disabled; only the
+rest are kept (not the "selectable" flag, which still marks the newest heroes unselectable),
+since a character nobody has seen is not one anyone can guess.
+
+**Persona** comes from the games too (`persona.json`, from the Megami Tensei wiki's character
+category for each game — the anime, film and novel ones left out). The Wikidata seed files every
+Persona game under *Megami Tensei* and has entries for only a few of their characters, and the
+anime fell below the AniList seed's popularity cut, so neither seed would ever have made it.
+A character's fame there is the length of their wiki page, which is what lets Easy deal the
+party rather than a classmate with one line. Its popularity is measured from the games
+themselves, given by hand in `data/seed/work-overrides.json`: searching Wikidata for "Persona"
+finds the term in psychology.
 
 These used to take a server id first. An old command that still passes one is fine: the id is
 recognised, ignored with a note, and the lists land in the shared compendium as usual.
