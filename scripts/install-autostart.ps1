@@ -77,6 +77,13 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAM
 # One consequence: a launcher started by hand, outside this task, is invisible to it -- the next
 # tick starts a second stack that loses the race for :4180. Stop the task, or run the hand-started
 # one with this task disabled.
+#
+# What the watchdog CANNOT cover: both tasks run only while you are logged on (Interactive). The
+# October outage that settled this was Windows Update restarting the machine at 5am -- twice --
+# and nobody logging on until 1pm, so no trigger fired at all and the site was dark for eight
+# hours. Surviving that means running whether logged on or not (an S4U principal, plus an
+# at-startup trigger), which needs an elevated prompt and changes how the task authenticates. It
+# is deliberately not done here; make it a decision, not a side effect of re-running this script.
 $triggers = @(
     $trigger,
     (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5))
