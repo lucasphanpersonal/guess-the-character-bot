@@ -1,6 +1,6 @@
-# Registers the scheduled tasks that keep this machine serving: the party-mode web app (with its
-# tunnel) from logon, and the Discord bot always -- see the note on the bot task below for why
-# that one is separate and why it has a watchdog.
+# Registers the scheduled tasks that keep this machine serving: the web app (with its tunnel) and
+# the Discord bot, each from logon and each with a five-minute watchdog -- see the notes below for
+# why they are separate tasks and what the watchdog relies on.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1 -Remove
@@ -64,15 +64,30 @@ $trigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAM
 
 # ExecutionTimeLimit zero means "never time it out": this is a server, not a batch job, and the
 # default three-day cap would silently kill it mid-party. RestartCount does NOT cover a crash --
-# it only retries a failed launch (see the bot task below, where that was tested) -- so once this
-# is running, a crash or a kill leaves the domain dark until the next logon. That is exactly how
-# it sat down for a day in September.
+# it only retries a failed launch (see the bot task below, where that was tested) -- so with only
+# the logon trigger, a crash or a kill left the domain dark until the next logon. That is how it
+# sat down for a day in September, and twice more in October (the launcher ended with
+# 0xC000013A, "closed", overnight, and the site 502'd until someone looked).
+#
+# So it has the bot's watchdog too: a trigger every five minutes that starts it only if it is not
+# running (MultipleInstances IgnoreNew -- stated, because a second launcher would fight the first
+# for :4180). That only works because start-all now EXITS when the web server or the tunnel dies,
+# instead of staying up with the survivor and looking "Running" to this scheduler forever.
+#
+# One consequence: a launcher started by hand, outside this task, is invisible to it -- the next
+# tick starts a second stack that loses the race for :4180. Stop the task, or run the hand-started
+# one with this task disabled.
+$triggers = @(
+    $trigger,
+    (New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5))
+)
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit ([TimeSpan]::Zero) `
-    -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+    -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable `
+    -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) `
+    -MultipleInstances IgnoreNew
 
 Install-Task $TaskName @{
-    Action = $action; Trigger = $trigger; Settings = $settings
+    Action = $action; Trigger = $triggers; Settings = $settings
     Description = 'Starts the Guess the Character web server and its named Cloudflare tunnel at logon.'
 }
 

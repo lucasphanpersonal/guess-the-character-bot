@@ -15,9 +15,16 @@
 // flag belongs to which. Output is prefixed per process so one scrollback stays readable, and
 // Ctrl+C takes everything down together.
 //
-// A child dying does NOT kill its siblings. The common case is the Discord bot exiting because
-// its token is missing or rejected, and taking a working web app down with it -- mid-party --
-// would be the wrong call. Each exit is reported and the rest keep running.
+// The Discord bot dying does NOT take the others down. The common case is it exiting because its
+// token is missing or rejected, and taking a working web app down with it -- mid-party -- would
+// be the wrong call. Its exit is reported and the rest keep running.
+//
+// The web server and the tunnel are the other way round: they are one thing, the site. A tunnel
+// with no server behind it answers every visitor with a 502, and a server with no tunnel is
+// unreachable -- and while this process stayed up nursing the survivor, whatever runs it (the
+// scheduled task, scripts/install-autostart.ps1) saw it "Running" and never started a fresh pair.
+// So either of those exiting unexpectedly stops the rest and exits non-zero, which is what lets
+// the task's watchdog bring the site back.
 
 require('dotenv').config();
 
@@ -40,6 +47,8 @@ const RESET = '\x1b[0m';
 
 const children = [];
 let shuttingDown = false;
+// The children that together ARE the site: if one goes, all go (see the header).
+const SITE = new Set(['web', 'tunnel']);
 
 function say(tag, line) {
   process.stdout.write(`${COLOURS[tag] || ''}[${tag}]${RESET} ${line}\n`);
@@ -82,6 +91,11 @@ function start(tag, command, commandArgs, env = {}) {
     // which is how a shell reports the same thing when no signal name reaches us.)
     const stopped = shuttingDown || signal === 'SIGTERM' || signal === 'SIGINT' || code === 143 || code === 130;
     if (stopped) return;
+    if (SITE.has(tag)) {
+      say('sys', `${tag} exited (${signal || `code ${code}`}) — the site needs it, so stopping the rest.`);
+      shutdown(`${tag} exited`, 1);
+      return;
+    }
     say('sys', `${tag} exited (${signal || `code ${code}`}) — the others are still running.`);
     if (tag === 'discord' && code !== 0) {
       say('sys', 'If that was the token: check DISCORD_TOKEN in .env, then re-run.');
@@ -225,11 +239,16 @@ if (wantWeb && !secure) {
 }
 
 // One Ctrl+C should take the whole set down, not leave orphans holding ports 4180/4443.
-function shutdown(signal) {
+// `code`: 0 for a stop someone asked for, 1 when the site fell over (a child died).
+function shutdown(reason, code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  say('sys', `${signal} — stopping ${children.length} process(es)…`);
-  for (const { child } of children) {
+  // Only the ones still running: a child that has already exited never fires 'exit' again, and
+  // counting it would leave this waiting out the timeout every time.
+  const alive = children.filter(({ child }) => child.exitCode === null && child.signalCode === null);
+  say('sys', `${reason} — stopping ${alive.length} process(es)…`);
+  if (!alive.length) process.exit(code);
+  for (const { child } of alive) {
     try {
       child.kill();
     } catch {
@@ -237,11 +256,11 @@ function shutdown(signal) {
     }
   }
   // Don't hang forever if something ignores the signal.
-  setTimeout(() => process.exit(0), 3000).unref();
-  let left = children.length;
-  for (const { child } of children) {
+  setTimeout(() => process.exit(code), 3000).unref();
+  let left = alive.length;
+  for (const { child } of alive) {
     child.on('exit', () => {
-      if (--left === 0) process.exit(0);
+      if (--left === 0) process.exit(code);
     });
   }
 }
