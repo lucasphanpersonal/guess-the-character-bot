@@ -18,6 +18,20 @@
   };
   const fmt = (n) => Number(n).toLocaleString();
 
+  // How lists are ordered wherever they are listed: 'popular' (the server's order, best-known
+  // first) or 'az'. One preference per browser, shared with the phones' library browser
+  // (party/public/app.js reads the same key), because it is how this person likes to look.
+  const SORT_KEY = 'gtc_list_sort';
+  const listSort = () => (store.get(SORT_KEY) === 'az' ? 'az' : 'popular');
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true });
+  const inOrder = (ls) => (listSort() === 'az' ? [...ls].sort(byName) : ls);
+  // The switch itself: two buttons, aria-pressed, the chosen one filled -- never colour alone.
+  const sortSwitch = () => {
+    const now = listSort();
+    const btn = (value, label) => `<button type="button" data-sort="${value}" aria-pressed="${now === value}">${label}</button>`;
+    return `<div class="pp-sort" role="group" aria-label="Order the lists"><span class="pp-sortlabel">Order</span>${btn('popular', 'Popular')}${btn('az', 'A–Z')}</div>`;
+  };
+
   /**
    * Where the characters come from: "Surprise me", "Everything", or any number of categories
    * picked as chips -- tap what you want to play, the way a person thinks about it ("anime and
@@ -138,13 +152,13 @@
 
     function paintDetail() {
       if (mode !== 'categories') { detail.innerHTML = ''; return; }
-      detail.innerHTML = chosen
+      detail.innerHTML = (chosen.length ? sortSwitch() : '') + chosen
         .map((c) => {
           const ls = lists.get(c);
           const on = ls ? ls.filter((l) => l.playing).length : null;
           const count = ls ? (on === ls.length ? `all ${ls.length} lists` : `${on} of ${ls.length} lists`) : 'loading…';
           const rows = ls
-            ? ls.map((l) => `<label class="pp-row"><input type="checkbox" data-list="${l.id}" ${l.playing ? 'checked' : ''}>` +
+            ? inOrder(ls).map((l) => `<label class="pp-row"><input type="checkbox" data-list="${l.id}" ${l.playing ? 'checked' : ''}>` +
                 `<span class="pp-rowname">${esc(l.name)}</span><span class="pp-n">${fmt(l.count)}</span></label>`).join('')
             : '';
           return `<details class="pp-cat${on === 0 ? ' off' : ''}" data-cat="${esc(c)}" ${open.has(c) ? 'open' : ''}>
@@ -222,6 +236,12 @@
       for (const ls of lists.values()) for (const l of ls) if (l.id === id && res?.ok) l.playing = res.playing;
       if (res?.ok) remember([id], [res.playing]);
       refreshCounts(); // and a failed tick is put back to what the server holds
+    });
+    detail.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sort]');
+      if (!b) return;
+      store.set(SORT_KEY, b.dataset.sort);
+      paintDetail(); // the open sections stay open (the `open` set)
     });
     detail.addEventListener('click', async (e) => {
       const b = e.target.closest('.pp-all, .pp-none');

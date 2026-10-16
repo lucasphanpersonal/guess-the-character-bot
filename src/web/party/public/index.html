@@ -313,6 +313,15 @@
     .pp-edit { margin-left:auto; flex:none; font-size:.8rem; font-weight:900; color:var(--ghost-ink);
                background:var(--paper); padding:5px 11px; border-radius:999px; box-shadow:0 2px 0 rgba(0,0,0,.12); }
     .pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
+    /* Popular / A-Z: the picker's lists and the library browser's. Filled AND pressed when chosen. */
+    .pp-sort { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:10px; }
+    .pp-sortlabel { color:var(--muted); font-size:.8rem; font-weight:800; margin-right:2px; }
+    .pp-sort button { width:auto; padding:6px 13px; font-size:.82rem; border-radius:999px; background:var(--paper);
+                      color:var(--ink); box-shadow:0 3px 0 rgba(0,0,0,.14); }
+    .pp-sort button:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.14); }
+    .pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; box-shadow:0 3px 0 var(--blue-d); }
+    #browseSort { margin:0 0 10px; }
+    #browseSort .pp-sortlabel { color:rgba(255,255,255,.85); }
     .pp-bulk { display:flex; gap:8px; padding:0 12px; }
     .pp-bulk button { width:auto; padding:7px 16px; font-size:.85rem; background:var(--paper); color:var(--ink);
                       box-shadow:0 3px 0 rgba(0,0,0,.14); }
@@ -758,6 +767,11 @@
         <div id="browseCrumb"></div>
       </div>
       <input id="browseFilter" placeholder="Filter…" autocomplete="off" style="display:none" />
+      <div id="browseSort" class="pp-sort" role="group" aria-label="Order the lists" style="display:none">
+        <span class="pp-sortlabel">Order</span>
+        <button type="button" data-sort="popular" aria-pressed="true">Popular</button>
+        <button type="button" data-sort="az" aria-pressed="false">A–Z</button>
+      </div>
       <div class="card flat"><div id="browseBody"></div></div>
       <button id="browseMore" class="ghost" style="display:none">Load More</button>
     </section>

@@ -631,6 +631,13 @@ function clearPopularity(scope) {
   return db.prepare(`UPDATE character_lists AS cl SET popularity = NULL WHERE ${VISIBLE}`).run(scope).changes;
 }
 
+// One list's score, by id: a name alone can be two lists in two categories ("Sword Art Online"
+// is an anime and a game), and the two scales must not cross. `null` unranks it (sorts last).
+function setListPopularity(listId, popularity) {
+  localWrites++;
+  return db.prepare('UPDATE character_lists SET popularity = ? WHERE id = ?').run(popularity, listId).changes > 0;
+}
+
 function setPopularityByName(scope, name, popularity) {
   return (
     db
@@ -793,6 +800,7 @@ module.exports = {
   toggleListEnabled,
   disableAllLists,
   setPopularityByName,
+  setListPopularity,
   clearPopularity,
   getRandomCategory,
   getCharacterByNameInLists,

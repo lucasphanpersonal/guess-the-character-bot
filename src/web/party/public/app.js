@@ -1438,6 +1438,13 @@ function updateTiltTest() {
 // orders things, so the top of a page is the part people actually recognise.
 const browseState = { view: 'categories', category: null, list: null, offset: 0, loading: false, filter: '' };
 let browseLists = []; // the current category's lists, kept client-side so filtering is instant
+// Popular (the server's order) or A-Z. The same key as the setup picker's (shared/pickers.js):
+// one preference for how this person likes lists ordered.
+const LIST_SORT_KEY = 'gtc_list_sort';
+const listSort = () => (store.get(LIST_SORT_KEY) === 'az' ? 'az' : 'popular');
+function paintBrowseSort() {
+  for (const b of $('browseSort').querySelectorAll('[data-sort]')) b.setAttribute('aria-pressed', String(b.dataset.sort === listSort()));
+}
 
 const PAGE = 60;
 async function getJson(path) {
@@ -1462,6 +1469,7 @@ async function openBrowse({ push = true } = {}) {
   browseState.list = null;
   show('browse');
   $('browseFilter').style.display = 'none';
+  $('browseSort').style.display = 'none';
   $('browseMore').style.display = 'none';
   setCrumb(['Everything in the game']);
   if (push) pushBrowseHistory('categories');
@@ -1506,6 +1514,8 @@ async function openCategory(category, { push = true } = {}) {
     filter.style.display = '';
     filter.value = browseState.filter;
     filter.placeholder = `Filter ${browseLists.length} lists…`;
+    $('browseSort').style.display = '';
+    paintBrowseSort();
     renderBrowseLists(browseState.filter);
   } catch (err) {
     $('browseBody').innerHTML = `<p class="hint center">Could not load (${escapeHtml(err.message)}).</p>`;
@@ -1516,7 +1526,10 @@ async function openCategory(category, { push = true } = {}) {
 
 function renderBrowseLists(query) {
   const q = query.trim().toLowerCase();
-  const shown = q ? browseLists.filter((l) => l.name.toLowerCase().includes(q)) : browseLists;
+  const matching = q ? browseLists.filter((l) => l.name.toLowerCase().includes(q)) : browseLists;
+  const shown = listSort() === 'az'
+    ? [...matching].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }))
+    : matching;
   const body = $('browseBody');
   body.innerHTML = '';
   if (!shown.length) {
@@ -1548,6 +1561,7 @@ async function openList(list, { push = true } = {}) {
   browseState.list = list;
   browseState.offset = 0;
   $('browseFilter').style.display = 'none';
+  $('browseSort').style.display = 'none';
   setCrumb(['All', browseState.category, list.name]);
   if (push) pushBrowseHistory('characters', { category: browseState.category, list });
   browseBusy(true); // loadCharacterPage replaces this with the grid
@@ -1988,6 +2002,13 @@ $('browseMore').addEventListener('click', () => { if (!browseState.loading) { br
 $('browseFilter').addEventListener('input', (e) => {
   browseState.filter = e.target.value;
   renderBrowseLists(e.target.value);
+});
+$('browseSort').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sort]');
+  if (!b) return;
+  store.set(LIST_SORT_KEY, b.dataset.sort);
+  paintBrowseSort();
+  renderBrowseLists(browseState.filter);
 });
 // Tilt calibration screen
 $('tiltTestBtn').addEventListener('click', openTiltTest);

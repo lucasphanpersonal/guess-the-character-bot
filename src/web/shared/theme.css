@@ -177,6 +177,12 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 .pp-edit { margin-left:auto; font-size:.8rem; font-weight:900; color:var(--ghost-ink); background:var(--paper);
            padding:4px 11px; border-radius:999px; box-shadow:0 2px 0 var(--chip-edge); }
 .pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
+/* Popular / A-Z, above the chosen categories' lists. The chosen one is filled AND pressed. */
+.pp-sort { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:10px; }
+.pp-sortlabel { color:var(--muted); font-size:.8rem; font-weight:800; margin-right:2px; }
+.pp-sort button { padding:5px 12px; font-size:.82rem; border-radius:999px; background:var(--paper); color:var(--ink); box-shadow:0 3px 0 var(--chip-edge); }
+.pp-sort button:active { transform:translateY(2px); box-shadow:0 1px 0 var(--chip-edge); }
+.pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; box-shadow:0 3px 0 var(--blue-d); }
 .pp-bulk { display:flex; gap:8px; padding:0 12px; }
 .pp-bulk button { padding:6px 14px; font-size:.85rem; background:var(--paper); color:var(--ink); box-shadow:0 3px 0 var(--chip-edge); }
 .pp-bulk button:active { box-shadow:0 1px 0 var(--chip-edge); }

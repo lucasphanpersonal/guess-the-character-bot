@@ -10,9 +10,10 @@
 //
 //   Anime / Manga     AniList `popularity` -- users with the title on their list
 //                     (Cowboy Bebop: 460,961)
-//   everything else   summed Wikipedia sitelinks across the cast, since Wikidata has no
-//                     series-level fame signal. A cast with articles in many languages is
-//                     a cast people have heard of.
+//   TV, Cartoon,      a year of English Wikipedia readers of the work (data/seed/work-fame.json,
+//   Movies, Games     from scripts/fetch-work-fame.js) -- the whole category, once that has
+//                     run. Before it, and for anything it does not cover: summed Wikipedia
+//                     sitelinks across the cast, which ranked a big cast over a famous show.
 //   Real People       the same sitelink scale, summed across the people in each field --
 //                     so Actors outranks Ice Hockey Players, which is the truth.
 //
@@ -99,11 +100,28 @@ function scoresFromPeople() {
   return scores;
 }
 
-function scoresFromWikidata() {
+// The work's own fame (scripts/fetch-work-fame.js): a year of English Wikipedia readers of the
+// show, film or game itself. Where that file has run, it is the scale for its categories, whole -- the cast
+// sum below ranked a big cast over a famous show (Glee over Breaking Bad), and mixing the two
+// scales in one category would rank by which one a list happened to get.
+function workFame() {
+  const data = readSeed('work-fame.json');
+  const categories = new Set();
+  const scores = new Map();
+  for (const [k, w] of Object.entries(data?.works ?? {})) {
+    const [category, label] = k.split('<|>');
+    categories.add(category);
+    if (w.status === 'ok') collect(scores, category, label, w.readers);
+  }
+  return { categories, scores };
+}
+
+function scoresFromWikidata(skip = new Set()) {
   const data = readSeed('wikidata-characters.json');
   if (!data) return new Map();
   const scores = new Map();
   for (const entry of mergeFranchises(Object.values(data.series))) {
+    if (skip.has(entry.category)) continue;
     const fame = (entry.characters ?? []).reduce((sum, c) => sum + (c.sitelinks || 0), 0);
     collect(scores, entry.category, entry.label, fame);
   }
@@ -169,7 +187,8 @@ function main() {
   const enable = scope != null && !args.includes('--no-enable') && Number.isFinite(top) && top > 0;
   const reset = args.includes('--reset');
 
-  const scores = new Map([...scoresFromWikidata(), ...scoresFromAniList(), ...scoresFromPeople()]);
+  const works = workFame();
+  const scores = new Map([...scoresFromWikidata(works.categories), ...works.scores, ...scoresFromAniList(), ...scoresFromPeople()]);
   console.log(`Fame scores available for ${scores.size} titles.`);
 
   // Clear first, so a re-run after the seed data changes drops scores that no longer match

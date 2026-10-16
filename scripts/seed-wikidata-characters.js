@@ -203,7 +203,10 @@ function mergeFranchises(series) {
         ? shared
         : franchise;
 
-    merged.push({ label, category, characters, mergedFrom: members.length });
+    // `qids`: the works it was built from, for scoring the list by how well-known they are
+    // (scripts/fetch-work-fame.js). Present only when the series carried their ids.
+    const qids = members.map((m) => m.qid).filter(Boolean);
+    merged.push({ label, category, characters, mergedFrom: members.length, ...(qids.length ? { qids } : {}) });
   }
 
   return [...standalone, ...merged];

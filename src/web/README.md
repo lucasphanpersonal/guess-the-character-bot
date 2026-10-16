@@ -280,7 +280,10 @@ Endpoints that prove the shared core is reachable from this frontend:
   whole library, category → list → character. Plain HTTP rather than socket events, so it never
   contends with game traffic and the browser can cache it (60s). Ordered the way the game orders
   things — lists by popularity, characters by fame — and paginated, since one list runs to 1,212
-  rows. Thumbnails go through `/img/<id>`, so browsing warms the same cache a game uses.
+  rows. A list's popularity is AniList's for Anime and Manga, and a year of English Wikipedia
+  readers of the work for TV, Cartoon, Movies and Games (`scripts/fetch-work-fame.js`). Wherever
+  lists are shown — this browser and the setup picker — a **Popular / A–Z** switch re-sorts them
+  on the page, remembered per browser (`gtc_list_sort`). Thumbnails go through `/img/<id>`, so browsing warms the same cache a game uses.
 
 ## Stage status
 
