@@ -64,6 +64,34 @@ module.exports = {
     assert.equal(imageIsTrustworthy('Video Games', 'https://example.com/wiki.gg/x.png'), false);
   },
 
+  // The clean-up applied the rule to every list, and the rule did not know official art: the
+  // Pokémon list lost 1,047 of its 1,212 pictures. Every roster seed stores one of these.
+  'a game\'s own official art is trusted for drawn media'() {
+    for (const url of [
+      'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Locke_0.jpg',
+      'https://cdn.cloudflare.steamstatic.com/apps/dota2/images/dota_react/heroes/pudge.png',
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/25.png',
+      'https://assets-bucket.deadlock-api.com/assets-api-res/images/heroes/inferno_card.png',
+    ]) assert.equal(imageIsTrustworthy('Video Games', url), true, url);
+  },
+
+  'official art is matched by its exact source, not its host'() {
+    // Anything else on the same CDN, and the same paths on a lookalike, are not the game's art.
+    assert.equal(imageIsTrustworthy('Video Games', 'https://raw.githubusercontent.com/someone/memes/master/pikachu.png'), false);
+    assert.equal(imageIsTrustworthy('Video Games', 'https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/avatars/x.jpg'), false);
+    assert.equal(imageIsTrustworthy('Video Games', 'https://ddragon.leagueoflegends.com.evil.example/cdn/img/champion/splash/x.jpg'), false);
+    assert.equal(imageIsTrustworthy('Video Games', 'http://ddragon.leagueoflegends.com/cdn/img/champion/splash/x.jpg'), false, 'https only');
+  },
+
+  // A title card or a logo spells out the name the player must not know.
+  'title cards and logos are junk, however the file spells them'() {
+    const { looksLikeJunk } = require('../src/compendium/characterImages');
+    for (const file of ['Titlecard_S7E6_marcelinethevampirequeen.png', 'Johnny_Test_titlecard.jpg', 'Title_card_Steven.png', 'P5S_EMMA_Logo.png']) {
+      assert.equal(looksLikeJunk(`https://static.wikia.nocookie.net/x/images/a/ab/${file}/revision/latest`), true, file);
+    }
+    assert.equal(looksLikeJunk('https://static.wikia.nocookie.net/dragonage/images/4/41/Krem.png'), false, 'a character is not junk');
+  },
+
   'a missing image is never trustworthy'() {
     assert.equal(imageIsTrustworthy('Anime', null), false);
     assert.equal(imageIsTrustworthy('Anime', ''), false);

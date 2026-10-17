@@ -25,7 +25,8 @@
 
 const db = require('../src/compendium/db');
 const { setCharacterImage } = require('../src/compendium/characterLists');
-const { imageIsTrustworthy } = require('../src/compendium/characterImages');
+// The junk filter lives with the trust rule, so every importer of wiki art applies the same one.
+const { imageIsTrustworthy, looksLikeJunk } = require('../src/compendium/characterImages');
 
 const UA = 'guess-the-character-bot/1.0 (character artwork backfill; https://github.com/lucasphanpersonal/guess-the-character-bot)';
 const PAUSE_MS = 180; // polite serial pacing; Fandom is somebody else's server
@@ -90,22 +91,6 @@ const norm = (s) =>
     .trim()
     .replace(/\s+/g, ' ');
 
-/**
- * Lead images that are about the SHOW rather than the character -- worse than nothing, since
- * a title card names the show to someone whose whole job is to not know it.
- *
- * Measured over the first 760 cartoon matches, this is a 3-in-760 problem: a logo, a title
- * card and a group shot. Tempting to fix it structurally instead, by refusing any page whose
- * title is the show's own name -- but 8 of the 10 characters named after their series got the
- * RIGHT image that way (BoJack Horseman, Chowder, Kim Possible), so that rule would have
- * thrown away four good images for every bad one it caught. The narrow filter wins.
- *
- * Matched against the filename with separators normalised: "Steven_Universe_logo.png" has no
- * word boundary before "logo", so \blogo\b silently misses the exact case that motivated it.
- */
-const JUNK_IMAGE = /(\blogo\b|\bwordmark\b|favicon|wiki background|placeholder|\bno image\b|noimage|question mark|default avatar|title card|group shot|groupshot|cast photo|characters slide|\bposter\b)/i;
-
-const looksLikeJunk = (url) => JUNK_IMAGE.test(decodeURIComponent(url).replace(/[-_]+/g, ' '));
 
 const slug = (s) => String(s).toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -318,6 +303,14 @@ const WIKI_ALIASES = {
   "Marvel's Avengers Assemble": 'marvel',
   'Lego Marvel Super Heroes': 'marvel',
   'Dynasty Warriors': 'koei',
+  // Popular game lists that found no wiki of their own (checked by hand: each is the wiki's
+  // real subdomain, and its sitename says what it covers).
+  Pokemon: 'pokemon', // Pokémon Wiki -- the species have official art; this is for the people
+  'X-Men': 'x-men', // X-Men Wiki
+  'The Punisher': 'marvel', // no Punisher wiki; the Marvel Database
+  'Ace Combat': 'acecombat', // Acepedia
+  'The Incredibles': 'pixar', // Pixar Wiki
+  'The Nightmare Before Christmas': 'disney', // Disney Wiki
   'The Grim Adventures of Billy & Mandy': 'grimadventures',
 };
 

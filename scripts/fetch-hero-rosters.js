@@ -28,6 +28,7 @@
 
 const path = require('path');
 const { writeFileAtomic } = require('./lib/writeAtomic');
+const { looksLikeJunk } = require('../src/compendium/characterImages');
 
 const USER_AGENT =
   'guess-the-character-bot/1.0 (Discord party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
@@ -63,7 +64,10 @@ async function wikiCast(domain, categories) {
     if (p.title.includes('/') || /^List of /i.test(p.title) || /^(Order|Society|Organization|Church) of /i.test(p.title)) continue;
     const name = p.title.replace(/\s*\([^)]*\)\s*$/, '').trim();
     const prior = out.get(name.toLowerCase());
-    if (!prior || p.length > prior.fame) out.set(name.toLowerCase(), { name, image: p.original?.source ?? null, fame: p.length });
+    // A logo or title card names the character to the one person meant not to know (EMMA's was
+    // the word "EMMA"): no picture is better. The same filter the Fandom image pass uses.
+    const image = p.original?.source && !looksLikeJunk(p.original.source) ? p.original.source : null;
+    if (!prior || p.length > prior.fame) out.set(name.toLowerCase(), { name, image, fame: p.length });
   }
   // "Shadow Yu" is Yu Narukami's dark self, a boss -- the same character to anyone guessing. Kept
   // only where the wiki has no page for the person (then the Shadow is who the games show).

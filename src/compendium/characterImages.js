@@ -44,9 +44,43 @@ const isFandomImage = (url) => /(^|\.)(fandom\.com|wikia\.nocookie\.net|wikia\.c
 // Games -- with the worst artwork coverage. The reasoning is the source's SHAPE, not its brand.
 const isGameWikiImage = (url) => /(^|\.)wiki\.gg\//.test(url);
 
+// A game's own art, from where the game itself publishes it: Riot's Data Dragon, Valve's CDN
+// for Dota 2, PokeAPI's copy of the official Pokémon artwork, Deadlock's extracted hero assets.
+// Each is the character as the game draws them -- the one thing Commons never promised -- and
+// each is what a roster seed (seed-roster.js, seed-league-of-legends.js, seed-pokemon-list.js)
+// stores. Not trusting them is how the Pokémon list lost 1,047 of its 1,212 pictures: the
+// clean-up applied this rule to every list and threw official artwork out as untrusted.
+// Exact hosts and paths, never a whole CDN: the reason is the source, so the match is the source.
+const OFFICIAL_ART = [
+  /^https:\/\/ddragon\.leagueoflegends\.com\/cdn\/img\/champion\//,
+  /^https:\/\/cdn\.cloudflare\.steamstatic\.com\/apps\/dota2\/images\/dota_react\/heroes\//,
+  /^https:\/\/raw\.githubusercontent\.com\/PokeAPI\/sprites\/master\/sprites\/pokemon\/other\/official-artwork\//,
+  /^https:\/\/assets-bucket\.deadlock-api\.com\/assets-api-res\/images\/heroes\//,
+];
+const isOfficialGameArt = (url) => OFFICIAL_ART.some((re) => re.test(url));
+
+/**
+ * Lead images that are about the SHOW rather than the character -- worse than nothing, since
+ * a title card names the show to someone whose whole job is to not know it.
+ *
+ * Measured over the first 760 cartoon matches, this is a 3-in-760 problem: a logo, a title
+ * card and a group shot. Tempting to fix it structurally instead, by refusing any page whose
+ * title is the show's own name -- but 8 of the 10 characters named after their series got the
+ * RIGHT image that way (BoJack Horseman, Chowder, Kim Possible), so that rule would have
+ * thrown away four good images for every bad one it caught. The narrow filter wins.
+ *
+ * Matched against the filename with separators normalised: "Steven_Universe_logo.png" has no
+ * word boundary before "logo", so \blogo\b silently misses the exact case that motivated it.
+ */
+// Shared by every importer of wiki art: scripts/fetch-fandom-images.js and the Persona roster
+// (scripts/fetch-hero-rosters.js), whose EMMA arrived as a logo spelling out "EMMA".
+const JUNK_IMAGE = /(\blogo\b|\bwordmark\b|favicon|wiki background|placeholder|\bno image\b|noimage|question mark|default avatar|title ?card|group shot|groupshot|cast photo|characters slide|\bposter\b)/i;
+
+const looksLikeJunk = (url) => JUNK_IMAGE.test(decodeURIComponent(url).replace(/[-_]+/g, ' '));
+
 function imageIsTrustworthy(category, imageUrl) {
   if (!imageUrl) return false;
-  if (isAniListImage(imageUrl) || isFandomImage(imageUrl) || isGameWikiImage(imageUrl)) return true;
+  if (isAniListImage(imageUrl) || isFandomImage(imageUrl) || isGameWikiImage(imageUrl) || isOfficialGameArt(imageUrl)) return true;
   return !DRAWN_MEDIA.has(category);
 }
 
@@ -60,5 +94,7 @@ module.exports = {
   isAniListImage,
   isFandomImage,
   isGameWikiImage,
+  isOfficialGameArt,
+  looksLikeJunk,
   DRAWN_MEDIA,
 };
