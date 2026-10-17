@@ -2,7 +2,7 @@
 // network -- the same discipline the Discord game tests use with fake Discord objects.
 
 const { assert } = require('./harness');
-const { RoomRegistry, MAX_PLAYERS, CODE_LENGTH } = require('../src/web/rooms');
+const { RoomRegistry, MAX_PLAYERS, maxPlayersFor, CODE_LENGTH } = require('../src/web/rooms');
 
 function creatingARoomSeatsTheHostAndReturnsACode() {
   const reg = new RoomRegistry();
@@ -101,6 +101,25 @@ function joiningIsCappedAtMaxPlayers() {
   const overflow = reg.joinRoom(room.code, { playerId: 'pX', nickname: 'Late' });
   assert.equal(overflow.ok, false);
   assert.match(overflow.error, /full/i);
+}
+
+// Drawing has no forehead-game shape to keep: it takes a whole party -- and still has a ceiling,
+// published in the room state for the client to show.
+function aDrawingRoomTakesAWholePartyButStillHasACeiling() {
+  const reg = new RoomRegistry();
+  const { room } = reg.createRoom({ hostPlayerId: 'd1', nickname: 'Host', kind: 'draw' });
+  const cap = maxPlayersFor('draw');
+  assert.ok(cap > MAX_PLAYERS, 'more than the guessing games');
+  assert.equal(room.publicState().maxPlayers, cap);
+  for (let i = 2; i <= cap; i++) {
+    assert.equal(reg.joinRoom(room.code, { playerId: `d${i}`, nickname: `D${i}`, kind: 'draw' }).ok, true, `seat ${i}`);
+  }
+  const overflow = reg.joinRoom(room.code, { playerId: 'dX', nickname: 'Late', kind: 'draw' });
+  assert.equal(overflow.ok, false);
+  assert.match(overflow.error, /full/i);
+  // And the guessing games are where they were.
+  assert.equal(maxPlayersFor('party'), MAX_PLAYERS);
+  assert.equal(maxPlayersFor('desk'), MAX_PLAYERS);
 }
 
 function aStartedRoomRefusesNewPlayersButLetsKnownOnesReconnect() {
@@ -208,6 +227,7 @@ module.exports = {
   'connections are counted per seat': connectionsAreCountedPerSeat,
   'a late disconnect after reconnect does not flip offline': aLateDisconnectAfterReconnectDoesNotFlipOffline,
   'joining is capped at MAX_PLAYERS': joiningIsCappedAtMaxPlayers,
+  'a drawing room takes a whole party, but still has a ceiling': aDrawingRoomTakesAWholePartyButStillHasACeiling,
   'a started room refuses new players but lets known ones reconnect':
     aStartedRoomRefusesNewPlayersButLetsKnownOnesReconnect,
   'a finished room accepts a replacement player': aFinishedRoomAcceptsAReplacementPlayer,

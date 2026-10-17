@@ -15,6 +15,17 @@
 
 const { MAX_PLAYERS } = require('../core/game/Lobby');
 
+// How many seats a room of each kind has. Guess the Character keeps the core's 8 -- the Discord
+// game's, and a forehead game's natural size, everyone watching everyone. Drawing has no such
+// shape: one draws, the rest guess, and a bigger room is only a bigger audience. 50 is "no limit"
+// for any party while still a ceiling, and the ceiling is the only guard: roomAccess.js limits
+// failed joins (guessing codes) and room creation per client, but not a successful join, so
+// without one a script holding a room's code could fill it with seats faster than any host could
+// remove them. Telephone grows with it -- every chain visits every seat -- which is the mode,
+// not a cost to cap.
+const MAX_PLAYERS_BY_KIND = { draw: 50 };
+const maxPlayersFor = (kind) => MAX_PLAYERS_BY_KIND[kind] ?? MAX_PLAYERS;
+
 // Unambiguous alphabet: no O/0, I/1, so a code read aloud across a room is unambiguous.
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
@@ -94,7 +105,7 @@ class Room {
       // published here because every screen in the room shows it, whatever the game.
       paused: this.status === 'playing' && !!this.game?.hostPaused,
       // Published rather than hardcoded in the client, which had its own copy of "8".
-      maxPlayers: MAX_PLAYERS,
+      maxPlayers: maxPlayersFor(this.kind),
       players: this.order.map((id) => {
         const p = this.players.get(id);
         return {
@@ -204,7 +215,7 @@ class RoomRegistry {
     if (room.status !== 'lobby' && room.status !== 'finished') {
       return { ok: false, error: 'That game has already started.' };
     }
-    if (room.players.size >= MAX_PLAYERS) return { ok: false, error: 'That room is full.' };
+    if (room.players.size >= maxPlayersFor(room.kind)) return { ok: false, error: 'That room is full.' };
 
     room.addSeat(playerId, nick);
     return { ok: true, room, reconnected: false };
@@ -264,4 +275,4 @@ class RoomRegistry {
   }
 }
 
-module.exports = { RoomRegistry, Room, MAX_PLAYERS, randomCode, cleanNickname, CODE_LENGTH, KINDS };
+module.exports = { RoomRegistry, Room, MAX_PLAYERS, maxPlayersFor, randomCode, cleanNickname, CODE_LENGTH, KINDS };

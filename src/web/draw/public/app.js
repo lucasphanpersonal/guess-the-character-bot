@@ -941,7 +941,10 @@ function burst(who, mine) {
     const r = el?.getBoundingClientRect();
     return r && r.width && r.bottom > 0 && r.top < innerHeight ? r : null;
   };
-  const fromRow = seen(row);
+  // The list scrolls in a big room: a row scrolled out of it is on the page but not on screen.
+  const box = $('players').getBoundingClientRect();
+  const inList = (r) => r && r.bottom > box.top && r.top < box.bottom ? r : null;
+  const fromRow = inList(seen(row));
   const r = fromRow ?? seen(canvas);
   if (!r) return;
   // From the name on the row; from low on the picture, where the reactions rise from.

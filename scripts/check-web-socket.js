@@ -1198,6 +1198,31 @@ const connect = (playerId) => {
     K1.close(); K2.close(); K3.close();
   }
 
+  // ---- Draw: a whole party, not eight -------------------------------------------------------
+  // The guessing games keep the core's 8; a drawing room takes far more, and still has a ceiling.
+  // Twelve over sockets, then a game started with all of them in it.
+  console.log('\n# draw — a big room');
+  {
+    const host = await connectDraw('bigHost');
+    res = await host.emitWithAck('room:create', { nickname: 'Host' });
+    const bigCode = res.state.code;
+    const cap = res.state.maxPlayers;
+    check(cap > 8, `draw: a drawing room publishes a ceiling above eight (${cap})`);
+    const guests = [];
+    for (let i = 1; i < 12; i++) {
+      const g = await connectDraw(`bigGuest${i}`);
+      guests.push(g);
+      res = await g.emitWithAck('room:join', { code: bigCode, nickname: `Guest ${i}` });
+      if (!res.ok) break;
+    }
+    check(res.ok && res.state.players.length === 12, `draw: twelve players in one room (${res.state?.players?.length ?? res.error})`);
+    const firstView = nextEvent(guests[10], 'draw:state');
+    res = await host.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+    check(res.ok, 'draw: a twelve-player game starts');
+    check((await firstView).players.length === 12, 'draw: and everyone is on the board');
+    host.close(); for (const g of guests) g.close();
+  }
+
   // ---- Draw: a guesser gives up -------------------------------------------------------------
   console.log('\n# draw — giving up on a drawing');
   {
