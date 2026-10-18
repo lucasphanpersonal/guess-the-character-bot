@@ -250,7 +250,21 @@ const connect = (playerId) => {
   await D.emitWithAck('setup:confirm', {});
   const cd = await cCountdown;
   check(cd.seconds >= 1, 'a grace countdown fires before the reveal (forehead moment)');
+  // A laptop that sleeps through the countdown: this process (server included) stops dead past both
+  // the countdown's end and the watchdog's next tick, so both are overdue when it wakes. Either may
+  // run first; the game must begin once, and charge the first player exactly one turn.
+  const turnCounts = [];
+  const countTurns = (v) => { if (v.phase === 'playing') turnCounts.push(v.current.turnNumber); };
+  C.on('game:state', countTurns);
+  const sleepUntil = Date.now() + (cd.seconds + 4) * 1000;
+  while (Date.now() < sleepUntil) { /* the machine is asleep */ }
   const firstView = await cPlay;
+  // Anything a second begin would have sent. Longer when a harness delays the countdown's timer on
+  // purpose so the watchdog provably goes first (the order a real sleep only sometimes produces).
+  await wait(Number(process.env.CHECK_COUNTDOWN_SETTLE_MS ?? 500));
+  C.off('game:state', countTurns);
+  check(turnCounts.length > 0 && turnCounts.every((n) => n === 1),
+    `a sleep through the countdown begins the game once: the first player is on turn 1 (${turnCounts.join(', ')})`);
   check(firstView.phase === 'playing' && firstView.isMyTurn === true, 'after the countdown, game starts, host up first');
   check(firstView.wearing === null, 'the guesser is not shown the guesser-card (tap fallback)');
   check(firstView.myCharacter && !!firstView.myCharacter.name, 'forehead mode gets the viewer\'s own character');
@@ -823,6 +837,44 @@ const connect = (playerId) => {
     const later = PH.received.filter((e) => e.event === 'game:state').map((e) => JSON.parse(e.json)).pop();
     check(later.turnRemaining < after.turnRemaining, `pause: and it runs (${after.turnRemaining}s, then ${later.turnRemaining}s)`);
     PH.close(); P1.close(); P2.close();
+  }
+
+  // ---- Desk: a table that has gone quiet. Two full rounds of turns time out with nobody touching
+  // anything and the game pauses itself: no clock runs, and anyone -- not only the host, who may be
+  // one of the people who wandered off -- carries on. Then the room is deleted with its game still
+  // running, and its clock must stop with it.
+  console.log('\n# desk — a deserted game pauses itself');
+  {
+    const QH = await connectDesk('dQuietHost');
+    let r = await QH.emitWithAck('room:create', { nickname: 'Sol' });
+    const code = r.state.code;
+    const Q1 = await connectDesk('dQuiet1');
+    await Q1.emitWithAck('room:join', { code, nickname: 'Tam' });
+    await QH.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+    const started = nextMatching(QH, 'game:state', (v) => v.phase === 'playing');
+    for (const s of [QH, Q1]) await s.emitWithAck('setup:confirm', {});
+    await started;
+    const live = registry.getRoom(code);
+    // Fast-forward the quiet: all but the last of two rounds' timeouts already counted, then one
+    // real one, through the watchdog, as a turn that ran out while everyone was away.
+    live.game.idleTimeouts = 2 * live.game.activePlayers.length - 1;
+    const quiet = nextMatching(Q1, 'room:state', (st) => st.idlePaused === true);
+    live.game.turnEndsAt = Date.now() - 1;
+    const q = await Promise.race([quiet, wait(6000).then(() => null)]);
+    check(q?.paused === true, 'deserted: two quiet rounds pause the game');
+    check(live.turnTimer == null && live.game.turnEndsAt == null, 'deserted: and no clock runs while nobody is there');
+    const host = live.hostPlayerId === pub('dQuietHost') ? QH : Q1;
+    const other = host === QH ? Q1 : QH;
+    check(!(await other.emitWithAck('room:pause', { paused: true })).ok, 'deserted: a player who is not the host still cannot pause');
+    const resumed = nextMatching(host, 'room:state', (st) => st.paused === false);
+    r = await other.emitWithAck('room:pause', { paused: false });
+    check(r.ok && !!(await Promise.race([resumed, wait(2000).then(() => null)])), 'deserted: anyone can carry on, not only the host');
+    check(live.game.idleTimeouts === 0 && live.game.turnEndsAt > Date.now() && !!live.turnTimer,
+      'deserted: carrying on starts the clock, and the quiet count afresh');
+    // Deleted with its game running -- the sweep's case: seats nobody has given up -- and the clock goes too.
+    for (const id of [...live.players.keys()]) registry.leaveRoom(code, id);
+    check(!registry.getRoom(code) && live.turnTimer == null && live.pauseGuard == null, 'a deleted room takes its turn clock with it');
+    QH.close(); Q1.close();
   }
 
   console.log('\n# draw — one draws, everyone else guesses');

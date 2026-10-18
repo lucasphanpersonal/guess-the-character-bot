@@ -45,7 +45,8 @@ src/
       activeBoards.js     Which board messages are live right now
       stats.js            Win/loss records and leaderboard
     game/
-      GameManager.js      Map<roomKey, Lobby> — one lobby per channel (Discord) / room (web)
+      GameManager.js      Map<channelId, Lobby> — one lobby per channel. The bot's alone: web
+                          rooms are src/web/rooms.js, which takes only MAX_PLAYERS from Lobby.js
       Lobby.js            Pre-game state: host, players, spectators, settings
       lobbySettings.js    Bounds/parsing shared by /lobby create and the settings modal
       Game.js             Active-game state: turn counts, who has finished, standings

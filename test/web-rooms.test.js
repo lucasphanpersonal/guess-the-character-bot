@@ -217,7 +217,46 @@ function aDepartedPlayerKeepsTheirNameForTheStandings() {
   assert.equal(room.players.get('p2').nickname, 'Sam');
 }
 
+// Each game's socket layer stops its own timers through this. Fired however a room goes, and
+// only when it goes: a room that merely lost one of its players still has a game to run.
+function everyWayARoomIsDeletedIsAnnounced() {
+  const reg = new RoomRegistry();
+  const gone = [];
+  reg.onRoomDeleted((room) => gone.push(room.code));
+
+  const { room: left } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  reg.joinRoom(left.code, { playerId: 'p2', nickname: 'Sam' });
+  reg.leaveRoom(left.code, 'p1');
+  assert.deepEqual(gone, [], 'one of two leaving deletes nothing');
+  reg.leaveRoom(left.code, 'p2');
+  assert.deepEqual(gone, [left.code], 'the last to leave deletes it');
+
+  const { room: swept } = reg.createRoom({ hostPlayerId: 'p3', nickname: 'Kira' });
+  assert.equal(reg.sweepAbandoned(1000, swept.createdAt + 2000), 1);
+  assert.deepEqual(gone, [left.code, swept.code], 'and so does the sweep');
+}
+
+// A teardown that throws must not stop the room going, or the others' teardowns running.
+function aFailingTeardownDoesNotKeepTheRoom() {
+  const reg = new RoomRegistry();
+  let ran = false;
+  reg.onRoomDeleted(() => { throw new Error('boom'); });
+  reg.onRoomDeleted(() => { ran = true; });
+  const { room } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    reg.leaveRoom(room.code, 'p1');
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(reg.getRoom(room.code), null);
+  assert.equal(ran, true);
+}
+
 module.exports = {
+  'every way a room is deleted is announced': everyWayARoomIsDeletedIsAnnounced,
+  'a failing teardown does not keep the room': aFailingTeardownDoesNotKeepTheRoom,
   'creating a room seats the host and returns a code': creatingARoomSeatsTheHostAndReturnsACode,
   'creating a room needs a nickname': creatingARoomNeedsANickname,
   'joining by code adds a seated player': joiningByCodeAddsASeatedPlayer,

@@ -213,6 +213,11 @@ function attachDrawSockets(nsp, { registry }) {
     schedule(room);
   }
 
+  // A deleted room's timer goes with it, or its rounds play on to nobody until the game runs out.
+  registry.onRoomDeleted((room) => {
+    if (room.kind === 'draw') clearTimer(room);
+  });
+
   const watchdog = setInterval(() => {
     for (const room of registry.allRooms()) if (room.kind === 'draw' && room.status === 'playing') tick(room);
   }, 2000);

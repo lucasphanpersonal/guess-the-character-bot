@@ -138,8 +138,11 @@
       const host = room.hostPlayerId === me;
       veil.hidden = !room.paused;
       if (room.paused) {
-        veil.querySelector('.pausewho').textContent = host ? 'You paused the game. The clock has stopped.' : 'The host paused the game. The clock has stopped.';
-        veil.querySelector('.pausego').hidden = !host;
+        // A pause nobody chose -- the table went quiet for two rounds -- is anyone's to lift.
+        veil.querySelector('.pausewho').textContent = room.idlePaused
+          ? 'Nobody has played for two full rounds, so the game paused itself. Anyone can carry on.'
+          : host ? 'You paused the game. The clock has stopped.' : 'The host paused the game. The clock has stopped.';
+        veil.querySelector('.pausego').hidden = !(host || room.idlePaused);
       }
       // Pause is the host's, and only while a game is running.
       const pauseBtn = dlg.querySelector('.rmpause');

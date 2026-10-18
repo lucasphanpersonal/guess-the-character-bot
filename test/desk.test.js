@@ -61,6 +61,27 @@ function aWrongGuessCostsNothingAndTheTurnGoesOn() {
   assert.equal(guessing.guessLog(g).length, 3);
 }
 
+// A table that has gone quiet pauses itself (turnRules.deserted), so whatever counts as somebody
+// being there has to say so. On a computer that includes a guess that misses: it ends no turn.
+function aTypedGuessShowsTheTableIsNotDeserted() {
+  const g = game(['p1', 'p2']);
+  for (let i = 0; i < 3; i++) loop.timeout(g, g.currentPlayerId);
+  assert.equal(loop.deserted(g), false, 'three quiet turns of the four two rounds take');
+  assert.equal(guessing.submitGuess(g, g.currentPlayerId, 'Batman', { others }).verdict, 'wrong');
+  loop.timeout(g, g.currentPlayerId);
+  assert.equal(loop.deserted(g), false, 'the miss started the count again');
+  for (let i = 0; i < 3; i++) loop.timeout(g, g.currentPlayerId);
+  assert.equal(loop.deserted(g), true, 'two full rounds with nobody acting');
+}
+
+function aRulingShowsTheTableIsNotDeserted() {
+  const g = game();
+  const { rulingId } = guessing.submitGuess(g, 'p1', 'Zorblax Quintavus', { others });
+  g.idleTimeouts = 5; // the guess reset it; the ruling has to, as well
+  guessing.rule(g, 'p3', rulingId, false);
+  assert.equal(g.idleTimeouts, 0);
+}
+
 function onlyTheCurrentPlayerMayGuess() {
   const g = game();
   assert.equal(guessing.submitGuess(g, 'p2', 'Mirelle Okonkwo', { others }).ok, false);
@@ -268,6 +289,8 @@ function phonesAndComputersCannotJoinEachOthersRooms() {
 }
 
 module.exports = {
+  'a typed guess shows the table is not deserted': aTypedGuessShowsTheTableIsNotDeserted,
+  'a ruling shows the table is not deserted': aRulingShowsTheTableIsNotDeserted,
   'notes are saved and everyone sees them': notesAreSavedAndEveryoneSeesThem,
   "notes that name another player's character are refused": notesThatNameAnotherPlayersCharacterAreRefused,
   'whole words only, so an innocent note is kept': wholeWordsOnlySoAnInnocentNoteIsKept,

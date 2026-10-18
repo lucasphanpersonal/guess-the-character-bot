@@ -156,6 +156,53 @@ module.exports = {
     cleanup(ctx);
   },
 
+  // Both the button and /lobby start check WAITING, then await the interaction's defer -- so two
+  // quick presses both arrive. Only one may deal.
+  async 'two Starts at once deal one game'() {
+    const ctx = await startedGame({ start: false });
+    const [a, b] = await Promise.all([
+      engine.startGameFromLobby(ctx.client, ctx.lobby),
+      engine.startGameFromLobby(ctx.client, ctx.lobby),
+    ]);
+    assert.deepEqual([a.ok, b.ok].sort(), [false, true]);
+    assert.match((a.ok ? b : a).error, /already starting/);
+    const reviewing = ctx.recorder.sent.filter(({ content }) => content?.includes('are reviewing their assigned characters'));
+    assert.equal(reviewing.length, 1, 'one deal announced');
+    // And one set of character cards: as many DMs as a single Start sends.
+    const once = await startedGame({ start: false });
+    await engine.startGameFromLobby(once.client, once.lobby);
+    assert.equal(ctx.recorder.textFor('dm:p1').length, once.recorder.textFor('dm:p1').length);
+    assert.ok(once.recorder.textFor('dm:p1').length > 0);
+    cleanup(once);
+    cleanup(ctx);
+  },
+
+  async 'a player Discord cannot fetch puts the lobby back, not half-started'() {
+    const ctx = await startedGame({ start: false });
+    const fetchUser = ctx.client.users.fetch;
+    let gone = true;
+    ctx.client.users.fetch = async (id) => {
+      if (id === 'p2' && gone) throw new Error('Unknown User');
+      return fetchUser(id);
+    };
+    const warn = console.warn;
+    console.warn = () => {};
+    let failed;
+    try {
+      failed = await engine.startGameFromLobby(ctx.client, ctx.lobby);
+    } finally {
+      console.warn = warn;
+    }
+    assert.equal(failed.ok, false);
+    assert.match(failed.error, /didn't start/);
+    assert.equal(ctx.lobby.status, 'WAITING', 'the lobby buttons work again');
+    assert.equal(ctx.lobby.game, null);
+
+    gone = false;
+    assert.equal((await engine.startGameFromLobby(ctx.client, ctx.lobby)).ok, true, 'and Start can be pressed again');
+    cleanup(ctx);
+  },
+
   async 'a failed multi-player start retires every character card before retrying'() {
     const ctx = await startedGame({ start: false });
     ctx.lobby.addPlayer('p3');
@@ -277,6 +324,48 @@ module.exports = {
     assert.equal(game.currentPlayerId, 'p2', 'nobody else to hand the turn to -- it comes right back');
     assert.equal(game.turnsFor('p2'), 2, 'a fresh turn was handed out, not a forced game-over');
     assert.equal(game.paused, false, 'the new turn starts live, not still paused');
+    cleanup(ctx);
+  },
+
+  // A whole table going quiet used to be endless: every turn timed out and armed the next, a board
+  // a minute to an empty channel, forever. Two full laps of it end the game, as /lobby end would.
+  async 'a table quiet for two full rounds ends the game, keeping finished results'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+    await guess(ctx, 'p1', true); // p1 finishes; p2 is the only one guessing
+    const idle = async () => {
+      const who = game.currentPlayerId;
+      await engine.handleTimeout(ctx.client, ctx.lobby);
+      await engine.checkLastChanceTimeout(ctx.client, ctx.lobby, who);
+    };
+    await idle();
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'one quiet lap is somebody stepping out, not a deserted table');
+    await idle();
+    assert.equal(ctx.lobby.status, 'CANCELLED', 'two quiet laps end it');
+    assert.equal(GameManager.getLobby(ctx.channelId), undefined, 'and nothing is left ticking');
+    assert.equal(game.turnsFor('p2'), 2, 'no turn was handed out for a game that is over');
+    assert.match(channelText(ctx), /Nobody has played for two full rounds/);
+    assert.match(channelText(ctx), /<@p1> — 1 turn/, "and p1's finished result is kept");
+    cleanup(ctx);
+  },
+
+  async 'anything anyone does resets the quiet count -- a pass, or a ruling that keeps the turn going'() {
+    const ctx = await startedGame();
+    await confirmBoth(ctx);
+    const game = ctx.lobby.game;
+    const idle = async () => {
+      const who = game.currentPlayerId;
+      await engine.handleTimeout(ctx.client, ctx.lobby);
+      await engine.checkLastChanceTimeout(ctx.client, ctx.lobby, who);
+    };
+    // Two players: four quiet turns in a row would be two laps. Three, then somebody acts.
+    for (let i = 0; i < 3; i++) await idle();
+    await guess(ctx, game.currentPlayerId, false); // ruled wrong: the turn goes on, but somebody acted
+    for (let i = 0; i < 3; i++) await idle();
+    await pass(ctx, game.currentPlayerId);
+    for (let i = 0; i < 3; i++) await idle();
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'never two full laps without somebody acting');
     cleanup(ctx);
   },
 

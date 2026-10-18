@@ -177,4 +177,7 @@ module.exports = {
   turnRemainingOf,
   resultView,
   OUT_OF_CONTENTION_NOTE,
+  // The table has gone quiet, and somebody is back: the core's count, for the socket layer.
+  deserted: rules.deserted,
+  noteActivity: rules.noteActivity,
 };

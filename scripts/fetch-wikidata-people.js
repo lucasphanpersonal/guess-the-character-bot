@@ -43,11 +43,11 @@
 const fs = require('fs');
 // Resume file = committed seed data: never leave it half-written (see the helper).
 const { writeFileAtomic } = require('./lib/writeAtomic');
+// Wikimedia asks for a descriptive User-Agent identifying the tool and a contact point.
+const { USER_AGENT } = require('./lib/http');
 const path = require('path');
 
 const SPARQL = 'https://query.wikidata.org/sparql';
-const USER_AGENT =
-  'guess-the-character-bot/1.0 (Discord party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
 const OUT_PATH = path.join(__dirname, '..', 'data', 'seed', 'wikidata-people.json');
 
 // Nobody has more than ~350 sitelinks, so this is the top of the range a band can cover.

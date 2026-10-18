@@ -104,6 +104,9 @@ class Room {
       // The host has stopped the clock (room:pause). On the game, because it lasts the game;
       // published here because every screen in the room shows it, whatever the game.
       paused: this.status === 'playing' && !!this.game?.hostPaused,
+      // ...and the pause was nobody's: the table went quiet (turnRules.deserted), so whoever comes
+      // back may carry on, not only the host -- who may be one of the people who left.
+      idlePaused: this.status === 'playing' && !!this.game?.idlePaused,
       // Published rather than hardcoded in the client, which had its own copy of "8".
       maxPlayers: maxPlayersFor(this.kind),
       players: this.order.map((id) => {
@@ -122,6 +125,27 @@ class Room {
 class RoomRegistry {
   constructor() {
     this.rooms = new Map(); // code -> Room
+    this.deleteListeners = [];
+  }
+
+  /**
+   * Called with every room the registry deletes, however it goes (the last player leaving, or the
+   * sweep). The registry knows nothing of timers; each game's socket layer does, and registers here
+   * to stop its own -- otherwise they ran on against a room nobody could reach any more.
+   */
+  onRoomDeleted(fn) {
+    this.deleteListeners.push(fn);
+  }
+
+  #drop(room) {
+    this.rooms.delete(room.code);
+    for (const fn of this.deleteListeners) {
+      try {
+        fn(room);
+      } catch (err) {
+        console.warn("[rooms] A deleted room's teardown failed:", err.message);
+      }
+    }
   }
 
   getRoom(code) {
@@ -153,7 +177,7 @@ class RoomRegistry {
       }
       room.lastSeen ??= room.createdAt;
       if (now - room.lastSeen > ttlMs) {
-        this.rooms.delete(room.code);
+        this.#drop(room);
         removed++;
       }
     }
@@ -265,7 +289,7 @@ class RoomRegistry {
     room.removeSeat(playerId);
 
     if (room.players.size === 0) {
-      this.rooms.delete(room.code);
+      this.#drop(room);
       return { room: null, deleted: true };
     }
     if (room.hostPlayerId === playerId) {

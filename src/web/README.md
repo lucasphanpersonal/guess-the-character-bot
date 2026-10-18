@@ -20,7 +20,8 @@ without tangling into it. Two ways to play, from one server, chosen on the home 
   names a character someone is still guessing is refused with the reason, because notes are the
   one thing a player writes that the others read.
 
-And a second game, **Draw the Character** (`/draw/`). Each round, everyone draws once in seat
+And a second game, **Draw the Character** (`/draw/`), for a whole party: a room takes up to 50
+(`MAX_PLAYERS_BY_KIND` in `rooms.js`), where Guess the Character keeps the core's 8. Each round, everyone draws once in seat
 order: the drawer picks one of three characters, taking as long as they like (no clock; a drawer
 who walks away is the host's to remove) — or asks for three new ones, as often as they like, never
 repeating a face already offered. Picking one opens a dialog listing what guessers can type and
@@ -85,7 +86,11 @@ stage — a removal mid-game is the same as that player leaving. While a game ru
 and nothing scores, a Paused screen covers every page — the phones' forehead view included —
 and **Continue Game** picks up exactly where it stopped. In the guessing games the pause belongs
 to the game, not the turn: a turn that begins while paused begins frozen. It sits beside the
-disconnect pause, and the clock runs only when neither holds it. On a phone-width computer page
+disconnect pause, and the clock runs only when neither holds it. A guessing game the table has
+walked away from pauses itself the same way: two full rounds of turns timing out with nobody
+touching anything (`turnRules.deserted`), and the Paused screen says so and offers anyone,
+not only the host, Continue Game. A room that is deleted (its last player leaves, or the sweep finds
+nobody connected) stops its game's clocks with it (`registry.onRoomDeleted`). On a phone-width computer page
 the dark-mode switch moves into it, so the title row keeps its room.
 
 **The home page** (`/`) asks one question first: which game. *Draw the Character* goes to
@@ -209,7 +214,9 @@ unchanged, which is what proves the Discord bot didn't move logically — only p
 - **Reused verbatim:** the content/difficulty/curation logic from `src/compendium/` (the web
   app plays as its own compendium scope, `'web'`, with its own playable selection -- see
   [The compendium](../../docs/compendium.md#the-compendium-shared-lists-and-scopes)), and the pure game state from core
-  (`core/game/Game.js`, `GameManager.js`, `Lobby.js`, `lobbySettings.js`).
+  (`core/game/Game.js` and `lobbySettings.js`, plus the player cap `MAX_PLAYERS` from `Lobby.js`).
+  Not `GameManager`: that is the bot's lobbies, in the bot's process. Rooms are the web's own
+  (`rooms.js`), one registry for every web game.
 - **New here:** the transport (WebSocket rooms instead of Discord's gateway), the UI, and the
   forehead-mode tilt mechanic — none of which the Discord bot has an equivalent of.
 - **The turn rules are shared, not ported:** `core/game/turnRules.js` is the one copy, and both

@@ -792,7 +792,8 @@ let turnTicker = null;
 function startTurnTicker(view) {
   clearInterval(turnTicker);
   let remaining = view.turnRemaining;
-  const pausedMsg = view.hostPaused ? 'Paused by the host' : `Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
+  // Not "by the host": a game that went quiet for two rounds pauses itself (the Paused screen says so).
+  const pausedMsg = view.hostPaused ? 'Paused' : `Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
   const paint = () => {
     if (motionEnabled && $('forehead').classList.contains('active')) {
       // The last player has nobody to pass to, so down = give up (held long). Say so.

@@ -151,6 +151,13 @@ Two guards:
   never forced out — leaving is only ever a deliberate act (`⏭️ Pass` / `🏳️ Give up`, or
   `/lobby leave`). The cost is that a genuinely-absent player parks the game: it keeps handing
   them turns and never ends on its own.
+- **A whole table going quiet is different** (`turnRules.deserted`). Timeouts in a row are
+  counted, and anything anyone does (a guess, a ruling, a pass) resets the count. Two full laps
+  of them, every player still guessing timing out twice with nobody touching anything, means
+  the table has gone. One lap would end a game because two people stepped out for a drink. The
+  bot then **ends the game** the way `/lobby end` does, keeping finished results, rather than
+  posting a board a minute to an empty channel. The web **pauses it**, because a room is
+  somewhere people come back to, and whoever does can press Continue Game, not only the host.
 
 `/lobby end` is the manual exit for a player who is genuinely gone, and it **keeps the results
 of everyone who already finished** rather than discarding the game whole. Nothing becomes

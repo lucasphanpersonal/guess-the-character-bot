@@ -29,8 +29,27 @@
 //
 // This is also the seam a different shape of round (everyone guessing at once) would replace:
 // who may act and what "advance" means are decided here and nowhere else.
+//
+// DESERTED. Going quiet is never terminal for a PLAYER -- but a whole table going quiet used to
+// be endless: every turn timed out, passed, and armed the next, forever (the bot posting a board
+// a minute to an empty channel; a web room ticking on after everyone had gone). So timeouts in a
+// row are counted, anything anyone does resets the count, and two full laps of them -- every
+// player still guessing, twice over, with nobody touching anything -- is `deserted`. One lap
+// would end a game because two people stepped out for a drink. What a frontend does about it is
+// its own: the bot ends the game as /lobby end does, keeping finished results; the web pauses it,
+// so anyone coming back can carry on.
 
 const turnKey = (game) => `${game.currentPlayerId}:${game.turnsFor(game.currentPlayerId)}`;
+
+/** Somebody did something -- a guess, a ruling, a pass -- so the table is not deserted. */
+function noteActivity(game) {
+  if (game) game.idleTimeouts = 0;
+}
+
+/** Two full laps of turns timed out with nobody acting. See DESERTED above. */
+function deserted(game) {
+  return !!game && !game.finished && (game.idleTimeouts ?? 0) >= 2 * Math.max(1, game.activePlayers.length);
+}
 
 /** Begin the current player's turn: their count -- the score -- ticks up. */
 function beginTurn(game) {
@@ -43,10 +62,12 @@ function beginTurn(game) {
  *
  * @returns {{ok: true, finishingId: string} | {ok: false, duplicate: true}}
  */
-function resolveTurn(game, { correct = false, msLeft = null } = {}) {
+function resolveTurn(game, { correct = false, msLeft = null, idle = false } = {}) {
   const key = turnKey(game);
   if (game.resolvedTurns.has(key)) return { ok: false, duplicate: true };
   game.resolvedTurns.add(key);
+  // A timeout is the one resolution nobody chose; every other one is somebody at the table.
+  game.idleTimeouts = idle ? (game.idleTimeouts ?? 0) + 1 : 0;
   const finishingId = game.currentPlayerId;
   if (correct) game.recordFinish(finishingId, msLeft);
   return { ok: true, finishingId };
@@ -112,6 +133,7 @@ function giveUp(game, playerId) {
 function forfeit(game, playerId) {
   if (over(game) || !game.turnOrder.includes(playerId) || !game.isActive(playerId)) return { ok: false, stale: true };
   game.surrendered.add(playerId);
+  noteActivity(game); // somebody chose something, on their turn or not
   if (playerId !== game.currentPlayerId) return { ok: true, resolved: false };
   return { ok: true, resolved: resolveTurn(game).ok };
 }
@@ -119,7 +141,7 @@ function forfeit(game, playerId) {
 /** The clock ran out on `playerId`'s turn: it passes, if it is still theirs. Never removes anyone. */
 function timeout(game, playerId) {
   if (over(game) || game.currentPlayerId !== playerId) return { ok: false, stale: true };
-  const r = resolveTurn(game);
+  const r = resolveTurn(game, { idle: true });
   return r.ok ? r : { ok: false, stale: true };
 }
 
@@ -139,4 +161,4 @@ function guesserControls(game) {
   };
 }
 
-module.exports = { beginTurn, resolveTurn, advance, claimCorrect, pass, giveUp, forfeit, timeout, guesserControls };
+module.exports = { beginTurn, resolveTurn, advance, claimCorrect, pass, giveUp, forfeit, timeout, guesserControls, noteActivity, deserted };

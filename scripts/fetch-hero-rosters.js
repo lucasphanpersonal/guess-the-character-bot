@@ -30,14 +30,16 @@ const path = require('path');
 const { writeFileAtomic } = require('./lib/writeAtomic');
 const { looksLikeJunk } = require('../src/compendium/characterImages');
 
-const USER_AGENT =
-  'guess-the-character-bot/1.0 (Discord party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
+const http = require('./lib/http');
+
 const SEED_DIR = path.join(__dirname, '..', 'data', 'seed');
 
+// Retried (lib/http), then loud: a roster that failed to load must stop the run, not be written
+// out as a roster with nobody in it.
 async function getJson(url) {
-  const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  return res.json();
+  const r = await http.getJson(url, { retries: 3 });
+  if (!r?.ok) throw new Error(`${url}: ${r ? `HTTP ${r.status}` : 'no answer after retries'}`);
+  return r.body;
 }
 
 // One wiki's members of several categories, deduplicated, with each page's lead image and

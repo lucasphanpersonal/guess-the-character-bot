@@ -27,7 +27,6 @@ const path = require('path');
 const os = require('os');
 const { Server } = require('socket.io');
 
-const GameManager = require('../core/game/GameManager');
 const characterLists = require('../compendium/characterLists');
 
 const { RoomRegistry } = require('./rooms');
@@ -345,8 +344,9 @@ function requestHandler(req, res) {
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,
+      // Web rooms only. Discord lobbies live in the bot, a separate process (scripts/start-all.js
+      // runs the two apart), so a count of them here was always 0.
       rooms: registry.rooms.size,
-      lobbies: GameManager.allLobbies().length,
       imageCache: { files: imageCache.stats().files },
       // What the join QR will encode. Handy for confirming through a proxy that it says https:
       // a QR that says http silently disables tilt controls for whoever scans it.

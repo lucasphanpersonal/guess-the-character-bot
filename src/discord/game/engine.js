@@ -160,6 +160,11 @@ async function startResolvedAudienceGame(client, lobby, vote, characters = vote.
 // Shared entry point for both `/lobby start` and the lobby board's Start button, so the
 // validation and character-selection rules can't drift between the two.
 async function startGameFromLobby(client, lobby) {
+  // The one claim on starting. Both callers check WAITING before an await of their own (the
+  // interaction's defer), so two quick Starts both reached here and dealt two games, DMs and all.
+  // Every path below moves the lobby off WAITING before its first await, so this check, made
+  // synchronously, lets exactly one through.
+  if (lobby.status !== 'WAITING') return { ok: false, error: 'This game is already starting.' };
   const wanted = lobby.players.length;
   if (wanted < MIN_PLAYERS) {
     return { ok: false, error: `Need at least ${MIN_PLAYERS} players -- currently ${wanted}.` };
@@ -214,11 +219,24 @@ async function startGame(client, lobby, characters) {
   lobby.status = 'CONFIRMING';
   await refreshLobbyBoard(lobby);
 
-  const users = await Promise.all(game.turnOrder.map((id) => client.users.fetch(id)));
+  // Nothing has been sent yet, so a failure here (a player who left Discord, an API hiccup) puts
+  // the lobby back as it was. Thrown out of here instead, it left the lobby CONFIRMING with no DMs
+  // out: every lobby button refused ("already started") and nobody could confirm.
+  let users;
+  let channel;
+  try {
+    users = await Promise.all(game.turnOrder.map((id) => client.users.fetch(id)));
+    channel = await getChannel(client, lobby);
+  } catch (err) {
+    console.warn('[engine] Could not start the game:', err.message);
+    lobby.status = 'WAITING';
+    lobby.game = null;
+    await refreshLobbyBoard(lobby);
+    return { ok: false, error: "Couldn't reach every player on Discord, so the game didn't start. Try Start again." };
+  }
   // Resolved once and cached on the game: names label characters in the confirm, reference
   // and spectator DMs, which is several lookups per player per reroll otherwise.
   game.setNames(Object.fromEntries(users.map((u) => [u.id, u.username])));
-  const channel = await getChannel(client, lobby);
 
   game.confirmState = Object.fromEntries(
     game.turnOrder.map((id) => [
@@ -352,8 +370,9 @@ async function checkLastChanceTimeout(client, lobby, currentPlayerId) {
   if (!game || game.finished || game.currentPlayerId !== currentPlayerId || !game.paused) return;
 
   // Pass the turn on -- never a forfeit. Advancing the rotation (or looping back to a lone
-  // player) keeps the game flowing without removing anyone who didn't choose to leave.
-  await endTurn(client, lobby, { correct: false, gaveUp: false });
+  // player) keeps the game flowing without removing anyone who didn't choose to leave. Idle:
+  // nobody chose this, which is what counts towards a deserted table (turnRules.deserted).
+  await endTurn(client, lobby, { correct: false, gaveUp: false, idle: true });
 }
 
 async function handleTimeout(client, lobby) {
@@ -427,7 +446,8 @@ async function submitJudgement(client, lobby, judgeId, correct) {
   }
 
   // A wrong guess costs nothing and is not recorded -- the turn simply carries on. The
-  // buzzer above is the whole of its effect.
+  // buzzer above is the whole of its effect -- that, and showing the table is not deserted.
+  rules.noteActivity(game);
   await refreshTurnBoard(game, lobby.channelId);
   return { ok: true, correct: false, turnEnded: false };
 }
@@ -546,13 +566,13 @@ async function announceCompletion(client, lobby, playerId) {
  * guessing, so simultaneous presses are routine, and every extra resolution used to advance the
  * rotation again: three presses skipped two players. See src/core/game/turnRules.js.
  */
-async function endTurn(client, lobby, { correct, gaveUp = false }) {
+async function endTurn(client, lobby, { correct, gaveUp = false, idle = false }) {
   const game = lobby.game;
   // Read first -- clearTimers drops the timer it comes from. It is the tiebreak between equal
   // turn counts (Game.standings), taken when the turn resolved: for a judged guess, when the
   // judge ruled; in the last-chance window, 0.
   const msLeft = game.timer?.remainingMs() ?? null;
-  if (!rules.resolveTurn(game, { correct, msLeft }).ok) return undefined;
+  if (!rules.resolveTurn(game, { correct, msLeft, idle }).ok) return undefined;
   return finishTurn(client, lobby, { correct, gaveUp });
 }
 
@@ -577,10 +597,80 @@ async function finishTurn(client, lobby, { correct, gaveUp = false }) {
 
   if (correct) await announceCompletion(client, lobby, finishingPlayerId);
 
+  // Two full laps of turns that timed out with nobody touching anything: the table has gone.
+  // Checked before advancing, so nobody is charged a turn for a game that is over. Ended the way
+  // /lobby end ends one -- whoever already finished keeps that result -- rather than posting a
+  // board a minute to an empty channel for as long as the process runs.
+  if (rules.deserted(game)) return endDesertedGame(client, lobby);
+
   // Everyone plays until they get their character, so one player finishing ends only their own
   // involvement. The game is over when nobody is left guessing.
   if (rules.advance(game).gameOver) return finalizeGame(client, lobby);
   return startTurn(client, lobby);
+}
+
+/**
+ * Ends a lobby or a game before it is finished: shared by `/lobby end` and a deserted game, so the
+ * two cannot tear a game down differently. Closes a vote in flight, retires confirmation DMs, keeps
+ * the result of anyone who already finished (recordAbandonedGame), stops the clocks, retires the
+ * live board and leaves voice. The lobby is deleted, not kept FINISHED: nothing is left to rematch.
+ *
+ * @returns the standings recorded, or null when nobody had finished.
+ */
+async function cancelLobby(lobby) {
+  // An audience vote may be mid-flight with a pending auto-close timer. Closed, and its board
+  // re-rendered, so the Vote button stops looking live.
+  if (lobby.vote && !lobby.vote.closed) {
+    clearVoteTimer(lobby.vote);
+    lobby.vote.closed = true;
+    lobby.vote.cancelled = true;
+    await refreshVoteBoard(lobby.vote);
+  }
+  clearVoteTimer(lobby.vote);
+  lobby.vote = null;
+
+  // Ended while players were still checking their characters: their DMs carry Good to go and
+  // Reroll buttons for a game that will never start.
+  if (lobby.status === 'CONFIRMING' && lobby.game?.confirmState) {
+    await cancelConfirmations(lobby.game, '🛑 The host ended this game before it began.');
+  }
+
+  // Whoever already got their character keeps that result. Recorded BEFORE the game is torn down,
+  // while the turn counts still exist.
+  const recorded = recordAbandonedGame(lobby);
+
+  if (lobby.game) {
+    clearTimers(lobby.game);
+    // Otherwise the cancelled turn's board keeps live-looking buttons.
+    await refreshTurnBoard(lobby.game, lobby.channelId, { cancelled: true });
+    voice.leaveVoiceForGame(lobby.game);
+  }
+  // CANCELLED, not FINISHED: the lobby is deleted below, so the board must not offer /rematch.
+  lobby.status = 'CANCELLED';
+  await refreshLobbyBoard(lobby);
+  GameManager.endLobby(lobby.channelId);
+  return recorded;
+}
+
+/** The line naming whoever's finished result survived an early end, or '' when nobody had. */
+function keptResults(recorded) {
+  if (!recorded) return '';
+  const finishers = recorded.filter((s) => s.turnsTaken !== null);
+  return (
+    `${finishers.length} player${finishers.length === 1 ? '' : 's'} had already finished, so that result is kept:\n` +
+    finishers.map((s) => `• <@${s.playerId}> — ${s.turnsTaken} turn${s.turnsTaken === 1 ? '' : 's'}`).join('\n')
+  );
+}
+
+async function endDesertedGame(client, lobby) {
+  const recorded = await cancelLobby(lobby);
+  try {
+    const channel = await getChannel(client, lobby);
+    const kept = keptResults(recorded);
+    await channel.send(`🛑 Nobody has played for two full rounds, so the game has ended.${kept ? ` ${kept}` : ''}`);
+  } catch (err) {
+    console.warn('[engine] Could not announce the deserted game:', err.message);
+  }
 }
 
 /**
@@ -805,6 +895,8 @@ module.exports = {
   checkLastChanceTimeout,
   maybeBeginPlay,
   recordAbandonedGame,
+  cancelLobby,
+  keptResults,
   characterMessage,
   sendSpectatorDM,
   clearTimers,

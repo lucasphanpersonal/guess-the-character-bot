@@ -49,6 +49,7 @@ function submitGuess(game, playerId, text, { others = [], romanised = false, now
   if (st.ruling) return { ok: false, error: 'The others are still ruling on your last guess.' };
   const guess = String(text ?? '').trim().slice(0, GUESS_MAX);
   if (!guess) return { ok: false, error: 'Type a name first.' };
+  loop.noteActivity(game); // a guess, right or wrong, is somebody at the table (turnRules.deserted)
 
   const { verdict } = judgeGuess(guess, game.headByPlayer[playerId].name, { others, singleWords: true, romanised });
   const turn = turnOf(game);
@@ -82,6 +83,7 @@ function rule(game, judgeId, rulingId, accept, now = Date.now()) {
   if (!game.turnOrder.includes(judgeId)) return { ok: false, error: 'Only players in this game can rule.' };
 
   st.ruling = null;
+  loop.noteActivity(game);
   if (accept) {
     const res = loop.gotIt(game, r.playerId, now);
     if (res.ok) remember(game, { playerId: r.playerId, text: r.text, verdict: 'correct', ruledBy: judgeId, turn: r.turn });

@@ -58,15 +58,13 @@ const lists = require('../src/compendium/characterLists');
 const { normalizeLoose } = require('../src/compendium/text');
 const { mergeFranchises } = require('./seed-wikidata-characters');
 const { writeFileAtomic } = require('./lib/writeAtomic');
+const { sleep, getJson } = require('./lib/http');
 
 const WBAPI = 'https://www.wikidata.org/w/api.php';
 const PAGEVIEWS = 'https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/en.wikipedia/all-access/user';
 // What the scores in the file measure. A file from an older measure is not reused: its numbers
 // are on another scale.
 const MEASURE = 'enwiki-readers-12-months-summed-namesake-best-of-kind';
-// Wikimedia asks for a descriptive User-Agent identifying the tool and a contact point.
-const USER_AGENT =
-  'guess-the-character-bot/1.0 (Discord party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
 const SEED_DIR = path.join(__dirname, '..', 'data', 'seed');
 const OUT_PATH = path.join(SEED_DIR, 'work-fame.json');
 const ENTITY_CHUNK = 50;
@@ -90,24 +88,12 @@ const FITS = {
 // Second best: the list is named for a franchise or a character rather than one work.
 const FRANCHISE = /\b(franchise|media mix|series|fictional|superhero|supervillain|comic|character|mascot)\b/i;
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const key = (category, name) => `${category}<|>${name}`;
+const key =(category, name) => `${category}<|>${name}`;
 
-// One API call, retried: a dropped socket or a 429/5xx partway through a long run is routine.
-// Returns null only when every retry failed -- the caller records that as unknown.
+// One API call, retried (lib/http). Returns null when it failed -- the caller records that as unknown.
 async function api(params) {
-  const url = `${WBAPI}?${new URLSearchParams({ format: 'json', ...params })}`;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-      if (res.ok) return await res.json();
-      const retryAfter = Number(res.headers.get('retry-after'));
-      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt);
-    } catch {
-      await sleep(2000 * 2 ** attempt);
-    }
-  }
-  return null;
+  const r = await getJson(`${WBAPI}?${new URLSearchParams({ format: 'json', ...params })}`, { retries: MAX_RETRIES });
+  return r?.ok ? r.body : null;
 }
 
 // Wikipedia articles only: a work's Commons category or Wikiquote page says nothing about fame.
@@ -140,17 +126,9 @@ function lastYear(now = new Date()) {
 /** A year of English Wikipedia readers for one article: a number, 0 for none, null when unknown. */
 async function readers(title, [from, to]) {
   const url = `${PAGEVIEWS}/${encodeURIComponent(title.replace(/ /g, '_'))}/monthly/${from}/${to}`;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT } });
-      if (res.ok) return ((await res.json()).items ?? []).reduce((n, i) => n + (i.views || 0), 0);
-      if (res.status === 404) return 0; // the API's "no views recorded", not an error
-      const retryAfter = Number(res.headers.get('retry-after'));
-      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 2000 * 2 ** attempt);
-    } catch {
-      await sleep(2000 * 2 ** attempt);
-    }
-  }
+  const r = await getJson(url, { retries: MAX_RETRIES, definitive: [404] });
+  if (r?.ok) return (r.body.items ?? []).reduce((n, i) => n + (i.views || 0), 0);
+  if (r?.status === 404) return 0; // the API's "no views recorded", not an error
   return null;
 }
 

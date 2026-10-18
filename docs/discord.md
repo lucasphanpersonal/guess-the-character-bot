@@ -143,6 +143,10 @@ out is [the architecture](architecture.md).
    revealed at the time, and printing them again put the same name and artwork in the channel
    twice running.
 
+   Nobody is removed for going quiet: a turn that runs out just passes. But a game where
+   *everyone* has gone quiet (two full rounds of turns timing out with nobody pressing
+   anything) ends itself, as `/lobby end` would. Anyone who already finished keeps that result.
+
    **⏭️ Pass** always just hands the turn on, and never removes you — even once you can no
    longer win, so you can play on for placement (or wait the game out) instead of being pushed
    out. **🏳️ Give up** is a separate red button that bows you out: it drops you from the

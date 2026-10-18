@@ -45,18 +45,9 @@ class Game {
     this.turnSeconds = turnSeconds;
     this.currentTurnIndex = 0;
     this.finished = false;
-    this.timer = null;
-    this.countdownHandles = [];
     // Unique instance ID for this game, used in button customIds to prevent stale controls
     // from old games in the same channel from affecting this one.
     this.gameInstanceId = Math.random().toString(36).substring(2, 9);
-    // The single self-updating message for the current turn. Replaced by engine.startTurn on
-    // every new turn.
-    this.turnBoardMessage = null;
-    // The board of the turn that just ended, frozen and awaiting deletion by the next turn --
-    // see engine.dropRetiredBoard. Left in place when the game ends, so the channel keeps a
-    // record of the final turn.
-    this.retiredBoardMessage = null;
     // The score. Everyone plays until they get their character, and fewest turns wins, so
     // turns are counted per player rather than as a shared round number -- once players start
     // dropping out of the rotation the two stop agreeing.
@@ -88,15 +79,29 @@ class Game {
     // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
     // isn't guessing, so simultaneous presses are routine rather than exotic.
     this.resolvedTurns = new Set();
-    this.voiceConnection = null;
-    this.audioPlayer = null;
-    // Populated by engine.startGame:
+    // Turns in a row that timed out with nobody acting -- see turnRules' DESERTED.
+    this.idleTimeouts = 0;
+    // Populated by engine.startGame (and by the web's gameSetup, in its own shape):
     // { [playerId]: { confirmed, rerollsLeft, rejectedNames, checkMessage, referenceMessages } }
     this.confirmState = null;
     // Display names, resolved once when the game starts. They label characters in three
     // different DMs and are re-rendered on every reroll, which is a lot of user lookups for
     // something that cannot change mid-game.
     this.names = {};
+
+    // --- the Discord bot's, from here down (src/discord/game/). The core never reads these; they
+    // sit on the game because they live and die with it. The web keeps its own clocks on the room.
+    this.timer = null; // the turn's countdown
+    this.countdownHandles = [];
+    // The single self-updating message for the current turn. Replaced by engine.startTurn on
+    // every new turn.
+    this.turnBoardMessage = null;
+    // The board of the turn that just ended, frozen and awaiting deletion by the next turn --
+    // see engine.dropRetiredBoard. Left in place when the game ends, so the channel keeps a
+    // record of the final turn.
+    this.retiredBoardMessage = null;
+    this.voiceConnection = null;
+    this.audioPlayer = null;
     // True after a turn's timer expires until the player guesses or passes -- they get one
     // last chance to guess before the turn actually moves on.
     this.paused = false;
@@ -150,9 +155,13 @@ class Game {
     this.names = names;
   }
 
-  /** Display name, falling back to a mention so a missed lookup still reads as somebody. */
+  /**
+   * Display name, so a missed lookup still reads as somebody. 'Player', as the web says it: a
+   * Discord mention here was one frontend's syntax in the core, and the bot cannot reach this
+   * without names any more (startGame does not start without fetching every player).
+   */
   nameOf(playerId) {
-    return this.names[playerId] ?? `<@${playerId}>`;
+    return this.names[playerId] ?? 'Player';
   }
 
   /** Still guessing: hasn't got their character and hasn't given up. */

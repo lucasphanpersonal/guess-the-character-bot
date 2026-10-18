@@ -216,6 +216,8 @@ function attachSockets(nsp, { registry, setup, variant }) {
     const game = room.game;
     if (!game.hostPaused) return;
     game.hostPaused = false;
+    game.idlePaused = false;
+    loop.noteActivity(game); // somebody is back: the quiet count starts again
     if (game.pausedForDisconnect) {
       // Still waiting on someone who dropped: their own pause takes over, guard and all.
       room.pauseGuard = setTimeout(() => resumeTurn(room), PAUSE_MAX_MS);
@@ -270,7 +272,17 @@ function attachSockets(nsp, { registry, setup, variant }) {
     if (!result.nextPlayerId) return emitGame(room);
 
     clearPause(room); // the pause belonged to the turn that just ended, not to this one
+    // Deserted (turnRules.deserted): two full rounds of turns ran out with nobody touching anything.
+    // Paused, not ended -- unlike the bot's channel, a web room is somewhere people come back to,
+    // and whoever does can carry on. Paused BEFORE the turn is armed, so it arms frozen with its
+    // whole time kept, and no clock runs while nobody is there to watch it.
+    const idle = loop.deserted(room.game) && !room.game.hostPaused;
+    if (idle) {
+      room.game.hostPaused = true;
+      room.game.idlePaused = true;
+    }
     scheduleTurn(room);
+    if (idle) broadcastRoom(room);
     // The player we advanced TO may themselves be offline -- the same rule the disconnect
     // handler applies, arriving by a different route. pauseTurn broadcasts for us.
     if (!registry.isConnected(room.code, room.game.currentPlayerId)) pauseTurn(room);
@@ -283,8 +295,14 @@ function attachSockets(nsp, { registry, setup, variant }) {
   // which is what computers do and what the tests use.
   const GRACE_SECONDS = variant.graceSeconds;
 
+  // Begun once. Two things can call this when the countdown ends -- its own timer and the
+  // watchdog below -- and after a sleep both are overdue at once, the watchdog's tick often first.
+  // A second run starts a turn, which charges the current player one, and turns are the score. So
+  // it begins only a game that is still counting down (or still on the check screen, for the
+  // no-countdown path), and cancels the countdown's timer rather than just forgetting it.
   const beginGame = (room) => {
-    room.countdownTimer = null;
+    if (!room?.game || (room.status !== 'countdown' && !inSetup(room))) return;
+    clearCountdown(room);
     room.status = 'playing';
     loop.startTurn(room.game); // first player's turn 1
     scheduleTurn(room);
@@ -331,8 +349,19 @@ function attachSockets(nsp, { registry, setup, variant }) {
   // Wall-clock backstop (mirrors the Discord bot's timerWatchdog): the setTimeouts above are the
   // primary path, but if the process is suspended (a laptop sleeping) they fire late. This
   // re-checks every deadline against the real clock so a turn that expired while asleep ends on
-  // wake instead of hanging. It never double-fires: the resolve-once guard in the turn loop and
-  // the countdown clearing its own timer make a redundant pass a no-op.
+  // wake instead of hanging. It never double-fires: the resolve-once guard in the turn loop makes a
+  // second timeout a no-op, and beginGame begins only a game still counting down.
+  // A room the registry deletes (its last player left, or the sweep found nobody connected for half
+  // an hour) takes its timers with it. They ran on otherwise: a turn timing out armed the next, an
+  // offline player's pause guard resumed it, and round it went against a room nobody could reach.
+  registry.onRoomDeleted((room) => {
+    if (room.kind !== variant.kind) return;
+    turnEnded(room);
+    clearCountdown(room);
+    clearTurnTimer(room);
+    clearPause(room);
+  });
+
   const WATCHDOG_MS = 3000;
   const watchdog = setInterval(() => {
     const now = Date.now();
@@ -523,7 +552,10 @@ function attachSockets(nsp, { registry, setup, variant }) {
     socket.on('room:pause', ({ paused } = {}, ack) => {
       const r = room();
       if (!r) return ack?.({ ok: false, error: 'Not in a room.' });
-      if (r.hostPlayerId !== playerId) return ack?.({ ok: false, error: 'Only the host can pause.' });
+      // A pause the table fell into (nobody played for two rounds) anyone may lift: the host may be
+      // one of the people who wandered off, and the game would wait for them for good.
+      const anyoneMay = !paused && !!r.game?.idlePaused;
+      if (r.hostPlayerId !== playerId && !anyoneMay) return ack?.({ ok: false, error: 'Only the host can pause.' });
       if (!playing(r)) return ack?.({ ok: false, error: 'There is no game running to pause.' });
       if (paused) hostPause(r);
       else hostContinue(r);
