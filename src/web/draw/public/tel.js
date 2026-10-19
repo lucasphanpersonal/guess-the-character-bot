@@ -1,7 +1,7 @@
 // Telephone, on the Draw page: everyone at once, each on a chain passed one seat along per step --
 // pick, draw, guess, draw ... -- then the replay, a card at a time, and the album.
 //
-// Loaded after app.js, whose pieces it uses: the socket, the pad and the tools row (makePad,
+// Loaded after app.js, pad.js and gallery.js, whose pieces it uses: the socket, the pad and the tools row (makePad,
 // activePad), the clock (setClock), pictures (characterArt, thumbnail, paintDrawing) and the
 // viewer (galleryItems, openViewer). The server's rules are ../telephone.js; this only shows them.
 // During play the server sends each player their own task and nothing else, so neither can this.

@@ -1,5 +1,5 @@
 // The computer games' sound (/desk/, /draw/). Loaded after common.js; exposes one global,
-// GTCSound. The phones have their own (src/web/party/public/app.js) because their problem is
+// GTCSound. The phones have their own (src/web/party/public/audio.js) because their problem is
 // different: the wearer cannot see the screen, so sound carries the clock and a bed runs under
 // the whole turn. Here everyone can see the screen, so there is no bed and no ticking -- only
 // short one-shot cues for the moments worth looking up for. Often that is a player in another

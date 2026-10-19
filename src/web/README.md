@@ -168,7 +168,9 @@ web/
                        socket.io namespace, because the links and QR codes out there point there.
     index.js             The variant: forehead view, a grace countdown, the tilt event.
     view.js              The forehead view -- the one view that carries your OWN character.
-    public/              The phone client: index.html, app.js, tilt.js.
+    public/              The phone client: index.html, tilt.js, and app.js with audio.js,
+                         config.js, compendium.js, eggs.js and boot.js -- plain scripts in one
+                         global scope, boot.js last (app.js's header says why the order matters).
   desk/                Computers: the board variant. Served at /desk/, namespace /desk.
     index.js             The variant: board view, no countdown, guess + ruling events.
     guessing.js          Typed guesses and the other players' rulings (pure, unit-tested).
@@ -194,7 +196,7 @@ means one room either way.
     telephone.js         Telephone: the chains, the steps, the replay (pure, unit-tested).
     socket.js            The protocol and the clock: one timer per room aimed at whatever is due
                          next, a watchdog for sleeping laptops, strokes checked and relayed.
-    public/              The drawing client.
+    public/              The drawing client: app.js, pad.js, gallery.js, tel.js, boot.js last.
 ```
 
 A different game goes in a folder of its own beside these, with its own client path and

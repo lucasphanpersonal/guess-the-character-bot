@@ -20,7 +20,7 @@
 
   // How lists are ordered wherever they are listed: 'popular' (the server's order, best-known
   // first) or 'az'. One preference per browser, shared with the phones' library browser
-  // (party/public/app.js reads the same key), because it is how this person likes to look.
+  // (party/public/compendium.js reads the same key), because it is how this person likes to look.
   const SORT_KEY = 'gtc_list_sort';
   const listSort = () => (store.get(SORT_KEY) === 'az' ? 'az' : 'popular');
   const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true });
