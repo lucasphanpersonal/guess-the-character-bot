@@ -159,8 +159,9 @@ Two guards:
   posting a board a minute to an empty channel. The web **pauses it**, because a room is
   somewhere people come back to, and whoever does can press Continue Game, not only the host.
 
-`/lobby end` is the manual exit for a player who is genuinely gone, and it **keeps the results
-of everyone who already finished** rather than discarding the game whole. Nothing becomes
+`/lobby remove` is the manual exit for a player who is genuinely gone: the host takes them out,
+exactly as if they had left, and everyone else plays on. `/lobby end` is the heavier remedy,
+and it **keeps the results of everyone who already finished** rather than discarding the game whole. Nothing becomes
 automatic — a human still decides to end it — but deciding no longer costs five people a game
 they finished because a sixth went quiet.
 
@@ -361,7 +362,8 @@ half-games in the leaderboard.
 
 Worth recording that the broader idea this came from -- persisting games so they survive a
 restart -- was **rejected as over-ranked**. The bot does not realistically restart mid-game;
-what actually kills a game is one player going quiet, and `/lobby end` is the remedy. Fixing
+what actually kills a game is one player going quiet, and `/lobby end` was the remedy (now
+`/lobby remove`, which takes out only them). Fixing
 the remedy was the whole of the value, at a fraction of the cost.
 
 **Turn length doesn't scale with the table.** Five players at 60s is a five-minute cycle at

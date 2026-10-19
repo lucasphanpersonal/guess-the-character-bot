@@ -82,6 +82,15 @@ function giveUp({ client, lobby }, userId) {
   return engine.submitGiveUp(client, lobby, userId);
 }
 
+function removeCmd(ctx, userId, targetId, { canManageGuild = false } = {}) {
+  return require('../src/discord/commands/actions/lobby-remove').execute(
+    createSlashInteraction({
+      client: ctx.client, userId, guildId: ctx.guildId, channelId: ctx.channelId, recorder: ctx.recorder,
+      options: { player: { id: targetId } }, canManageGuild,
+    })
+  );
+}
+
 function cleanup(ctx) {
   if (ctx.lobby.game) engine.clearTimers(ctx.lobby.game);
   GameManager.endLobby(ctx.channelId);
@@ -153,6 +162,67 @@ module.exports = {
     const retried = await engine.startGameFromLobby(ctx.client, ctx.lobby);
     assert.equal(retried.ok, true);
     assert.equal(ctx.lobby.status, 'CONFIRMING');
+    cleanup(ctx);
+  },
+
+  // /lobby remove, at each stage. Before play it undoes the deal, which was made for a table with
+  // that player at it; mid-game it is the player leaving.
+  async '/lobby remove takes a player out of a waiting lobby'() {
+    const ctx = await startedGame({ start: false });
+    ctx.lobby.addPlayer('p3');
+    await removeCmd(ctx, 'p1', 'p3');
+    assert.deepEqual(ctx.lobby.players, ['p1', 'p2']);
+    assert.equal(ctx.lobby.status, 'WAITING');
+    assert.match(channelText(ctx), /removed <@p3> from the lobby \(2 left in\)/);
+    assert.match(ctx.recorder.textMatching('editreply:p1'), /Removed <@p3>/);
+    cleanup(ctx);
+  },
+
+  async '/lobby remove during the character check cancels the deal, so nobody waits on them'() {
+    const ctx = await startedGame(); // dealt, CONFIRMING
+    await confirmPhase.handleConfirmationButton(
+      createButtonInteraction({ client: ctx.client, userId: 'p1', customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
+    );
+    await removeCmd(ctx, 'p1', 'p2'); // p2 never confirmed
+    assert.equal(ctx.lobby.status, 'WAITING', 'back to the lobby, Start works again');
+    assert.equal(ctx.lobby.game, null);
+    assert.deepEqual(ctx.lobby.players, ['p1']);
+    assert.match(ctx.recorder.textMatching('dm:p1:edit'), /removed a player/, "p1's character cards are retired");
+    assert.match(channelText(ctx), /press Start to deal again/);
+    cleanup(ctx);
+  },
+
+  async '/lobby remove mid-game is that player leaving: revealed, and the turn moves on'() {
+    const ctx = await startedGame();
+    ctx.lobby.addPlayer('p3');
+    await engine.startGame(ctx.client, ctx.lobby, [MARIO, LUIGI, { name: 'Peach' }]).catch(() => {});
+    if (ctx.lobby.status !== 'CONFIRMING') throw new Error(`setup: ${ctx.lobby.status}`);
+    for (const userId of ['p1', 'p2', 'p3']) {
+      await confirmPhase.handleConfirmationButton(
+        createButtonInteraction({ client: ctx.client, userId, customId: `confirm:${ctx.channelId}`, recorder: ctx.recorder })
+      );
+    }
+    const game = ctx.lobby.game;
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS');
+    const guesser = game.currentPlayerId;
+    const target = guesser === 'p1' ? 'p2' : guesser; // the guesser, unless that is the host
+    await removeCmd(ctx, 'p1', target);
+    assert.equal(game.surrendered.has(target), true);
+    assert.equal(ctx.lobby.status, 'IN_PROGRESS', 'the others play on');
+    assert.notEqual(game.currentPlayerId, target);
+    assert.match(channelText(ctx), new RegExp(`The host removed <@${target}> from the game`));
+    cleanup(ctx);
+  },
+
+  async '/lobby remove is for the host or an admin, and never removes the host'() {
+    const ctx = await startedGame({ start: false });
+    await removeCmd(ctx, 'p2', 'p1');
+    assert.match(ctx.recorder.textMatching('reply:p2'), /Only the host or a server admin/);
+    await removeCmd(ctx, 'p1', 'p1');
+    assert.match(ctx.recorder.textMatching('reply:p1'), /host can't be removed/);
+    assert.deepEqual(ctx.lobby.players, ['p1', 'p2']);
+    await removeCmd(ctx, 'admin', 'p2', { canManageGuild: true });
+    assert.deepEqual(ctx.lobby.players, ['p1'], 'an admin can');
     cleanup(ctx);
   },
 

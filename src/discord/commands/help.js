@@ -93,8 +93,9 @@ module.exports = {
             'resolves -- you never stop talking to log a guess. ✅ asks to confirm first, ' +
             'because it reveals your character and cannot be taken back; ❌ costs nothing, so ' +
             'it does not.\n' +
-            '⏭️ **Pass** hands your turn on -- there is no guess box, because the judge ' +
-            'already decides whether you got it.\n' +
+            // No "there is no guess box" here: the line above already says why, and /help is at
+            // Discord's 6000-character embed limit (test/help.test.js holds it there).
+            '⏭️ **Pass** hands your turn on.\n' +
             "Guessing wrong costs you nothing and isn't counted, so guess early and often. " +
             "Only **Pass**, or running out of time, hands the turn over (once time's up the " +
             'board goes amber for one truly last guess).',
@@ -123,7 +124,8 @@ module.exports = {
           value:
             '`/lobby status` -- whose turn it is, time left, and who has already finished\n' +
             '`/lobby leave` -- mid-game this forfeits: you drop out, the others play on\n' +
-            '`/lobby end` -- host or admin can cancel a stuck game\n' +
+            '`/lobby remove` -- host or admin: take out a player who has gone quiet\n' +
+            '`/lobby end` -- host or admin: cancel a stuck game\n' +
             '`/rematch` -- replay with the same players once a game finishes\n' +
             '`/leaderboard [player]` -- server standings, or one player\'s record and turn counts\n' +
             'The end-of-game reveal also has **Rematch** and **Leaderboard** buttons.',

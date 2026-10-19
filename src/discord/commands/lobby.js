@@ -17,11 +17,12 @@ const join = require('./actions/lobby-join');
 const leave = require('./actions/lobby-leave');
 const start = require('./actions/lobby-start');
 const end = require('./actions/lobby-end');
+const remove = require('./actions/lobby-remove');
 const status = require('./actions/lobby-status');
 const spectate = require('./actions/lobby-spectate');
 const setCharacters = require('./actions/lobby-set-characters');
 
-const ACTIONS = { create, join, leave, start, end, status, spectate, 'set-characters': setCharacters };
+const ACTIONS = { create, join, leave, start, end, remove, status, spectate, 'set-characters': setCharacters };
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -77,6 +78,12 @@ module.exports = {
     .addSubcommand((sub) => sub.setName('start').setDescription('Start the game once at least 2 players have joined'))
     .addSubcommand((sub) =>
       sub.setName('end').setDescription('Cancel the lobby or game in this channel (host or admin only)')
+    )
+    .addSubcommand((sub) =>
+      sub
+        .setName('remove')
+        .setDescription('Take a player out of the lobby or the game, at any stage (host or admin only)')
+        .addUserOption((opt) => opt.setName('player').setDescription('Who to remove').setRequired(true))
     )
     .addSubcommand((sub) => sub.setName('status').setDescription('Show whose turn it is and how long is left'))
     .addSubcommand((sub) =>

@@ -691,21 +691,23 @@ async function endDesertedGame(client, lobby) {
  * not their turn, nothing needs advancing: the current player is active by definition, so a
  * forfeit by anybody else can never empty the table.
  */
-async function submitForfeit(client, lobby, playerId) {
+async function submitForfeit(client, lobby, playerId, { removed = false } = {}) {
   const game = lobby.game;
+  // `removed`: the host took them out (/lobby remove) -- the same exit, said as what it was.
+  const out = removed ? "They're already out of this game." : "You're already out of this game.";
   if (!game || game.finished || lobby.status !== 'IN_PROGRESS') {
     return { ok: false, error: 'No game in progress.' };
   }
   if (!game.turnOrder.includes(playerId)) {
-    return { ok: false, error: "You're not playing in this game." };
+    return { ok: false, error: removed ? "They're not playing in this game." : "You're not playing in this game." };
   }
   if (!game.isActive(playerId)) {
-    return { ok: false, error: "You're already out of this game." };
+    return { ok: false, error: out };
   }
 
   // Marked and, if it was their turn, resolved -- synchronously, before the reveal below awaits.
   const r = rules.forfeit(game, playerId);
-  if (!r.ok) return { ok: false, error: "You're already out of this game." };
+  if (!r.ok) return { ok: false, error: out };
   // Reveal what they were wearing at the moment they leave, not only if they stay to the end:
   // they never got to work it out, and it spoils nobody -- everyone else was DM'd it at the
   // start. Marked revealed so the end-of-game reveal (finalizeGame) doesn't show it again.
@@ -714,7 +716,8 @@ async function submitForfeit(client, lobby, playerId) {
   const left = game.activePlayers.length;
   await channel.send(
     characterMessage(
-      `🏳️ <@${playerId}> has left the game.` + (left ? ` ${left} still guessing.` : ''),
+      (removed ? `🚪 The host removed <@${playerId}> from the game.` : `🏳️ <@${playerId}> has left the game.`) +
+        (left ? ` ${left} still guessing.` : ''),
       [{ label: 'They were wearing', ...game.headByPlayer[playerId] }]
     )
   );
@@ -726,6 +729,53 @@ async function submitForfeit(client, lobby, playerId) {
     await refreshTurnBoard(game, lobby.channelId);
   }
   return { ok: true };
+}
+
+/**
+ * The host takes someone out: `/lobby remove`, at whatever stage the lobby is at.
+ *
+ * Mid-game it is that player leaving (submitForfeit): their character revealed, the turn moved
+ * on if it was theirs. A player who has gone quiet otherwise costs everyone a full turn and its
+ * last chance every lap, and `/lobby end` was the only remedy -- ending the game for everyone.
+ *
+ * Before play it undoes the deal, which was made for a table with them at it: character checks
+ * retired, an audience vote closed, the lobby back to WAITING for the host to Start again. That
+ * is also the way past someone who never confirms. The game waits for every confirmation, so one
+ * player who walked off held the whole table there, with no way on but to cancel the lobby.
+ *
+ * @returns {{ok: false, error: string} | {ok: true, redealt?: boolean}} redealt: a deal or vote was
+ *   undone, so the host has to Start again
+ */
+async function removePlayer(client, lobby, playerId) {
+  if (lobby.status === 'IN_PROGRESS') return submitForfeit(client, lobby, playerId, { removed: true });
+  if (lobby.status !== 'WAITING' && lobby.status !== 'CONFIRMING' && lobby.status !== 'VOTING') {
+    return { ok: false, error: 'That game is over -- there is nobody to remove.' };
+  }
+  if (!lobby.players.includes(playerId)) return { ok: false, error: "They're not in this lobby." };
+
+  const redealt = lobby.status !== 'WAITING' || !!lobby.vote;
+  if (lobby.status === 'CONFIRMING' && lobby.game?.confirmState) {
+    await cancelConfirmations(lobby.game, '🛑 The host removed a player, so this deal was cancelled. A new one comes when the host starts again.');
+  }
+  // A vote dealt per player -- even a closed one kept for a retry after a failed DM -- is a vote
+  // for a table that no longer exists.
+  if (lobby.vote) {
+    if (!lobby.vote.closed) {
+      clearVoteTimer(lobby.vote);
+      lobby.vote.closed = true;
+      lobby.vote.cancelled = true;
+      await refreshVoteBoard(lobby.vote);
+    }
+    clearVoteTimer(lobby.vote);
+    lobby.vote = null;
+  }
+  if (lobby.game) clearTimers(lobby.game);
+  lobby.game = null;
+  lobby.status = 'WAITING';
+  lobby.removePlayer(playerId);
+  if (lobby.assignedCharacters) delete lobby.assignedCharacters[playerId];
+  await refreshLobbyBoard(lobby);
+  return { ok: true, redealt };
 }
 
 /**
@@ -890,6 +940,7 @@ module.exports = {
   submitPass,
   submitGiveUp,
   submitForfeit,
+  removePlayer,
   handlePass,
   handleTimeout,
   checkLastChanceTimeout,

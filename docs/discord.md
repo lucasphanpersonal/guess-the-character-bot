@@ -161,6 +161,13 @@ out is [the architecture](architecture.md).
    undone. Everyone else plays on — one person having to go shouldn't end a six-player game, and
    until now the host cancelling it for everybody was the only way out.
 
+   **`/lobby remove player:`** is the same exit, taken for someone (host or a server admin). It
+   is for the player who has gone quiet and isn't coming back: left in, they are handed a full
+   turn and its last chance every lap. Mid-game it is exactly their leaving. Their character is
+   revealed, and the turn moves on if it was theirs. Before play it cancels the deal, which was
+   made for a table with them at it, and the lobby goes back to waiting for Start. That is also
+   the way past someone who never confirms their character, since turn 1 waits for everyone.
+
    #### Why turns, and not guesses
 
    Scoring on turns is what lets the game run to a natural end for everybody instead of
@@ -259,6 +266,7 @@ second bot application with its own token; one bot cannot be in two voice channe
 | `/lobby start` | host | Deal characters and begin |
 | `/pass` | current player | End your turn (or use the turn board's button) |
 | `/lobby status` | anyone | Whose turn, time remaining, who has already finished |
+| `/lobby remove` | host/admin | Take one player out, at any stage: mid-game it is them leaving; before play it cancels the deal |
 | `/lobby end` | host/admin | Cancel a stuck lobby or game |
 | `/rematch` | that game's players | Replay the last finished game with the same players (or use the reveal's button) |
 | `/leaderboard` | anyone | Server standings, or one player's record |
