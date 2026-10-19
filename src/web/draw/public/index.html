@@ -280,7 +280,12 @@
     @media (max-width: 1000px) { .refart { height:11rem; } }
     .tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
     .tools[hidden] { display:none; }
-    .swatch { width:2.4rem; height:2.4rem; padding:0; border-radius:50%; border:3px solid #fff;
+    /* Two even rows of twelve, not wherever the line happens to wrap: the second row is the skin
+       range, Fair to Deep, read as one run. Phones set their own grid below. Columns shrink rather
+       than hold at 2.4rem: twelve of those are ~570px, wider than the canvas in a one-column window
+       just over phone width, where they ran past the card and panned the page sideways. */
+    #swatches { display:grid; grid-template-columns:repeat(12, minmax(0, 2.4rem)); gap:10px; width:100%; }
+    .swatch { width:100%; height:auto; aspect-ratio:1; padding:0; border-radius:50%; border:3px solid #fff;
               box-shadow:0 4px 0 rgba(0,0,0,.25); }
     .swatch:active { box-shadow:0 1px 0 rgba(0,0,0,.25); }
     /* The picked colour and size are marked with a ring AND a check -- never by colour alone. */
@@ -351,7 +356,8 @@
       .refname { margin-top:0; }
     }
     /* A phone during play: the title shrinks to one line, the round shares the clock's line under
-       the blanks, and the palette packs into two rows instead of three. */
+       the blanks, and the palette packs into an even grid: 24 swatches, three rows of eight, each
+       still a fingertip wide (twelve to a row would be two rows of ~24px targets). */
     @media (max-width: 560px) {
       body:is(:has(#game.active), :has(#tel.active)) .titlebar { align-items:center; margin-bottom:.8rem; }
       body:is(:has(#game.active), :has(#tel.active)) .titlebar h1 { font-size:1.45rem; }
@@ -361,7 +367,7 @@
       .mask { font-size:1.4rem; letter-spacing:.25em; }
       .mask.blanks { letter-spacing:0; }
       .tools { gap:8px; }
-      #swatches { display:grid; grid-template-columns:repeat(9, minmax(0, 1fr)); gap:7px; width:100%; }
+      #swatches { display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:7px; width:100%; }
       .swatch { width:100%; height:auto; aspect-ratio:1; border-width:2px; }
       .swatch.on, .size.on { outline-width:3px; outline-offset:1px; }
       .size { width:2rem; height:2rem; }

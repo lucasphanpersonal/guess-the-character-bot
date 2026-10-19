@@ -39,16 +39,22 @@ const DRAW_SECONDS = [60, 80, 100, 120];
 // and sent to the client in room state -- the client used to keep its own copy, so adding a colour
 // meant two edits, and missing one drew swatches the server silently dropped.
 // Named, because a swatch is the one control where colour IS the content -- the names are what a
-// screen reader, or anyone who can't tell two of them apart, has to go on. Two skin tones and the
-// browns are there because characters are mostly people.
+// screen reader, or anyone who can't tell two of them apart, has to go on.
 // Chosen by measured distance (CIE76 ΔE between swatches), not by eye: Navy used to sit 24 from
 // Black and read as black on the canvas; it is 54 now, with Blue brightened to keep the two apart.
-// Orange was really amber, 28 from Yellow; it is a true orange now, clear of Red, Yellow and Tan.
+// Orange was really amber, 28 from Yellow; it is a true orange now, clear of Red and Yellow. Every
+// pair is at least 25 apart -- except along the skin range, six steps from Fair to Deep, 16 to 22
+// apart: characters are mostly people, and a range is meant to be steps. It replaced Peach, Tan and
+// a saddle Brown, which sat 14 from the step beside it; the range's own browns do hair and wood.
+// Fair is 22 from the Eraser, so it still shows on the white page.
 const PALETTE = [
-  ['#1b1033', 'Black'], ['#9a9a9a', 'Grey'], ['#e21b3c', 'Red'], ['#ff6d00', 'Orange'], ['#ffd60a', 'Yellow'],
-  ['#8fd14f', 'Lime'], ['#26890c', 'Green'], ['#12a4a0', 'Teal'], ['#7fd6ff', 'Sky blue'], ['#1f8bff', 'Blue'],
-  ['#233fb5', 'Navy'], ['#c13ac1', 'Purple'], ['#ff7eb6', 'Pink'], ['#f8c9a0', 'Peach'], ['#c68642', 'Tan'],
-  ['#8b4513', 'Brown'], ['#ffffff', 'Eraser'],
+  ['#1b1033', 'Black'], ['#545454', 'Dark grey'], ['#9a9a9a', 'Grey'], ['#e21b3c', 'Red'], ['#8c1c2c', 'Maroon'],
+  ['#ff6d00', 'Orange'], ['#ffd60a', 'Yellow'], ['#8fd14f', 'Lime'], ['#26890c', 'Green'], ['#7d7f1f', 'Olive'],
+  ['#12a4a0', 'Teal'], ['#7fd6ff', 'Sky blue'], ['#1f8bff', 'Blue'], ['#233fb5', 'Navy'], ['#c13ac1', 'Purple'],
+  ['#b9a0ff', 'Lavender'], ['#ff7eb6', 'Pink'],
+  ['#fad8bd', 'Fair skin'], ['#eeb485', 'Light skin'], ['#d38e55', 'Medium skin'], ['#9c5c32', 'Tan skin'],
+  ['#653a23', 'Brown skin'], ['#3a2218', 'Deep skin'],
+  ['#ffffff', 'Eraser'],
 ];
 const COLOURS = new Set(PALETTE.map(([c]) => c));
 const SIZE_LIST = [3, 8, 18, 36];
