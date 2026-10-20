@@ -43,6 +43,65 @@ function choosingHasNoClock() {
   assert.equal(g.phase, 'choosing');
 }
 
+// --- searching (when the host allowed it) ---------------------------------------------------
+
+function searchable() {
+  const g = draw.createDrawGame({ order: ['p1', 'p2', 'p3'], rounds: 2, drawSeconds: 80, allowSearch: true });
+  draw.offerChoices(g, [head('Pikachu'), head('Bowser Koopa'), head('Combat Carl')], T0);
+  return g;
+}
+
+function searchingIsOffUnlessTheHostAllowedIt() {
+  const g = started();
+  assert.match(draw.addSearched(g, 'p1', head('Samus Aran')).error, /isn't on/);
+  assert.equal(g.choices.length, 3);
+  assert.equal(draw.viewFor(g, 'p1', names, T0).canSearch, false);
+}
+
+// A found character joins the choices, so picking it is the same `choose`, with the same checks.
+function aDrawerCanDrawSomeoneTheySearchedFor() {
+  const g = searchable();
+  assert.equal(draw.viewFor(g, 'p1', names, T0).canSearch, true);
+  assert.equal(draw.viewFor(g, 'p2', names, T0).canSearch, false, 'only the drawer');
+  const res = draw.addSearched(g, 'p1', head('Samus Aran'));
+  assert.deepEqual(res, { ok: true, index: 3 });
+  const mine = draw.viewFor(g, 'p1', names, T0);
+  assert.equal(mine.choices[3].name, 'Samus Aran');
+  assert.equal(mine.choices[3].searched, true);
+  assert.ok(!JSON.stringify(draw.viewFor(g, 'p2', names, T0)).includes('Samus'), 'a guesser is never sent it');
+  assert.equal(draw.choose(g, 'p1', res.index, T0).ok, true);
+  assert.equal(g.character.name, 'Samus Aran');
+  assert.ok(g.used.includes('Samus Aran'));
+}
+
+function anotherSearchReplacesTheLastAndNewChoicesDropIt() {
+  const g = searchable();
+  draw.addSearched(g, 'p1', head('Samus Aran'));
+  assert.deepEqual(draw.addSearched(g, 'p1', head('Link')), { ok: true, index: 3 });
+  assert.deepEqual(g.choices.map((c) => c.name), ['Pikachu', 'Bowser Koopa', 'Combat Carl', 'Link']);
+  draw.rerollChoices(g, 'p1', [head('Mario'), head('Luigi'), head('Peach Toadstool')], T0);
+  assert.equal(g.choices.some((c) => c.searched), false);
+}
+
+// The same keys the guess-checker judges with: "Spiderman" is no second go at "Spider-Man".
+function aSearchCannotRepeatSomeoneAlreadyDrawnAndFindsOneOfTheThree() {
+  const g = draw.createDrawGame({ order: ['p1', 'p2'], rounds: 2, drawSeconds: 80, allowSearch: true });
+  draw.offerChoices(g, [head('Spider-Man'), head('Bowser Koopa'), head('Combat Carl')], T0);
+  draw.choose(g, 'p1', 0, T0);
+  draw.offerChoices(g, [head('Pikachu'), head('Bowser Koopa'), head('Combat Carl')], T0); // a later turn
+  assert.match(draw.addSearched(g, 'p1', head('Spiderman')).error, /already been drawn/);
+  assert.deepEqual(draw.addSearched(g, 'p1', head('pikachu')), { ok: true, index: 0 }, 'one of the three: that one');
+  assert.equal(g.choices.length, 3);
+}
+
+function onlyTheDrawerSearchesAndOnlyWhileChoosing() {
+  const g = searchable();
+  assert.match(draw.addSearched(g, 'p2', head('Samus Aran')).error, /not your turn/);
+  draw.choose(g, 'p1', 0, T0);
+  assert.match(draw.addSearched(g, 'p1', head('Samus Aran')).error, /Nothing to choose/);
+  assert.equal(draw.viewFor(g, 'p1', names, T0).canSearch, false);
+}
+
 // --- guessing ------------------------------------------------------------------------------
 
 function aCorrectGuessScoresByHowFastItCame() {
@@ -567,6 +626,11 @@ function onlyTheDrawerHearsAboutRerolls() {
 module.exports = {
   'only the drawer chooses, and only from the three': onlyTheDrawerChoosesAndOnlyFromTheThree,
   'choosing has no clock': choosingHasNoClock,
+  'searching is off unless the host allowed it': searchingIsOffUnlessTheHostAllowedIt,
+  'a drawer can draw someone they searched for': aDrawerCanDrawSomeoneTheySearchedFor,
+  'another search replaces the last, and New Choices drop it': anotherSearchReplacesTheLastAndNewChoicesDropIt,
+  'a search cannot repeat someone already drawn, and finds one of the three': aSearchCannotRepeatSomeoneAlreadyDrawnAndFindsOneOfTheThree,
+  'only the drawer searches, and only while choosing': onlyTheDrawerSearchesAndOnlyWhileChoosing,
   'a correct guess scores by how fast it came': aCorrectGuessScoresByHowFastItCame,
   'a close guess is hidden from guessers, but the drawer sees every guess': aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess,
   'one word of the name is never enough without a pool': oneWordOfTheNameIsNeverEnoughWithoutAPool,

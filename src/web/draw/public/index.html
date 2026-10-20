@@ -188,6 +188,14 @@
       #chooseOverlay > p.hint { display:none; }
     }
     .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    /* The drawer's Search (when the host allowed it) puts the header on a second line in a narrow
+       canvas, where the overlay was already exactly full with the pictures at their smallest. So
+       the header's wrap gap tightens from 14px, and the pictures' floor drops from 3rem to 2.5rem
+       (still a face): measured, that is what a 375px phone and a 1010px window needed to fit. */
+    @container (max-width: 30rem) {
+      #chooseOverlay:has(#searchChoiceBtn:not([hidden])) .choosehead { row-gap:6px; }
+      #chooseOverlay:has(#searchChoiceBtn:not([hidden])) .pick .art { height:clamp(2.5rem, calc(75cqw - 15rem), 9rem); }
+    }
     .pick .art img { width:100%; height:100%; object-fit:contain; }
     /* The pick, confirmed. Sized to the phone first: a 16px gutter, and it scrolls inside itself
        rather than off the bottom when the keyboard takes half the screen. */
@@ -487,6 +495,11 @@
             </select>
           </div>
         </div>
+        <!-- Classic only: hidden for Telephone, like Rounds. The style is the pool picker's row. -->
+        <label class="pp-row" id="searchField">
+          <input type="checkbox" id="searchToggle" />
+          <span class="pp-rowname">Drawers can search for any character<br /><span class="hint">Beside the three choices, the drawer can look anyone up</span></span>
+        </label>
         <button id="startBtn" class="good wide">Start Drawing</button>
         <p class="err" id="lobbyErr" role="alert"></p>
       </div>
@@ -531,6 +544,8 @@
             <div class="choosehead">
               <h2>Pick one to draw</h2>
               <button id="rerollChoicesBtn" class="alt">New Choices</button>
+              <!-- Only when the host allowed it. A dialog, not a box in here: there is no room. -->
+              <button id="searchChoiceBtn" class="alt" hidden>Search</button>
             </div>
             <div class="pick" id="pick"></div>
             <p class="hint">Draw it, don't write it. You score for everyone who gets it.</p>
@@ -603,6 +618,18 @@
         <button type="submit" id="confirmGo" autofocus>Start Drawing</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- The drawer's search, when the host allowed it: find anyone, then the same dialog as a choice. -->
+  <dialog class="card confirmpick" id="searchPick" aria-labelledby="searchTitle">
+    <h2 id="searchTitle">Draw Someone Else</h2>
+    <label for="searchInput">Search for a character</label>
+    <input id="searchInput" maxlength="60" autocomplete="off" placeholder="e.g. Pikachu" />
+    <p class="err" id="searchErr" role="alert"></p>
+    <div id="searchResults"></div>
+    <div class="confirmactions">
+      <button type="button" class="ghost" id="searchBack">Back</button>
+    </div>
   </dialog>
 
   <!-- Telephone (tel.js): one screen for the whole game -- the step's task (pick, draw, guess),

@@ -1163,6 +1163,53 @@ const connect = (playerId) => {
     T1.close(); T2.close(); T3.close();
   }
 
+  // ---- Draw: the drawer searches for a character, when the host allowed it -----------------------
+  console.log('\n# draw — the drawer searches');
+  {
+    const startSearchGame = async (tag, search) => {
+      const A = await connectDraw(`${tag}A`);
+      const code = (await A.emitWithAck('room:create', { nickname: 'Ada' })).state.code;
+      const B = await connectDraw(`${tag}B`);
+      await B.emitWithAck('room:join', { code, nickname: 'Bo' });
+      const aView = nextMatching(A, 'draw:state', (v) => v.phase === 'choosing');
+      const bView = nextMatching(B, 'draw:state', (v) => v.phase === 'choosing');
+      const r = await A.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60, search });
+      const views = { [pub(`${tag}A`)]: await aView, [pub(`${tag}B`)]: await bView };
+      // Whoever draws first, as the server says -- not assumed to be the host.
+      const drawerId = Object.keys(views).find((id) => views[id].isDrawer);
+      const [D, G] = drawerId === pub(`${tag}A`) ? [A, B] : [B, A];
+      return { ok: r.ok, A, B, D, G, view: views[drawerId], guestView: views[drawerId === pub(`${tag}A`) ? pub(`${tag}B`) : pub(`${tag}A`)] };
+    };
+
+    const off = await startSearchGame('sOff', false);
+    check(off.ok && off.view.canSearch === false, 'draw search: off unless the host turns it on');
+    check(!(await off.D.emitWithAck('draw:search', { name: 'Anyone' })).ok, 'draw search: a room without it refuses a search');
+    off.A.close(); off.B.close();
+
+    const on = await startSearchGame('sOn', true);
+    check(on.ok && on.view.canSearch === true && on.guestView.canSearch === false, 'draw search: on for the drawer, and only the drawer');
+    check(!(await on.G.emitWithAck('draw:search', { name: 'Anyone' })).ok, 'draw search: a guesser cannot search');
+    check(!(await on.D.emitWithAck('draw:search', { id: 999999999 })).ok, 'draw search: an id that is no character is refused');
+    // Someone from the library who is not among the three dealt, found by id as the client sends it.
+    const offered = new Set(on.view.choices.map((c) => c.name));
+    const wanted = SEEDED_NAMES.find((n) => !offered.has(n));
+    const row = characterLists.searchCharactersInScope(process.env.WEB_SCOPE, wanted, 5).find((c) => c.name === wanted);
+    const withIt = nextMatching(on.D, 'draw:state', (v) => v.choices?.some((c) => c.name === wanted));
+    res = await on.D.emitWithAck('draw:search', { id: row.id });
+    const v = await Promise.race([withIt, wait(2000).then(() => null)]);
+    check(res.ok && v?.choices[res.index]?.name === wanted && v.choices[res.index].searched === true,
+      `draw search: a found character becomes a choice (${wanted}, choice ${res.index})`);
+    check(!on.G.received.some((e) => e.event === 'draw:state' && e.json.includes(wanted)), 'draw search: the guesser is never sent who it is');
+    // A name typed in replaces it, with no picture.
+    res = await on.D.emitWithAck('draw:search', { name: 'Grandma Jean' });
+    check(res.ok && res.index === 3, 'draw search: a typed name replaces the last search');
+    const drawingNow = nextMatching(on.D, 'draw:state', (s) => s.phase === 'drawing');
+    check((await on.D.emitWithAck('draw:choose', { index: res.index })).ok, 'draw search: picking it is an ordinary choice');
+    const d = await Promise.race([drawingNow, wait(2000).then(() => null)]);
+    check(d?.character?.name === 'Grandma Jean', 'draw search: and that is who is drawn');
+    on.A.close(); on.B.close();
+  }
+
   // ---- Draw: the host removes a player ----------------------------------------------------------
   // Someone who walks away keeps their seat, and every turn of theirs runs a full clock with nobody
   // drawing. Mid-game a removal is a departure: the turn ends if it was theirs, and below two

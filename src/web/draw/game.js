@@ -31,7 +31,7 @@
 // Once you have it -- and for the drawer, always -- what you type goes only to the others who
 // know, because it may well contain the answer.
 
-const { judgeGuess, maskNameWords } = require('../../compendium/answers');
+const { judgeGuess, maskNameWords, identityKeys } = require('../../compendium/answers');
 const { normalizeLoose } = require('../../compendium/text');
 const { publicCharacter } = require('../publicCharacter');
 const gallery = require('./gallery');
@@ -108,10 +108,12 @@ const DRAWER_PER_GUESS = 60;
  * @param {(character) => object} [args.castOf]  the names a character must be told apart from --
  *   their own show's cast, as answers.poolIndex. What lets one word of a name count. Injected, so
  *   these rules need no database; without it, nothing short of a full name is ever correct.
+ * @param {boolean} [args.allowSearch]  the host let drawers search for any character (addSearched)
  */
-function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null, categoryKnown = false }) {
+function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null, categoryKnown = false, allowSearch = false }) {
   return {
     castOf,
+    allowSearch,
     // The room plays one category, so the kind of work is no hint: shown from the start.
     categoryKnown,
     order: [...order],
@@ -262,6 +264,36 @@ function choose(g, playerId, index, now, alsoAccept = '', shownAs = null) {
   g.startedAt = now;
   g.deadline = now + g.drawSeconds * 1000;
   return { ok: true };
+}
+
+/**
+ * The drawer, in a room whose host allowed it, draws someone they searched for instead of one of
+ * the three. It joins the choices rather than having a path of its own, so picking it IS picking a
+ * choice: the same dialog (what will count, the spellings) and the same `choose`, which already
+ * checks the turn, the drawer and the index. One searched choice at a time; another search
+ * replaces it, and New Choices drops it with the rest.
+ *
+ * Refused if it was drawn already this game -- by identityKeys, the keys the guess-checker judges
+ * with, so "Spiderman" is not a second go at "Spider-Man". Already one of the three: that one.
+ *
+ * @param {object} character  a head the caller resolved itself (never a client's own description)
+ * @returns {{ok: false, error: string} | {ok: true, index: number}} the choice to open
+ */
+function addSearched(g, playerId, character) {
+  if (isPaused(g)) return PAUSED;
+  if (!g.allowSearch) return { ok: false, error: "Searching isn't on in this room." };
+  if (g.phase !== 'choosing') return { ok: false, error: 'Nothing to choose right now.' };
+  if (playerId !== drawerOf(g)) return { ok: false, error: "It's not your turn to draw." };
+  if (!character?.name) return { ok: false, error: 'No such character.' };
+  const keys = new Set(identityKeys(character.name));
+  const same = (name) => identityKeys(name).some((k) => keys.has(k));
+  if (g.used.some(same)) return { ok: false, error: `${character.name} has already been drawn this game.` };
+  const dealt = g.choices.filter((c) => !c.searched);
+  g.choices = dealt;
+  const already = dealt.findIndex((c) => same(c.name));
+  if (already >= 0) return { ok: true, index: already };
+  g.choices = [...dealt, { ...character, searched: true }];
+  return { ok: true, index: g.choices.length - 1 };
 }
 
 /**
@@ -619,8 +651,11 @@ function viewFor(g, viewerId, names, now = Date.now()) {
             ...publicCharacter(c),
             accepts: acceptedNames(g, c),
             swapped: spellingsFor(c.name, [], { swap: ROMANISED.has(c.origin?.category) })[1] ?? null,
+            // Found by search (addSearched): opened straight into the dialog, not shown as a fourth card.
+            searched: !!c.searched,
           }))
         : null,
+    canSearch: isDrawer && g.phase === 'choosing' && !!g.allowSearch,
     // -1 unlimited. Only the drawer has anything to reroll.
     rerollsLeft: isDrawer && g.phase === 'choosing' ? g.rerollsLeft : null,
     character: answerShown && g.character ? publicCharacter(g.character) : null,
@@ -675,6 +710,7 @@ module.exports = {
   choose,
   rerollChoices,
   rerollExclusions,
+  addSearched,
   say,
   revealDueHints,
   hintTimes,

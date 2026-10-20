@@ -236,7 +236,9 @@ function attachDrawSockets(nsp, { registry }) {
     const drawSeconds = DRAW_SECONDS.includes(Number(config.drawSeconds)) ? Number(config.drawSeconds) : 80;
     const difficulty = config.difficulty || web.DEFAULT_DIFFICULTY;
     const mode = config.mode === 'telephone' ? 'telephone' : 'classic';
-    room.drawSettings = { mode, listIds, label, difficulty, rounds, drawSeconds, poolType: config.poolType, category: config.category, categories: config.categories };
+    // Classic only: Telephone's pick is a different step, and it is not drawing for a room to guess.
+    const search = mode === 'classic' && !!config.search;
+    room.drawSettings = { mode, listIds, label, difficulty, rounds, drawSeconds, search, poolType: config.poolType, category: config.category, categories: config.categories };
     if (mode === 'telephone') return startTelephone(room, label);
     // A character's show, indexed by word the first time one of its characters is drawn: a guess of
     // one word counts only when nobody else in that show shares it (see game.js).
@@ -249,7 +251,7 @@ function attachDrawSockets(nsp, { registry }) {
     // One category in the whole pool, however the host got there (picked it, Surprise Me, or lists
     // that happen to share one): the kind of work is no hint, so it shows from the start.
     const categoryKnown = web.content.categoryCount(listIds) === 1;
-    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf, categoryKnown });
+    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf, categoryKnown, allowSearch: search });
     if (!dealChoices(room, Date.now())) {
       room.game = null;
       return { ok: false, error: `${label} has no characters at this difficulty.` };
@@ -412,6 +414,34 @@ function attachDrawSockets(nsp, { registry }) {
         emitViews(r);
         schedule(r);
       }
+    });
+
+    // A character the drawer searched for (game.js addSearched), when the host allowed it: by id from
+    // the library, looked up again here in the web's own scope -- never a client's own description of
+    // one -- or a name typed in, which has no picture. Not limited to the room's pool: searching is
+    // an explicit choice, as the host's picker is (/api/browse/search, which the client asks).
+    socket.on('draw:search', ({ id, name } = {}, ack) => {
+      if (!dealBudget(socket)) return ack?.(SLOW_DOWN);
+      const r = room();
+      if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
+      const g = r.game;
+      // Before the lookup, so a stranger's requests cannot make the server search for them.
+      if (!g.allowSearch) return ack?.({ ok: false, error: "Searching isn't on in this room." });
+      if (g.phase !== 'choosing' || draw.drawerOf(g) !== playerId) return ack?.({ ok: false, error: "It's not your turn to choose." });
+      let row;
+      if (id != null) {
+        row = Number.isInteger(Number(id)) ? web.content.characterById(Number(id)) : null;
+        if (!row) return ack?.({ ok: false, error: 'No such character.' });
+      } else {
+        const typed = String(name ?? '').trim().slice(0, 60);
+        if (!typed.replace(/[^\p{L}\p{N}]/gu, '')) return ack?.({ ok: false, error: 'Type a name first.' });
+        row = web.content.freeform(typed);
+      }
+      const res = draw.addSearched(g, playerId, headOf(row));
+      // The views first, then the answer: the client opens the dialog on the answer, from a view that
+      // already holds the new choice (one socket delivers in order).
+      if (res.ok) emitViews(r);
+      ack?.(res);
     });
 
     socket.on('draw:say', ({ text } = {}, ack) => {

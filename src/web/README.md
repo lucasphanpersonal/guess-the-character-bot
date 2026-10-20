@@ -24,7 +24,11 @@ And a second game, **Draw the Character** (`/draw/`), for a whole party: a room 
 (`MAX_PLAYERS_BY_KIND` in `rooms.js`), where Guess the Character keeps the core's 8. Each round, everyone draws once in seat
 order: the drawer picks one of three characters, taking as long as they like (no clock; a drawer
 who walks away is the host's to remove) — or asks for three new ones, as often as they like, never
-repeating a face already offered. Picking one opens a dialog listing what guessers can type and
+repeating a face already offered. If the host ticked **Drawers can search for any character**
+(classic only, off by default), the drawer also gets **Search**: anyone in the library, by the
+host-picks search (or a name typed in), sent by id and looked up again by the server, refused if
+already drawn this game (`game.js addSearched`). It becomes one more choice, so it opens the same
+dialog and is picked by the same `draw:choose`. Picking one opens a dialog listing what guessers can type and
 be right, with a box for other names the drawer will accept ("Endeavor" for Todoroki Enji, another
 sub's spelling), and which of them the blanks spell out: the name, its words the other way round
 for an Anime or Manga name ("Rock Lee" for the library's "Lee Rock"), or any name typed in — the

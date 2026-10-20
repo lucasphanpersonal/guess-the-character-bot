@@ -262,9 +262,14 @@ socket.on('room:kicked', ({ reason } = {}) => {
 let drawMode = store.get('gtc_draw_mode') === 'telephone' ? 'telephone' : 'classic';
 function renderModes() {
   for (const b of document.querySelectorAll('#modes [data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === drawMode));
-  // Telephone has no rounds: every chain goes once round the table.
+  // Telephone has no rounds: every chain goes once round the table. Nor a drawer's search (classic).
   $('roundsField').hidden = drawMode === 'telephone';
+  $('searchField').hidden = drawMode === 'telephone';
 }
+// Whether drawers may search for any character: off unless a host turns it on, then remembered
+// in this browser like the mode.
+$('searchToggle').checked = store.get('gtc_draw_search') === '1';
+$('searchToggle').addEventListener('change', () => store.set('gtc_draw_search', $('searchToggle').checked ? '1' : '0'));
 $('modes').addEventListener('click', (e) => {
   const b = e.target.closest('[data-mode]');
   if (!b) return;
@@ -299,6 +304,7 @@ $('startBtn').addEventListener('click', () => {
       rounds: Number($('roundsSelect').value),
       drawSeconds: Number($('timeSelect').value),
       mode: drawMode,
+      search: $('searchToggle').checked,
     },
     (res) => {
       $('startBtn').disabled = false;
@@ -464,10 +470,15 @@ function renderGame(turnChanged) {
   // The confirm dialog is for one choice of one turn: gone with the turn (picked, the game over,
   // removed by the host) or with the choice itself.
   if (confirming && !(v.phase === 'choosing' && v.isDrawer && v.choices?.[confirming.index]?.name === confirming.name)) closeConfirm();
+  // The search belongs to choosing, like the dialog it leads to.
+  if ($('searchPick').open && !v.canSearch) $('searchPick').close();
   if (v.phase === 'choosing' && v.isDrawer) {
+    // A character found by search is a choice too, but opened straight into the dialog rather than
+    // shown as a fourth card: the overlay is inside the canvas and has room for three.
     $('pick').innerHTML = v.choices
-      .map((c, i) => `<button data-i="${i}"><div class="art">${characterArt(c)}</div><span>${esc(c.name)}</span><span class="hint" title="${esc(c.source)}">${esc(c.source)}</span></button>`)
+      .map((c, i) => (c.searched ? '' : `<button data-i="${i}"><div class="art">${characterArt(c)}</div><span>${esc(c.name)}</span><span class="hint" title="${esc(c.source)}">${esc(c.source)}</span></button>`))
       .join('');
+    $('searchChoiceBtn').hidden = !v.canSearch;
     $('rerollChoicesBtn').disabled = v.rerollsLeft === 0;
     $('rerollChoicesBtn').textContent = v.rerollsLeft > 0 ? `New Choices (${v.rerollsLeft} Left)` : 'New Choices';
   }
@@ -642,6 +653,29 @@ $('pick').addEventListener('click', (e) => {
   const b = e.target.closest('[data-i]');
   if (b) openConfirm(Number(b.dataset.i));
 });
+
+// The drawer's search (when the host allowed it). The character search the host's picker uses,
+// asking /api/browse/search; a result is sent by id, so the server looks it up again itself. What
+// comes back is the index of a choice holding it, opened in the same dialog as any of the three --
+// the views arrive before the answer, so the choice is already in `view` (socket.js draw:search).
+if (window.GTCPickers) {
+  window.GTCPickers.characterSearch($('searchInput'), $('searchResults'), (found) => {
+    $('searchErr').textContent = '';
+    socket.emit('draw:search', found.typed ? { name: found.name } : { id: found.id }, (res) => {
+      if (!res?.ok) return ($('searchErr').textContent = res?.error || 'Could not pick that one.');
+      $('searchPick').close();
+      openConfirm(res.index);
+    });
+  });
+}
+$('searchChoiceBtn').addEventListener('click', () => {
+  $('searchErr').textContent = '';
+  $('searchInput').value = '';
+  $('searchResults').innerHTML = '';
+  $('searchPick').showModal();
+  $('searchInput').focus();
+});
+$('searchBack').addEventListener('click', () => $('searchPick').close());
 
 $('rerollChoicesBtn').addEventListener('click', () => {
   const b = $('rerollChoicesBtn');
