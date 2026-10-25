@@ -175,10 +175,15 @@ $('viewerSave').addEventListener('click', () => {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10_000);
   };
-  // On a phone the share sheet is where Save to Photos lives; a download lands in Files, where
-  // nobody looks for a picture. A computer downloads. Cancelling the sheet is not a failure.
+  // On an iPhone or iPad the share sheet is where Save Image (to Photos) lives; a download lands in
+  // Files, where nobody looks for a picture. Everywhere else downloads -- Android included, whose
+  // share sheet usually has no save at all (it sends the picture to an app), while a download goes
+  // to Downloads, which the gallery shows. It once keyed on "a touchscreen", so Android's Save
+  // opened a share menu. iPadOS reports itself as a Mac, hence the touch-point test. Cancelling
+  // the sheet is not a failure.
+  const apple = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const asFile = typeof File === 'function' ? new File([blob], `${file}.png`, { type: 'image/png' }) : null;
-  if (asFile && matchMedia('(pointer: coarse)').matches && navigator.canShare?.({ files: [asFile] })) {
+  if (asFile && apple && navigator.canShare?.({ files: [asFile] })) {
     navigator.share({ files: [asFile] }).catch((e) => {
       if (e?.name !== 'AbortError') download();
     });

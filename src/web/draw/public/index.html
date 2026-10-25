@@ -94,10 +94,11 @@
     #roundsField[hidden] { display:none; }
     @media (max-width: 560px) { .modes { grid-template-columns:1fr; } }
 
-    /* Telephone. The picture as large as the window allows below the prompt, like the classic one. */
+    /* Telephone. The picture as large as the window allows below the prompt, like the classic one --
+       and in svh for the same reason: dvh resized it as an iPhone's toolbar came and went. */
     .telgrid { display:grid; grid-template-columns:minmax(0,1fr) 15rem; gap:18px; align-items:start; }
     @media (max-width: 1000px) { .telgrid { grid-template-columns:1fr; } }
-    .telmain > div { max-width:max(20rem, calc((100dvh - 24rem) * 4 / 3)); margin-inline:auto; }
+    .telmain > div { max-width:max(20rem, calc((100svh - 24rem) * 4 / 3)); margin-inline:auto; }
     .telmain > #telReplay, .telmain > #telAlbum { max-width:none; }
     .telprompt { font-family:var(--font-display); font-size:1.4rem; font-weight:800; text-align:center; overflow-wrap:anywhere; }
     .telprompt b { font-weight:900; font-size:1.15em; }
@@ -353,8 +354,10 @@
       .refcard { order:1; }
       /* Full width on a phone, but in a wide one-column window a 4:3 picture as wide as the page
          is taller than the screen and pushes the drawer's tools off the bottom. So no wider than
-         the height left over allows: ~31rem is the title, blanks, reference and tools together. */
-      .drawgrid > :not(.side):not(.chat) { order:2; width:100%; max-width:max(20rem, calc((100dvh - 31rem) * 4 / 3)); justify-self:center; }
+         the height left over allows: ~31rem is the title, blanks, reference and tools together.
+         svh, not dvh: dvh follows Safari's toolbar as it hides and shows on scroll, so on an iPhone
+         the canvas changed width -- and redrew -- every time anyone scrolled. svh holds still. */
+      .drawgrid > :not(.side):not(.chat) { order:2; width:100%; max-width:max(20rem, calc((100svh - 31rem) * 4 / 3)); justify-self:center; }
       .chat { order:3; height:20rem; }
       .players { order:4; display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); }
       /* The reference as a strip beside its name, not a 13rem panel above the canvas. Still a
