@@ -109,10 +109,14 @@ const DRAWER_PER_GUESS = 60;
  *   their own show's cast, as answers.poolIndex. What lets one word of a name count. Injected, so
  *   these rules need no database; without it, nothing short of a full name is ever correct.
  * @param {boolean} [args.allowSearch]  the host let drawers search for any character (addSearched)
+ * @param {(key: string) => boolean} [args.knownName]  whether a guess is exactly some character's
+ *   name, anywhere in the library (content.knownName): a typo that IS somebody's name is a guess at
+ *   them, not a slip. Injected like castOf; without it only the show's own cast is checked.
  */
-function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null, categoryKnown = false, allowSearch = false }) {
+function createDrawGame({ order, rounds = 3, drawSeconds = 80, castOf = null, categoryKnown = false, allowSearch = false, knownName = null }) {
   return {
     castOf,
+    knownName,
     allowSearch,
     // The room plays one category, so the kind of work is no hint: shown from the start.
     categoryKnown,
@@ -175,6 +179,11 @@ const judging = (g, character) => ({
   others: g.castOf?.(character) ?? [],
   // Anime and Manga names are romanised from Japanese: "Tanjiro" is "Tanjirou" there.
   romanised: ROMANISED.has(character.origin?.category),
+  // A slip of the keyboard counts ("Hermoine Granger"): close here is only a hint, so a guesser who
+  // plainly knew it scored nothing for a typo. answers.js says how small, and never another name in
+  // the show ("Maria" for Mario stays close where both are in it) or in the library at all.
+  acceptTypos: true,
+  knownName: g.knownName,
 });
 
 /**
@@ -355,8 +364,8 @@ function say(g, playerId, text, now) {
   const { romanised } = opts;
   let { verdict } = judgeGuess(clean, g.character.name, opts);
   // A name the drawer said they would accept counts as the name -- as a whole name (any order,
-  // case or accents), not word by word: they typed exactly what they meant.
-  if (verdict !== 'correct' && (g.alsoAccept ?? []).some((name) => judgeGuess(clean, name, { romanised }).verdict === 'correct')) {
+  // case, accents, or a small typo), not word by word: they typed exactly what they meant.
+  if (verdict !== 'correct' && (g.alsoAccept ?? []).some((name) => judgeGuess(clean, name, { romanised, acceptTypos: true, knownName: g.knownName }).verdict === 'correct')) {
     verdict = 'correct';
   }
   if (verdict === 'correct') {

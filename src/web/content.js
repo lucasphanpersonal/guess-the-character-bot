@@ -10,6 +10,28 @@
 // id, which meant reading -- and risking writing -- that server's selection.
 
 const characterLists = require('../compendium/characterLists');
+const { answerForms } = require('../compendium/answers');
+
+// Every form of every name the web can see, as the checker compares them. ~0.13s to build over the
+// library, so it is built when a game that uses it starts up (warmKnownNames) and rebuilt every ten
+// minutes off a timer -- never inside somebody's guess, on the event loop every room shares -- so a
+// list added from Discord is known soon after without a restart.
+const KNOWN_REFRESH_MS = 10 * 60 * 1000;
+let known = null;
+const buildKnown = () => {
+  known = new Set(characterLists.getAllCharacterNames(characterLists.WEB_SCOPE).flatMap((n) => answerForms(n).exact));
+};
+function knownNames() {
+  if (!known) buildKnown();
+  return known;
+}
+let refresher = null;
+function warmKnownNames() {
+  knownNames();
+  if (refresher) return;
+  refresher = setInterval(buildKnown, KNOWN_REFRESH_MS);
+  refresher.unref?.();
+}
 
 // Resolved in the compendium, because /list create in Discord switches new lists on for this
 // same scope. Curate its selection with `npm run select:lists`.
@@ -31,6 +53,9 @@ const content = {
   // counts as the whole of it when nobody else in the pool has that word, or everyone who does is
   // far less famous (answers.poolIndex).
   castOf: (listIds) => characterLists.getCharactersForLists(listIds).map((c) => ({ name: c.name, fame: c.fame })),
+  // Whether a guess is exactly some character's name anywhere in the library (answers.judgeGuess
+  // knownName): a typo that IS somebody's name is a guess at them. See knownNames below.
+  knownName: (guessKey) => knownNames().has(guessKey),
   // A list's category -- which tells the checker whether its names are romanised from Japanese.
   categoryOf: (listId) => characterLists.getListsByIds([listId], null)[0]?.category ?? null,
   // How many categories a pool spans: one, and everyone in the room already knows which.
@@ -161,4 +186,5 @@ module.exports = {
   toggleList,
   setListsPlaying,
   keepListsOff,
+  warmKnownNames,
 };

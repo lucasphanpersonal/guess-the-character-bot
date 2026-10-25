@@ -796,6 +796,22 @@ function searchCharactersInScope(scope, query, limit = 25) {
     );
 }
 
+/**
+ * Every character name `scope` can see, each once. For the guess-checker's "a typo that IS
+ * somebody's name is not a typo" (answers.judgeGuess knownName): measured on the library, 7,583
+ * names sit one letter from a different character's -- "Banjo" and "Bando", "Sanji" and "Wan Ji".
+ */
+function getAllCharacterNames(scope) {
+  return db
+    .prepare(
+      `SELECT DISTINCT ch.name FROM characters ch
+         JOIN character_lists cl ON cl.id = ch.list_id
+        WHERE ${VISIBLE}`
+    )
+    .all(scope)
+    .map((r) => r.name);
+}
+
 // Scoped on purpose: the id comes back from an autocomplete value or a web request, which is
 // client-supplied and so cannot be trusted to be one this scope can see.
 function getCharacterById(scope, id) {
@@ -873,4 +889,5 @@ module.exports = {
   searchCharactersInLists,
   searchCharactersInScope,
   getCharacterById,
+  getAllCharacterNames,
 };

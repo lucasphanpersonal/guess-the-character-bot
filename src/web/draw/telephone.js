@@ -34,10 +34,13 @@ const stepKind = (step) => (step === 0 ? 'pick' : step % 2 === 1 ? 'draw' : 'gue
  * @param {number} args.drawSeconds    each drawing step
  * @param {Map} args.choices           playerId -> CHOICES characters to start a chain from
  */
-function createTelephone({ order, drawSeconds = 80, choices = new Map() }) {
+// `knownName`: the library's names (content.knownName), so a final guess that is somebody else's
+// name is not taken for a typo of the start. Injected, like the classic game's cast.
+function createTelephone({ order, drawSeconds = 80, choices = new Map(), knownName = null }) {
   const n = order.length;
   return {
     mode: 'telephone',
+    knownName,
     order: [...order],
     gone: new Set(),
     drawSeconds,
@@ -172,11 +175,12 @@ function toReplay(t) {
   t.deadline = null;
   t.replay = { chain: 0, shown: 1 };
   // Did the name survive? The last guess against where the chain started, by the same checker the
-  // classic game uses -- a first name or a dominant surname still counts.
+  // classic game uses -- a first name or a dominant surname still counts, and so does a small typo
+  // ("Hermoine Granger" made it).
   for (const chain of t.chains) {
     const start = chain.entries[0]?.text;
     const last = [...chain.entries].reverse().find((e) => e?.kind === 'guess' && !e.blank && !e.skipped);
-    chain.madeIt = !!(start && last && judgeGuess(last.text, start, { singleWords: true }).verdict === 'correct');
+    chain.madeIt = !!(start && last && judgeGuess(last.text, start, { singleWords: true, acceptTypos: true, knownName: t.knownName }).verdict === 'correct');
   }
   return t;
 }

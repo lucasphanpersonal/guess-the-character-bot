@@ -999,11 +999,14 @@ const connect = (playerId) => {
     const rv = await Promise.race([runningView, wait(2000).then(() => null)]);
     check(res.ok && rv && rv.secondsLeft >= pv.secondsLeft - 1, `draw pause: Continue picks up where it stopped (${pv.secondsLeft}s, then ${rv?.secondsLeft}s)`);
   }
-  const typoDraw = drawAnswer.slice(0, -1) + (drawAnswer.endsWith('x') ? 'y' : 'x');
+  // The name with more besides: close whatever was dealt. (A TYPO was the close guess here, but in
+  // Draw a small one now counts -- and whether one does depends on the name's length, so a check
+  // built on it passed or failed by the deal. Typos are answers.test.js and draw.test.js's.)
+  const typoDraw = `${drawAnswer} perhaps`;
   const drawerSeesClose = nextMatching(P, 'draw:state', (v) => v.chat.some((m) => m.text === typoDraw));
   const qSince = Q.received.length;
   res = await Q.emitWithAck('draw:say', { text: typoDraw });
-  check(res.ok && res.verdict === 'close', 'a typo is close');
+  check(res.ok && res.verdict === 'close', 'a near miss is close');
   // Raced against a clock: before this was fixed the drawer was never sent it, and a bare wait hangs.
   const closeView = await Promise.race([drawerSeesClose, wait(2000).then(() => null)]);
   const closeLine = closeView?.chat.find((m) => m.text === typoDraw);

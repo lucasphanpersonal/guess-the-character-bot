@@ -167,8 +167,18 @@ verdicts:
 | **close** | Something a person should look at: a title stripped off (`Leia` for Princess Leia, but also `America` for Captain America), a word other characters share (`Uzumaki`), a typo or two, or the right name with extra words. |
 | **wrong** | Everything else. |
 
+**Typos, where a game turns them on.** Draw does (`acceptTypos`), because there "close" is only a
+hint, and a guesser who plainly knew the answer used to score nothing for `Hermoine Granger`. The
+computer guessing game doesn't: there a close guess goes to the other players to rule on. A typo
+counts as correct when it is small (one slip from five letters, two from ten — nothing below five,
+where `Mira` and `Mara` are two people), on a form that would have counted itself (not a stripped
+title, not a shared surname), and is not another character's name. That means anyone within a typo
+of it in the same show, and anyone in the library with exactly that name: 7,583 names sit one letter
+from a different character's (`Banjo` and Elfen Lied's `Bando`). Measured over the 500 best-known
+characters, a swap of two letters used to count 4 times; it now counts 486.
+
 Run against every character in the compendium, it never accepts one character's full name for a
-different character's. The same rules decide which two names are one character when a game is
+different character's — with typos accepted, too. The same rules decide which two names are one character when a game is
 dealt, so nobody is dealt "Noelle Silva" while somebody else wears "Silva Noelle".
 
 ## Where a character is from

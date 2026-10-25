@@ -107,6 +107,9 @@ function cleanPiece(piece = {}) {
 }
 
 function attachDrawSockets(nsp, { registry }) {
+  // The library's names, for "a typo that is somebody's name is not a typo" (game.js judging):
+  // indexed now, at start-up, rather than inside the first guess of the first game.
+  web.warmKnownNames();
   const broadcastRoom = (room) => room && nsp.to(room.code).emit('room:state', stateOf(room));
 
   const socketsIn = (room) => {
@@ -251,7 +254,7 @@ function attachDrawSockets(nsp, { registry }) {
     // One category in the whole pool, however the host got there (picked it, Surprise Me, or lists
     // that happen to share one): the kind of work is no hint, so it shows from the start.
     const categoryKnown = web.content.categoryCount(listIds) === 1;
-    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf, categoryKnown, allowSearch: search });
+    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf, categoryKnown, allowSearch: search, knownName: web.content.knownName });
     if (!dealChoices(room, Date.now())) {
       room.game = null;
       return { ok: false, error: `${label} has no characters at this difficulty.` };
@@ -274,7 +277,7 @@ function attachDrawSockets(nsp, { registry }) {
     if (each < 1) return { ok: false, error: `${label} has too few characters at this difficulty for ${order.length} players.` };
     const heads = rows.map(headOf);
     const choices = new Map(order.map((id, i) => [id, heads.slice(i * each, (i + 1) * each)]));
-    room.game = tel.begin(tel.createTelephone({ order, drawSeconds: s.drawSeconds, choices }), Date.now());
+    room.game = tel.begin(tel.createTelephone({ order, drawSeconds: s.drawSeconds, choices, knownName: web.content.knownName }), Date.now());
     room.status = 'playing';
     broadcastRoom(room);
     emitViews(room);

@@ -48,7 +48,7 @@ module.exports = {
     draw.choose(g, 'p1', 0, T0);
     g.strokes.push(stroke(line(100)));
     draw.say(g, 'p2', 'pikachu', T0 + 4000);
-    draw.say(g, 'p3', 'pikahcu', T0 + 5000); // close: two letters swapped
+    draw.say(g, 'p3', 'pikachu pokemon', T0 + 5000); // close: the name with more besides (a typo would now count)
     draw.endTurn(g, T0 + 80_000, 'time');
     assert.equal(g.drawings.length, 1);
     const [d] = g.drawings;

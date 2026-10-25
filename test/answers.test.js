@@ -116,6 +116,45 @@ module.exports = {
     ]);
   },
 
+  // Drawing opts in: there, close is only a hint, and a guesser who plainly knew it scored nothing.
+  'with acceptTypos, a small slip on a name that would count is correct'() {
+    const hp = poolIndex(['Hermione Granger', 'Harry Potter', 'Ron Weasley', 'Severus Snape']);
+    const opts = { others: hp, singleWords: true, acceptTypos: true };
+    for (const [g, n] of [
+      ['Hermoine Granger', 'Hermione Granger'],
+      ['Hermoine', 'Hermione Granger'], // the first name alone counts here, so its typo does too
+      ['Severus Snaep', 'Severus Snape'],
+      ['Harry Pottre', 'Harry Potter'],
+    ]) assert.equal(judgeGuess(g, n, opts).verdict, 'correct', `${g} for ${n}`);
+    assert.equal(judgeGuess('Pikahcu', 'Pikachu', { acceptTypos: true }).verdict, 'correct');
+    assert.equal(judgeGuess('Sasuek Uchiha', 'Sasuke Uchiha', { acceptTypos: true }).verdict, 'correct');
+  },
+
+  'accepted typos stay small, and never another character in the show'() {
+    const opts = (cast) => ({ others: poolIndex(cast), singleWords: true, acceptTypos: true });
+    // Another name in the cast, exactly or within a typo of it: close, as without the option.
+    assert.equal(judgeGuess('Maria', 'Mario', opts(['Mario', 'Maria', 'Luigi'])).verdict, 'close');
+    // Short names: nothing below five letters ("Mira" and "Mara" are two people).
+    assert.equal(judgeGuess('Mara', 'Mira', opts(['Mira'])).verdict, 'close');
+    // Two typos only from ten letters; "Pikachu" forgives one.
+    assert.equal(judgeGuess('Pikahcuu', 'Pikachu', opts(['Pikachu'])).verdict, 'wrong');
+    // A word that is only close by itself (a shared family name) is only close misspelled, too.
+    assert.equal(judgeGuess('Uchia', 'Uchiha Sasuke', opts(['Uchiha Sasuke', 'Uchiha Itachi'])).verdict, 'close');
+    // A title stripped off stays close however it is spelled.
+    assert.equal(judgeGuess('Amerca', 'Captain America', opts(['Captain America'])).verdict, 'close');
+    // And the default is unchanged: a typo is close.
+    assert.equal(judgeGuess('Hermoine Granger', 'Hermione Granger').verdict, 'close');
+  },
+
+  // Measured on the library: 7,583 names sit one letter from a different character's in another
+  // show. Typing one of those is a guess at THAT character, whatever show the drawing is from.
+  'a typo that is somebody else\'s name, anywhere in the library, stays close'() {
+    const library = new Set(['banjo', 'bando', 'hermionegranger']);
+    const opts = { others: poolIndex(['Bando', 'Lucy', 'Kouta']), singleWords: true, acceptTypos: true, knownName: (k) => library.has(k) };
+    assert.equal(judgeGuess('Banjo', 'Bando', opts).verdict, 'close', 'Banjo is Banjo, not a slip for Elfen Lied\'s Bando');
+    assert.equal(judgeGuess('Bandi', 'Bando', opts).verdict, 'correct', 'a slip that names nobody still counts');
+  },
+
   'short names get no typo allowance -- they are one letter apart from each other'() {
     eachIs('wrong', [
       ['Al', 'Ed'],

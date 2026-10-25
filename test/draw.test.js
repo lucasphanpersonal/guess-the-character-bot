@@ -128,14 +128,27 @@ function aCorrectGuessScoresByHowFastItCame() {
 
 function aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess() {
   const g = drawing();
-  assert.equal(draw.say(g, 'p2', 'Pikahcu', T0).verdict, 'close');
+  // The right name with more besides: still close while drawing (a typo of it is correct -- below).
+  assert.equal(draw.say(g, 'p2', 'Pikachu Pokemon', T0).verdict, 'close');
   assert.equal(draw.say(g, 'p2', 'Raichu', T0).verdict, 'wrong');
   const lines = (viewer) => draw.viewFor(g, viewer, names, T0).chat.map((m) => `${m.text}:${m.kind}`);
   assert.deepEqual(lines('p3'), ['Raichu:guess'], 'a near miss is a hint to anyone still guessing, so they never see it');
-  assert.deepEqual(lines('p1'), ['Pikahcu:close', 'Raichu:guess'], 'the drawer sees every guess, marked');
+  assert.deepEqual(lines('p1'), ['Pikachu Pokemon:close', 'Raichu:guess'], 'the drawer sees every guess, marked');
   assert.equal(draw.say(g, 'p3', 'Pikachu', T0).verdict, 'correct');
   assert.deepEqual(lines('p1').at(-1), 'Pikachu:correct', '...the right ones too');
   assert.ok(!lines('p2').some((l) => l.startsWith('Pikachu')), 'but never to someone still guessing');
+}
+
+// A typo is not a wrong guess at a drawing: close there is only a hint, so it used to score nothing.
+function aSmallTypoCountsWhileDrawing() {
+  const g = drawing(); // Pikachu
+  const r = draw.say(g, 'p2', 'Pikahcu', T0 + 5_000);
+  assert.equal(r.verdict, 'correct');
+  assert.ok(r.points > 0 && g.guessed.has('p2'));
+  // A name the drawer added counts misspelled too.
+  const h = started();
+  draw.choose(h, 'p1', 1, T0, 'King Koopa'); // Bowser Koopa, also accepting King Koopa
+  assert.equal(draw.say(h, 'p2', 'King Kopa', T0).verdict, 'correct');
 }
 
 // People guessing at a drawing type what they see. "Combat" at a soldier is not a guess that it
@@ -642,6 +655,7 @@ module.exports = {
   'a search cannot repeat someone already drawn, and finds one of the three': aSearchCannotRepeatSomeoneAlreadyDrawnAndFindsOneOfTheThree,
   'only the drawer searches, and only while choosing': onlyTheDrawerSearchesAndOnlyWhileChoosing,
   'each chat line says whether it is yours': eachChatLineSaysWhetherItIsYours,
+  'a small typo counts while drawing': aSmallTypoCountsWhileDrawing,
   'a correct guess scores by how fast it came': aCorrectGuessScoresByHowFastItCame,
   'a close guess is hidden from guessers, but the drawer sees every guess': aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess,
   'one word of the name is never enough without a pool': oneWordOfTheNameIsNeverEnoughWithoutAPool,

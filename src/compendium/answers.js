@@ -150,6 +150,11 @@ const romaji = (k) => k.replace(/ou/g, 'o').replace(/uu/g, 'u').replace(/oo/g, '
 // into "Al", and short names are exactly where two characters sit one letter apart.
 const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
 
+// How many typos still make a guess CORRECT, for a game that opts in (acceptTypos). Stricter than
+// close's budget, because this one ends a turn: nothing below five letters ("Mira" and "Mara" are two
+// people a letter apart), and a second typo only from ten.
+const acceptBudget = (k) => (k.length >= 10 ? 2 : k.length >= 5 ? 1 : 0);
+
 /**
  * @param {string} guess    what was typed
  * @param {string} name     the character's name
@@ -169,9 +174,19 @@ const typoBudget = (k) => (k.length >= 8 ? 2 : k.length >= 4 ? 1 : 0);
  *   character's own show: across a whole pool of thousands, a common first name always belongs to
  *   someone else, which says nothing about whether it picks out this one. Without them, no single
  *   word is ever correct.
+ * @param {boolean} [opts.acceptTypos]  a slip of the keyboard on a name that would have counted is
+ *   CORRECT, not close ("Hermoine Granger", "Pikahcu"). A game opts in when close means nothing
+ *   happens: guessing at a drawing, where "close" is only a hint, so a guesser who plainly knew the
+ *   answer scored nothing. Where close goes to a person to rule on (the computer game), it stays
+ *   close. Within acceptBudget, never what `others` has as another name -- "Maria" stays close for
+ *   "Mario" in a show with both -- and a single word only where that word would count by itself.
+ * @param {(key: string) => boolean} [opts.knownName]  whether a normalized guess is exactly some
+ *   character's name, anywhere in the library. A typo that IS someone's name is that someone, not a
+ *   typo: "Banjo" for Elfen Lied's Bando is a guess at Banjo. Without it only `others` is checked --
+ *   measured, that let 7,583 pairs of different characters' names through as typos of each other.
  * @returns {{ verdict: 'correct'|'close'|'wrong', as: string|null }}  `as` is the form matched.
  */
-function judgeGuess(guess, name, { others = [], singleWords = false, romanised = false } = {}) {
+function judgeGuess(guess, name, { others = [], singleWords = false, romanised = false, acceptTypos = false, knownName = null } = {}) {
   // The article is optional on the guess's side too: "the joker" names "Joker".
   const g = key(String(guess).trim().replace(/^the\s+/i, '')) || key(guess);
   if (!g) return { verdict: 'wrong', as: null };
@@ -196,19 +211,28 @@ function judgeGuess(guess, name, { others = [], singleWords = false, romanised =
 
   // One word of the name, standing for all of it -- only when nobody else in the cast has it. Asked
   // of the word as the NAME spells it, so the cast (which spells it that way too) can answer.
+  const own = key(name);
+  let indexed = null;
+  const index = () => (indexed ??= Array.isArray(others) ? poolIndex(others) : others);
+  const standsAlone = (w) => singleWords && index().size > 0 && !index().sharesWord(w, own);
   const word = forms.words.find((w) => w === g) ?? forms.words.find((w) => fold(w) === fg);
   if (word) {
-    const own = key(name);
-    const index = Array.isArray(others) ? poolIndex(others) : others;
-    if (singleWords && index.size > 0 && !index.sharesWord(word, own)) return { verdict: 'correct', as: word };
+    if (standsAlone(word)) return { verdict: 'correct', as: word };
     return { verdict: 'close', as: word };
   }
 
   if (forms.loose.includes(g)) return { verdict: 'close', as: g };
 
-  // Typos, against everything that would have counted.
+  // Typos, against everything that would have counted -- correct for a game that accepts them
+  // (acceptTypos), when the form is one that would have been correct itself and the slip is small
+  // enough, and is not somebody else in the cast; close otherwise.
   for (const f of [...forms.exact, ...forms.loose, ...forms.words]) {
-    if (editDistance(g, f) <= typoBudget(f)) return { verdict: 'close', as: f };
+    const d = Math.min(editDistance(g, f), editDistance(fg, fold(f)));
+    if (d > typoBudget(f)) continue;
+    const wouldCount = forms.exact.includes(f) || (forms.words.includes(f) && standsAlone(f));
+    const someoneElse = index().nearOther?.(g, own) || (g !== own && knownName?.(g));
+    if (acceptTypos && wouldCount && d <= acceptBudget(f) && !someoneElse) return { verdict: 'correct', as: f };
+    return { verdict: 'close', as: f };
   }
 
   // The right name with something extra: "Monkey D Luffy" for "Luffy", "Captain Rex Clone" ...
@@ -259,6 +283,17 @@ function poolIndex(names) {
   }
   return {
     size: names.length,
+    /**
+     * Whether a guess IS, or is within a typo of, the name of anyone here but `ownKey` -- which a
+     * typo accepted for this character (judgeGuess acceptTypos) must not be.
+     */
+    nearOther(guessKey, ownKey) {
+      for (const k of fameOf.keys()) {
+        if (k !== ownKey && (k === guessKey || editDistance(guessKey, k) <= typoBudget(k))) return true;
+        for (const w of wordsOf(k)) if (w === guessKey && isNameWord(w)) return true;
+      }
+      return false;
+    },
     /** Whether any name other than `ownKey` has this word -- and is not dwarfed by `ownKey`. */
     sharesWord(word, ownKey) {
       const has = owners.get(word);

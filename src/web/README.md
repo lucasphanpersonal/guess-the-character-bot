@@ -28,7 +28,9 @@ repeating a face already offered. If the host ticked **Drawers can search for an
 (classic only, off by default), the drawer also gets **Search**: anyone in the library, by the
 host-picks search (or a name typed in), sent by id and looked up again by the server, refused if
 already drawn this game (`game.js addSearched`). It becomes one more choice, so it opens the same
-dialog and is picked by the same `draw:choose`. Picking one opens a dialog listing what guessers can type and
+dialog and is picked by the same `draw:choose`. A small typo in a guess counts (`Hermoine Granger`),
+unless it is somebody else's name; see [the compendium](../../docs/compendium.md) for the rule.
+Picking one opens a dialog listing what guessers can type and
 be right, with a box for other names the drawer will accept ("Endeavor" for Todoroki Enji, another
 sub's spelling), and which of them the blanks spell out: the name, its words the other way round
 for an Anime or Manga name ("Rock Lee" for the library's "Lee Rock"), or any name typed in — the
