@@ -686,6 +686,10 @@ $('rerollChoicesBtn').addEventListener('click', () => {
   });
 });
 
+// One column (a phone, or a narrow window): the guess list sits below the picture, not beside it.
+// The same breakpoint as index.html's.
+const oneColumn = matchMedia('(max-width: 1000px)');
+
 // The server's chat, plus the lines only this player sees: their own close calls.
 let localLines = [];
 function renderChat() {
@@ -700,10 +704,72 @@ function renderChat() {
   }));
   const lines = [...server, ...localLines].sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
   const ul = $('chat');
-  const atBottom = ul.scrollHeight - ul.scrollTop - ul.clientHeight < 40;
-  ul.innerHTML = lines.map((l) => `<li class="${l.cls}">${l.html}</li>`).join('');
-  if (atBottom) ul.scrollTop = ul.scrollHeight;
+  // In one column the list is a short strip UNDER the guess box (index.html), so the newest line
+  // goes at the top, next to the box; beside the picture it is a full column, newest at the bottom.
+  if (oneColumn.matches) {
+    const atTop = ul.scrollTop < 40;
+    ul.innerHTML = lines.reverse().map((l) => `<li class="${l.cls}">${l.html}</li>`).join('');
+    if (atTop) ul.scrollTop = 0;
+  } else {
+    const atBottom = ul.scrollHeight - ul.scrollTop - ul.clientHeight < 40;
+    ul.innerHTML = lines.map((l) => `<li class="${l.cls}">${l.html}</li>`).join('');
+    if (atBottom) ul.scrollTop = ul.scrollHeight;
+  }
+  floatNewGuesses();
 }
+
+// One column: the guess list is below the picture, so whoever is watching the drawing -- the drawer
+// most of all -- never sees the guesses come in. Each new line from someone else floats over the
+// picture's corner for a few seconds. Only what this player's view already carries (the server
+// decides who may read which line), never their own, and never a backlog: lines already there when
+// the page caught up are skipped.
+let floatedUpTo = null; // the highest chat id seen; null until the first view
+function floatNewGuesses() {
+  const chat = view?.chat ?? [];
+  const top = chat.reduce((n, m) => Math.max(n, m.id), 0);
+  // A new game numbers its lines from the start again.
+  if (floatedUpTo === null || top < floatedUpTo) {
+    floatedUpTo = top;
+    return;
+  }
+  const fresh = chat.filter((m) => m.id > floatedUpTo && !m.mine);
+  floatedUpTo = Math.max(floatedUpTo, top);
+  if (!oneColumn.matches || view?.phase !== 'drawing') return;
+  const wrap = canvas.parentElement;
+  let box = wrap.querySelector('.bubbles');
+  if (!box) {
+    box = document.createElement('div');
+    box.className = 'bubbles';
+    box.setAttribute('aria-hidden', 'true'); // the list below is the live region; this is decoration
+    wrap.append(box);
+  }
+  for (const m of fresh.slice(-3)) {
+    const b = document.createElement('div');
+    b.className = `bubble${m.kind === 'correct' ? ' right' : m.kind === 'close' ? ' near' : ''}`;
+    b.innerHTML = `<span class="who">${esc(m.name)}:</span> ${m.kind === 'correct' ? '✓ ' : ''}${esc(m.text)}`;
+    b.addEventListener('animationend', () => b.remove());
+    setTimeout(() => b.remove(), 3600); // and if no animation runs at all
+    box.append(b);
+  }
+  // Three at most: a burst of guesses must not stack up over the drawing.
+  while (box.children.length > 3) box.firstElementChild.remove();
+}
+
+// One column, keyboard up: keep the picture in view above it. iOS scrolls the focused box into
+// view by itself, which in one column took the picture off the top of the screen -- typing a guess
+// meant not seeing what you were guessing. Picture plus box (~320px on a phone) fit in the space
+// above a phone keyboard, so the page is scrolled to put the picture's top at the top. When they
+// do not fit (a short landscape screen), the browser's own scroll is left alone.
+function keepPictureInView() {
+  if (!oneColumn.matches || document.activeElement !== $('chatInput') || !matchMedia('(pointer: coarse)').matches) return;
+  const vv = window.visualViewport;
+  const room = vv ? vv.height : innerHeight;
+  const top = canvas.getBoundingClientRect().top + scrollY - 8;
+  const bottom = $('chatForm').getBoundingClientRect().bottom + scrollY + 8;
+  if (bottom - top <= room) window.scrollTo(0, Math.max(0, top));
+}
+$('chatInput').addEventListener('focus', () => setTimeout(keepPictureInView, 350));
+window.visualViewport?.addEventListener('resize', keepPictureInView);
 function localLine(cls, html) {
   localLines.push({ cls, html, at: Date.now() });
   localLines = localLines.slice(-12);

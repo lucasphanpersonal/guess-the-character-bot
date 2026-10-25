@@ -147,6 +147,18 @@
       100% { transform:translateY(-260%) scale(1); opacity:0; }
     }
     @keyframes fadeonly { 0% { opacity:0; } 15% { opacity:1; } 100% { opacity:0; } }
+    /* The others' guesses, floated over the picture's corner for a moment (app.js guessBubble) --
+       in one column only, where the guess list sits below the picture and out of sight while you
+       watch the drawing. Dark and translucent, so a line reads over any drawing without hiding it. */
+    .bubbles { position:absolute; left:8px; bottom:8px; z-index:2; display:flex; flex-direction:column; align-items:flex-start;
+               gap:4px; max-width:75%; pointer-events:none; }
+    .bubble { background:rgba(27,16,51,.82); color:#fff; font-weight:800; font-size:.85rem; line-height:1.25;
+              padding:4px 10px; border-radius:12px; overflow-wrap:anywhere; animation:bubble 3.2s ease-out forwards; }
+    .bubble .who { opacity:.75; }
+    .bubble.right { background:rgba(38,137,12,.9); }
+    .bubble.near { background:rgba(214,138,0,.92); color:#2b1c00; }
+    @keyframes bubble { 0% { opacity:0; transform:translateY(6px); } 8% { opacity:1; transform:none; } 80% { opacity:1; } 100% { opacity:0; } }
+    @media (prefers-reduced-motion: reduce) { .bubble { animation-name:fadeonly; } }
     @media (prefers-reduced-motion: reduce) { .floater { animation-name:fadeonly; } }
     /* Someone got it (app.js burst): pieces flung out from their row. Fixed, over everything,
        never in the way of a click. The script makes none under reduced motion; this is the backstop. */
@@ -358,7 +370,22 @@
          svh, not dvh: dvh follows Safari's toolbar as it hides and shows on scroll, so on an iPhone
          the canvas changed width -- and redrew -- every time anyone scrolled. svh holds still. */
       .drawgrid > :not(.side):not(.chat) { order:2; width:100%; max-width:max(20rem, calc((100svh - 31rem) * 4 / 3)); justify-self:center; }
-      .chat { order:3; height:20rem; }
+      /* The guess box straight under the picture, so guessing never means scrolling away from the
+         drawing: on a phone it sat ~230px below it, past the bottom of an iPhone with Safari's bars
+         showing. Then the newest guesses (newest first, renderChat), a short strip that scrolls
+         for the rest; Give Up last, still well away from Send. The heading gives up its line --
+         the box's placeholder says who will read it. */
+      .chat { order:3; height:auto; }
+      .chat h2 { display:none; }
+      #chatForm { order:-1; margin-top:0; }
+      .chat ul { order:1; flex:none; max-height:5.6em; margin-top:10px; }
+      .chat ul:empty { display:none; }
+      .chat .giveup { order:2; }
+      /* The error line keeps its height for nothing here (theme.css reserves 1.3em, plus margins):
+         that left a gap between the box and the newest guesses. It is below the box, so an error
+         appearing moves only the list, never the box being typed into. */
+      .chat .err { order:0; margin:6px 0 0; }
+      .chat .err:empty { display:none; }
       .players { order:4; display:grid; grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); }
       /* The reference as a strip beside its name, not a 13rem panel above the canvas. Still a
          FIXED height, for the same reason as at full size. */
@@ -373,9 +400,24 @@
       body:is(:has(#game.active), :has(#tel.active)) .titlebar { align-items:center; margin-bottom:.8rem; }
       body:is(:has(#game.active), :has(#tel.active)) .titlebar h1 { font-size:1.45rem; }
       body:is(:has(#game.active), :has(#tel.active)) .titletools { height:auto; }
-      .topbar { gap:8px 12px; margin-bottom:12px; }
-      .cluebox { order:-1; flex-basis:100%; }
-      .mask { font-size:1.4rem; letter-spacing:.25em; }
+      .topbar { gap:6px 12px; margin-bottom:10px; }
+      .cluebox { order:-1; flex-basis:100%; gap:4px; }
+      .mask { font-size:1.4rem; letter-spacing:.25em; min-height:1.9rem; }
+      /* The hints in smaller pills, so "Category at 60s" and "Title at 20s" share one line: they
+         took two rows over the picture, which pushed the guess box off the screen. */
+      .mask .tag.later { font-size:.8rem; padding:0 10px; }
+      .cluebar { font-size:.78rem; gap:6px; }
+      .cluebar .tag { padding:2px 9px; }
+      .cluebar .tag.later { padding:0 8px; }
+      .reactions { margin-top:8px; gap:8px; }
+      .reactions button { min-width:2.8rem; padding:4px 12px; font-size:1rem; box-shadow:0 4px 0 rgba(0,0,0,.25); }
+      /* The drawer's reference as a slim strip: at 6rem it pushed the tools below the bottom of an
+         iPhone with Safari's bars showing. Still a FIXED height (see .refart). The "only you can see
+         it" note gives its line up; the blanks above already show the drawer the name. */
+      .refcard:not([hidden]) { grid-template-columns:3.5rem minmax(0,1fr); padding:8px 12px; }
+      .refart { height:3.5rem; grid-row:span 2; }
+      .refcard .hint { display:none; }
+      .refname { font-size:1rem; }
       .mask.blanks { letter-spacing:0; }
       .tools { gap:8px; }
       #swatches { display:grid; grid-template-columns:repeat(8, minmax(0, 1fr)); gap:7px; width:100%; }

@@ -102,6 +102,16 @@ function onlyTheDrawerSearchesAndOnlyWhileChoosing() {
   assert.equal(draw.viewFor(g, 'p1', names, T0).canSearch, false);
 }
 
+// A phone floats the others' guesses over the picture, never your own: each line says whether it is.
+function eachChatLineSaysWhetherItIsYours() {
+  const g = drawing();
+  draw.say(g, 'p2', 'bowser', T0 + 1_000);
+  draw.say(g, 'p3', 'luigi', T0 + 2_000);
+  const forP2 = draw.viewFor(g, 'p2', names, T0 + 3_000).chat;
+  assert.deepEqual(forP2.map((m) => [m.text, m.mine]), [['bowser', true], ['luigi', false]]);
+  assert.ok(draw.viewFor(g, 'p1', names, T0 + 3_000).chat.every((m) => m.mine === false), 'the drawer typed none of them');
+}
+
 // --- guessing ------------------------------------------------------------------------------
 
 function aCorrectGuessScoresByHowFastItCame() {
@@ -631,6 +641,7 @@ module.exports = {
   'another search replaces the last, and New Choices drop it': anotherSearchReplacesTheLastAndNewChoicesDropIt,
   'a search cannot repeat someone already drawn, and finds one of the three': aSearchCannotRepeatSomeoneAlreadyDrawnAndFindsOneOfTheThree,
   'only the drawer searches, and only while choosing': onlyTheDrawerSearchesAndOnlyWhileChoosing,
+  'each chat line says whether it is yours': eachChatLineSaysWhetherItIsYours,
   'a correct guess scores by how fast it came': aCorrectGuessScoresByHowFastItCame,
   'a close guess is hidden from guessers, but the drawer sees every guess': aCloseGuessIsHiddenFromGuessersButTheDrawerSeesEveryGuess,
   'one word of the name is never enough without a pool': oneWordOfTheNameIsNeverEnoughWithoutAPool,

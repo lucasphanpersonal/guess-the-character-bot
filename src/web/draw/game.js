@@ -683,7 +683,8 @@ function viewFor(g, viewerId, names, now = Date.now()) {
     chat: g.chat
       .filter((m) => !m.insider || insider || g.phase !== 'drawing')
       .slice(-40)
-      .map((m) => ({ id: m.id, name: nameOf(m.playerId), text: m.text, insider: m.insider, kind: m.kind ?? 'said' })),
+      // `mine`: so a phone floats only the OTHERS' guesses over the picture -- you know what you typed.
+      .map((m) => ({ id: m.id, name: nameOf(m.playerId), text: m.text, insider: m.insider, kind: m.kind ?? 'said', mine: m.playerId === viewerId })),
     lastTurn:
       g.phase === 'reveal' && g.lastTurn
         ? {
