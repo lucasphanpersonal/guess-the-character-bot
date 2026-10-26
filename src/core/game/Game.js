@@ -31,9 +31,11 @@ class Game {
     };
   }
 
-  constructor({ lobby, characters, turnSeconds }) {
+  // `order`: the seating for this game (./seating.js freshSeating), with `characters` in that same
+  // order. The lobby's join order when none is given.
+  constructor({ lobby, characters, turnSeconds, order = lobby.players }) {
     this.lobby = lobby;
-    this.turnOrder = [...lobby.players];
+    this.turnOrder = [...order];
     // Each player's "head" is what THEY must guess -- and what every OTHER player was DM'd.
     this.headByPlayer = {};
     // A null character is a seat nobody has chosen for yet: the web's pick-for-each-other mode

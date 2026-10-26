@@ -15,6 +15,9 @@ process.env.WEB_PORT = process.env.WEB_PORT || '4199';
 process.env.WEB_SCOPE = process.env.WEB_SCOPE || 'gtc-check-scope';
 process.env.WEB_GRACE_SECONDS = process.env.WEB_GRACE_SECONDS || '1'; // short grace so the check stays quick
 process.env.WEB_DRAW_REVEAL_SECONDS = process.env.WEB_DRAW_REVEAL_SECONDS || '1'; // and a short reveal between drawings
+// Games seat players at random (core/game/seating.js), and much below asserts on who goes first: the
+// join order is kept, except in the section that checks the reseating itself.
+process.env.GTC_FIXED_SEATING = '1';
 const OWN_DB = !process.env.BOT_DB_PATH; // did we pick the path, or did the caller?
 process.env.BOT_DB_PATH = process.env.BOT_DB_PATH || path.join(os.tmpdir(), 'gtc-ws-check.sqlite');
 
@@ -1211,6 +1214,48 @@ const connect = (playerId) => {
     const d = await Promise.race([drawingNow, wait(2000).then(() => null)]);
     check(d?.character?.name === 'Grandma Jean', 'draw search: and that is who is drawn');
     on.A.close(); on.B.close();
+  }
+
+  // ---- Seating: every game seated afresh, unlike the last ----------------------------------------
+  // The rest of this check keeps the join order; here it is the real thing, through the real start
+  // and rematch events, read back off the server's own room.
+  console.log('\n# seating — a new order every game');
+  {
+    process.env.GTC_FIXED_SEATING = '0';
+    try {
+      // Draw, two players: the rematch is drawn first by the other one.
+      const A = await connectDraw('seatA');
+      const code = (await A.emitWithAck('room:create', { nickname: 'Ana' })).state.code;
+      const B = await connectDraw('seatB');
+      await B.emitWithAck('room:join', { code, nickname: 'Ben' });
+      const firsts = [];
+      res = await A.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+      firsts.push(registry.getRoom(code).game.order[0]);
+      for (let i = 0; i < 4; i++) {
+        await A.emitWithAck('draw:again', {});
+        await A.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+        firsts.push(registry.getRoom(code).game.order[0]);
+      }
+      check(res.ok && firsts.every((p, i) => i === 0 || p !== firsts[i - 1]), `seating: each Draw game starts with someone else (${firsts.map((p) => (p === pub('seatA') ? 'Ana' : 'Ben')).join(', ')})`);
+      A.close(); B.close();
+
+      // Guess on computers, three players: nobody checks the same person two games running.
+      const S = await Promise.all(['seatX', 'seatY', 'seatZ'].map(connectDesk));
+      const dcode = (await S[0].emitWithAck('room:create', { nickname: 'Xia' })).state.code;
+      await S[1].emitWithAck('room:join', { code: dcode, nickname: 'Yan' });
+      await S[2].emitWithAck('room:join', { code: dcode, nickname: 'Zed' });
+      const pairsOf = (order) => order.map((id, i) => `${id}>${order[(i + 1) % order.length]}`);
+      await S[0].emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+      const first = [...registry.getRoom(dcode).game.turnOrder];
+      await S[0].emitWithAck('setup:cancel', {});
+      await S[0].emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+      const second = [...registry.getRoom(dcode).game.turnOrder];
+      check(second[0] !== first[0] && !pairsOf(second).some((p) => pairsOf(first).includes(p)),
+        'seating: the next deal has another first player, and nobody checks the same person');
+      S.forEach((s) => s.close());
+    } finally {
+      process.env.GTC_FIXED_SEATING = '1';
+    }
   }
 
   // ---- Draw: the host removes a player ----------------------------------------------------------

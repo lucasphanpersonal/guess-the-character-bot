@@ -22,7 +22,9 @@ without tangling into it. Two ways to play, from one server, chosen on the home 
 
 And a second game, **Draw the Character** (`/draw/`), for a whole party: a room takes up to 50
 (`MAX_PLAYERS_BY_KIND` in `rooms.js`), where Guess the Character keeps the core's 8. Each round, everyone draws once in seat
-order: the drawer picks one of three characters, taking as long as they like (no clock; a drawer
+order -- and every game in every web game is seated afresh, unlike the last one in that room
+(`core/game/seating.js`): someone else goes first, and in Guess nobody checks (or picks for) the same
+person two games running. The drawer picks one of three characters, taking as long as they like (no clock; a drawer
 who walks away is the host's to remove) — or asks for three new ones, as often as they like, never
 repeating a face already offered. If the host ticked **Drawers can search for any character**
 (classic only, off by default), the drawer also gets **Search**: anyone in the library, by the

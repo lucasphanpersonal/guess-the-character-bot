@@ -18,6 +18,7 @@ const web = require('../content');
 const { poolIndex } = require('../../compendium/answers');
 const { perSocket, SLOW_DOWN } = require('../rateLimit');
 const tel = require('./telephone');
+const { freshSeating } = require('../../core/game/seating');
 
 // What a player can repeat inside a room, at well above a person's pace: dealing (which reads the
 // pool) and guessing/chatting (which every screen in the room receives).
@@ -254,11 +255,15 @@ function attachDrawSockets(nsp, { registry }) {
     // One category in the whole pool, however the host got there (picked it, Surprise Me, or lists
     // that happen to share one): the kind of work is no hint, so it shows from the start.
     const categoryKnown = web.content.categoryCount(listIds) === 1;
-    room.game = draw.createDrawGame({ order: [...room.order], rounds, drawSeconds, castOf, categoryKnown, allowSearch: search, knownName: web.content.knownName });
+    // Seated afresh, unlike the last game in this room (core/game/seating.js): the host no longer
+    // always draws first, nor a rematch replays the same order.
+    const order = freshSeating(room.order, room.lastOrder);
+    room.game = draw.createDrawGame({ order, rounds, drawSeconds, castOf, categoryKnown, allowSearch: search, knownName: web.content.knownName });
     if (!dealChoices(room, Date.now())) {
       room.game = null;
       return { ok: false, error: `${label} has no characters at this difficulty.` };
     }
+    room.lastOrder = order;
     room.status = 'playing';
     broadcastRoom(room);
     emitViews(room);
@@ -270,7 +275,8 @@ function attachDrawSockets(nsp, { registry }) {
   // small pool gives fewer each rather than none -- one each is still a game.
   function startTelephone(room, label) {
     const s = room.drawSettings;
-    const order = [...room.order];
+    // Seated afresh too: the order is who passes to whom, so it decides whose chain you continue.
+    const order = freshSeating(room.order, room.lastOrder);
     if (order.length < tel.MIN_PLAYERS) return { ok: false, error: `Telephone needs at least ${tel.MIN_PLAYERS} players.` };
     const rows = web.content.randomCharacters(s.listIds, order.length * tel.CHOICES, [], s.difficulty, { preferImages: true });
     const each = Math.min(tel.CHOICES, Math.floor(rows.length / order.length));
@@ -278,6 +284,7 @@ function attachDrawSockets(nsp, { registry }) {
     const heads = rows.map(headOf);
     const choices = new Map(order.map((id, i) => [id, heads.slice(i * each, (i + 1) * each)]));
     room.game = tel.begin(tel.createTelephone({ order, drawSeconds: s.drawSeconds, choices, knownName: web.content.knownName }), Date.now());
+    room.lastOrder = order;
     room.status = 'playing';
     broadcastRoom(room);
     emitViews(room);

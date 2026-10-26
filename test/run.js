@@ -9,6 +9,9 @@ const path = require('path');
 
 const tmpDb = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'gtc-test-')), 'test.sqlite');
 process.env.BOT_DB_PATH = tmpDb;
+// Games seat players at random (core/game/seating.js); the suites assert on who goes first, so
+// they keep the join order. test/seating.test.js tests the shuffle itself, with this switched off.
+process.env.GTC_FIXED_SEATING = '1';
 
 // Required after BOT_DB_PATH is set, so the DB layer still opens the throwaway file.
 const GameManager = require('../src/core/game/GameManager');

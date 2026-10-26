@@ -4,9 +4,10 @@ const { getListLabelForIds } = require('../../compendium/characterLists');
 
 // Shared by /rematch and the game-over board's Rematch button.
 //
-// Turn order is carried over unchanged. It used to be swapped, because stopping at the first
-// correct guess handed the player who moved first a turn the other hadn't had -- but scoring
-// on turns taken means everyone races their own count and the seat no longer matters.
+// The last game's order comes along, so the rematch can be seated UNLIKE it (core/game/seating.js):
+// another first player, other "checks the next one" pairs. Not for fairness -- scoring on turns
+// taken means the seat gives nobody an edge -- but because carried over unchanged, the same person
+// handled your character every game of the night.
 /**
  * Who may start a rematch: someone who was in the game -- a player, or its host. Not anyone who
  * clicks: the rematch makes them host, with Start and the character picker, so a passer-by could
@@ -32,6 +33,7 @@ function createRematchLobby(previous, hostId) {
     difficulty: previous.difficulty,
   });
   for (const playerId of previous.players) lobby.addPlayer(playerId);
+  lobby.lastOrder = previous.game?.turnOrder ?? previous.lastOrder ?? null;
   GameManager.createLobby(previous.channelId, lobby);
   return { lobby, players: [...lobby.players] };
 }

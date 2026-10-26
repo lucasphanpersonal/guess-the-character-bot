@@ -7,6 +7,7 @@
 
 const gameSetup = require('./gameSetup');
 const web = require('../content');
+const { freshSeating } = require('../../core/game/seating');
 
 const { content } = web;
 
@@ -28,7 +29,9 @@ const setup = {
   start(room, { poolType = 'random', category = null, categories = null, difficulty = web.DEFAULT_DIFFICULTY, turnSeconds, preferImages = false, hostPicks = false, eachPicks = false, picks = {} } = {}) {
     if (hostPicks && eachPicks) return { ok: false, error: 'Choose one way of picking characters.' };
     const { listIds, label } = web.resolvePool({ poolType, category, categories, excluded: room.excludedListIds });
-    let order = [...room.order];
+    // Seated afresh every game, unlike the last one in this room (core/game/seating.js): who goes
+    // first, and who checks -- or picks for -- whom. Everything below deals in this order.
+    let order = freshSeating(room.order, room.lastOrder);
     let characters;
     if (eachPicks) {
       // Empty seats, filled on the check screen. Nothing to count against the pool: a typed name
@@ -66,6 +69,7 @@ const setup = {
       checkerPicks: !!eachPicks,
       ...(clampedTurnSeconds !== undefined ? { turnSeconds: clampedTurnSeconds } : {}),
     });
+    room.lastOrder = order;
     const shownLabel = hostPicks ? 'Picked by the host' : eachPicks ? 'Picked for each other' : label;
     room.poolLabel = shownLabel;
     // Remembered so "Rematch (same settings)" can re-deal without the host reconfiguring. The

@@ -1,5 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags } = require('discord.js');
 const Game = require('../../core/game/Game');
+const { freshSeating } = require('../../core/game/seating');
 const { MAX_PLAYERS } = require('../../core/game/Lobby');
 const TurnTimer = require('./turnTimer');
 const GameManager = require('../../core/game/GameManager');
@@ -211,7 +212,13 @@ async function startGameFromLobby(client, lobby) {
 }
 
 async function startGame(client, lobby, characters) {
-  const game = new Game({ lobby, characters, turnSeconds: lobby.turnSeconds });
+  // `characters` arrive in the lobby's join order (one per player, however they were chosen:
+  // dealt, hand-picked or voted). Seated afresh (seating.js), each character staying with its
+  // player: who goes first and who checks whom change from game to game, rematches included.
+  const order = freshSeating(lobby.players, lobby.lastOrder);
+  const byPlayer = new Map(lobby.players.map((id, i) => [id, characters[i]]));
+  const game = new Game({ lobby, characters: order.map((id) => byPlayer.get(id)), turnSeconds: lobby.turnSeconds, order });
+  lobby.lastOrder = order;
   game.listLabel = getListLabelForIds(lobby.listIds);
   // The audience already chose in vote mode, so rerolling would undo their decision.
   game.rerollAllowed = lobby.mode !== 'audience-vote';

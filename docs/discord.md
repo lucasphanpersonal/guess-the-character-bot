@@ -179,7 +179,13 @@ out is [the architecture](architecture.md).
    It also retired a rule. The bot used to stop at the first correct guess and hand the other
    player a "rebuttal" turn if the first mover won, because otherwise they'd won on a turn
    their opponent never had. Racing your own turn count makes going first worth nothing, so
-   the exception is gone and rematches no longer swap the seating.
+   the exception is gone.
+
+   The seat still decides something, though: everyone checks the **next** player's character, so
+   the order says who handles whose. Every game, rematches included, is seated afresh at random
+   (`core/game/seating.js`), picking an order unlike the last: someone else goes first, and nobody
+   checks the same person two games running (with two players only who starts can change). The
+   web games do the same.
 
 `/lobby status` shows whose turn it is, the time left, and who's already finished. `/lobby end`
 cancels a stuck game (host or a server admin). After a game, `/rematch` replays it with the

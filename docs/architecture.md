@@ -52,6 +52,8 @@ src/
       Game.js             Active-game state: turn counts, who has finished, standings
       turnRules.js        The turn rules both frontends run: rotation, resolve-once, pass /
                           give up / leave, which controls apply
+      seating.js          Each game's order, at random and unlike the last (who goes first,
+                          who checks whom) -- every game on every frontend
 
   discord/              The Discord bot. Imports from core/.
     index.js              Client bootstrap, interaction routing, graceful shutdown

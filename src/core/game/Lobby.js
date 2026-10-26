@@ -43,6 +43,9 @@ class Lobby {
     // Set via /lobby set-characters: { [playerId]: characterRow }. Used instead of a random pick
     // at /lobby start when both players have an assignment.
     this.assignedCharacters = {};
+    // The last game's seating, so the next one can be seated unlike it (./seating.js). A rematch
+    // starts with its predecessor's.
+    this.lastOrder = null;
   }
 
   addPlayer(userId) {
