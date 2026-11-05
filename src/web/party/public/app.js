@@ -203,11 +203,18 @@ document.addEventListener('visibilitychange', () => {
 });
 
 let lastSetupView = null;
+// When the host's Remove buttons may first appear for this deal. Entering the deal screen from
+// another screen holds them back a few seconds, so the host does not hit Remove on the cards as they land.
+const REMOVE_HOLD_MS = 4000;
+let removeArmedAt = 0;
 function renderSetup(view) {
   keepAwake();
   clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
   overHeard = false; // a new game: its end will be news
   finishCelebrated = false;
+  // Arm on ENTERING the deal screen, not on the first setup view of the page: a rematch, a second
+  // game or a re-deal after a removal all come back through here from another screen.
+  if (!document.getElementById('setup').classList.contains('active')) removeArmedAt = Date.now() + REMOVE_HOLD_MS;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
   // finished game's view lying around made a tilt during the NEXT game's reroll stage look like
@@ -315,6 +322,14 @@ function removeButton(p) {
   const b = document.createElement('button');
   b.className = 'rmbtn';
   b.textContent = 'Remove';
+  // Held back right after a deal (see REMOVE_HOLD_MS). Hidden rather than disabled, so the row
+  // does not look like it has a button that is broken; the row re-renders on every state push, so
+  // the timer only needs to reveal this one element.
+  const wait = removeArmedAt - Date.now();
+  if (wait > 0) {
+    b.style.visibility = 'hidden';
+    setTimeout(() => { b.style.visibility = ''; }, wait);
+  }
   b.addEventListener('click', () => {
     if (!confirm(`Remove ${p.name} from the room? Everyone goes back to the lobby and you deal again.`)) return;
     b.disabled = true;
