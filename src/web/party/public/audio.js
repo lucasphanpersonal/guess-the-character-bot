@@ -31,12 +31,18 @@ let muted = store.get('gtc_muted') === '1';
 // `at` places the note on the AudioContext clock instead of "now", which is what lets the turn
 // bed be scheduled a bar ahead; `out` routes it through a gain node that can fade the whole bed
 // out at once.
-function tone(freq = 880, ms = 180, { gain = 0.5, type = 'sine', at = null, out = null } = {}) {
+//
+// A pulse wave unless the caller names a voice: the sound of a chip of the era. A pulse has far more
+// energy than a sine at the same level, so an unnamed voice is scaled down to keep the balance every
+// gain here was set for. The time-up alarm names 'square' on purpose, to be as loud as it was.
+const PULSE_LEVEL = 0.4;
+function tone(freq = 880, ms = 180, { gain = 0.5, type, at = null, out = null } = {}) {
   if (!audioCtx || muted) return;
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = type; o.frequency.value = freq; o.connect(g); g.connect(out || audioCtx.destination);
+    o.type = type ?? 'square'; o.frequency.value = freq; o.connect(g); g.connect(out || audioCtx.destination);
+    if (!type) gain *= PULSE_LEVEL;
     const t = at ?? audioCtx.currentTime;
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
@@ -90,7 +96,7 @@ function scheduleBedBar() {
   for (const [step, note, len, gain] of BED_PATTERN) {
     tone(chord[note], len * stepS * 1000, {
       gain: bedCrit ? gain * 1.35 : gain,
-      type: note === 0 ? 'triangle' : 'sine',
+      type: note === 0 ? 'triangle' : undefined, // triangle bass, pulse over it, as a chip would
       at: bedNextBarAt + step * stepS,
       out: bedGain,
     });
@@ -171,5 +177,16 @@ function playSoundCheck() {
 function renderSoundCheck() {
   $('muteBtn').textContent = muted ? 'Turn Game Sounds Back On' : 'Turn Game Sounds Off';
   $('soundCheckBtn').disabled = muted;
+  const corner = $('soundToggle');
+  corner.setAttribute('aria-checked', String(!muted));
+  corner.title = muted ? 'Sound Off' : 'Sound On';
+}
+
+// The one way sound changes on the phones, from the setup screen's button or the corner switch.
+function setMuted(next) {
+  muted = next;
+  store.set('gtc_muted', muted ? '1' : '0');
+  if (muted) stopBed();
+  renderSoundCheck();
 }
 

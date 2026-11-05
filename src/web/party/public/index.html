@@ -464,6 +464,8 @@
     #forehead.mine #foreheadRot::after { content:''; position:absolute; inset:0; pointer-events:none;
                             border:14px solid #ffd23f; animation:pulseBorder 1s ease-in-out infinite; }
     @keyframes pulseBorder { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+    /* It stays, and stays bright: the room still needs to see whose turn it is. It just holds still. */
+    @media (prefers-reduced-motion: reduce) { #forehead.mine #foreheadRot::after { animation:none; } }
     .enable-motion { --face:var(--amber); --deep:var(--amber-d); color:#231a03; }
     /* Tilt test */
     .tiltbig { font-size:2.6rem; font-weight:900; text-align:center; min-height:3rem; }
@@ -502,7 +504,6 @@
     .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
     body.at-play .themetoggle { display:none; }
     /* Room for the switch: the title must never run under it. */
-    h1 { padding-right:64px; }
     /* The arcade face is wide and has no narrower width to fall back on, so in a room, with Room
        beside the switch, the title takes the next size down rather than running under them. */
     body:has(.roombtn:not([hidden])) h1 { font-size:16px; }
@@ -512,6 +513,18 @@
                display:inline-flex; align-items:center; gap:6px; font-size:.95rem;
                --px:2px; --face:var(--paper); --deep:var(--edge); color:var(--ghost-ink); }
     .roombtn:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+    /* Sound, beside dark mode; Room moves along to make room for it. */
+    .soundtoggle { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
+                   right:calc(80px + env(safe-area-inset-right, 0px)); width:34px; height:30px; padding:0; font-size:1.05rem;
+                   display:inline-flex; align-items:center; justify-content:center;
+                   --px:2px; --face:var(--paper); --deep:var(--edge); color:var(--ghost-ink); }
+    .soundtoggle[aria-checked="false"] { --face:rgba(0,0,0,.45); --lit:transparent; color:#fff; }
+    .soundtoggle[aria-checked="false"] .note { text-decoration:line-through; opacity:.8; }
+    .roombtn { right:calc(124px + env(safe-area-inset-right, 0px)); }
+    body.at-play .soundtoggle { right:calc(106px + env(safe-area-inset-right, 0px)); }
+    body:has(#forehead.active) .soundtoggle { display:none; }
+    /* Nothing narrower can hold the word as well as the title beside it. */
+    @media (max-width: 360px) { .roomword { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); } }
     /* During play the button can sit over the forehead overlay, which stays plain and dark. */
     body.at-play .roombtn, body:has(#forehead.active) .roombtn { --face:rgba(0,0,0,.5); --deep:transparent; --lit:transparent; --outline:rgba(255,255,255,.4); color:#fff; font-family:var(--font-name); }
     /* :has as well as .at-play, because the card is up during the countdown too, while the screen
@@ -519,8 +532,9 @@
     body:has(#forehead.active) .themetoggle { display:none; }
     body:has(#forehead.active) .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); }
     body.at-play .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); font-family:var(--font-name); }
-    body:has(.roombtn:not([hidden])) h1 { padding-right:150px; }
-    body.at-play:has(.roombtn:not([hidden])) h1 { padding-right:96px; }
+    body:has(.roombtn:not([hidden])) h1 { padding-right:190px; }
+    h1 { padding-right:104px; }
+    body.at-play:has(.roombtn:not([hidden])) h1 { padding-right:150px; }
     @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
     /* The first question: big slabs, colour AND shape, a line under each saying what it means. */
     .devicebtn { display:flex; align-items:center; gap:14px; text-align:left; padding:20px 18px;
@@ -561,7 +575,13 @@
   <!-- Room: who is in it, Leave, and the host's Remove (/shared/roommenu.js) -- beside the dark-mode
        switch on every screen once you are in a room, play included, where it takes the corner. -->
   <button id="roomBtn" class="roombtn" type="button" hidden aria-label="Room: players and leaving">
-    <span aria-hidden="true">☰</span> Room
+    <span aria-hidden="true">☰</span> <span class="roomword">Room</span>
+  </button>
+  <!-- Sound on or off, on every screen but the forehead view: the turn bed runs for a minute at a
+       time, and this used to be reachable only from the setup screen. Named and stated for a screen
+       reader by its aria-label and aria-checked; off also shows as a struck-through note. -->
+  <button id="soundToggle" class="soundtoggle" type="button" role="switch" aria-checked="true" aria-label="Sound" title="Sound On">
+    <span class="note" aria-hidden="true">♪</span>
   </button>
   <!-- Dark mode: a small switch in the corner, on every screen but play (body.at-play hides it --
        nobody should be reaching for a phone on a forehead). <head> applied the choice already. -->

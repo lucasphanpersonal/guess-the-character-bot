@@ -7,18 +7,20 @@
 // which sounds only while a pen is actually moving.
 //
 // Sound sits under the room, not over it. These play on computers that are usually also carrying
-// a voice call, often into headphones, several of them in one room, so every cue is soft sine or
-// triangle at a low gain. Only the game itself is loud, never the beeps. And the cues are
-// spread across machines on purpose: a miss is heard only by the person who guessed (misses are
-// free and come by the dozen), and only a ruler hears the call to rule.
+// a voice call, often into headphones, several of them in one room, so every cue is a soft chip
+// voice, pulse or triangle, at a low gain. Only the game itself is loud, never the beeps. And the
+// cues are spread across machines on purpose: a miss is heard only by the person who guessed (misses
+// are free and come by the dozen), and only a ruler hears the call to rule.
 //
 // Every sound goes through tone(), so "off" is honoured in one place and nothing can dodge it.
-// The preference is the phones' own key (gtc_muted): one per browser, sticky, on by default.
+// The preference is the phones' own key (gtc_muted): one per browser, sticky. OFF until somebody
+// turns it on, here: everyone can see the screen, so nothing is lost by default. The phones default
+// to on, because a wearer hears the clock or does not know it (audio.js). A stored choice wins on both.
 (function () {
   const { store } = GTC;
   let ctx = null;
   let master = null;
-  let muted = store.get('gtc_muted') === '1';
+  let muted = store.get('gtc_muted') !== '0';
 
   // Browsers only start audio after a gesture on the page. So the context is made on the first
   // click or key, not at load: made earlier, it would sit suspended and log a warning. It is
@@ -54,11 +56,16 @@
   let cueStart = 0; // where on the audio clock the cue being played begins (see play)
   let quietAt = 0;  // when the last note scheduled so far ends
   // `free`: placed now and kept out of the queue below, for sounds too small to wait for (pop).
-  function tone(freq, ms, { gain = 0.25, type = 'sine', at = 0, free = false } = {}) {
+  // A pulse wave unless a cue asks for the triangle: the two voices of a chip of the era. A pulse has
+  // far more energy than a sine at the same level, and its upper harmonics carry over a voice call,
+  // hence PULSE_LEVEL: the gains below were set by ear for a sine, and this keeps them that quiet.
+  const PULSE_LEVEL = 0.4;
+  function tone(freq, ms, { gain = 0.25, type, at = 0, free = false } = {}) {
     if (muted || !ctx || ctx.state !== 'running') return;
     try {
       const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = type; o.frequency.value = freq; o.connect(g); g.connect(out());
+      o.type = type ?? 'square'; o.frequency.value = freq; o.connect(g); g.connect(out());
+      if (!type) gain *= PULSE_LEVEL;
       const t = Math.max(ctx.currentTime, cueStart) + at;
       if (!free) quietAt = Math.max(quietAt, t + ms / 1000);
       g.gain.setValueAtTime(0.0001, t);

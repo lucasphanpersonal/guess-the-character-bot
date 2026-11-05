@@ -90,10 +90,18 @@ $('motionGateBtn').addEventListener('click', () => {
   enableMotion().then(() => { if (lastSetupView) renderSetup(lastSetupView); });
 });
 $('soundCheckBtn').addEventListener('click', playSoundCheck);
+// Hearing what you chose is the point of the switch, and the tap is what lets audio start.
+$('soundToggle').addEventListener('click', () => {
+  setMuted(!muted);
+  if (!muted) {
+    ensureAudio();
+    beep(880, 120);
+    setTimeout(() => beep(1250, 160), 110);
+  }
+});
+renderSoundCheck();
 $('muteBtn').addEventListener('click', () => {
-  muted = !muted;
-  store.set('gtc_muted', muted ? '1' : '0');
-  if (muted) stopBed();
+  setMuted(!muted);
   renderSoundCheck();
   // Turning it back on auditions immediately: the whole point of the control is being able to
   // hear what you just chose.

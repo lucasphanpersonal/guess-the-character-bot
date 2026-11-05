@@ -162,6 +162,9 @@ like it was always there.
   stopping", not something anyone raises their voice against — and because only the current
   player's phone plays it, the sound is also how the room knows whose head to look at. Anything
   continuous needs an off switch (`gtc_muted`, honoured inside `tone()` so nothing can dodge it).
+  The voice is a chip's, pulse and triangle. A pulse is far louder than a sine at the same gain, so an
+  unnamed voice is scaled by `PULSE_LEVEL`. Off by default on the computers, where everyone can see
+  the screen; on by default on the phones, where the wearer hears the clock or does not know it.
 - **No emoji in UI copy.** Text-presentation glyphs (✓ ✗ ▲ ‹ › ✕ →) are typography and are
   fine. Anything with Emoji_Presentation (⏭, most pictographs) renders in colour on iOS and
   looks pasted in next to plain-text buttons. The favicon is the one deliberate exception.

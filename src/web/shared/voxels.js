@@ -41,11 +41,13 @@
     v.box(-4, 3, 2, 11, 5, 5, INK);       // the phone
     v.box(-3, 2, 3, 10, 5, 5, CREAM);     // its screen
     v.stamp(['.####.', '#....#', '....#.', '...#..', '......', '...#..'], -3, 3, 5, RED);
-    v.box(-4, -3, -1, 0, 5, 5, INK);      // eyes
-    v.box(2, 3, -1, 0, 5, 5, INK);
-    v.box(-2, 1, -3, -3, 5, 5, INK);      // a mouth, slightly worried
-    v.put(-3, -2, 5, INK);
-    v.put(2, -2, 5, INK);
+    v.box(-4, -3, -1, 0, 5, 5, CREAM);    // eyes, looking up at the phone it cannot read
+    v.put(-3, 0, 5, INK);
+    v.box(2, 3, -1, 0, 5, 5, CREAM);
+    v.put(2, 0, 5, INK);
+    v.box(-1, 0, -3, -3, 5, 5, INK);      // a small, hopeful smile
+    v.put(-2, -2, 5, INK);
+    v.put(1, -2, 5, INK);
     return v.done();
   }
 

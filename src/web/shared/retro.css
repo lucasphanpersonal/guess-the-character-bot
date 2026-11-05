@@ -260,12 +260,13 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   .size.fill { min-width:44px; }
   .pp-chip, .pp-sort button, .pp-bulk button, .pp-cat summary, label.pp-row, .backbtn, .backlink, .cs-row, .rowbtn, .mode,
   .reactions button, .gitem .vote, .tools button.ghost, .tools button.bad, .pick button, .viewernav button, .viewerclose,
-  .spellings label, #howtoToggle, .choice, .chat .giveup, .pp-chip, button.tile, .rmbtn:not(.icon) { min-height:44px; }
+  .spellings label, #howtoToggle, .choice, .chat .giveup, button.tile, button.undo, .rmbtn:not(.icon) { min-height:44px; }
   .rmbtn:not(.icon) { display:inline-flex; align-items:center; justify-content:center; }
   .themetoggle::before, .roombtn::before, .soundtoggle::before, .swatch::before, .size::before, .rmbtn.icon::before, .pickclear::before {
     content:""; position:absolute; }
   .themetoggle::before { inset:-8px -2px; }
-  .roombtn::before, .soundtoggle::before { inset:-8px 0; }
+  .roombtn::before { inset:-8px 0; }
+  .soundtoggle::before { inset:-8px -5px; }
   .swatch::before, .size::before { inset:-4px; }
   .rmbtn.icon::before { inset:-9px; }
   .pickclear::before { inset:-10px -6px; }
