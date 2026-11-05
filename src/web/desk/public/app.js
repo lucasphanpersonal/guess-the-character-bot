@@ -641,8 +641,8 @@ $('guessForm').addEventListener('submit', (e) => {
 
 $('passBtn').addEventListener('click', () =>
   socket.emit('game:pass', {}, (res) => { if (res && !res.ok) $('guessErr').textContent = res.error; }));
-$('giveUpBtn').addEventListener('click', () => {
-  if (!confirm('Give up? Your character is revealed and you are out of this game.')) return;
+$('giveUpBtn').addEventListener('click', async () => {
+  if (!(await GTC.ask('Give up? Your character is revealed and you are out of this game.', { yes: 'Give Up', no: 'Keep Playing', danger: true }))) return;
   socket.emit('game:giveup', {}, (res) => { if (res && !res.ok) $('guessErr').textContent = res.error; });
 });
 
@@ -727,8 +727,8 @@ socket.on('host:state', (view) => {
 });
 $('hostCancelBtn').addEventListener('click', () =>
   socket.emit('setup:cancel', {}, (res) => { if (!res?.ok) $('hostErr').textContent = res?.error || 'Could not cancel.'; }));
-$('hostLeaveBtn').addEventListener('click', () => {
-  if (confirm('Leave the room? The game carries on without you.')) leave();
+$('hostLeaveBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Leave the room? The game carries on without you.', { yes: 'Leave', no: 'Stay', danger: true })) leave();
 });
 
 // --- results ------------------------------------------------------------------------------

@@ -260,6 +260,8 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
   :root[data-playing] main.desk ~ .feed .toast { max-width:100%; padding:3px 10px; font-size:.9rem; line-height:1.25;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   :root[data-playing] main.desk ~ .feed .toast:nth-last-child(n+3) { display:none; }
+  /* One line, cut short when it must: no room there for a ▼, which would only be the first thing cut. */
+  :root[data-playing] main.desk ~ .feed .toast .rpgtext::after { content:none; }
 }
 /* Shorter windows take height from the strip rather than the stage: smaller pictures in the tiles,
    then (below 760) no notes lines in them -- those are still each tile's tooltip, and the guesser's
@@ -318,8 +320,8 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .tile.done { opacity:.72; }
 .ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
 .feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
-.toast { background:var(--toast); color:#fff; padding:10px 14px;
-         font-weight:700; animation:pop .16s steps(3); }
+/* The RPG window itself is retro.css's (*RPG text boxes*). */
+.toast { padding:10px 14px; font-weight:700; animation:pop .16s steps(3); }
 @keyframes pop { from { transform:scale(.8); opacity:0 } to { transform:scale(1); opacity:1 } }
 @media (prefers-reduced-motion: reduce) { .toast { animation:none; } .clock i { transition:none; } }
 

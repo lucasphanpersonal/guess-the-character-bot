@@ -328,12 +328,12 @@ function removeButton(p) {
     b.style.visibility = 'hidden';
     setTimeout(() => { b.style.visibility = ''; }, wait);
   }
-  b.addEventListener('click', () => {
-    if (!confirm(`Remove ${p.name} from the room? Everyone goes back to the lobby and you deal again.`)) return;
+  b.addEventListener('click', async () => {
+    if (!(await GTC.ask(`Remove ${p.name} from the room? Everyone goes back to the lobby and you deal again.`, { yes: 'Remove', danger: true }))) return;
     b.disabled = true;
     socket.emit('room:kick', { playerId: p.playerId }, (res) => {
       b.disabled = false;
-      if (!res?.ok) alert(res?.error || 'Could not remove them.');
+      if (!res?.ok) GTC.ask(res?.error || 'Could not remove them.', { no: null });
     });
   });
   return b;
@@ -860,7 +860,9 @@ function showGiveUpProgress(fraction) {
 // is pure and unit-tested. This reads the sensor, hands it over, and does what it is told.
 function handleGameTilt() {
   const v = lastPlayView;
-  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) {
+  // A question on screen (GTC.ask -- "Leave the game?") holds the tilt: the phone comes off the
+  // forehead to read it, and that must not count as a gesture. confirm() used to freeze this for us.
+  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn || GTC.asking()) {
     TiltRules.reset(tilt);
     showGiveUpProgress(0);
     return;

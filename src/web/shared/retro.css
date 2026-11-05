@@ -50,6 +50,8 @@
   --paper:#fff6e0; --card:var(--paper); --ink:#1a1633; --muted:#5a5272; --edge:#cfc3a3;
   --soft:#f3e7c8; --chip:#f3e7c8; --chip-edge:#cfc3a3; --input:#fffdf5; --ghost-ink:var(--ink);
   --mystery-a:#ece0c2; --mystery-b:#e2d5b3; --mystery-ink:#a99c7c; --toast:#0c0a24; --link:#163f8f;
+  /* An RPG text box (toasts, GTC.ask): a night-blue window, a dark pixel frame and a cream rule inside it. */
+  --rpg-top:#2b2a86; --rpg-bottom:#0c0a24; --rpg-rule:#fff6e0;
   /* Four paired colours, each always beside a shape. The -d half is the button's lower edge. */
   --red:#d42a4a; --red-d:#8f1530; --blue:#2a64d6; --blue-d:#163f8f;
   --amber:#ffb000; --amber-d:#a86c00; --green:#1c8237; --green-d:#0f5c24;
@@ -93,6 +95,7 @@
   --paper:#1c1c33; --ink:#fff6e0; --muted:#aaa5c2; --edge:#3e3e66;
   --soft:#29294a; --chip:#29294a; --chip-edge:#0a0a16; --input:#12122a;
   --mystery-a:#25254a; --mystery-b:#1e1e3c; --mystery-ink:#6f6c9a; --toast:#05050c; --link:#9fc4ff;
+  --rpg-top:#1d1c5e; --rpg-bottom:#05050c;
   --red-d:#7a1228; --blue-d:#12347a;
 }
 /* Spooky season: overrides only, switched on by the date check in <head>/season.js. */
@@ -375,6 +378,14 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   .fb-bob svg { animation:fbBob 2.4s steps(4) infinite; }
   @keyframes fbTumble { to { transform:rotate(360deg); } }
   .fb-tumble svg { animation:fbTumble 3.2s steps(4) infinite; }
+
+  /* An RPG text box's ▼, once its words are out: once a second, so well clear of a flash. Still
+     during play (data-playing), where the toasts are news and not a toy. */
+  @keyframes rpgBlink { 0%, 49% { opacity:1; } 50%, 100% { opacity:0; } }
+  :root:not([data-playing]) .typed > .rpgtext::after, :root:not([data-playing]) .rpgtext.typed::after { animation:rpgBlink 1s steps(1) infinite; }
+  /* The menu pointer taps toward what it points at, two frames, as the hand did. Not during play. */
+  @keyframes gloveTap { 0%, 49% { transform:none; } 50%, 100% { transform:translateX(3px); } }
+  :root:not([data-playing]) .glove svg { animation:gloveTap .8s steps(1) infinite; }
 }
 
 /* --- the CRT screen -------------------------------------------------------------------------
@@ -485,3 +496,34 @@ dialog.card, dialog.roommenu { color:var(--ink); }
 .flyby .fb-f1 { visibility:hidden; }
 :root[data-playing] .flybys, :root[data-plain] .flybys { display:none; }
 @media (prefers-reduced-motion: reduce) { .flybys { display:none; } }
+
+/* --- RPG text boxes and the menu pointer ------------------------------------------------------
+   Homages to the 16-bit RPGs, drawn here rather than borrowed: words that type themselves out in a
+   framed window, a ▼ when they are done, and a white glove pointing at the choice. GTC.typeOut,
+   GTC.toast and GTC.ask (common.js) and /shared/pointer.js; the motion itself is in *motion*. */
+/* Out of sight, still read: the whole of a typed message, once (common.js). */
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+/* The untyped rest of a message holds its place, so a box is its full size from the first frame. */
+.tw-rest { visibility:hidden; }
+/* The ▼ is laid out from the start too (hidden until the words are out), so it never pushes a line. */
+.rpgtext::after { content:"▼"; display:inline-block; margin-left:.35em; font-size:.7em; vertical-align:.1em; visibility:hidden; }
+.typed > .rpgtext::after, .rpgtext.typed::after { visibility:visible; }
+.toast, dialog.rpgbox { color:#fff; background:linear-gradient(var(--rpg-top), var(--rpg-bottom));
+  box-shadow:var(--frame), inset 0 0 0 2px var(--rpg-rule), var(--drop); }
+/* A question, at the bottom of the screen where an RPG kept its text. Readable face, and big: it is
+   read once, by someone deciding something. */
+dialog.rpgbox { position:fixed; inset:auto 0 max(24px, env(safe-area-inset-bottom)); margin:0 auto; --px:3px;
+  width:min(34rem, calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 48px); overflow:auto;
+  padding:18px 20px 16px; border:none; font-family:var(--font-name); }
+dialog.rpgbox::backdrop { background:rgba(5,5,12,.55); }
+dialog.rpgbox .rpgtext { margin:0; font-size:1.45rem; line-height:1.25; overflow-wrap:anywhere; }
+/* The choices: room on each one's left for the pointer, and 44px for a thumb. */
+.rpgchoices { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px 16px; margin-top:16px; padding-left:48px; }
+.rpgchoices button { min-height:44px; padding:10px 18px; font-size:1.05rem; }
+dialog.rpgbox button:focus-visible { outline-color:var(--rpg-rule); }
+/* The pointer itself: one fixed sprite, moved by transform. Above the page and its feed, under the
+   CRT glass like everything else; never a target. */
+.glove { position:fixed; top:0; left:0; z-index:30; pointer-events:none; line-height:0;
+  filter:drop-shadow(0 2px 0 rgba(0,0,0,.35)); }
+.glove svg { display:block; }
+:root[data-plain] .glove { display:none; }

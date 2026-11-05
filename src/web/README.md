@@ -172,6 +172,9 @@ web/
                        high-score table. The computer games add their layouts (theme.css), seasonal
                        switch and sound (sound.js). The phones also load common.js, pickers.js (the
                        pool picker and character search) and roommenu.js (Room: leave, remove, pause).
+                       Every page loads pointer.js, the white-glove menu pointer beside whatever
+                       you are about to choose. Questions are GTC.ask (common.js), an RPG text box
+                       that types itself out, never the browser's confirm() or alert().
                        voxels.js and fx3d.js are the 3D accents on landing, lobby and results pages
                        (cubes built in code, no model files). vendor/ holds the one Three.js file
                        they fetch: only the classes fx3d.js uses, bundled and minified with esbuild
