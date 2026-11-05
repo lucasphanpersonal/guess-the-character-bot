@@ -20,7 +20,7 @@ without tangling into it. Two ways to play, from one server, chosen on the home 
   names a character someone is still guessing is refused with the reason, because notes are the
   one thing a player writes that the others read.
 
-And a second game, **Draw the Character** (`/draw/`), for a whole party: a room takes up to 50
+And a second game, **Draw the Character** (*Doodle Dash* on the site, `/draw/`), for a whole party: a room takes up to 50
 (`MAX_PLAYERS_BY_KIND` in `rooms.js`), where Guess the Character keeps the core's 8. Each round, everyone draws once in seat
 order -- and every game in every web game is seated afresh, unlike the last one in that room
 (`core/game/seating.js`): someone else goes first, and in Guess nobody checks (or picks for) the same
@@ -103,10 +103,12 @@ not only the host, Continue Game. A room that is deleted (its last player leaves
 nobody connected) stops its game's clocks with it (`registry.onRoomDeleted`). On a phone-width computer page
 the dark-mode switch moves into it, so the title row keeps its room.
 
-**The home page** (`/`) asks one question first: which game. *Draw the Character* goes to
-`/draw/`, which plays on phones and computers alike, in one room. Guess the Character is two
-choices, because its two ways cannot share a room: *Phones* gets the forehead game's create / join,
-Browse and Test Tilt; *Computers* gets create, join and Browse, and is handed off to `/desk/`
+**The home page** (`/`) asks one question first: which game, of two. Every game is guessing a
+character, so they are named for how they play. *Doodle Dash* (Draw the Character) goes to
+`/draw/`, which plays on phones and computers alike, in one room. *Who Am I?* (Guess the Character)
+asks a second question, because its two ways cannot share a room: *Phones on Foreheads* gets the
+forehead game's create / join, Browse and Test Tilt; *Everyone at a Screen* gets create, join and
+Browse, and is handed off to `/desk/`
 (`?create=1&name=` or `?room=CODE&name=`, wiped from the address once acted on). A hint from
 `pointer: coarse` marks which of those two this device looks like. A computer's join box asks
 `GET /api/room?code=` which game a code belongs to; it answers with the game's path and nothing

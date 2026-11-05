@@ -35,9 +35,9 @@ const NICK_MAX = 20;
 // holds every web game's rooms, so a code means one room -- but a phone that joins a computer
 // room would be dealt into a game its client cannot draw, so each game only joins its own kind.
 const KINDS = {
-  party: 'a phone game. Join it from a phone, at the main address',
-  desk: 'a computer game. Open it on a computer, at /desk/',
-  draw: 'Draw the Character. Open it at /draw/',
+  party: 'Who Am I? on phones. Join it from a phone, at the main address',
+  desk: 'Who Am I? on computers. Open it on a computer, at /desk/',
+  draw: 'Doodle Dash. Open it at /draw/',
 };
 
 function randomCode() {

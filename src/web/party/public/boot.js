@@ -164,24 +164,30 @@ roomMenu.update();
 // The CRT screen's switch on the first screen (the Room menu's is bound by roommenu.js).
 GTC.bindCrtToggles();
 
-// --- the start: which game ---------------------------------------------------------------
+// --- the start: which game, then which way -------------------------------------------------
 //
-// Asked before anything else, because it decides what the rest of the start screen offers: Draw
-// is its own page (a link), and Guess the Character is phones or computers. The answer is
-// remembered only as "where Back from Browse returns to" -- the question itself is asked on every
-// fresh visit, so a phone borrowed for one game is never stuck being a computer.
+// Asked before anything else, because it decides what the rest of the start screen offers. Two
+// games: Doodle Dash is its own page (a link), and Who Am I? is phones or computers -- a second
+// question (#how), since a room is one or the other. The answer is remembered only as "where Back
+// from Browse returns to" -- the questions are asked on every fresh visit, so a phone borrowed for
+// one game is never stuck being a computer.
 let startScreen = 'landing';
-function pickDevice(screen) {
-  startScreen = screen;
+function go(screen) {
   show(screen);
   window.scrollTo(0, 0);
 }
+function pickDevice(screen) {
+  startScreen = screen;
+  go(screen);
+}
+$('pickGuess').addEventListener('click', () => go('how'));
 $('pickPhone').addEventListener('click', () => pickDevice('landing'));
 $('pickComputer').addEventListener('click', () => pickDevice('computer'));
-for (const b of document.querySelectorAll('[data-splash]')) b.addEventListener('click', () => show('splash'));
-// A hint between the two ways to play Guess, never a decision: touch-first is a good guess at
-// "phone", and a tablet or a touchscreen laptop can still pick the other one. Draw needs no hint:
-// it plays on either.
+for (const b of document.querySelectorAll('[data-splash]')) b.addEventListener('click', () => go('splash'));
+for (const b of document.querySelectorAll('[data-how]')) b.addEventListener('click', () => go('how'));
+// A hint between the two ways to play Who Am I?, never a decision: touch-first is a good guess at
+// "phone", and a tablet or a touchscreen laptop can still pick the other one. Doodle Dash needs no
+// hint: it plays on either.
 $(matchMedia('(pointer: coarse)').matches ? 'likelyPhone' : 'likelyComputer').hidden = false;
 
 // The computer game lives on a page of its own, so the computer start hands off: create goes to
@@ -212,7 +218,7 @@ $('pcJoinBtn').addEventListener('click', async () => {
     return ($('pcErr').textContent = "Couldn't reach the server. Check your connection and try again.");
   }
   // A phone room: the forehead game cannot be played from a computer, so say whose it is.
-  if (found.path === '/') return ($('pcErr').textContent = "That room is a phone game. Join it from a phone, or ask the host for a computer room.");
+  if (found.path === '/') return ($('pcErr').textContent = "That room is Who Am I? on phones. Join it from a phone, or ask the host for a room at a screen.");
   location.assign(`${found.path}?room=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`);
 });
 $('pcCodeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));
