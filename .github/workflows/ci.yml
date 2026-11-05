@@ -1,0 +1,39 @@
+# Runs the unit suite and the web socket check on every pull request and on every push to main.
+# Both must pass before a commit (CLAUDE.md, "Verifying a change"); this makes that automatic.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on a PR. Never cancel a run on main: each commit on main needs its own result.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The web socket check waits on sockets; a hang should fail fast, not hold a runner for 6 hours.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` installs exactly what package-lock.json records. postinstall generates data/sounds.
+      - run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      # Boots the real web server on localhost and drives a full game over sockets.
+      - name: Web socket check
+        run: npm run check:web-socket
