@@ -44,7 +44,7 @@ GTC.bindThemeToggles();
 // Sound (/shared/sound.js): short cues for your turn, a result, and a call to rule. Optional-
 // chained like the pickers: a missing sound script costs the cues, never the game -- and hides the
 // switch rather than leave one that does nothing.
-const sound = (cue) => window.GTCSound?.play(cue);
+const sound = (cue, ...args) => window.GTCSound?.play(cue, ...args);
 $('soundToggle').hidden = !window.GTCSound;
 window.GTCSound?.mountToggle($('soundToggle'));
 
@@ -114,6 +114,7 @@ $('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('jo
 // Only the room this link is for: following somebody's invite to another room must not drop you
 // back into yesterday's.
 socket.on('connect', () => {
+  GTC.forgetRosters(); // the room may have changed while this page was away (common.js)
   const last = store.get('gtc_desk_room');
   const name = store.get('gtc_desk_name');
   const linked = params.get('room')?.toUpperCase();
@@ -139,6 +140,7 @@ function enterRoom(state) {
 // Resolves once the server has the leave (or after a moment without an answer), so a caller that is
 // about to navigate away -- the title -- does not cut the request off and leave the seat held.
 function leave() {
+  GTC.forgetRosters();
   const done = new Promise((resolve) => {
     socket.emit('room:leave', {}, resolve);
     setTimeout(resolve, 1500);
@@ -185,6 +187,7 @@ function renderLobby() {
   const code = roomState.code;
   $('roomCode').innerHTML = roomCodeHtml(code);
   $('shareLink').value = `${location.origin}/desk/?room=${code}`;
+  if (GTC.someoneArrived(code, roomState.players, me)) sound('join');
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
@@ -416,6 +419,7 @@ socket.on('setup:state', (view) => {
   $('notesErr').textContent = '';
   heardTurn = '';
   heardRuling = null;
+  overHeard = false;
   const picking = view.checkerPicks;
   const target = view.checking.ownerName;
   $('checkTitle').textContent = picking ? `You pick ${target}'s character` : `You check ${target}'s character`;
@@ -481,6 +485,7 @@ const STATUS_BADGE = {
 // every clock correction) sound it once. Dropped with the game (setup:state, game:over).
 let heardTurn = '';     // `${playerId}:${turnNumber}` of the turn last seen
 let heardRuling = null; // id of the ruling on screen
+let overHeard = false;  // this game's end fanfare has played (game:over)
 
 socket.on('game:state', (view) => {
   const wasMyTurn = gameView?.isMyTurn;
@@ -743,6 +748,8 @@ socket.on('game:over', (res) => {
   heardRuling = null;
   const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
+  // Once per game: a reconnect on this screen is sent game:over again (re-armed by setup:state).
+  if (!overHeard) { overHeard = true; sound('over', res.winners.some((w) => w.playerId === me)); }
   GTC.confetti();
   window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
   $('standings').innerHTML = res.standings

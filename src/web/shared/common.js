@@ -95,6 +95,37 @@
     return true;
   }
 
+  // Whether somebody else sat down since this page last drew this room's lobby: the moment for a
+  // join chime. Unlike isNewSeat, the roster the page first draws is not news -- opening a lobby
+  // of five must not sound five arrivals, and nobody needs a chime for their own arrival.
+  const rostersSeen = new Map(); // room code -> the ids in its lobby when last drawn
+  function someoneArrived(code, players, me) {
+    const before = rostersSeen.get(code);
+    rostersSeen.set(code, new Set(players.map((p) => p.playerId)));
+    return !!before && players.some((p) => p.playerId !== me && !before.has(p.playerId));
+  }
+  // Only arrivals this page SAW are news. Whoever joined while it was offline (a phone asleep in a
+  // pocket) or out of the room is simply there on its return, so each page calls this on every
+  // (re)connect and on leaving, and the next lobby it draws is a fresh baseline.
+  const forgetRosters = () => rostersSeen.clear();
+
+  // Tunes both sound systems play -- the computers' (shared/sound.js) and the phones'
+  // (party/public/audio.js) -- kept here, once, so the same moment cannot come to sound different
+  // on a phone and a computer. Each note: [Hz, ms, gain, voice, start in seconds]. A voice of
+  // undefined is the pulse; gains are the computers', and the phones scale them up (TUNE_SCALE).
+  const TUNES = {
+    // Somebody joined the lobby: a tiny rising blip, the quietest cue there is.
+    join: [[988, 60, 0.14, undefined, 0], [1319, 90, 0.14, undefined, 0.06]],
+    // Game over: three repeated notes and a held one over a triangle bass. Not the got-it
+    // arpeggio, so the end is not heard as one more right answer.
+    over: [
+      [784, 80, 0.24, undefined, 0], [784, 80, 0.24, undefined, 0.11], [784, 80, 0.24, undefined, 0.22],
+      [1047, 480, 0.26, undefined, 0.33], [262, 480, 0.24, 'triangle', 0.33],
+    ],
+    // ...and a step up on top for the winners: the one part that is yours.
+    overWon: [[1319, 110, 0.22, 'triangle', 0.86], [1568, 380, 0.24, 'triangle', 0.97]],
+  };
+
   // Right, wrong, close: one quick tint of the whole screen and a stamped word. Rules, because this
   // is the one effect that covers everything:
   //   - One flash per event, never a loop, at a low opacity, and at most one in `FLASH_GAP_MS`. A
@@ -247,5 +278,5 @@
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, flash, shake, confetti };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
 })();

@@ -109,6 +109,7 @@ function renderLobby(state) {
   // 'block' (not '') -- an <img> defaults to inline, and margin:auto centering (see CSS) only
   // takes effect on a block-level box. Leaving it inline was why the QR rendered off-center.
   qr.style.display = 'block';
+  if (GTC.someoneArrived(state.code, state.players, me)) joinBlip();
   $('playerCount').textContent = `Players (${state.players.length}/${state.maxPlayers ?? 8})`;
   window.GTCFx?.players(state.players.length);
   const roster = $('roster');
@@ -197,6 +198,8 @@ document.addEventListener('visibilitychange', () => {
 let lastSetupView = null;
 function renderSetup(view) {
   keepAwake();
+  clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
+  overHeard = false; // a new game: its end will be news
   finishCelebrated = false;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
@@ -399,6 +402,7 @@ function renderHostList(rows) {
 
 // --- playing ------------------------------------------------------------------------------
 let countdown = null;          // local 1s ticker
+let overHeard = false;         // this game's end fanfare has played (renderOver)
 // The clock is frozen when the current player has dropped (their turn waits for them) or the host
 // has paused the game -- the same stillness either way: no ticking, no bed, no cues.
 const frozen = (v) => !!(v?.paused || v?.hostPaused);
@@ -428,6 +432,8 @@ function bannerText(view, remaining) {
 
 function renderPlaying(view) {
   keepAwake();
+  // Play began on the server's clock: a local countdown a beat behind would blip over the turn.
+  clearInterval(countdown);
   lastPlayView = view;
   // You've got yours: drop out of forehead mode into a "you got it" screen with your reveal.
   if (view.me?.finished) { hideForehead(); return renderFinished(view); }
@@ -629,8 +635,9 @@ function renderOver(result) {
   lastOverHostPicked = !!result.hostPicked;
   if (result.hostPicked) hostPicks.clear();
   $('rematchBtn').textContent = result.hostPicked ? 'Pick Characters Again' : 'Rematch — Same Settings';
-  // a little win sting
-  beep(880, 160); setTimeout(() => beep(1320, 260), 170);
+  // Once per game: a reconnect on the results screen (a phone waking from its lock) is sent
+  // game:over again, and the results are not news the second time. Re-armed by the next setup.
+  if (!overHeard) { overHeard = true; fanfare(result.winners.some((w) => w.playerId === me)); }
   show('over');
 }
 
@@ -956,10 +963,15 @@ function startCountdown(seconds) {
     else wobble($('countNum'), text);
   };
   paint();
+  countBlip(n);
   navigator.vibrate?.(80);
+  // A reconnect in the last half-second is told 0: nothing is left to count, and a ticker would
+  // only run on into negative numbers.
+  if (n <= 0) return;
   countdown = setInterval(() => {
     n -= 1;
     paint();
+    countBlip(n);
     if (n <= 0) { clearInterval(countdown); return; }
     navigator.vibrate?.(40);
   }, 1000);
@@ -1015,6 +1027,8 @@ function joinRoom() {
 function leaveRoom() {
   allowSleep();
   stopBed();
+  clearInterval(countdown);
+  GTC.forgetRosters();
   lastPlayView = null;
   socket.emit('room:leave', {}, () => {});
   currentRoom = null; lastState = null; store.del('gtc_lastRoom'); hideForehead(); show('landing');
@@ -1028,7 +1042,9 @@ function leaveRoom() {
 // --- routing --------------------------------------------------------------------------------
 function routeByStatus(state) {
   if (!state) return;
-  if (state.status === 'lobby') { lastPlayView = null; renderLobby(state); show('lobby'); }
+  // The countdown too: a host who cancels during the grace sends everyone here, and a ticker left
+  // running would go on sounding beats and a "go" for a game that is not starting.
+  if (state.status === 'lobby') { lastPlayView = null; clearInterval(countdown); renderLobby(state); show('lobby'); }
   // 'setup' -> setup:state handler; 'playing' -> game:state handler; 'finished' -> game:over.
   // Those carry the per-player payloads, so status alone doesn't switch to them here.
 }
@@ -1082,6 +1098,7 @@ socket.on('room:kicked', ({ reason }) => {
 });
 
 socket.on('connect', () => {
+  GTC.forgetRosters(); // the room may have changed while this phone was away (common.js)
   // Cleared here rather than after the re-join lands: the socket being up is exactly what the
   // notice was reporting on, and leaving it to the callback meant one Wi-Fi blip left "Reconnecting…"
   // on screen for the rest of the party, long after everything had come back.
