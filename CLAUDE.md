@@ -145,6 +145,10 @@ like it was always there.
   page settles, and if it fails or the device is slow the sprite just stays. No box on any play
   screen, so nothing renders during a game. It never receives a character, and it never reads device
   tilt: iOS asks for motion once per site, and the game needs that answer for itself.
+- **Flybys are rare, behind everything, and never during play** (`shared/flybys.js`). One at a time,
+  30-90s apart, on a fixed layer at z-index -1 with no pointer events. Nothing runs while the tab is
+  hidden, and none fly for reduced motion, under `data-playing` or under `data-plain`. Keep them rare: the bar is a nice
+  surprise now and then, not something moving in the corner of every turn.
 - **Motion is stepped, and all of it sits in one guarded block** (retro.css, *motion*). `steps()`,
   not easing. A screen change slides and never fades: a stalled animation that starts at opacity 0
   leaves the whole game invisible, which is what a hidden page does. A roster is rewritten whole on
