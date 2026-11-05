@@ -150,10 +150,6 @@
   // (re)connect and on leaving, and the next lobby it draws is a fresh baseline.
   const forgetRosters = () => rostersSeen.clear();
 
-  // Tunes both sound systems play -- the computers' (shared/sound.js) and the phones'
-  // (party/public/audio.js) -- kept here, once, so the same moment cannot come to sound different
-  // on a phone and a computer. Each note: [Hz, ms, gain, voice, start in seconds]. A voice of
-  // undefined is the pulse; gains are the computers', and the phones scale them up (TUNE_SCALE).
   // Menu selects: which click answers with a blip, and how often. Both sound systems (shared/sound.js
   // and party/public/audio.js) ask here, so they cannot disagree on what counts as a select.
   // `[data-no-blip]` opts a whole region out (Draw's tools: a colour change mid-drawing is not a menu).
@@ -180,6 +176,10 @@
     },
   };
 
+  // Tunes both sound systems play -- the computers' (shared/sound.js) and the phones'
+  // (party/public/audio.js) -- kept here, once, so the same moment cannot come to sound different
+  // on a phone and a computer. Each note: [Hz, ms, gain, voice, start in seconds]. A voice of
+  // undefined is the pulse; gains are the computers', and the phones scale them up (TUNE_SCALE).
   const TUNES = {
     // Somebody joined the lobby: a short rising jingle, three bright steps and a held top note. Long
     // enough to be a welcome, short enough that a whole party joining in a minute is not a song.
