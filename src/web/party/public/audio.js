@@ -89,6 +89,30 @@ function joinBlip() {
   if (live()) playTune('join');
 }
 
+// A correct guess on the guesser's own phone: the level-up fanfare (GTC.TUNES.levelUp). Everyone
+// else's got-it stays the single chime it was.
+function levelUpFanfare() {
+  if (live()) playTune('levelUp');
+}
+
+// Menu selects: the same blip the computers play on a button or a choice (shared/sound.js). Quiet
+// by design, a throttle for a run of quick taps, and off the cue clock so it never holds a turn
+// cue back. The sound controls are skipped: they play their own confirmation.
+const SELECT_GAP_MS = 70;
+const SELECT_SKIP = '#soundToggle, #muteBtn, #soundCheckBtn, [data-no-blip]';
+const SELECT_TARGET = 'button, [role="radio"], [role="option"], [role="checkbox"], [role="switch"], [role="tab"]';
+let selectedAt = 0;
+document.addEventListener('click', (e) => {
+  const el = e.target.closest?.(SELECT_TARGET);
+  if (!el || el.disabled || el.matches(SELECT_SKIP) || el.closest('[data-no-blip]') || muted) return;
+  ensureAudio(); // a tap is a gesture: the first one also starts audio on iOS
+  if (!live()) return;
+  const now = performance.now();
+  if (now - selectedAt < SELECT_GAP_MS) return;
+  selectedAt = now;
+  for (const [f, ms, gain, type, at] of GTC.TUNES.select) tone(f, ms, { gain: gain * TUNE_SCALE, type, at: audioCtx.currentTime + at });
+}, true);
+
 // The end of the game, a step up on top for a winner's phone. The last finisher's reveal chime
 // arrives a moment before game:over and runs 160ms, so the fanfare waits for it: on top of it, the
 // end would open on the got-it chime and be heard as one more finish.

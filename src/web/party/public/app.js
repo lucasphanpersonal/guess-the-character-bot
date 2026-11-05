@@ -1094,7 +1094,9 @@ socket.on('game:countdown', ({ seconds }) => startCountdown(seconds));
 socket.on('game:state', (view) => renderPlaying(view));
 socket.on('host:state', (view) => renderHost(view));
 socket.on('game:reveal', (r) => {
-  beep(r.kind === 'got' ? 760 : 380, 160); // a chime when someone finishes / bows out
+  // The guesser's own right answer gets the level-up fanfare; a finish by anyone else, the chime; a bow-out, a low note.
+  if (r.kind === 'got' && r.playerId === me) levelUpFanfare();
+  else beep(r.kind === 'got' ? 760 : 380, 160);
   // Seconds left are named at the moment of finishing because that is now the time to beat:
   // anyone who gets theirs in as many turns needs more on the clock to win outright.
   const left = r.secondsLeft == null ? '' : ` with <b>${r.secondsLeft}s</b> left`;

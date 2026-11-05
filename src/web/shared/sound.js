@@ -4,7 +4,8 @@
 // the whole turn. Here everyone can see the screen, so there is no bed and no ticking -- only
 // short one-shot cues for the moments worth looking up for. Often that is a player in another
 // tab, on a call, waiting for their turn. The one exception is Draw's pen on paper (scribble),
-// which sounds only while a pen is actually moving.
+// which sounds only while a pen is actually moving. And one more: a small select blip on every button
+// and choice, which answers a tap rather than announcing anything (see "menu selects" below).
 //
 // Sound sits under the room, not over it. These play on computers that are usually also carrying
 // a voice call, often into headphones, several of them in one room, so every cue is a soft chip
@@ -89,8 +90,8 @@
     turn() { tone(523, 160, { gain: 0.3 }); tone(784, 260, { gain: 0.3, at: 0.13 }); },
     // Somebody got it: a bright rising triad.
     got(nth) { const k = climb(nth); [523, 659, 784].forEach((f, i) => tone(f * k, i === 2 ? 320 : 150, { gain: 0.26, type: 'triangle', at: i * 0.1 })); },
-    // You got it: the same triad with the octave on top, so yours is recognisably yours.
-    gotMine(nth) { const k = climb(nth); [523, 659, 784, 1047].forEach((f, i) => tone(f * k, i === 3 ? 380 : 140, { gain: 0.28, type: 'triangle', at: i * 0.09 })); },
+    // You got it: a level-up fanfare (GTC.TUNES.levelUp), climbing with the same `nth` as the others.
+    gotMine(nth) { const k = climb(nth); for (const [f, ms, gain, type, at] of GTC.TUNES.levelUp) tone(f * k, ms, { gain, type, at }); },
     // A miss: one low falling step, short. Heard often, so it is the quietest thing here.
     miss() { tone(330, 120, { gain: 0.16 }); tone(262, 180, { gain: 0.16, at: 0.1 }); },
     // Close -- held for a ruling: two level notes, a question rather than an answer.
@@ -123,6 +124,29 @@
     cueStart = Math.min(Math.max(now, quietAt + GAP_S), now + MAX_WAIT_S);
     try { cue(...args); } finally { cueStart = 0; }
   }
+
+  // --- menu selects ----------------------------------------------------------------------------
+  // Every button and choice on the page gives a small select blip on click, so a tap is answered
+  // by sound without anyone wiring it in. Delegated, so buttons rendered later are covered too.
+  // Throttled, because a row of palette buttons tapped quickly would otherwise chirp in a run.
+  // Outside the cue queue (free), so a select never holds back a turn or a got-it cue. The sound
+  // controls are left out: they play their own confirmation, and a blip on top would mush with it.
+  const SELECT_GAP_MS = 70;
+  const SELECT_SKIP = '#soundToggle, #muteBtn, #soundCheckBtn, [data-no-blip]';
+  const SELECT_TARGET = 'button, [role="radio"], [role="option"], [role="checkbox"], [role="switch"], [role="tab"]';
+  let selectedAt = 0;
+  function select() {
+    if (muted || !ctx || ctx.state !== 'running') return;
+    const now = performance.now();
+    if (now - selectedAt < SELECT_GAP_MS) return;
+    selectedAt = now;
+    for (const [f, ms, gain, type, at] of GTC.TUNES.select) tone(f, ms, { gain, type, at, free: true });
+  }
+  document.addEventListener('click', (e) => {
+    const el = e.target.closest?.(SELECT_TARGET);
+    if (!el || el.disabled || el.matches(SELECT_SKIP) || el.closest('[data-no-blip]')) return;
+    select();
+  }, true);
 
   // --- reactions (Draw) ------------------------------------------------------------------------
   // A guesser's reaction, as the drawer hears it: a tiny pop, so they know people are watching

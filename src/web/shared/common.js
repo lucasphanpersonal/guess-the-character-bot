@@ -155,8 +155,22 @@
   // on a phone and a computer. Each note: [Hz, ms, gain, voice, start in seconds]. A voice of
   // undefined is the pulse; gains are the computers', and the phones scale them up (TUNE_SCALE).
   const TUNES = {
-    // Somebody joined the lobby: a tiny rising blip, the quietest cue there is.
-    join: [[988, 60, 0.14, undefined, 0], [1319, 90, 0.14, undefined, 0.06]],
+    // Somebody joined the lobby: a short rising jingle, three bright steps and a held top note. Long
+    // enough to be a welcome, short enough that a whole party joining in a minute is not a song.
+    join: [
+      [784, 70, 0.14, undefined, 0], [988, 70, 0.14, undefined, 0.07], [1175, 70, 0.14, undefined, 0.14],
+      [1568, 210, 0.16, undefined, 0.21],
+    ],
+    // A menu select: two quick high notes, like a cursor moving, and quieter than any cue, because a
+    // screen full of buttons would otherwise chirp at every tap. Plays on every button and choice.
+    select: [[1047, 35, 0.1, undefined, 0], [1568, 50, 0.1, undefined, 0.04]],
+    // A correct guess, a level up: a rising arpeggio that resolves on a held top note. The guesser's
+    // own fanfare, so it is the one place in the games that climbs all the way up.
+    levelUp: [
+      [523, 90, 0.2, 'triangle', 0], [659, 90, 0.2, 'triangle', 0.08], [784, 90, 0.2, 'triangle', 0.16],
+      [1047, 90, 0.22, 'triangle', 0.24], [1319, 90, 0.22, 'triangle', 0.32],
+      [1047, 460, 0.24, 'triangle', 0.4], [784, 460, 0.16, 'triangle', 0.4],
+    ],
     // Game over: three repeated notes and a held one over a triangle bass. Not the got-it
     // arpeggio, so the end is not heard as one more right answer.
     over: [
