@@ -607,8 +607,12 @@ function openConfirm(index) {
   // cannot carry one character's names onto the next.
   $('alsoAccept').value = '';
   renderSpellings(c, c.name);
+  syncConfirmGo();
   $('confirmGo').disabled = false;
   $('confirmPick').showModal();
+  // autofocus scrolls Start Drawing into view, which on a short phone scrolled the dialog to its
+  // foot and the other-name panel off the top -- the one thing this dialog is for. Back to the top.
+  $('confirmPick').scrollTop = 0;
   // Straight into the box with a keyboard to hand; on a phone the button keeps the focus
   // (autofocus), so the on-screen keyboard does not cover the names on opening.
   if (matchMedia('(pointer: fine)').matches) $('alsoAccept').focus();
@@ -633,8 +637,19 @@ function renderSpellings(c, keep) {
     .join('');
 }
 const pickedSpelling = () => document.querySelector('#confirmSpellings input:checked')?.value ?? null;
+// With the other-name box empty, the button names the choice being made -- "No Other Name" -- so
+// starting without one is something the drawer reads and agrees to, not a box they never saw.
+// Players kept missing the box; this does not make anyone type, it makes skipping it visible.
+function syncConfirmGo() {
+  const typed = confirming && spellingOptions(confirming.choice).length > 1 + (confirming.choice.swapped ? 1 : 0);
+  $('confirmGo').textContent = typed ? 'Start Drawing' : 'No Other Name — Start Drawing';
+}
 // Typing another name offers it as a spelling at once; what was picked stays picked while it exists.
-$('alsoAccept').addEventListener('input', () => confirming && renderSpellings(confirming.choice, pickedSpelling()));
+$('alsoAccept').addEventListener('input', () => {
+  if (!confirming) return;
+  renderSpellings(confirming.choice, pickedSpelling());
+  syncConfirmGo();
+});
 
 function closeConfirm() {
   confirming = null;
