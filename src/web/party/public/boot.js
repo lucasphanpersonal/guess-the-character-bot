@@ -272,6 +272,9 @@ else if (resumeRoom) $('codeInput').value = resumeRoom;
 // A room link or a rejoin has already answered which game (only a phone page holds a phone
 // room), so skip the question. It is also what shows while the rejoin lands.
 if (resumeRoom) show('landing');
+// `/?how` opens on the second question: the desk and Draw pages link here for "phones on
+// foreheads", where the first question is already answered.
+else if (new URLSearchParams(location.search).has('how')) show('how');
 
 // Last of all: every script is in and currentRoom is decided, so the connect handler can rejoin.
 socket.connect();

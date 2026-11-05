@@ -541,6 +541,12 @@
     .devicebtn.c0 { --face:var(--red); --deep:var(--red-d); }
     .devicebtn.c1 { --face:var(--blue); --deep:var(--blue-d); }
     .devicebtn.c3 { --face:var(--green); --deep:var(--green-d); }
+    /* Both games on screen on a short phone (an iPhone SE, 568px): with the mascot and the hint
+       line the second game sat wholly below the fold, and a choice you cannot see is not offered.
+       Decoration and a hint give way; the two slabs do not. */
+    @media (max-height: 700px) {
+      #splash .fx3d, #splash .splashhint { display:none; }
+    }
     /* Draw is a link (it is another page), dressed as the slabs beside it. */
     .devicebtn.c2 { background:var(--amber); color:#2b1c00; text-decoration:none;
                     box-shadow:var(--frame), inset 0 calc(var(--px) * -2) 0 0 var(--amber-d), inset 0 var(--px) 0 0 rgba(255,255,255,.28), var(--drop); }
@@ -594,10 +600,10 @@
          character, so the names say how each one plays, not that it guesses.
          Skipped when a room link or a rejoin already answers it. -->
     <section id="splash" class="screen active">
-      <div class="fx3d" data-fx="mascot"></div>
+      <div class="fx3d slim" data-fx="mascot"></div>
       <div class="card">
         <div class="gatetitle" data-wobble>What Are We Playing?</div>
-        <p class="hint center">Everyone in a room plays the same one.</p>
+        <p class="hint center splashhint">Everyone in a room plays the same one.</p>
       </div>
       <button id="pickGuess" class="devicebtn c3" type="button">
         <span class="shape" aria-hidden="true">■</span>
