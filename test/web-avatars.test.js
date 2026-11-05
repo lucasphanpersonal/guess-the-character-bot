@@ -73,7 +73,13 @@ module.exports = {
     assert.equal(room.players.get('b').avatar, 5, 'unchanged');
     // Your own face again is fine.
     assert.equal(room.setAvatar('b', 5).ok, true);
-    for (const bad of [-1, Avatars.count, 'cat', null, 2.5]) assert.equal(room.setAvatar('b', bad).ok, false, String(bad));
+    // Face 0 free, so a value that coerces to 0 would succeed if anything coerced it.
+    assert.equal(room.setAvatar('a', 2).ok, true);
+    for (const bad of [-1, Avatars.count, 'cat', null, '', false, true, [], '0', '3', 2.5]) {
+      const r = room.setAvatar('b', bad);
+      assert.equal(r.ok, false, JSON.stringify(bad));
+      assert.match(r.error, /No such face/);
+    }
     assert.equal(room.setAvatar('nobody', 2).ok, false);
   },
 

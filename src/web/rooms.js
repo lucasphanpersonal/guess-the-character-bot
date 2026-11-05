@@ -112,8 +112,9 @@ class Room {
   setAvatar(playerId, avatar) {
     const seat = this.players.get(playerId);
     if (!seat) return { ok: false, error: 'Not in this room.' };
-    const n = Number(avatar);
-    if (!Avatars.valid(n)) return { ok: false, error: 'No such player.' };
+    // Checked as sent, not coerced: Number(null) is 0, a real face. Create and join check the same way.
+    const n = avatar;
+    if (!Avatars.valid(n)) return { ok: false, error: 'No such face.' };
     const worn = this.#worn(playerId);
     if (worn.has(n) && this.players.size <= Avatars.count) {
       const by = [...this.players.values()].find((p) => p.playerId !== playerId && p.avatar === n);
