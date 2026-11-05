@@ -80,6 +80,21 @@ function wobble(el, text, { colour = true } = {}) {
   });
 }
 
+// The heading names what you are playing. The first question (which game) is the site's own
+// screen, so it carries the site's name; every other screen on this page is Who Am I? -- phones,
+// or a computer's start before it hands off to /desk/, which is titled the same. Re-wobbled only
+// on a change, since show() runs on every state push.
+const SITE_NAME = 'Guess the Character';
+const GAME_NAME = 'Who Am I?';
+let shownTitle = null;
+function setTitleFor(screen) {
+  const title = screen === 'splash' ? SITE_NAME : GAME_NAME;
+  if (title === shownTitle) return;
+  shownTitle = title;
+  wobble(document.getElementById('homeTitle'), title);
+  document.title = title;
+}
+
 function show(screen) {
   // A screen that was not showing starts at the top. The page keeps its scroll across screens, so
   // the deal screen opened where the settings screen had been scrolled to, with its check card off
@@ -92,6 +107,7 @@ function show(screen) {
   document.body.classList.toggle('at-play', screen === 'playing' || screen === 'countdown');
   // The same for the shared styles (retro.css), which know no game's screen names.
   document.documentElement.toggleAttribute('data-playing', screen === 'playing' || screen === 'countdown');
+  setTitleFor(screen);
   // Every way in or out of a room ends on a screen change, so this is where Room follows it.
   roomMenu?.update();
 }

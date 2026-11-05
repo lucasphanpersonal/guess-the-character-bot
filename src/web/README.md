@@ -103,7 +103,8 @@ not only the host, Continue Game. A room that is deleted (its last player leaves
 nobody connected) stops its game's clocks with it (`registry.onRoomDeleted`). On a phone-width computer page
 the dark-mode switch moves into it, so the title row keeps its room.
 
-**The home page** (`/`) asks one question first: which game, of two. Every game is guessing a
+**The home page** (`/`) asks one question first: which game, of two. That screen is titled with
+the site's name; every later screen on the page is titled *Who Am I?*, as `/desk/` is. Every game is guessing a
 character, so they are named for how they play. *Doodle Dash* (Draw the Character) goes to
 `/draw/`, which plays on phones and computers alike, in one room. *Who Am I?* (Guess the Character)
 asks a second question, because its two ways cannot share a room: *Phones on Foreheads* gets the
