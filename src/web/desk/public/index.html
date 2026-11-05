@@ -16,7 +16,7 @@
   <link rel="stylesheet" href="/shared/theme.css" />
 </head>
 <body>
-<main>
+<main class="desk">
   <div class="titlebar">
     <h1><a id="title" href="/">Guess the Character</a></h1>
     <div class="titletools">
@@ -225,18 +225,21 @@
           <h2 id="waitTitle"></h2>
           <p class="hint" id="waitHint"></p>
         </div>
-        <div class="card">
+        <div class="card logcard">
           <h2 id="logTitle">Guesses</h2>
           <ul class="log" id="guessLog"></ul>
         </div>
-        <div class="card stack notescard">
-          <div>
-            <h2>Your Notes</h2>
-            <p class="hint">Everyone sees them as you type: keep other people's characters out.</p>
-          </div>
-          <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
-          <p class="err" id="notesErr" role="alert"></p>
+      </div>
+      <!-- Your notes sit beside the side column rather than in it: on your own turn they move under
+           the spotlight (theme.css), where the big mystery card has room to spare, so the guess box,
+           the log and the notes all fit on a laptop screen at once. -->
+      <div class="card stack notescard">
+        <div>
+          <h2>Your Notes</h2>
+          <p class="hint">Everyone sees them as you type: keep others' characters out.</p>
         </div>
+        <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
+        <p class="err" id="notesErr" role="alert"></p>
       </div>
     </div>
     <div class="strip" id="board" aria-label="Everyone playing"></div>
@@ -263,6 +266,8 @@
     </div>
   </section>
 </main>
+<!-- During play on a computer the feed docks in the title row (theme.css, the fitted play screen):
+     anywhere lower, it covered the strip of players. -->
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/shared/common.js"></script>

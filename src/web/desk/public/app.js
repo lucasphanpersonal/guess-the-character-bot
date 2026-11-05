@@ -529,6 +529,8 @@ function renderGame() {
     $('spotlight').innerHTML = spotHtml;
     lastSpotHtml = spotHtml;
   }
+  // You are in the spotlight (your turn, face down): your notes move under it (theme.css).
+  $('game').toggleAttribute('data-spot-me', !!spot?.isMe);
   for (const b of v.board) notesBy.set(b.playerId, b.notes ?? '');
   fillNotes();
   syncMyNotes();
@@ -574,6 +576,9 @@ function renderGame() {
         })
         .join('')
     : '<li class="hint">No guesses yet.</li>';
+  // On a computer the log scrolls inside its card once it outgrows it (theme.css, the fitted play
+  // screen). Newest first, so back to the top: the newest guess is the one everyone is talking about.
+  $('guessLog').scrollTop = 0;
 }
 
 // The clock is the server's: it sends seconds remaining, and this only counts down between
