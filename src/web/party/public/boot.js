@@ -6,10 +6,11 @@
 $('createBtn').addEventListener('click', createRoom);
 $('joinBtn').addEventListener('click', joinRoom);
 $('leaveBtn').addEventListener('click', leaveRoom);
-$('playLeaveBtn').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
+const LEAVE_GAME = 'Leave the game? Your character is revealed and you drop out.';
+$('playLeaveBtn').addEventListener('click', async () => { if (await GTC.ask(LEAVE_GAME, { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom(); });
 // The forehead overlay covers everything else at full-screen, including playLeaveBtn above --
 // this is the only way out while a phone is actually in forehead mode.
-$('foreheadLeave').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
+$('foreheadLeave').addEventListener('click', async () => { if (await GTC.ask(LEAVE_GAME, { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom(); });
 $('overLeaveBtn').addEventListener('click', leaveRoom);
 let lastOverHostPicked = false;
 $('rematchBtn').addEventListener('click', () => {
@@ -50,17 +51,17 @@ syncHowto();
 $('setupBtn').addEventListener('click', () => openConfig());
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);
-$('setupCancelBtn').addEventListener('click', () => {
-  if (confirm('Cancel this deal and send everyone back to the lobby?')) socket.emit('setup:cancel', {}, () => {});
+$('setupCancelBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Cancel this deal and send everyone back to the lobby?', { yes: 'Call It Off', no: 'Keep Dealing', danger: true })) socket.emit('setup:cancel', {}, () => {});
 });
-$('setupLeaveBtn').addEventListener('click', () => {
-  if (confirm('Leave the room?')) leaveRoom();
+$('setupLeaveBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Leave the room?', { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom();
 });
-$('hostCancelBtn').addEventListener('click', () => {
-  if (confirm('Call off this deal and send everyone back to the lobby? Your picks are kept.')) socket.emit('setup:cancel', {}, () => {});
+$('hostCancelBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Call off this deal and send everyone back to the lobby? Your picks are kept.', { yes: 'Call It Off', no: 'Keep Dealing', danger: true })) socket.emit('setup:cancel', {}, () => {});
 });
-$('hostLeaveBtn').addEventListener('click', () => {
-  if (confirm('Leave the room? The game carries on without you.')) leaveRoom();
+$('hostLeaveBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Leave the room? The game carries on without you.', { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom();
 });
 $('undoBtn').addEventListener('click', () => socket.emit('setup:undo', {}, (res) => {
   $('rerollNote').textContent = res?.ok ? `Put ${res.restored} back.` : res?.error || '';
@@ -120,11 +121,11 @@ $('browseBtn').addEventListener('click', openBrowse);
 // player straight back in their room, which the page rejoins on load -- so in a room it asks first,
 // in words that say what leaving costs, and leaves properly. Out of a room it just shows the start
 // screen, which is also the way back from Browse and Test Tilt.
-$('homeTitle').addEventListener('click', (e) => {
+$('homeTitle').addEventListener('click', async (e) => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   if (currentRoom) {
-    if (!confirm(leaveCost())) return;
+    if (!(await GTC.ask(leaveCost(), { yes: 'Leave', no: 'Stay', danger: true }))) return;
     leaveRoom();
   }
   // Home is the first question, which game -- the one screen every other start hangs off.

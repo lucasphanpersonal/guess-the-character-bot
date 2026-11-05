@@ -177,17 +177,17 @@
       render();
     });
     dlg.querySelector('.rmclose').addEventListener('click', () => dlg.close());
-    dlg.querySelector('.rmleave').addEventListener('click', () => {
+    dlg.querySelector('.rmleave').addEventListener('click', async () => {
       const cost = o.leaveCost();
-      if (cost && !confirm(cost)) return;
+      if (cost && !(await GTC.ask(cost, { yes: 'Leave', no: 'Stay', danger: true }))) return;
       dlg.close();
       o.leave();
     });
-    list.addEventListener('click', (e) => {
+    list.addEventListener('click', async (e) => {
       const b = e.target.closest('[data-kick]');
       if (!b) return;
       const room = o.room();
-      if (!confirm(o.removeCost(b.dataset.name, room?.status))) return;
+      if (!(await GTC.ask(o.removeCost(b.dataset.name, room?.status), { yes: 'Remove', danger: true }))) return;
       b.disabled = true;
       err.textContent = '';
       o.socket.emit('room:kick', { playerId: b.dataset.kick }, (res) => {

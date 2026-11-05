@@ -230,19 +230,6 @@
     document.documentElement.toggleAttribute('data-playing', !!document.getElementById(id)?.hasAttribute('data-play'));
   }
 
-  // A passing note in the corner. `html` must already be escaped by the caller. `max` caps how
-  // many stack at once (oldest dropped): the stack grows upward, into whatever sits above it.
-  function toast(html, ms = 4500, { max = 4 } = {}) {
-    const feed = $('feed');
-    if (!feed) return;
-    const t = document.createElement('div');
-    t.className = 'toast';
-    t.innerHTML = html;
-    feed.appendChild(t);
-    setTimeout(() => t.remove(), ms);
-    while (feed.children.length > max) feed.firstChild.remove();
-  }
-
   /**
    * The title is the way home: the site's home page (its href, "/"), where every game is linked.
    * A real link, so it still opens in a new tab. Walking out of a room is the catch: navigating away
@@ -256,7 +243,7 @@
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; // a new tab: let it
       e.preventDefault();
       const cost = leaving();
-      if (cost && !confirm(cost)) return;
+      if (cost && !(await ask(cost, { yes: 'Leave', no: 'Stay', danger: true }))) return;
       if (cost) await leave();
       location.assign(link.href);
     });
@@ -356,5 +343,134 @@
     words();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
+  // --- RPG text: words that type themselves out -----------------------------------------------
+  // The text inside `el` appears letter by letter, as an old RPG's text box printed it. Two rules,
+  // because this sits on messages people need:
+  //   - Layout never moves while it types. The whole text is laid out from the first frame and the
+  //     untyped rest is only invisible (visibility, not removed), so a box is its final size at once
+  //     and nothing under it shifts line by line.
+  //   - It is always quick: TYPE_MS a letter, and the whole of it inside TYPE_MAX_MS however long it
+  //     is. Nothing waits for it -- a box's buttons work from the first frame. Under reduced motion,
+  //     or in a hidden tab, it is simply all there.
+  // Screen readers never see the typing: callers put the text out of sight in full (.sr) and mark
+  // the typed copy aria-hidden, so it is read once and whole. `onDone` runs when it is all out.
+  const TYPE_MS = 14;
+  const TYPE_MAX_MS = 420;
+  function typeOut(el, onDone) {
+    const done = () => { el.classList.add('typed'); onDone?.(); };
+    if (calm() || document.hidden) { done(); return; }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.data) nodes.push(n);
+    const pieces = nodes.map((orig) => {
+      const chars = Array.from(orig.data); // by code point, so no emoji or accent is cut in half
+      const shown = document.createTextNode('');
+      const rest = document.createElement('span');
+      rest.className = 'tw-rest';
+      rest.textContent = orig.data;
+      orig.replaceWith(shown, rest);
+      return { orig, chars, shown, rest };
+    });
+    const total = pieces.reduce((s, p) => s + p.chars.length, 0);
+    const perChar = Math.min(TYPE_MS, TYPE_MAX_MS / Math.max(total, 1));
+    const start = performance.now();
+    const tick = () => {
+      let left = Math.floor((performance.now() - start) / perChar);
+      for (const p of pieces) {
+        const n = Math.max(0, Math.min(p.chars.length, left));
+        left -= p.chars.length;
+        p.shown.data = p.chars.slice(0, n).join('');
+        p.rest.textContent = p.chars.slice(n).join('');
+      }
+      if (left < 0 && !el.dataset.twSkip) { setTimeout(tick, 16); return; }
+      // All out: put the original text nodes back, so the box holds plain text again.
+      for (const p of pieces) { p.rest.remove(); p.shown.replaceWith(p.orig); }
+      done();
+    };
+    tick();
+  }
+
+  // A passing note in the corner, as an RPG text box. `html` must already be escaped by the caller.
+  // `max` caps how many stack at once (oldest dropped): the stack grows upward, into whatever sits
+  // above it. The feed is a live region, so the note's words are in it once and whole (.sr); the
+  // typed copy is for the eyes only.
+  function toast(html, ms = 4500, { max = 4 } = {}) {
+    const feed = $('feed');
+    if (!feed) return;
+    const t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = `<span class="sr">${html}</span><span class="rpgtext" aria-hidden="true">${html}</span>`;
+    feed.appendChild(t);
+    typeOut(t.querySelector('.rpgtext'), () => t.classList.add('typed'));
+    setTimeout(() => t.remove(), ms);
+    while (feed.children.length > max) feed.firstChild.remove();
+  }
+
+  /**
+   * A question in an RPG text box, in place of the browser's confirm(): the words type out, a ▼
+   * blinks when they are done, and the choices sit underneath. Resolves true for `yes`, false for
+   * `no`, Escape, or the box closing any other way. With `no: null` it is a notice with one button
+   * (in place of alert()), and resolves true once it is dismissed.
+   *
+   * What confirm() did for free and this must do by hand:
+   *   - Nothing behind it acts on a key while it is up. confirm() froze the page's scripts; a modal
+   *     <dialog> only makes the page inert to the pointer and focus, and a key pressed in the box
+   *     still bubbles to the document -- where the desk's Y/N rules on a guess. So keys stop here.
+   *   - Anything that acts on its own while it is up checks GTC.asking() (the phones' tilt does:
+   *     a phone held to read "Leave the game?" must not count as a tilt).
+   * The safe answer has the focus, so an Enter pressed out of habit keeps you where you are. The
+   * arrow keys move between the choices, as in a game's menu, and the menu pointer
+   * (/shared/pointer.js) points at the one with the focus.
+   * @returns {Promise<boolean>}
+   */
+  let openAsks = 0;
+  let askSeq = 0;
+  function ask(text, { yes = 'OK', no = 'Cancel', danger = false } = {}) {
+    const dlg = document.createElement('dialog');
+    if (typeof dlg.showModal !== 'function') {
+      if (no == null) { alert(text); return Promise.resolve(true); }
+      return Promise.resolve(confirm(text));
+    }
+    const id = `rpgq${++askSeq}`;
+    dlg.className = 'rpgbox';
+    dlg.setAttribute('aria-labelledby', id);
+    dlg.innerHTML =
+      `<p class="sr" id="${id}">${esc(text)}</p><p class="rpgtext" aria-hidden="true">${esc(text)}</p>` +
+      '<div class="rpgchoices">' +
+      (no != null ? `<button type="button" class="ghost" value="no">${esc(no)}</button>` : '') +
+      `<button type="button" value="yes"${danger ? ' class="bad"' : ''}>${esc(yes)}</button></div>`;
+    const choices = [...dlg.querySelectorAll('.rpgchoices button')];
+    return new Promise((resolve) => {
+      dlg.addEventListener('click', (e) => {
+        const b = e.target.closest('.rpgchoices button');
+        if (b) dlg.close(b.value);
+        else dlg.querySelector('.rpgtext').dataset.twSkip = '1'; // a tap on the words finishes them
+      });
+      dlg.addEventListener('keydown', (e) => {
+        e.stopPropagation();
+        const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        const at = choices.indexOf(document.activeElement);
+        const next = choices[(at + step + choices.length) % choices.length];
+        next.focus();
+        window.GTCPointer?.point(next);
+      });
+      dlg.addEventListener('close', () => {
+        openAsks--;
+        dlg.remove();
+        resolve(no == null ? true : dlg.returnValue === 'yes');
+      });
+      document.body.append(dlg);
+      openAsks++;
+      dlg.showModal();
+      const safe = choices[0];
+      safe.focus();
+      window.GTCPointer?.point(safe);
+      typeOut(dlg.querySelector('.rpgtext'));
+    });
+  }
+  const asking = () => openAsks > 0;
+
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, ask, asking, typeOut, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
 })();

@@ -243,12 +243,12 @@ function removeButton(id, name, { compact = false } = {}) {
     : `<button class="rmbtn" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="${label}">Remove</button>`;
 }
 
-function kick(e) {
+async function kick(e) {
   const b = e.target.closest('[data-kick]');
   if (!b) return;
   const mid = roomState?.status === 'playing';
   const cost = mid ? ' Their score stays on the board; if they are drawing, the turn ends.' : '';
-  if (!confirm(`Remove ${b.dataset.name} from the ${mid ? 'game' : 'room'}?${cost}`)) return;
+  if (!(await GTC.ask(`Remove ${b.dataset.name} from the ${mid ? 'game' : 'room'}?${cost}`, { yes: 'Remove', danger: true }))) return;
   b.disabled = true;
   socket.emit('room:kick', { playerId: b.dataset.kick }, (res) => {
     b.disabled = false;
@@ -833,8 +833,8 @@ function burst(who, mine) {
 }
 
 // Giving up shows you the answer, which cannot be taken back -- so it asks first.
-$('giveUpBtn').addEventListener('click', () => {
-  if (!confirm("Give up on this drawing? You'll see who it is, and score nothing for it.")) return;
+$('giveUpBtn').addEventListener('click', async () => {
+  if (!(await GTC.ask("Give up on this drawing? You'll see who it is, and score nothing for it.", { yes: 'Give Up', no: 'Keep Guessing', danger: true }))) return;
   socket.emit('draw:giveup', {}, (res) => {
     if (!res?.ok) $('chatErr').textContent = res?.error || 'That did not go through.';
   });

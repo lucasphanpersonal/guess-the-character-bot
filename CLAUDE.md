@@ -182,6 +182,12 @@ like it was always there.
   `data-playing`, which stills the flicker. Art, drawings and the QR code stay under it alike (the
   QR was decoded through it); lifting only the canvas striped the same drawing in one place and not
   another. Glow goes on dark surfaces only; on cream it is just blur.
+- **A question is `GTC.ask`, never `confirm()` or `alert()`.** It is an RPG text box: the words type
+  out (always under half a second, and the buttons work from the first frame), the safe answer has
+  the focus, and the white-glove pointer (`shared/pointer.js`) points at it. It is not modal the way
+  confirm() was: scripts behind it keep running, so anything that acts on its own (the phones' tilt)
+  checks `GTC.asking()`, and the box stops keys from reaching the page. Toasts type out the same way;
+  typed text is `aria-hidden` beside a whole `.sr` copy, so a screen reader hears it once.
 - **No emoji in UI copy.** Text-presentation glyphs (✓ ✗ ▲ ‹ › ✕ →) are typography and are
   fine. Anything with Emoji_Presentation (⏭, most pictographs) renders in colour on iOS and
   looks pasted in next to plain-text buttons. The favicon is the one deliberate exception.
