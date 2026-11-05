@@ -152,6 +152,30 @@ const connect = (playerId) => {
   res = await B2.emitWithAck('room:join', { code, nickname: 'Sam' });
   check(res.ok && res.reconnected === true && res.state.players.length === 2, 'B reconnects to the same seat');
 
+  // Faces (shared/avatars.js): one each, picked from the lobby, a worn one refused by name.
+  {
+    const Avatars = require('../src/web/shared/avatars');
+    const [fa, fb] = res.state.players.map((p) => p.avatar);
+    check(Avatars.valid(fa) && Avatars.valid(fb) && fa !== fb, `each seat has a face of its own (${fa}, ${fb})`);
+    const free = [...Array(Avatars.count).keys()].find((n) => n !== fa && n !== fb);
+    // A may still have B's rejoin broadcast in flight, so wait for the state that has the new face.
+    const aSeesFace = new Promise((resolve) => {
+      const on = (st) => {
+        if (st.players.find((p) => p.playerId === pub('pB'))?.avatar !== free) return;
+        A.off('room:state', on);
+        resolve(true);
+      };
+      A.on('room:state', on);
+    });
+    let f = await B2.emitWithAck('room:avatar', { avatar: free });
+    check(f.ok && f.avatar === free, 'B picks a free face');
+    check(await Promise.race([aSeesFace, wait(2000).then(() => false)]), 'and A sees it at once');
+    f = await B2.emitWithAck('room:avatar', { avatar: fa });
+    check(!f.ok && /Alex/.test(f.error), `a face someone wears is refused, by name ("${f.error}")`);
+    f = await B2.emitWithAck('room:avatar', { avatar: '<b>' });
+    check(!f.ok, 'and a face that is not one is refused');
+  }
+
   A.close(); B2.close();
   await wait(50);
 
@@ -888,8 +912,9 @@ const connect = (playerId) => {
     return new Promise((r) => sock.on('connect', () => r(sock)));
   };
   const P = await connectDraw('rP');
-  res = await P.emitWithAck('room:create', { nickname: 'Pia' });
+  res = await P.emitWithAck('room:create', { nickname: 'Pia', avatar: 7 });
   check(res.ok && res.state.kind === 'draw', 'a draw room is created');
+  check(res.state.players[0].avatar === 7, 'with the face its browser asked for');
   // The palette is published, not re-declared: the client draws its swatches from this.
   const { PALETTE: drawPalette } = require('../src/web/draw/socket');
   check(JSON.stringify(res.state.palette) === JSON.stringify(drawPalette) && res.state.sizes?.length > 0,

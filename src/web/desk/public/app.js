@@ -84,7 +84,7 @@ function nickname() {
 $('createBtn').addEventListener('click', () => {
   const name = nickname();
   if (!name) return ($('landingErr').textContent = 'Type your name first.');
-  socket.emit('room:create', { nickname: name }, (res) => {
+  socket.emit('room:create', { nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     enterRoom(res.state);
   });
@@ -93,7 +93,7 @@ $('createBtn').addEventListener('click', () => {
 // `quiet`: a rejoin the page attempted by itself. If that room has gone, say nothing -- an error
 // for something the person never asked for reads as the page being broken.
 function join(code, name, { quiet = false } = {}) {
-  socket.emit('room:join', { code, nickname: name }, (res) => {
+  socket.emit('room:join', { code, nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) {
       if (quiet) return store.set('gtc_desk_room', '');
       return ($('landingErr').textContent = res?.error || 'Could not join that room.');
@@ -185,6 +185,9 @@ function renderRoom() {
   // carries the per-player view the room state does not.
 }
 
+// The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+
 function renderLobby() {
   const code = roomState.code;
   $('roomCode').innerHTML = roomCodeHtml(code);
@@ -193,8 +196,9 @@ function renderLobby() {
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
+  avPicker.update(roomState.players, me);
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
   if (isHost()) {
@@ -383,7 +387,7 @@ function spotlightHtml(b, v) {
   // No "Guessing" badge: whoever is in the spotlight is the one guessing, so it would only repeat
   // the turn bar. Any other status is news.
   const badge = b.status === 'guessing' ? '' : STATUS_BADGE[b.status] ?? '';
-  return `<div class="spothead"><span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${badge}${turn}</div>
+  return `<div class="spothead">${GTC.faceOf(roomState?.players, b.playerId, 36)}<span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${badge}${turn}</div>
     ${artHtml('art', b.character)}
     <div class="spotname">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
     <div class="src">${b.character ? esc(b.character.source) : ''}</div>
@@ -398,7 +402,7 @@ function tileHtml(b, v) {
   const turns = b.turns ? `<span class="turns">${b.turns} turn${b.turns === 1 ? '' : 's'}</span>` : '';
   return `<div class="tile${current ? ' current' : ''}${done ? ' done' : ''}">
       ${artHtml('tart', b.character)}
-      <div class="tname"><span class="n" title="${esc(b.name)}">${esc(b.isMe ? `${b.name} (you)` : b.name)}</span>${turns}</div>
+      <div class="tname">${GTC.faceOf(roomState?.players, b.playerId)}<span class="n" title="${esc(b.name)}">${esc(b.isMe ? `${b.name} (you)` : b.name)}</span>${turns}</div>
       <div class="tchar">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
       ${STATUS_BADGE[b.status] ?? ''}
       <div class="tnotes" data-notes-for="${esc(b.playerId)}"></div>
@@ -771,6 +775,7 @@ socket.on('game:over', (res) => {
         : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
       return GTC.hiscoreRow({
         place: s.place,
+        face: GTC.faceOf(roomState?.players, s.playerId),
         imageUrl: s.character?.imageUrl ?? null,
         name: s.name,
         detail: `was ${s.character?.name ?? '—'}${out}`,

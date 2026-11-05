@@ -107,7 +107,7 @@ function enterRoom(state) {
 
 // `quiet`: a rejoin the page attempted by itself, which says nothing if the room has gone.
 function join(code, name, { quiet = false } = {}) {
-  socket.emit('room:join', { code, nickname: name }, (res) => {
+  socket.emit('room:join', { code, nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) {
       if (quiet) return store.set('gtc_draw_room', '');
       return ($('landingErr').textContent = res?.error || 'Could not join that room.');
@@ -119,7 +119,7 @@ function join(code, name, { quiet = false } = {}) {
 $('createBtn').addEventListener('click', () => {
   const name = nickname();
   if (!name) return ($('landingErr').textContent = 'Type your name first.');
-  socket.emit('room:create', { nickname: name }, (res) => {
+  socket.emit('room:create', { nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     enterRoom(res.state);
   });
@@ -196,6 +196,9 @@ socket.on('room:state', (state) => {
   renderPlayers();
 });
 
+// The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+
 function renderRoom() {
   roomMenu.update(); // the Room button and its list follow every roster change
   if (!roomState || roomState.status !== 'lobby') return;
@@ -206,8 +209,9 @@ function renderRoom() {
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
+    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
     .join('');
+  avPicker.update(roomState.players, me);
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
   if (!isHost()) return;
@@ -586,7 +590,7 @@ function renderPlayers() {
             ? '<span class="tag gaveup">Gave up</span>'
             : '';
       const name = `${esc(p.name)}${p.playerId === me ? ' (you)' : ''}`;
-      return `<li data-pid="${esc(p.playerId)}" class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
+      return `<li data-pid="${esc(p.playerId)}" class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${GTC.faceOf(roomState?.players, p.playerId)}<span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
     })
     .join('');
   if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;

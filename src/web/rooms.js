@@ -14,6 +14,9 @@
 // `Game`; this file only gets people into the same room and keeps the roster live.
 
 const { MAX_PLAYERS } = require('../core/game/Lobby');
+// The faces a seat can wear. The art lives with the pages (shared/avatars.js); the server needs
+// only how many there are, and reads it from that same file so the two cannot disagree.
+const Avatars = require('./shared/avatars');
 
 // How many seats a room of each kind has. Guess the Character keeps the core's 8 -- the Discord
 // game's, and a forehead game's natural size, everyone watching everyone. Drawing has no such
@@ -68,7 +71,7 @@ class Room {
     // session. What makes a host's ticks "stay" is their own browser re-applying them to each new
     // room they host (shared/pickers.js, content.js keepListsOff) -- still never the selection.
     this.excludedListIds = new Set();
-    // playerId -> { playerId, nickname, connected, joinedAt }
+    // playerId -> { playerId, nickname, avatar, joinedAt, conns }
     this.players = new Map();
     // Names of people who have given up their seat. A game in progress still lists them in its
     // turn order, its reveals and its final standings, and those read the roster for names -- so
@@ -79,12 +82,45 @@ class Room {
     this.order = [];
   }
 
-  addSeat(playerId, nickname) {
+  addSeat(playerId, nickname, avatar) {
     // `conns` is the set of live socket ids for this seat. A seat is "connected" while any
     // socket holds it -- so a second tab, or a reconnect whose new socket arrives before the old
     // one's disconnect, never flips the player to offline. See attach/detachConnection.
-    this.players.set(playerId, { playerId, nickname, joinedAt: Date.now(), conns: new Set() });
+    this.players.set(playerId, { playerId, nickname, avatar: this.#faceFor(avatar), joinedAt: Date.now(), conns: new Set() });
     this.order.push(playerId);
+  }
+
+  // Faces are one per seat while there are faces to go round, so a glance at a roster of eight
+  // tells everyone apart. A Draw room can hold more people than there are faces; then they are
+  // shared, and any face may be picked, because no rule could keep them all different.
+  #worn(except) {
+    const worn = new Set();
+    for (const p of this.players.values()) if (p.playerId !== except) worn.add(p.avatar);
+    return worn;
+  }
+
+  // A newcomer gets the face their browser last chose if it is free, or a free one at random.
+  #faceFor(preferred) {
+    const worn = this.#worn();
+    if (Avatars.valid(preferred) && !worn.has(preferred)) return preferred;
+    const free = [...Array(Avatars.count).keys()].filter((n) => !worn.has(n));
+    const from = free.length ? free : [...Array(Avatars.count).keys()];
+    return from[Math.floor(Math.random() * from.length)];
+  }
+
+  /** The lobby's picker: wear face `avatar`, unless someone else already does. */
+  setAvatar(playerId, avatar) {
+    const seat = this.players.get(playerId);
+    if (!seat) return { ok: false, error: 'Not in this room.' };
+    const n = Number(avatar);
+    if (!Avatars.valid(n)) return { ok: false, error: 'No such player.' };
+    const worn = this.#worn(playerId);
+    if (worn.has(n) && this.players.size <= Avatars.count) {
+      const by = [...this.players.values()].find((p) => p.playerId !== playerId && p.avatar === n);
+      return { ok: false, error: `${by?.nickname || 'Someone'} is already the ${Avatars.nameOf(n)}.` };
+    }
+    seat.avatar = n;
+    return { ok: true, avatar: n };
   }
 
   removeSeat(playerId) {
@@ -114,6 +150,7 @@ class Room {
         return {
           playerId: p.playerId,
           nickname: p.nickname,
+          avatar: p.avatar,
           connected: p.conns.size > 0,
           isHost: p.playerId === this.hostPlayerId,
         };
@@ -184,7 +221,7 @@ class RoomRegistry {
     return removed;
   }
 
-  createRoom({ hostPlayerId, nickname, kind = 'party' }) {
+  createRoom({ hostPlayerId, nickname, kind = 'party', avatar }) {
     if (!hostPlayerId) return { ok: false, error: 'Missing player id.' };
     if (!KINDS[kind]) return { ok: false, error: 'Unknown game.' };
     const nick = cleanNickname(nickname);
@@ -203,7 +240,7 @@ class RoomRegistry {
     if (!code) return { ok: false, error: 'Could not allocate a room code, try again.' };
 
     const room = new Room(code, hostPlayerId, kind);
-    room.addSeat(hostPlayerId, nick);
+    room.addSeat(hostPlayerId, nick, avatar);
     this.rooms.set(code, room);
     return { ok: true, room };
   }
@@ -215,7 +252,7 @@ class RoomRegistry {
    * rejected for a full room -- they already hold a seat. A new playerId is subject to the
    * lobby being open and not full.
    */
-  joinRoom(code, { playerId, nickname, kind = 'party' }) {
+  joinRoom(code, { playerId, nickname, kind = 'party', avatar }) {
     const room = this.getRoom(code);
     if (!room) return { ok: false, error: 'No room with that code.' };
     if (!playerId) return { ok: false, error: 'Missing player id.' };
@@ -241,7 +278,8 @@ class RoomRegistry {
     }
     if (room.players.size >= maxPlayersFor(room.kind)) return { ok: false, error: 'That room is full.' };
 
-    room.addSeat(playerId, nick);
+    // `avatar` is only a preference, for a new seat: a reconnect keeps the face it already wears.
+    room.addSeat(playerId, nick, avatar);
     return { ok: true, room, reconnected: false };
   }
 

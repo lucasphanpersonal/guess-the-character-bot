@@ -389,15 +389,24 @@ function attachSockets(nsp, { registry, setup, variant }) {
     const room = () => registry.getRoom(socket.data.code);
     const isHost = () => room()?.hostPlayerId === playerId;
 
-    socket.on('room:create', ({ nickname } = {}, ack) => {
-      const res = access.createRoom(socket, registry, variant.kind, nickname);
+    socket.on('room:create', ({ nickname, avatar } = {}, ack) => {
+      const res = access.createRoom(socket, registry, variant.kind, nickname, avatar);
       if (!res.ok) return ack?.(res);
       ack?.({ ok: true, state: res.room.publicState() });
       broadcastRoom(res.room);
     });
 
-    socket.on('room:join', ({ code, nickname } = {}, ack) => {
-      const res = access.joinRoom(socket, registry, variant.kind, code, nickname);
+    // The lobby's face picker (shared/avatars.js). Any time, not only in the lobby: a face is
+    // decoration, and the picker is simply not shown once a game is under way.
+    socket.on('room:avatar', ({ avatar } = {}, ack) => {
+      const res = access.setAvatar(socket, registry, avatar);
+      if (!res.ok) return ack?.(res);
+      ack?.({ ok: true, avatar: res.avatar });
+      broadcastRoom(res.room);
+    });
+
+    socket.on('room:join', ({ code, nickname, avatar } = {}, ack) => {
+      const res = access.joinRoom(socket, registry, variant.kind, code, nickname, avatar);
       if (!res.ok) return ack?.(res);
       ack?.({ ok: true, state: res.room.publicState(), reconnected: res.reconnected });
       broadcastRoom(res.room);

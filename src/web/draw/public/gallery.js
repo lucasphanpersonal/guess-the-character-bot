@@ -20,7 +20,7 @@ socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts
   GTC.confetti();
   window.GTCFx?.podium(standings);
   $('standings').innerHTML = standings
-    .map((s) => GTC.hiscoreRow({ place: s.place, name: s.name, detail: s.left ? '(left)' : '', score: s.score, unit: 'pts' }))
+    .map((s) => GTC.hiscoreRow({ place: s.place, face: GTC.faceOf(roomState?.players, s.playerId), name: s.name, detail: s.left ? '(left)' : '', score: s.score, unit: 'pts' }))
     .join('');
   $('hostOver').hidden = !isHost();
   $('guestOver').hidden = isHost();
