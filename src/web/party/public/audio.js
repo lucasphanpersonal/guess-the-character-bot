@@ -36,12 +36,20 @@ let muted = store.get('gtc_muted') === '1';
 // energy than a sine at the same level, so an unnamed voice is scaled down to keep the balance every
 // gain here was set for. The time-up alarm names 'square' on purpose, to be as loud as it was.
 const PULSE_LEVEL = 0.4;
+// Every note not routed to the bed goes out through this one node, so muting can cut what is
+// already sounding: a cue's notes are all scheduled up front, and a fanfare runs over a second
+// after the switch was pressed. setMuted() disconnects it, and the next cue makes a fresh one.
+let cueGain = null;
+function cueOut() {
+  if (!cueGain) { cueGain = audioCtx.createGain(); cueGain.connect(audioCtx.destination); }
+  return cueGain;
+}
 function tone(freq = 880, ms = 180, { gain = 0.5, type, at = null, out = null } = {}) {
   if (!audioCtx || muted) return;
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = type ?? 'square'; o.frequency.value = freq; o.connect(g); g.connect(out || audioCtx.destination);
+    o.type = type ?? 'square'; o.frequency.value = freq; o.connect(g); g.connect(out || cueOut());
     if (!type) gain *= PULSE_LEVEL;
     const t = at ?? audioCtx.currentTime;
     g.gain.setValueAtTime(0.0001, t);
@@ -222,7 +230,10 @@ function renderSoundCheck() {
 function setMuted(next) {
   muted = next;
   store.set('gtc_muted', muted ? '1' : '0');
-  if (muted) stopBed();
+  if (muted) {
+    stopBed();
+    if (cueGain) { try { cueGain.disconnect(); } catch {} cueGain = null; }
+  }
   renderSoundCheck();
 }
 

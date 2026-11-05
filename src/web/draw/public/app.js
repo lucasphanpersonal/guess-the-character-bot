@@ -135,6 +135,7 @@ $('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('jo
 
 // A reload mid-game rejoins -- but only the room this link is for.
 socket.on('connect', () => {
+  GTC.forgetRosters(); // the room may have changed while this page was away (common.js)
   const last = store.get('gtc_draw_room');
   const name = store.get('gtc_draw_name');
   const linked = params.get('room')?.toUpperCase();
@@ -152,6 +153,7 @@ socket.on('connect', () => {
 // Resolves once the server has the leave (or after a moment without an answer), so a caller that is
 // about to navigate away -- the title -- does not cut the request off and leave the seat held.
 function leave() {
+  GTC.forgetRosters();
   const done = new Promise((resolve) => {
     socket.emit('room:leave', {}, resolve);
     setTimeout(resolve, 1500);

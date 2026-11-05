@@ -104,6 +104,10 @@
     rostersSeen.set(code, new Set(players.map((p) => p.playerId)));
     return !!before && players.some((p) => p.playerId !== me && !before.has(p.playerId));
   }
+  // Only arrivals this page SAW are news. Whoever joined while it was offline (a phone asleep in a
+  // pocket) or out of the room is simply there on its return, so each page calls this on every
+  // (re)connect and on leaving, and the next lobby it draws is a fresh baseline.
+  const forgetRosters = () => rostersSeen.clear();
 
   // Right, wrong, close: one quick tint of the whole screen and a stamped word. Rules, because this
   // is the one effect that covers everything:
@@ -257,5 +261,5 @@
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, flash, shake, confetti };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, flash, shake, confetti };
 })();

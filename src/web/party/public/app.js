@@ -198,6 +198,7 @@ document.addEventListener('visibilitychange', () => {
 let lastSetupView = null;
 function renderSetup(view) {
   keepAwake();
+  clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
   finishCelebrated = false;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
@@ -958,6 +959,9 @@ function startCountdown(seconds) {
   paint();
   countBlip(n);
   navigator.vibrate?.(80);
+  // A reconnect in the last half-second is told 0: the go has just sounded, and a ticker would
+  // only count on into -1 and sound it a second time over play.
+  if (n <= 0) return;
   countdown = setInterval(() => {
     n -= 1;
     paint();
@@ -1017,6 +1021,8 @@ function joinRoom() {
 function leaveRoom() {
   allowSleep();
   stopBed();
+  clearInterval(countdown);
+  GTC.forgetRosters();
   lastPlayView = null;
   socket.emit('room:leave', {}, () => {});
   currentRoom = null; lastState = null; store.del('gtc_lastRoom'); hideForehead(); show('landing');
@@ -1030,7 +1036,9 @@ function leaveRoom() {
 // --- routing --------------------------------------------------------------------------------
 function routeByStatus(state) {
   if (!state) return;
-  if (state.status === 'lobby') { lastPlayView = null; renderLobby(state); show('lobby'); }
+  // The countdown too: a host who cancels during the grace sends everyone here, and a ticker left
+  // running would go on sounding beats and a "go" for a game that is not starting.
+  if (state.status === 'lobby') { lastPlayView = null; clearInterval(countdown); renderLobby(state); show('lobby'); }
   // 'setup' -> setup:state handler; 'playing' -> game:state handler; 'finished' -> game:over.
   // Those carry the per-player payloads, so status alone doesn't switch to them here.
 }
@@ -1084,6 +1092,7 @@ socket.on('room:kicked', ({ reason }) => {
 });
 
 socket.on('connect', () => {
+  GTC.forgetRosters(); // the room may have changed while this phone was away (common.js)
   // Cleared here rather than after the re-join lands: the socket being up is exactly what the
   // notice was reporting on, and leaving it to the callback meant one Wi-Fi blip left "Reconnecting…"
   // on screen for the rest of the party, long after everything had come back.
