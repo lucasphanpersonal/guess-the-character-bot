@@ -42,6 +42,10 @@ h2 { font-size:1.35rem; margin:0 0 .6rem; }
      the switch moves into the Room menu (roommenu.js) for as long as the button is showing. */
   .titletools:has(.roombtn:not([hidden])) > .themetoggle { display:none; }
 }
+/* The arcade face cannot shrink and "Character" cannot break, so at 24px the title and its controls
+   need 360px plus the page's padding: on a 320-360px phone the row ran 36px past the screen and the
+   whole page panned sideways. The next crisp size down (a multiple of 8) fits beside them. */
+@media (max-width: 374px) { :root { --title-size:16px; } }
 .screen { display:none; }
 .screen.active { display:block; }
 .card { padding:20px; }
