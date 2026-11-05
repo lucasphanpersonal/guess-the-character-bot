@@ -370,11 +370,16 @@ dialog.card, dialog.roommenu { color:var(--ink); }
    season.js and the phones' <head>; the switches are GTC.bindCrtToggles). One fixed layer over the
    page, never a transform of the page itself: bending the page would blur every line of text and
    make anything fixed inside it scroll away.
-   Kept in check, because it lies over the cream panels people read. A line every 3px at 16% darkens
-   text and paper alike, so it costs no contrast. The wash is what costs it: 8% of a phosphor green
-   over everything, which tints the whites and lifts the blacks the way an old tube did. Measured
-   against the palette: ink on cream 16.2:1 -> 13.3:1, muted on cream 6.8 -> 5.7, white on a blue
-   button 5.4 -> 4.7, the red error line 4.6 -> 4.5. Raise the wash and those last two go first.
+   Kept in check, because it lies over the panels people read. Every layer costs contrast (the
+   contrast formula's flare term means even a black that darkens text and paper alike costs some),
+   so each is measured against the palette, light and dark. The wash -- 7% of a phosphor green over
+   everything, tinting the whites and lifting the blacks the way an old tube did -- is the look, and
+   alone takes ink on cream 16.2:1 -> 13.7, muted on cream 6.8 -> 5.8, white on a blue button
+   5.4 -> 4.8, the red error line 4.6 -> 4.5, dark mode's muted on --soft 5.8 -> 5.1, and white on
+   a green button 5.0 -> 4.3 (bold, button-sized). The rim is kept low for that reason: nothing
+   until 65% out, .2 at the very corner, where only the title row's controls sit (Room, ink on
+   cream: 9.4). At the rim muted text holds 4.9 (light) and 4.0 (dark, on --soft). Raise either
+   layer and the red error line and the green button go first.
    It takes no taps, and screen readers never see it (a pseudo-element with no text).
    Below the flash and confetti (44, 45), which are their own effects, and below the forehead overlay
    only by being switched off there (data-plain): that overlay sits inside main's stacking context
@@ -385,9 +390,9 @@ dialog.card, dialog.roommenu { color:var(--ink); }
    checked: it still decodes with the glass over it. */
 :root[data-crt] body::after { content:""; position:fixed; inset:0; z-index:40; pointer-events:none;
   background:
-    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 52%, rgba(0,0,0,.5) 100%),
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 65%, rgba(0,0,0,.2) 100%),
     repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.16) 2px 3px),
-    linear-gradient(rgba(80,255,150,.08), rgba(80,255,150,.08)); }
+    linear-gradient(rgba(80,255,150,.07), rgba(80,255,150,.07)); }
 /* A page sets data-plain on <html> while a display surface is up (the phones' forehead view), and the
    glass steps aside. A page-set attribute rather than a selector for the surface, so this file names
    no game's elements and works without :has(). */

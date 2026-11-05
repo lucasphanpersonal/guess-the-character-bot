@@ -169,10 +169,10 @@ like it was always there.
   unnamed voice is scaled by `PULSE_LEVEL`. Off by default on the computers, where everyone can see
   the screen; on by default on the phones, where the wearer hears the clock or does not know it.
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
-  screen*). It lies over the cream panels people read, so it is held in check: scanlines cost no
-  contrast (they darken text and paper alike), but the green wash does, and its comment holds the
-  measured ratios. Raise the wash and the red error line and white-on-blue buttons drop below 4.5:1
-  first. Shared CSS names no game's elements: a page sets `data-plain`
+  screen*). It lies over the panels people read, so it is held in check, and every layer costs
+  contrast (even a black that darkens text and paper alike: the formula's flare term). Its comment
+  holds the measured ratios, light and dark, at the centre and at the rim. Raise the wash or the
+  rim and the red error line and white-on-green buttons go first. Shared CSS names no game's elements: a page sets `data-plain`
   on `<html>` while a display surface is up (the forehead view: it sits in `main`'s stacking
   context, so only `display:none` can clear the glass), and a screen marked `data-play` sets
   `data-playing`, which stills the flicker. Art, drawings and the QR code stay under it alike (the
