@@ -203,8 +203,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 let lastSetupView = null;
-// When the host's Remove buttons may first appear for this deal. A fresh deal (no setup view held
-// before) holds them back a few seconds, so the host does not hit Remove on the cards as they land.
+// When the host's Remove buttons may first appear for this deal. Entering the deal screen from
+// another screen holds them back a few seconds, so the host does not hit Remove on the cards as they land.
 const REMOVE_HOLD_MS = 4000;
 let removeArmedAt = 0;
 function renderSetup(view) {
