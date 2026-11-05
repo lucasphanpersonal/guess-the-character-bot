@@ -182,8 +182,11 @@
     setTimeout(() => box.remove(), 3000);
   }
 
+  // A screen marked data-play in the markup is play: <html> says so (data-playing) for as long as it
+  // shows, so shared styles can quiet down without knowing any one game's screen names.
   function show(id) {
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
+    document.documentElement.toggleAttribute('data-playing', !!document.getElementById(id)?.hasAttribute('data-play'));
   }
 
   // A passing note in the corner. `html` must already be escaped by the caller. `max` caps how
@@ -252,31 +255,65 @@
     };
   }
 
-  // Dark mode's switch. season.js already applied the saved choice (or the computer's setting)
-  // before first paint; this wires every switch on the page (.themetoggle, role="switch" -- the
-  // same as the phones' page: the title row's, and the Room menu's at phone width) to flip it,
-  // saves the choice in gtc_theme (shared with the phones' page),
-  // and keeps aria-checked true to the theme, which is also what slides the knob.
-  function bindThemeToggles() {
-    const root = document.documentElement;
-    const isDark = () => root.dataset.theme === 'dark';
-    const label = () => {
-      for (const b of document.querySelectorAll('.themetoggle')) b.setAttribute('aria-checked', String(isDark()));
+  // A switch for one setting held on <html> (dark mode, the CRT screen). season.js applied the saved
+  // choice before first paint; this wires every switch matching `selector` inside `scope` to flip it,
+  // saves the choice, and keeps every such switch on the page true to it (aria-checked, which is also
+  // what slides the knob), whichever one was pressed. Idempotent and scoped, because switches arrive
+  // at different times: a page's own at boot, the Room menu's when it mounts.
+  function bindSwitch({ selector, isOn, set, scope = document }) {
+    const sync = () => {
+      for (const b of document.querySelectorAll(selector)) b.setAttribute('aria-checked', String(isOn()));
     };
-    for (const b of document.querySelectorAll('.themetoggle')) {
+    for (const b of scope.querySelectorAll(selector)) {
+      if (b.dataset.bound) continue;
+      b.dataset.bound = '1';
       b.addEventListener('click', () => {
-        const dark = !isDark();
+        set(!isOn());
+        sync();
+      });
+    }
+    sync();
+    return sync;
+  }
+
+  // Dark mode (gtc_theme, shared with the phones' page). The browser's own chrome follows the field.
+  function bindThemeToggles(scope) {
+    const root = document.documentElement;
+    bindSwitch({
+      selector: '.themetoggle',
+      scope,
+      isOn: () => root.dataset.theme === 'dark',
+      set(dark) {
         if (dark) root.dataset.theme = 'dark';
         else delete root.dataset.theme;
         store.set('gtc_theme', dark ? 'dark' : 'light');
         const spooky = root.dataset.season === 'spooky';
         const meta = document.querySelector('meta[name=theme-color]');
         if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#0e0f1a') : spooky ? '#cc4a0c' : '#1f1a4d';
-        label();
-      });
-    }
-    label();
+      },
+    });
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
+  // The CRT screen (retro.css, *the CRT screen*; gtc_crt, on until someone turns it off). Its rows
+  // also say On or Off in words (.crtstate), so the state never rests on the knob alone.
+  function bindCrtToggles(scope) {
+    const root = document.documentElement;
+    const words = () => {
+      for (const s of document.querySelectorAll('.crtstate')) s.textContent = 'crt' in root.dataset ? 'On' : 'Off';
+    };
+    bindSwitch({
+      selector: '.crttoggle',
+      scope,
+      isOn: () => 'crt' in root.dataset,
+      set(on) {
+        if (on) root.dataset.crt = 'on';
+        else delete root.dataset.crt;
+        store.set('gtc_crt', on ? 'on' : 'off');
+        words();
+      },
+    });
+    words();
+  }
+
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
 })();

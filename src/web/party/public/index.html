@@ -6,33 +6,10 @@
   <meta name="theme-color" content="#1f1a4d" />
   <title>Guess the Character</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
-  <!-- Seasonal theme: spooky season. Decided here, in <head>, so the attribute is on <html>
-       before the first paint and the page never flashes purple on its way to orange. It ends by
-       itself on November 1 (the visitor's local midnight), so nobody has to remember to take the
-       pumpkins down. Move the date to extend it; delete this block and the [data-season] CSS to
-       retire it. The favicon is the one place an emoji is allowed (see CLAUDE.md). -->
-  <script>
-    if (new Date() < new Date(2026, 10, 1)) {
-      document.documentElement.dataset.season = 'spooky';
-      document.querySelector('meta[name=theme-color]').content = '#cc4a0c';
-      document.querySelector('link[rel=icon]').href =
-        "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎃</text></svg>";
-    }
-  </script>
-  <!-- Dark mode, decided before first paint for the same reason as the season: a dark page must
-       not flash white on its way there. The toggle's choice (gtc_theme) wins; until someone has
-       pressed it, the phone's own light/dark setting does. Storage can be blocked, hence the try. -->
-  <script>
-    (function () {
-      var saved = null;
-      try { saved = localStorage.getItem('gtc_theme'); } catch (e) { /* follow the phone */ }
-      var dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (!dark) return;
-      document.documentElement.dataset.theme = 'dark';
-      document.querySelector('meta[name=theme-color]').content =
-        document.documentElement.dataset.season === 'spooky' ? '#2a1307' : '#0e0f1a';
-    })();
-  </script>
+  <!-- The season, dark mode and the CRT screen, decided before the first paint so the page never
+       flashes the wrong look on its way to the right one. The same blocking script as /desk/ and
+       /draw/, so the three pages cannot decide them differently. -->
+  <script src="/shared/season.js"></script>
   <link rel="preload" href="/shared/fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/shared/fonts/pixelify-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/shared/retro.css" />
@@ -615,6 +592,9 @@
         <span><b>Guess on Computers</b><small>Guess the Character at a screen. You see every character but your own.</small></span>
         <span class="likely" id="likelyComputer" hidden>Looks Like a Computer</span>
       </button>
+      <!-- The CRT screen's switch (GTC.bindCrtToggles): here on the first screen, and in the Room
+           menu once in a room. Not in the corner, which already holds three controls. -->
+      <div class="crtrow"><span>CRT Screen</span><button class="crttoggle" type="button" role="switch" aria-checked="true" aria-label="CRT screen effect"><span class="knob" aria-hidden="true">▤</span></button><span class="crtstate" aria-hidden="true">On</span></div>
     </section>
 
     <!-- Computer: the same create / join as the phones, for Guess the Character on computers, which

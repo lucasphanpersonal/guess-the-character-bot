@@ -85,6 +85,8 @@ function show(screen) {
   // Idle whimsy stops once play starts -- phones are on foreheads, and the only thing that
   // should be moving is the game.
   document.body.classList.toggle('at-play', screen === 'playing' || screen === 'countdown');
+  // The same for the shared styles (retro.css), which know no game's screen names.
+  document.documentElement.toggleAttribute('data-playing', screen === 'playing' || screen === 'countdown');
   // Every way in or out of a room ends on a screen change, so this is where Room follows it.
   roomMenu?.update();
 }
@@ -872,6 +874,7 @@ let foreheadMyTurn = false;
 function renderForehead(view) {
   const el = $('forehead');
   el.classList.add('active');
+  plainScreen(true);
   el.classList.toggle('mine', view.isMyTurn);
   $('foreheadCount').style.display = 'none'; // countdown is over; show the character
   // The TOP guide belongs to positioning, so it stays up exactly as long as the card is withheld.
@@ -918,7 +921,10 @@ function updateForeheadDebug() {
     : '';
 }
 
-function hideForehead() { $('forehead').classList.remove('active'); foreheadMyTurn = false; resetForeheadHold(); }
+function hideForehead() { $('forehead').classList.remove('active'); plainScreen(false); foreheadMyTurn = false; resetForeheadHold(); }
+// The forehead view is a display surface read across a room: while it is up, <html> says the screen
+// must be plain (data-plain), and the shared look's decoration -- the CRT glass -- steps aside.
+function plainScreen(on) { document.documentElement.toggleAttribute('data-plain', on); }
 
 // A one-line note about the sensor itself (refused, missing, failed to start), for screens that
 // have room for an aside rather than a whole explanation. The screens where tilt is actually
@@ -944,6 +950,7 @@ function startCountdown(seconds) {
     const el = $('forehead');
     el.classList.remove('mine');
     el.classList.add('active');
+    plainScreen(true);
     $('foreheadImg').style.display = 'none';
     $('foreheadNoImg').style.display = 'none';
     $('foreheadCount').style.display = 'flex';

@@ -48,6 +48,7 @@ const roomMenu = GTCRoomMenu.mount({
         : `Remove ${name}? Their score stays on the board; if they are drawing, the turn ends.`,
 });
 GTC.bindThemeToggles();
+GTC.bindCrtToggles();
 
 // Sound (/shared/sound.js): your turn to draw, someone getting it, time nearly up, the reveal.
 // Optional-chained: a missing sound script costs the cues, never the game, and hides the switch.

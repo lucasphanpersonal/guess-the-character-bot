@@ -262,9 +262,9 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   .reactions button, .gitem .vote, .tools button.ghost, .tools button.bad, .pick button, .viewernav button, .viewerclose,
   .spellings label, #howtoToggle, .choice, .chat .giveup, button.tile, button.undo, .rmbtn:not(.icon) { min-height:44px; }
   .rmbtn:not(.icon) { display:inline-flex; align-items:center; justify-content:center; }
-  .themetoggle::before, .roombtn::before, .soundtoggle::before, .swatch::before, .size::before, .rmbtn.icon::before, .pickclear::before {
+  .themetoggle::before, .crttoggle::before, .roombtn::before, .soundtoggle::before, .swatch::before, .size::before, .rmbtn.icon::before, .pickclear::before {
     content:""; position:absolute; }
-  .themetoggle::before { inset:-8px -2px; }
+  .themetoggle::before, .crttoggle::before { inset:-8px -2px; }
   .roombtn::before { inset:-8px 0; }
   .soundtoggle::before { inset:-8px -5px; }
   .swatch::before, .size::before { inset:-4px; }
@@ -334,11 +334,72 @@ dialog.card, dialog.roommenu { color:var(--ink); }
                  --px:4px; box-shadow:var(--frame); animation:flashStamp .3s steps(4); }
   .flash.good .flash-stamp { --outline:var(--green); } .flash.bad .flash-stamp { --outline:var(--red); } .flash.near .flash-stamp { --outline:var(--amber); }
 
+  /* The CRT screen's flicker: the glass breathes by a few percent of its own faint layer, so the
+     page underneath changes by under one percent. Far too small and too slow to be a flash. */
+  @keyframes crtFlicker { 0%, 100% { opacity:1; } 30% { opacity:.86; } 60% { opacity:.94; } }
+  /* Only between games: during play (data-playing, set from the page's own play screens) the glass
+     holds still, like every other idle animation, and nothing repaints for it. */
+  :root[data-crt]:not([data-playing]) body::after { animation:crtFlicker 4s steps(6) infinite; }
+
   /* Square confetti (GTC.confetti). */
   @keyframes confettiFall { from { transform:translateY(-20px); } to { transform:translateY(calc(100vh + 40px)); } }
   .confetti { position:fixed; inset:0; z-index:44; overflow:hidden; pointer-events:none; }
   .confetti i { position:absolute; top:0; animation:confettiFall 1.6s steps(18) backwards; }
 }
+
+/* --- the CRT screen -------------------------------------------------------------------------
+   The whole page as if on a tube: scanlines, a darker rim that reads as the glass curving away, and
+   a glow on the arcade type. On unless someone turns it off (gtc_crt, decided before first paint by
+   season.js and the phones' <head>; the switches are GTC.bindCrtToggles). One fixed layer over the
+   page, never a transform of the page itself: bending the page would blur every line of text and
+   make anything fixed inside it scroll away.
+   Kept faint on purpose, because it lies over the cream panels people read: a line every 3px at 12%,
+   so the darkest it gets is a row of slightly greyer cream, and body text keeps its contrast. It
+   takes no taps, and screen readers never see it (a pseudo-element with no text).
+   Below the flash and confetti (44, 45), which are their own effects, and below the forehead overlay
+   only by being switched off there (data-plain): that overlay sits inside main's stacking context
+   (z-index 1 on the phones), so no z-index of its own could put it above a layer here.
+   Everything else is under the glass alike: character art, drawings and the join QR code. Lifting
+   any of them cannot work everywhere (the phones' main is a stacking context, and so is any screen
+   mid-slide), and lifting some made the same drawing look different in two places. The QR code was
+   checked: it still decodes with the glass over it. */
+:root[data-crt] body::after { content:""; position:fixed; inset:0; z-index:40; pointer-events:none;
+  background:
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 58%, rgba(0,0,0,.4) 100%),
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.12) 2px 3px); }
+/* A page sets data-plain on <html> while a display surface is up (the phones' forehead view), and the
+   glass steps aside. A page-set attribute rather than a selector for the surface, so this file names
+   no game's elements and works without :has(). */
+:root[data-plain] body::after { display:none; }
+/* Asked-for contrast beats a look: no glass, and no glow (below). The switch still says on: it is a
+   choice about the look, and this is the device's own setting stepping in for as long as it is set. */
+@media (prefers-contrast: more) { :root[data-crt] body::after { display:none; } }
+/* Phosphor glow on the dark surfaces' arcade type: the title, the clock's numbers, the high scores.
+   Never on the cream panels, where a glow is only a blur round dark letters. The title keeps its
+   own drop shadow underneath. Set on each letter as well as the heading: currentColor resolves where
+   the shadow is declared, so the heading's alone would give every letter of the marquee a cream glow. */
+@media (prefers-contrast: no-preference) {
+  :root[data-crt] h1, :root[data-crt] h1 .wob { text-shadow:var(--px) var(--px) 0 rgba(0,0,0,.55), 0 0 10px color-mix(in srgb, currentColor 45%, transparent); }
+  :root[data-crt] .hiscore .hs-place, :root[data-crt] .hiscore .hs-score, :root[data-crt] .flash-stamp {
+    text-shadow:0 0 8px color-mix(in srgb, currentColor 55%, transparent); }
+}
+/* Drawings stay UNDER the glass, the canvas included. Lifting the canvas alone left the same drawing
+   striped in the gallery and the Telephone chain (outside .canvaswrap, some inside stacking contexts
+   no z-index escapes) and put the canvas over the toast feed (z-index 20). Under the glass, a drawing
+   looks the same everywhere on this screen; the paper itself is still white in both themes. */
+/* The switch: a small track and a sliding knob, like dark mode's beside it, and labelled in words
+   in the row that holds it (.crtrow). Its state is aria-checked, which is also what moves the knob. */
+.crttoggle { position:relative; flex:none; width:56px; height:30px; padding:0; color:#fff;
+  --px:2px; --face:rgba(0,0,0,.28); --deep:transparent; --lit:transparent; --outline:rgba(255,255,255,.4); }
+.crttoggle:active { transform:none; }
+.crttoggle .knob { position:absolute; top:3px; left:3px; width:24px; height:24px; background:#fff; color:var(--brand);
+  font-size:1rem; line-height:24px; text-align:center; }
+.crttoggle[aria-checked="true"] { --face:var(--green); }
+.crttoggle[aria-checked="true"] .knob { left:29px; color:var(--green-d); }
+.crttoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+.crtrow { display:flex; align-items:center; justify-content:center; gap:12px; margin:8px 0 0;
+  font-family:var(--font-display); font-weight:700; color:var(--on-field); }
+.crtrow .crtstate { min-width:2em; font-family:var(--font-name); font-weight:600; opacity:.85; }
 
 /* --- 3D accents (/shared/fx3d.js) ------------------------------------------------------------
    A FIXED height, so nothing below moves when the renderer arrives, or never does. The sprite is
