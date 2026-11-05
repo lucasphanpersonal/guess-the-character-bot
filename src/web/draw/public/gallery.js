@@ -166,7 +166,7 @@ $('viewerSave').addEventListener('click', () => {
   c.fillStyle = '#6b6480';
   c.font = `24px ${CAPTION_FACE}`;
   c.textAlign = 'right';
-  c.fillText('Draw the Character', 1172, 946);
+  c.fillText('Doodle Dash', 1172, 946);
   const file = `${d.character?.name ?? 'drawing'} by ${d.drawer}`.replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80) || 'drawing';
   // Built synchronously (toDataURL, not toBlob): the share sheet below only opens straight from the
   // tap, and Safari counts an async callback as no longer the tap.

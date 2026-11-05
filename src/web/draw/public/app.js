@@ -30,7 +30,7 @@ let me = null;
 socket.on('hello', ({ you }) => {
   me = you;
 });
-wobble($('title'), 'Draw the Character');
+wobble($('title'), 'Doodle Dash');
 // Before bindThemeToggles: the menu carries a dark-mode switch of its own for phone widths.
 const roomMenu = GTCRoomMenu.mount({
   button: $('roomBtn'),

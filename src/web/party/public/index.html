@@ -540,6 +540,13 @@
     .devicebtn small { display:block; font-family:var(--font-name); font-size:.88rem; font-weight:700; line-height:1.35; margin-top:3px; }
     .devicebtn.c0 { --face:var(--red); --deep:var(--red-d); }
     .devicebtn.c1 { --face:var(--blue); --deep:var(--blue-d); }
+    .devicebtn.c3 { --face:var(--green); --deep:var(--green-d); }
+    /* Both games on screen on a short phone (an iPhone SE, 568px): with the mascot and the hint
+       line the second game sat wholly below the fold, and a choice you cannot see is not offered.
+       Decoration and a hint give way; the two slabs do not. */
+    @media (max-height: 700px) {
+      #splash .fx3d, #splash .splashhint { display:none; }
+    }
     /* Draw is a link (it is another page), dressed as the slabs beside it. */
     .devicebtn.c2 { background:var(--amber); color:#2b1c00; text-decoration:none;
                     box-shadow:var(--frame), inset 0 calc(var(--px) * -2) 0 0 var(--amber-d), inset 0 var(--px) 0 0 rgba(255,255,255,.28), var(--drop); }
@@ -586,39 +593,55 @@
   <main>
     <h1><a id="homeTitle" href="/">Guess the Character</a></h1>
 
-    <!-- The first question: which game. Draw plays on anything, phones and computers in one room;
-         Guess the Character comes in two ways that cannot share a room -- phones on foreheads, or
-         everyone at a computer -- so those are two choices, each saying which device it wants.
+    <!-- The first question: which game. Two: Who Am I? (guess your own character) and Doodle Dash
+         (draw). Doodle Dash plays on anything, phones and computers in one room, so it is a link.
+         Who Am I? comes in two ways that cannot share a room -- phones on foreheads, or everyone at
+         a screen -- so picking it asks a second question (#how). Every game is guessing a
+         character, so the names say how each one plays, not that it guesses.
          Skipped when a room link or a rejoin already answers it. -->
     <section id="splash" class="screen active">
-      <div class="fx3d" data-fx="mascot"></div>
+      <div class="fx3d slim" data-fx="mascot"></div>
       <div class="card">
         <div class="gatetitle" data-wobble>What Are We Playing?</div>
-        <p class="hint center">Everyone in a room plays the same one.</p>
+        <p class="hint center splashhint">Everyone in a room plays the same one.</p>
       </div>
+      <button id="pickGuess" class="devicebtn c3" type="button">
+        <span class="shape" aria-hidden="true">■</span>
+        <span><b>Who Am I?</b><small>Everyone can see your character but you. Ask yes or no questions until you work it out.</small></span>
+      </button>
       <a id="pickDraw" class="devicebtn c2" href="/draw/">
         <span class="shape" aria-hidden="true">●</span>
-        <span><b>Draw the Character</b><small>One draws, everyone guesses. Phones and computers together.</small></span>
+        <span><b>Doodle Dash</b><small>One draws, everyone races to guess. Phones and computers together.</small></span>
       </a>
-      <button id="pickPhone" class="devicebtn c0" type="button">
-        <span class="shape" aria-hidden="true">▲</span>
-        <span><b>Guess on Phones</b><small>Guess the Character with phones on foreheads. Tilt to answer.</small></span>
-        <span class="likely" id="likelyPhone" hidden>Looks Like a Phone</span>
-      </button>
-      <button id="pickComputer" class="devicebtn c1" type="button">
-        <span class="shape" aria-hidden="true">◆</span>
-        <span><b>Guess on Computers</b><small>Guess the Character at a screen. You see every character but your own.</small></span>
-        <span class="likely" id="likelyComputer" hidden>Looks Like a Computer</span>
-      </button>
       <!-- The CRT screen's switch (GTC.bindCrtToggles): here on the first screen, and in the Room
            menu once in a room. Not in the corner, which already holds three controls. -->
       <div class="crtrow"><span>CRT Screen</span><button class="crttoggle" type="button" role="switch" aria-checked="true" aria-label="CRT screen effect"><span class="knob" aria-hidden="true">▤</span></button><span class="crtstate" aria-hidden="true">On</span></div>
     </section>
 
-    <!-- Computer: the same create / join as the phones, for Guess the Character on computers, which
+    <!-- The second question, for Who Am I? only: phones or computers. A room is one or the other
+         (the forehead view and the board view are opposites), so it is asked before create/join. -->
+    <section id="how" class="screen">
+      <button class="backlink" type="button" data-splash>‹ All Games</button>
+      <div class="card">
+        <div class="gatetitle" data-wobble>How Are You Playing?</div>
+        <p class="hint center">Everyone in a room plays the same way.</p>
+      </div>
+      <button id="pickPhone" class="devicebtn c0" type="button">
+        <span class="shape" aria-hidden="true">▲</span>
+        <span><b>Phones on Foreheads</b><small>Hold it up so the room can see. Tilt to answer.</small></span>
+        <span class="likely" id="likelyPhone" hidden>Looks Like a Phone</span>
+      </button>
+      <button id="pickComputer" class="devicebtn c1" type="button">
+        <span class="shape" aria-hidden="true">◆</span>
+        <span><b>Everyone at a Screen</b><small>See every character but yours. Type your guess.</small></span>
+        <span class="likely" id="likelyComputer" hidden>Looks Like a Computer</span>
+      </button>
+    </section>
+
+    <!-- Computer: the same create / join as the phones, for Who Am I? at a screen, which
          has a page of its own (/desk/) -- so this hands off to it rather than playing here. -->
     <section id="computer" class="screen">
-      <button class="backlink" type="button" data-splash>‹ All Games</button>
+      <button class="backlink" type="button" data-how>‹ Back</button>
       <div class="fx3d slim" data-fx="mascot"></div>
       <div class="card">
         <label for="pcNickInput">Your name</label>
@@ -638,7 +661,7 @@
 
     <!-- Landing: the phone's start screen -->
     <section id="landing" class="screen">
-      <button class="backlink" type="button" data-splash>‹ All Games</button>
+      <button class="backlink" type="button" data-how>‹ Back</button>
       <div class="fx3d slim" data-fx="mascot"></div>
       <div class="card">
         <label for="nickInput">Your name</label>

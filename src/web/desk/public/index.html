@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#1f1a4d" />
-  <title>Guess the Character</title>
+  <title>Who Am I?</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
   <!-- The look and the seasonal switch are shared with /draw/ (src/web/shared). The season script
        is blocking on purpose: the first paint is already in season. -->
@@ -18,7 +18,7 @@
 <body>
 <main class="desk">
   <div class="titlebar">
-    <h1><a id="title" href="/">Guess the Character</a></h1>
+    <h1><a id="title" href="/">Who Am I?</a></h1>
     <div class="titletools">
       <!-- Room: who is in it, Leave, and the host's Remove -- on every screen once you are in one
            (/shared/roommenu.js). -->
@@ -59,8 +59,8 @@
           <input id="codeInput" maxlength="4" autocomplete="off" />
         </div>
         <button id="joinBtn" class="alt wide">Join Room</button>
-        <p class="hint">Playing with phones on foreheads instead? That's the
-          <a href="/">phone version</a>. Or draw them: <a href="/draw/">Draw the Character</a>.</p>
+        <p class="hint">Playing with phones on foreheads instead? Start from the
+          <a href="/?how">home page</a>. Or draw them: <a href="/draw/">Doodle Dash</a>.</p>
       </div>
     </div>
     <p class="err light" id="landingErr" role="alert"></p>
