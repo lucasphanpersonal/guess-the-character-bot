@@ -218,22 +218,9 @@ $('pcCodeInput').addEventListener('input', (e) => (e.target.value = e.target.val
 $('pcCodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('pcJoinBtn').click(); });
 $('pcBrowseBtn').addEventListener('click', () => openBrowse());
 
-// Dark mode. <head> already applied the stored choice (or the phone's own setting) before first
-// paint; this is only the corner switch, which says which way it is set. The choice is per device.
-const themeIsDark = () => document.documentElement.dataset.theme === 'dark';
-function syncThemeToggle() {
-  $('themeToggle').setAttribute('aria-checked', String(themeIsDark()));
-}
-$('themeToggle').addEventListener('click', () => {
-  const dark = !themeIsDark();
-  if (dark) document.documentElement.dataset.theme = 'dark';
-  else delete document.documentElement.dataset.theme;
-  store.set('gtc_theme', dark ? 'dark' : 'light');
-  const spooky = document.documentElement.dataset.season === 'spooky';
-  document.querySelector('meta[name=theme-color]').content = dark ? (spooky ? '#2a1307' : '#0e0f1a') : spooky ? '#cc4a0c' : '#1f1a4d';
-  syncThemeToggle();
-});
-syncThemeToggle();
+// Dark mode's corner switch: the same binder as the computer pages (GTC.bindThemeToggles), so the
+// three cannot drift. season.js already applied the stored choice before first paint.
+GTC.bindThemeToggles();
 $('browseBack').addEventListener('click', browseBack);
 $('browseMore').addEventListener('click', () => { if (!browseState.loading) { browseState.loading = true; loadCharacterPage(false); } });
 $('browseFilter').addEventListener('input', (e) => {

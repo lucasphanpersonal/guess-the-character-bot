@@ -167,9 +167,12 @@ like it was always there.
   the screen; on by default on the phones, where the wearer hears the clock or does not know it.
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
   screen*). It lies over the cream panels people read, so it stays faint: raise the scanlines'
-  alpha and body text is what pays. It is off over the forehead view (which sits in `main`'s
-  stacking context, so only `display:none` can clear it). Drawings stay under it: lifting the canvas
-  alone striped the same drawing in the gallery but not in play, and covered the toast feed. Glow goes on dark surfaces only; on cream it is just blur.
+  alpha and body text is what pays. Shared CSS names no game's elements: a page sets `data-plain`
+  on `<html>` while a display surface is up (the forehead view: it sits in `main`'s stacking
+  context, so only `display:none` can clear the glass), and a screen marked `data-play` sets
+  `data-playing`, which stills the flicker. Art, drawings and the QR code stay under it alike (the
+  QR was decoded through it); lifting only the canvas striped the same drawing in one place and not
+  another. Glow goes on dark surfaces only; on cream it is just blur.
 - **No emoji in UI copy.** Text-presentation glyphs (✓ ✗ ▲ ‹ › ✕ →) are typography and are
   fine. Anything with Emoji_Presentation (⏭, most pictographs) renders in colour on iOS and
   looks pasted in next to plain-text buttons. The favicon is the one deliberate exception.

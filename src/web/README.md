@@ -113,7 +113,8 @@ skips the question. Dark mode is a small switch: in the corner on the phones' pa
 play), in the title row on the computer pages. The CRT screen (scanlines, a darker rim, a glow on
 the arcade type, a faint flicker) is on by default; its switch is on each game's first screen and
 in the Room menu, and the choice is remembered per browser (`gtc_crt`). It steps aside for the
-forehead view and for `prefers-contrast: more`, and its flicker stops for reduced motion.
+forehead view and for `prefers-contrast: more`; its flicker stops during play and for reduced
+motion. All three pages decide it, the season and dark mode in one blocking script, `/shared/season.js`.
 
 Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
