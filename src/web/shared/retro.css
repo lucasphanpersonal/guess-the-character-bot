@@ -272,6 +272,8 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   .pickclear::before { inset:-10px -6px; }
   /* The Draw search toggle's row, and any label that is a whole row with a checkbox in it. */
   label.seat { min-height:44px; }
+  /* Draw's New Choices and Search, beside the drawer's three choices. */
+  .choosehead button { min-height:44px; }
   /* A Telephone or Draw guess box: the keyboard opens over this, and the same 44px holds. */
   .guessbox button, .telguess button, .chat form button { min-height:44px; }
 }
