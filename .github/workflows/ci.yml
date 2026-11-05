@@ -10,13 +10,16 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs on a PR. Never cancel a run on main: each commit on main needs its own result.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    # The web socket check waits on sockets; a hang should fail fast, not hold a runner for 6 hours.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
