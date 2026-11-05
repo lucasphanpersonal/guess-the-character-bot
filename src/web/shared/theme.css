@@ -252,8 +252,10 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
   main.desk .strip { flex:none; margin-top:8px; }
   /* The feed docks over the title, which is decoration during play: down at the bottom right it
      covered the last tiles of the strip, names and all. Left of the title row's controls, one line
-     a toast, and the newest two -- each one's news is also in the log or on the board. */
-  :root[data-playing] main.desk ~ .feed { top:16px; bottom:auto; right:auto; max-width:none; gap:4px; align-items:flex-start;
+     a toast, and the newest two -- each one's news is also in the log or on the board. It takes no
+     clicks: the title under it is the way home. The 320px is the title row's controls (Room, Sound,
+     Dark Mode, ~298px measured, plus the row gap): change .titletools and re-measure it. */
+  :root[data-playing] main.desk ~ .feed { pointer-events:none; top:16px; bottom:auto; right:auto; max-width:none; gap:4px; align-items:flex-start;
     left:max(28px, calc((100vw - 72rem) / 2 + 28px)); width:calc(min(100vw, 72rem) - 56px - 320px); }
   :root[data-playing] main.desk ~ .feed .toast { max-width:100%; padding:3px 10px; font-size:.9rem; line-height:1.25;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

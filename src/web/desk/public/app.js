@@ -56,6 +56,7 @@ let gameView = null;
 let clock = { remaining: null, total: 60, timer: null };
 let lastBoardHtml = '';
 let lastSpotHtml = ''; // the spotlight, redrawn on the same terms as the board
+let lastLogHtml = '';  // the guess log, likewise (and its scroll reset with it)
 // Everyone's notes, by player. Kept apart from the board's HTML and filled into it in place, so a
 // note arriving with every keystroke never rebuilds the cards (and reloads every picture).
 const notesBy = new Map();
@@ -568,7 +569,7 @@ function renderGame() {
   }
 
   $('logTitle').textContent = v.isMyTurn ? 'Your guesses' : `${v.current.name}'s guesses`;
-  $('guessLog').innerHTML = v.guesses.length
+  const logHtml = v.guesses.length
     ? v.guesses
         .map((g) => {
           const note = g.lapsed ? ' <span class="by">(nobody ruled)</span>' : g.ruledBy ? ` <span class="by">(ruled by ${esc(g.ruledBy)})</span>` : '';
@@ -577,8 +578,14 @@ function renderGame() {
         .join('')
     : '<li class="hint">No guesses yet.</li>';
   // On a computer the log scrolls inside its card once it outgrows it (theme.css, the fitted play
-  // screen). Newest first, so back to the top: the newest guess is the one everyone is talking about.
-  $('guessLog').scrollTop = 0;
+  // screen). Newest first, so back to the top when it CHANGES -- a new guess, a ruling, a new turn --
+  // and not on every state push (clock corrections, notes), which would snatch an older guess away
+  // from someone reading it. Keyed on the log itself: the guess count stops growing at the cap.
+  if (logHtml !== lastLogHtml) {
+    $('guessLog').innerHTML = logHtml;
+    $('guessLog').scrollTop = 0;
+    lastLogHtml = logHtml;
+  }
 }
 
 // The clock is the server's: it sends seconds remaining, and this only counts down between
