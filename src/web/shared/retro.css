@@ -274,3 +274,34 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   /* A Telephone or Draw guess box: the keyboard opens over this, and the same 44px holds. */
   .guessbox button, .telguess button, .chat form button { min-height:44px; }
 }
+
+/* --- 3D accents (/shared/fx3d.js) ------------------------------------------------------------
+   A FIXED height, so nothing below moves when the renderer arrives, or never does. The sprite is
+   there from the start and the canvas goes over it. Both are low resolution scaled up hard-edged. */
+.fx3d { position:relative; width:100%; height:var(--fx-h, 120px); margin:0 auto; pointer-events:none; }
+.fx3d.slim { --fx-h:88px; }
+.fx3d canvas { position:absolute; top:0; left:50%; transform:translateX(-50%); height:100%; width:auto; max-width:100%;
+               image-rendering:pixelated; }
+.fx3d.live .fx3d-sprite { visibility:hidden; }
+.screen > .fx3d { margin-bottom:12px; }
+@media (min-width: 761px) {
+  .fx3d { --fx-h:170px; }
+  .fx3d.slim { --fx-h:120px; }
+  .fx3d[data-fx="podium"] { --fx-h:250px; }
+}
+/* A phone on its side has no height to spare for decoration: the game comes first. */
+@media (max-height: 500px) { .fx3d { display:none; } }
+/* Who stands where: in HTML under the podium, because names may be in any script. A phone gets the
+   trophy and no podium, and the table right below already says it. */
+.fx3d-names { display:none; }
+@media (min-width: 761px) {
+  .fx3d-names { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; max-width:34rem; margin:0 auto 14px; text-align:center;
+                font-family:var(--font-name); font-weight:700; color:var(--on-field); }
+  .fx3d-names span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* Each says its place, because the names cannot line up with steps that turn. */
+  .fx3d-names span:empty { visibility:hidden; }
+  .fx3d-names span::before { font-family:var(--font-arcade); font-weight:400; font-size:12px; margin-right:.6em; }
+  [data-podium-place="1"]::before { content:"1ST"; color:var(--gold); }
+  [data-podium-place="2"]::before { content:"2ND"; color:var(--silver); }
+  [data-podium-place="3"]::before { content:"3RD"; color:var(--bronze); }
+}

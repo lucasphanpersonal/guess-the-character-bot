@@ -186,6 +186,7 @@ function renderLobby() {
   $('roomCode').innerHTML = roomCodeHtml(code);
   $('shareLink').value = `${location.origin}/desk/?room=${code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
+  window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
     .map((p) => `<li class="pill">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
@@ -734,6 +735,7 @@ socket.on('game:over', (res) => {
   heardRuling = null;
   const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
+  window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
   $('standings').innerHTML = res.standings
     .map((s) => {
       const out = s.turns != null ? '' : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';

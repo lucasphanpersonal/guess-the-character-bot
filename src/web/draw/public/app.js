@@ -200,6 +200,7 @@ function renderRoom() {
   $('roomCode').innerHTML = roomCodeHtml(roomState.code);
   $('shareLink').value = `${location.origin}/draw/?room=${roomState.code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
+  window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
     .map((p) => `<li class="pill">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
     .join('');

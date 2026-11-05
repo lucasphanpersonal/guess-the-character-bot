@@ -166,6 +166,11 @@ web/
                        high-score table. The computer games add their layouts (theme.css), seasonal
                        switch and sound (sound.js). The phones also load common.js, pickers.js (the
                        pool picker and character search) and roommenu.js (Room: leave, remove, pause).
+                       voxels.js and fx3d.js are the 3D accents on landing, lobby and results pages
+                       (cubes built in code, no model files). vendor/ holds the one Three.js file
+                       they fetch: only the classes fx3d.js uses, bundled and minified with esbuild
+                       (528 KB, 134 KB gzipped). Its name carries the version; a rebuild gets a new
+                       name, because a proxy would otherwise serve the old file for hours.
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
   guess/               Guess the Character on the web, however it is played.

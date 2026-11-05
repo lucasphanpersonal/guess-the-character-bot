@@ -573,6 +573,7 @@
          everyone at a computer -- so those are two choices, each saying which device it wants.
          Skipped when a room link or a rejoin already answers it. -->
     <section id="splash" class="screen active">
+      <div class="fx3d" data-fx="mascot"></div>
       <div class="card">
         <div class="gatetitle" data-wobble>What Are We Playing?</div>
         <p class="hint center">Everyone in a room plays the same one.</p>
@@ -597,6 +598,7 @@
          has a page of its own (/desk/) -- so this hands off to it rather than playing here. -->
     <section id="computer" class="screen">
       <button class="backlink" type="button" data-splash>‹ All Games</button>
+      <div class="fx3d slim" data-fx="mascot"></div>
       <div class="card">
         <label for="pcNickInput">Your name</label>
         <input id="pcNickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />
@@ -616,6 +618,7 @@
     <!-- Landing: the phone's start screen -->
     <section id="landing" class="screen">
       <button class="backlink" type="button" data-splash>‹ All Games</button>
+      <div class="fx3d slim" data-fx="mascot"></div>
       <div class="card">
         <label for="nickInput">Your name</label>
         <input id="nickInput" maxlength="20" placeholder="e.g. Richard" autocomplete="off" />
@@ -664,6 +667,7 @@
 
     <!-- Lobby -->
     <section id="lobby" class="screen">
+      <div class="fx3d" data-fx="mascot"></div>
       <div class="card">
         <div class="hint center">Room code — read it out, share the link, or scan the QR</div>
         <div class="roomcode" id="lobbyCode">····</div>
@@ -862,6 +866,7 @@
 
     <!-- Game over -->
     <section id="over" class="screen">
+      <div class="fx3d" data-fx="trophy"></div>
       <div class="card">
         <div class="big-emoji" id="overEmoji">WINNER</div>
         <div class="hint center" id="overResult"></div>
@@ -894,5 +899,8 @@
   <script src="/compendium.js"></script>
   <script src="/eggs.js"></script>
   <script src="/boot.js"></script>
+  <!-- The 3D accents, last: the game is fully working before they load, and without them. -->
+  <script src="/shared/voxels.js"></script>
+  <script src="/shared/fx3d.js"></script>
 </body>
 </html>

@@ -140,6 +140,11 @@ like it was always there.
   `--frame` is declared on `*`: a custom property holding `var()` resolves where it is declared.
 - **Colour is never the only signal.** Choice rows pair a colour with a shape (▲ ◆ ● ■), and chosen
   is a mark inside as well as a heavier frame.
+- **3D is decoration, and the game never waits for it** (`shared/fx3d.js`, `shared/voxels.js`). A
+  `.fx3d` box has a fixed height and a flat sprite from the start; the renderer loads only after the
+  page settles, and if it fails or the device is slow the sprite just stays. No box on any play
+  screen, so nothing renders during a game. It never receives a character, and it never reads device
+  tilt: iOS asks for motion once per site, and the game needs that answer for itself.
 - **Everything a thumb aims at is 44px.** Grow the control, or where the row has no room (Draw's
   palette holds the canvas on screen) give it a transparent `::before` hit area out to 44px. Both
   live in retro.css under *fingers*.

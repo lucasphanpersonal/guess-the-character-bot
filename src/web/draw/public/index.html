@@ -472,6 +472,7 @@
 
   <!-- Landing -->
   <section id="landing" class="screen active">
+    <div class="fx3d" data-fx="pencil"></div>
     <div class="cols">
       <div class="card stack">
         <h2>Draw it, guess it</h2>
@@ -500,6 +501,7 @@
 
   <!-- Lobby -->
   <section id="lobby" class="screen">
+    <div class="fx3d slim" data-fx="pencil"></div>
     <div class="cols">
       <div class="card stack">
         <div>
@@ -758,6 +760,8 @@
   </section>
 
   <section id="over" class="screen">
+    <div class="fx3d" data-fx="podium"></div>
+    <div class="fx3d-names" aria-hidden="true"><span data-podium-place="2"></span><span data-podium-place="1"></span><span data-podium-place="3"></span></div>
     <div class="cols">
       <div class="card stack">
         <h2 id="overTitle">Game over</h2>
@@ -813,5 +817,8 @@
 <script src="gallery.js"></script>
 <script src="tel.js"></script>
 <script src="boot.js"></script>
+<!-- The 3D accents, last: the game is fully working before they load, and without them. -->
+<script src="/shared/voxels.js"></script>
+<script src="/shared/fx3d.js"></script>
 </body>
 </html>

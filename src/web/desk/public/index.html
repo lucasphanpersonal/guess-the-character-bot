@@ -38,6 +38,7 @@
 
   <!-- Landing -->
   <section id="landing" class="screen active">
+    <div class="fx3d" data-fx="mascot"></div>
     <div class="cols">
       <div class="card stack">
         <h2>Play on a computer</h2>
@@ -66,6 +67,7 @@
 
   <!-- Lobby -->
   <section id="lobby" class="screen">
+    <div class="fx3d slim" data-fx="mascot"></div>
     <div class="cols">
       <div class="card stack">
         <div>
@@ -239,6 +241,8 @@
 
   <!-- Results -->
   <section id="over" class="screen">
+    <div class="fx3d" data-fx="podium"></div>
+    <div class="fx3d-names" aria-hidden="true"><span data-podium-place="2"></span><span data-podium-place="1"></span><span data-podium-place="3"></span></div>
     <div class="cols">
       <div class="card stack">
         <h2 id="overTitle">Game over</h2>
@@ -263,5 +267,8 @@
 <script src="/shared/pickers.js"></script>
 <script src="/shared/roommenu.js"></script>
 <script src="app.js"></script>
+<!-- The 3D accents, last: the game is fully working before they load, and without them. -->
+<script src="/shared/voxels.js"></script>
+<script src="/shared/fx3d.js"></script>
 </body>
 </html>

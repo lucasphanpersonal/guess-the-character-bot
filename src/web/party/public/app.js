@@ -110,6 +110,7 @@ function renderLobby(state) {
   // takes effect on a block-level box. Leaving it inline was why the QR rendered off-center.
   qr.style.display = 'block';
   $('playerCount').textContent = `Players (${state.players.length}/${state.maxPlayers ?? 8})`;
+  window.GTCFx?.players(state.players.length);
   const roster = $('roster');
   roster.innerHTML = '';
   for (const p of state.players) {
