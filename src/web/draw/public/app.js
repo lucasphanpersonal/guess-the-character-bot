@@ -202,7 +202,7 @@ function renderRoom() {
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
+    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
     .join('');
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
@@ -788,6 +788,7 @@ socket.on('draw:correct', ({ playerId: who, name, points, nth }) => {
   // ack, or they would hear two. Each one a step higher than the last (sound.js climb).
   sound(who === me ? 'gotMine' : 'got', nth);
   burst(who, who === me);
+  if (who === me) GTC.flash('good', 'Got It!');
 });
 
 // A few pieces of colour flung out from whoever got it: their row in the player list, or the
@@ -850,6 +851,8 @@ $('chatForm').addEventListener('submit', (e) => {
       return ($('chatErr').textContent = res?.error || 'That did not send.');
     }
     if (res.verdict === 'close') localLine('close', `"${esc(text)}" is close!`);
+    // A flash for every miss would be a strobe in a game of fast guesses: the box shakes instead.
+    if (res.verdict === 'wrong' || res.verdict === 'close') GTC.shake($('chatInput'));
   });
 });
 

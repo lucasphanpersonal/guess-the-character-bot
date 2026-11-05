@@ -115,7 +115,7 @@ function renderLobby(state) {
   roster.innerHTML = '';
   for (const p of state.players) {
     const li = document.createElement('li');
-    li.className = 'seat';
+    li.className = GTC.isNewSeat(state.code, p.playerId) ? 'seat new' : 'seat';
     const dot = document.createElement('span');
     dot.className = 'dot' + (p.connected ? '' : ' off');
     const name = document.createElement('span');
@@ -197,6 +197,7 @@ document.addEventListener('visibilitychange', () => {
 let lastSetupView = null;
 function renderSetup(view) {
   keepAwake();
+  finishCelebrated = false;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
   // finished game's view lying around made a tilt during the NEXT game's reroll stage look like
@@ -550,7 +551,12 @@ function startTurnTicker(view) {
 
 // The screen a player sees once they've got their character: their reveal, turn count, and the
 // live standings while everyone else plays on.
+let finishCelebrated = false; // renderFinished runs on every state push until the game ends
 function renderFinished(view) {
+  if (!finishCelebrated) {
+    finishCelebrated = true;
+    GTC.flash('good', 'Got It!');
+  }
   clearInterval(turnTicker);
   stopBed(); // their turn is over even though the game isn't
   renderMotionPrompt($('motionBanner'));
@@ -575,6 +581,7 @@ function logReveal(html) {
 
 function renderOver(result) {
   allowSleep();
+  GTC.confetti();
   lastPlayView = null;
   clearInterval(countdown);
   clearInterval(turnTicker);

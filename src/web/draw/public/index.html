@@ -46,16 +46,16 @@
                           background:currentColor; opacity:.9; transform-origin:left center; }
     .mask .slot b { display:inline-block; font-weight:900; line-height:1; padding-bottom:.14em; }
     .mask .punct { display:inline-flex; align-items:flex-end; height:1.2em; padding-bottom:.14em; }
-    .mask.drawlines .slot::before { animation:drawline .45s ease-out both; animation-delay:calc(var(--i) * 28ms); }
+    .mask.drawlines .slot::before { animation:drawline .4s steps(6) both; animation-delay:calc(var(--i) * 28ms); }
     @keyframes drawline { from { transform:scaleX(0); } to { transform:scaleX(1); } }
-    .mask .slot.fresh b { animation:inkin .9s cubic-bezier(.3,.6,.35,1) both; }
+    .mask .slot.fresh b { animation:inkin .8s steps(8) both; }
     @keyframes inkin {
       from { clip-path:inset(-40% 100% -40% -40%); transform:scale(1.35); }
       70% { transform:scale(1.08); }
       to { clip-path:inset(-40% -40% -40% -40%); transform:scale(1); }
     }
     .mask .slot.fresh::after { content:"✎"; position:absolute; left:0; bottom:.35em; font-size:.8em; line-height:1;
-                               text-shadow:0 2px 0 rgba(0,0,0,.3); pointer-events:none; animation:pen .9s cubic-bezier(.3,.6,.35,1) both; }
+                               text-shadow:0 2px 0 rgba(0,0,0,.3); pointer-events:none; animation:pen .8s steps(8) both; }
     @keyframes pen {
       0% { transform:translate(-.3em, -.1em) rotate(-14deg); opacity:1; }
       75% { transform:translate(.75em, .05em) rotate(6deg); opacity:1; }
@@ -130,7 +130,7 @@
     .tcend.yes { background:var(--green); color:#fff; }
     .tcend.no { background:var(--amber); color:#2b1c00; }
     /* The replay's newest card arrives; nothing else moves. */
-    .telchain .fresh { animation:tcin .45s cubic-bezier(.3,.7,.4,1.3) both; }
+    .telchain .fresh { animation:tcin .3s steps(5) both; }
     @keyframes tcin { from { opacity:0; transform:translateY(14px) scale(.96); } to { opacity:1; transform:none; } }
     @media (prefers-reduced-motion: reduce) { .telchain .fresh { animation:none; } }
     /* Reactions: four chunky pills under the picture, and each one tapped floats up over it on
@@ -141,7 +141,7 @@
                         background:var(--paper); }
     .r-star { color:var(--amber-d); } .r-wow { color:var(--red); } .r-huh { color:var(--blue); } .r-ha { color:var(--green); }
     .floater { position:absolute; bottom:6%; z-index:2; pointer-events:none; font-family:var(--font-display); font-weight:900;
-               font-size:2.4rem; line-height:1; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 2px 0 #fff; animation:floatup 1.8s ease-out forwards; }
+               font-size:2.4rem; line-height:1; text-shadow:0 0 3px #fff, 0 0 3px #fff, 0 2px 0 #fff; animation:floatup 1.6s steps(16) forwards; }
     @keyframes floatup {
       0% { transform:translateY(0) scale(.6); opacity:0; }
       15% { transform:translateY(-15%) scale(1.15); opacity:1; }
@@ -164,7 +164,7 @@
     /* Someone got it (app.js burst): pieces flung out from their row. Fixed, over everything,
        never in the way of a click. The script makes none under reduced motion; this is the backstop. */
     .bit { position:fixed; z-index:50; width:9px; height:9px; margin:-4px 0 0 -4px;
-           pointer-events:none; animation:bitburst .75s cubic-bezier(.2,.7,.3,1) forwards; }
+           pointer-events:none; animation:bitburst .7s steps(10) forwards; }
     @keyframes bitburst {
       0% { transform:translate(0, 0) rotate(0) scale(1.2); opacity:1; }
       100% { transform:translate(var(--dx), var(--dy)) rotate(var(--spin)) scale(.5); opacity:0; }

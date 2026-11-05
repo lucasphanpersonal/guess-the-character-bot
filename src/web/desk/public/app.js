@@ -188,7 +188,7 @@ function renderLobby() {
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
@@ -613,8 +613,12 @@ $('guessForm').addEventListener('submit', (e) => {
     if (res.verdict === 'wrong') {
       $('guessErr').textContent = `"${text}" isn't it. Keep asking.`;
       sound('miss');
+      GTC.flash('bad', 'Miss');
     }
-    if (res.verdict === 'close') sound('close');
+    if (res.verdict === 'close') {
+      sound('close');
+      GTC.flash('near', 'Close');
+    }
     // A right one sounds from game:reveal, which also covers one the others rule in.
   });
 });
@@ -648,13 +652,17 @@ socket.on('desk:guess', ({ name, text, verdict }) => {
 });
 socket.on('desk:ruled', ({ accepted, by, lapsed }) => {
   // Arrives before the state that clears the ruling, so `waiting` still says whose guess it was.
-  if (!accepted && gameView?.ruling?.waiting) sound('miss');
+  if (!accepted && gameView?.ruling?.waiting) {
+    sound('miss');
+    GTC.flash('bad', 'Miss');
+  }
   toast(lapsed ? 'Nobody ruled in time, so it counts as a miss.' : `${esc(by)} ruled: ${accepted ? '✓ it counts' : '✗ not it'}`);
 });
 socket.on('game:reveal', (r) => {
   const who = r.playerId === me ? 'You' : esc(r.name);
   const what = `<strong>${esc(r.character?.name)}</strong>`;
   if (r.kind === 'got') sound(r.playerId === me ? 'gotMine' : 'got');
+  if (r.kind === 'got' && r.playerId === me) GTC.flash('good', 'Got It!');
   if (r.kind === 'got') toast(`${who} got it: ${what}, in ${r.turns} turn${r.turns === 1 ? '' : 's'}.`, 7000);
   else if (r.kind === 'gaveup') toast(`${who} gave up. They were ${what}.`, 7000);
   else toast(`${who} left. They were ${what}.`, 7000);
@@ -735,6 +743,7 @@ socket.on('game:over', (res) => {
   heardRuling = null;
   const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
+  GTC.confetti();
   window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
   $('standings').innerHTML = res.standings
     .map((s) => {

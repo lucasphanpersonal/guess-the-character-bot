@@ -85,6 +85,72 @@
       `<span class="hs-score">${esc(score)}${unit ? `<small>${esc(unit)}</small>` : ''}</span></li>`;
   }
 
+  // True once per player per room: so a badge pops in when someone joins, and not every time the
+  // lobby is re-rendered around them. A roster is rewritten whole on every state push.
+  const seatsSeen = new Set();
+  function isNewSeat(code, id) {
+    const key = `${code}:${id}`;
+    if (seatsSeen.has(key)) return false;
+    seatsSeen.add(key);
+    return true;
+  }
+
+  // Right, wrong, close: one quick tint of the whole screen and a stamped word. Rules, because this
+  // is the one effect that covers everything:
+  //   - One flash per event, never a loop, at a low opacity, and at most one in `FLASH_GAP_MS`. A
+  //     fast typist's misses must never become a strobe.
+  //   - Nothing at all under reduced motion: what happened is also said in words, on the page.
+  //   - It never takes a tap (pointer-events), and the words are aria-hidden for the same reason.
+  //   - Never called while the forehead overlay is up, and it would show if it were: main is its own
+  //     stacking context, so a z-index here beats the overlay's. That screen stays plain.
+  const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const FLASH_GAP_MS = 800;
+  let lastFlash = -1e9;
+  function flash(kind, label) {
+    if (calm()) return;
+    const now = performance.now();
+    if (now - lastFlash < FLASH_GAP_MS) return;
+    lastFlash = now;
+    const el = document.createElement('div');
+    el.className = `flash ${kind}`;
+    el.setAttribute('aria-hidden', 'true');
+    el.innerHTML = `<span class="flash-stamp">${esc(label)}</span>`;
+    document.body.append(el);
+    setTimeout(() => el.remove(), 1100);
+  }
+
+  // A wrong guess in a game where they come by the dozen: the box shakes, and that is all.
+  function shake(el) {
+    if (calm() || !el) return;
+    el.classList.remove('shake');
+    void el.offsetWidth; // so a second miss straight after the first plays it again
+    el.classList.add('shake');
+  }
+
+  // Square confetti, once, for the end of a game. Fewer pieces on a phone. Transforms only, removed
+  // when done, and it never takes a tap.
+  const CONFETTI = ['var(--red)', 'var(--blue)', 'var(--amber)', 'var(--green)', 'var(--on-field)'];
+  let lastConfetti = -1e9;
+  function confetti() {
+    if (calm()) return;
+    const now = performance.now();
+    if (now - lastConfetti < 4000) return; // a reconnect re-sending the results is not a second party
+    lastConfetti = now;
+    const box = document.createElement('div');
+    box.className = 'confetti';
+    box.setAttribute('aria-hidden', 'true');
+    const n = matchMedia('(pointer: coarse), (max-width: 760px)').matches ? 26 : 48;
+    for (let i = 0; i < n; i++) {
+      const b = document.createElement('i');
+      const size = i % 3 ? 8 : 12;
+      b.style.cssText = `left:${Math.round(Math.random() * 100)}%;width:${size}px;height:${size}px;background:${CONFETTI[i % CONFETTI.length]};` +
+        `animation-duration:${(1.3 + Math.random() * 0.9).toFixed(2)}s;animation-delay:${(Math.random() * 0.5).toFixed(2)}s`;
+      box.append(b);
+    }
+    document.body.append(box);
+    setTimeout(() => box.remove(), 3000);
+  }
+
   function show(id) {
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
   }
@@ -181,5 +247,5 @@
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, flash, shake, confetti };
 })();

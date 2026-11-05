@@ -251,7 +251,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
 .feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
 .toast { background:var(--toast); color:#fff; padding:10px 14px;
-         font-weight:700; animation:pop .2s ease-out; }
+         font-weight:700; animation:pop .16s steps(3); }
 @keyframes pop { from { transform:scale(.8); opacity:0 } to { transform:scale(1); opacity:1 } }
 @media (prefers-reduced-motion: reduce) { .toast { animation:none; } .clock i { transition:none; } }
 
@@ -264,7 +264,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
                border:2px solid rgba(255,255,255,.4); }
 .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
 .themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px;
-                     background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center; transition:left .18s ease; }
+                     background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center; transition:left .15s steps(3); }
 .themetoggle[aria-checked="true"] .knob { left:27px; background:var(--paper); color:var(--ink); }
 .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
