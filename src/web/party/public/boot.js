@@ -260,7 +260,8 @@ for (const ev of ['focus', 'click']) {
 // The landing screen is active from the markup, so show() never runs for it -- tilt it here or
 // the first screen anyone sees is the one screen with no lean at all.
 scheduleEgg();
-wobble($('homeTitle'), 'Guess the Character');
+// show() names the heading, but never ran for the screen active in the markup.
+setTitleFor(document.querySelector('.screen.active')?.id);
 for (const el of document.querySelectorAll('[data-wobble]')) wobble(el, el.textContent, { colour: false });
 if (nickname) $('nickInput').value = nickname;
 
