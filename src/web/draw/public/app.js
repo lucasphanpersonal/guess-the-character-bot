@@ -378,6 +378,7 @@ function characterArt(c) {
 // guess sends one). Keyed by round and drawer as well as phase, so a turn is never mistaken for
 // the last one.
 let heardPhase = '';
+let overHeard = false; // this game's end fanfare has played (gallery.js, draw:over)
 // The hurry cue sounds once per drawing turn, as the clock is SEEN to cross into the last ten
 // seconds -- so a reload with nine seconds left does not knock the moment it arrives.
 let hurry = { turn: '', above: false, done: false };
@@ -399,6 +400,7 @@ socket.on('draw:state', (v) => {
   // lines ("... is close!") go with it rather than piling up under the next drawing.
   if (!view || view.drawer.playerId !== v.drawer.playerId || view.round !== v.round) localLines = [];
   view = v;
+  overHeard = false; // a game is on: its end will be news
   // A rematch from the end screen: last game's drawing must not stay open over the new one.
   closeViewer();
   show('game');

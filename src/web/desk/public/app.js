@@ -419,6 +419,7 @@ socket.on('setup:state', (view) => {
   $('notesErr').textContent = '';
   heardTurn = '';
   heardRuling = null;
+  overHeard = false;
   const picking = view.checkerPicks;
   const target = view.checking.ownerName;
   $('checkTitle').textContent = picking ? `You pick ${target}'s character` : `You check ${target}'s character`;
@@ -484,6 +485,7 @@ const STATUS_BADGE = {
 // every clock correction) sound it once. Dropped with the game (setup:state, game:over).
 let heardTurn = '';     // `${playerId}:${turnNumber}` of the turn last seen
 let heardRuling = null; // id of the ruling on screen
+let overHeard = false;  // this game's end fanfare has played (game:over)
 
 socket.on('game:state', (view) => {
   const wasMyTurn = gameView?.isMyTurn;
@@ -746,7 +748,8 @@ socket.on('game:over', (res) => {
   heardRuling = null;
   const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
-  sound('over', res.winners.some((w) => w.playerId === me));
+  // Once per game: a reconnect on this screen is sent game:over again (re-armed by setup:state).
+  if (!overHeard) { overHeard = true; sound('over', res.winners.some((w) => w.playerId === me)); }
   GTC.confetti();
   window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
   $('standings').innerHTML = res.standings

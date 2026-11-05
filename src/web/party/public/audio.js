@@ -62,38 +62,41 @@ const beep = (freq = 880, ms = 180) => tone(freq, ms);
 
 // --- one-shot cues --------------------------------------------------------------------------
 // Placed on the audio clock, like the bed, so a cue's notes keep their spacing in a tab whose
-// timers are throttled. All no-ops until the first gesture has made the context.
-const cueAt = (s) => (audioCtx ? audioCtx.currentTime + s : null);
+// timers are throttled. Unlike the older beeps, these play only on a RUNNING context: the clock
+// stands still while iOS holds it suspended, so a lobby filling up meanwhile would stack every
+// join on one instant and sound them as a single chord when it resumed. Missed is better.
+const live = () => !!audioCtx && audioCtx.state === 'running';
 
-// The grace countdown, one blip per second as the number changes, and a higher "go" on zero. The
-// countdown is spent raising the phone to a forehead, so the wearer counts it by ear -- the number
-// is already out of sight. The phone buzzes on the same beats (startCountdown).
+// The tunes the computers play too (GTC.TUNES, common.js), louder: a phone speaker across a room,
+// against the computers' cues at a desk, often into headphones.
+const TUNE_SCALE = 1.8;
+function playTune(name, delay = 0) {
+  const t0 = audioCtx.currentTime + delay;
+  for (const [f, ms, gain, type, at] of GTC.TUNES[name]) tone(f, ms, { gain: gain * TUNE_SCALE, type, at: t0 + at });
+}
+
+// The grace countdown, one blip per second while the number is above zero. It is spent raising
+// the phone to a forehead, so the wearer counts it by ear -- the number is out of sight. There is
+// no "go" on zero: the first player's turn chime and bed land at that same moment, and the phones
+// have no queue to keep two phrases apart. The phone buzzes on the same beats (startCountdown).
 function countBlip(n) {
-  if (!audioCtx) return;
-  if (n > 0) tone(523, 90, { gain: 0.4 });
-  else { tone(1047, 90, { gain: 0.38, type: 'triangle' }); tone(1568, 260, { gain: 0.38, type: 'triangle', at: cueAt(0.09) }); }
+  if (live() && n > 0) tone(523, 90, { gain: 0.4 });
 }
 
-// Somebody joined the lobby: a tiny rising blip, quieter than any game cue. A whole party joins
-// in the same minute, often with the phones side by side, so it must not become a din.
+// Somebody joined the lobby. A whole party joins in the same minute, often with the phones side
+// by side, so it is quieter than any game cue.
 function joinBlip() {
-  if (!audioCtx) return;
-  tone(988, 60, { gain: 0.28 });
-  tone(1319, 90, { gain: 0.28, at: cueAt(0.06) });
+  if (live()) playTune('join');
 }
 
-// The end of the game: three repeated notes and a held one over a triangle bass -- not the
-// got-it chime, so the end is not heard as one more finish. A winner's phone adds a step up on
-// top, the one part that is theirs. Same shape as the computers' (shared/sound.js, over).
+// The end of the game, a step up on top for a winner's phone. The last finisher's reveal chime
+// arrives a moment before game:over and runs 160ms, so the fanfare waits for it: on top of it, the
+// end would open on the got-it chime and be heard as one more finish.
+const AFTER_REVEAL_S = 0.2;
 function fanfare(won) {
-  if (!audioCtx) return;
-  [784, 784, 784].forEach((f, i) => tone(f, 80, { gain: 0.45, at: cueAt(i * 0.11) }));
-  tone(1047, 480, { gain: 0.48, at: cueAt(0.33) });
-  tone(262, 480, { gain: 0.4, type: 'triangle', at: cueAt(0.33) });
-  if (won) {
-    tone(1319, 110, { gain: 0.38, type: 'triangle', at: cueAt(0.86) });
-    tone(1568, 380, { gain: 0.4, type: 'triangle', at: cueAt(0.97) });
-  }
+  if (!live()) return;
+  playTune('over', AFTER_REVEAL_S);
+  if (won) playTune('overWon', AFTER_REVEAL_S);
 }
 
 // --- the turn bed ---------------------------------------------------------------------------

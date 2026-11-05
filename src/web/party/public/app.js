@@ -199,6 +199,7 @@ let lastSetupView = null;
 function renderSetup(view) {
   keepAwake();
   clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
+  overHeard = false; // a new game: its end will be news
   finishCelebrated = false;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
@@ -401,6 +402,7 @@ function renderHostList(rows) {
 
 // --- playing ------------------------------------------------------------------------------
 let countdown = null;          // local 1s ticker
+let overHeard = false;         // this game's end fanfare has played (renderOver)
 // The clock is frozen when the current player has dropped (their turn waits for them) or the host
 // has paused the game -- the same stillness either way: no ticking, no bed, no cues.
 const frozen = (v) => !!(v?.paused || v?.hostPaused);
@@ -430,6 +432,8 @@ function bannerText(view, remaining) {
 
 function renderPlaying(view) {
   keepAwake();
+  // Play began on the server's clock: a local countdown a beat behind would blip over the turn.
+  clearInterval(countdown);
   lastPlayView = view;
   // You've got yours: drop out of forehead mode into a "you got it" screen with your reveal.
   if (view.me?.finished) { hideForehead(); return renderFinished(view); }
@@ -631,7 +635,9 @@ function renderOver(result) {
   lastOverHostPicked = !!result.hostPicked;
   if (result.hostPicked) hostPicks.clear();
   $('rematchBtn').textContent = result.hostPicked ? 'Pick Characters Again' : 'Rematch — Same Settings';
-  fanfare(result.winners.some((w) => w.playerId === me));
+  // Once per game: a reconnect on the results screen (a phone waking from its lock) is sent
+  // game:over again, and the results are not news the second time. Re-armed by the next setup.
+  if (!overHeard) { overHeard = true; fanfare(result.winners.some((w) => w.playerId === me)); }
   show('over');
 }
 
@@ -959,8 +965,8 @@ function startCountdown(seconds) {
   paint();
   countBlip(n);
   navigator.vibrate?.(80);
-  // A reconnect in the last half-second is told 0: the go has just sounded, and a ticker would
-  // only count on into -1 and sound it a second time over play.
+  // A reconnect in the last half-second is told 0: nothing is left to count, and a ticker would
+  // only run on into negative numbers.
   if (n <= 0) return;
   countdown = setInterval(() => {
     n -= 1;
