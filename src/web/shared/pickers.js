@@ -301,7 +301,7 @@
           const b = document.createElement('button');
           b.type = 'button';
           b.className = 'cs-row';
-          b.innerHTML = (c.imageUrl ? `<img class="cs-thumb" src="${esc(c.imageUrl)}" alt="">` : '<span class="cs-thumb"></span>') +
+          b.innerHTML = GTC.art(c.imageUrl, 'class="cs-thumb"') +
             `<span class="cs-name">${esc(c.name)}</span><span class="cs-list">${esc(c.list || '')}</span>`;
           b.addEventListener('click', () => { clear(); onChoose({ id: c.id, name: c.name, list: c.list, imageUrl: c.imageUrl }); });
           results.appendChild(b);
@@ -311,7 +311,7 @@
         const typed = document.createElement('button');
         typed.type = 'button';
         typed.className = 'cs-row';
-        typed.innerHTML = `<span class="cs-thumb"></span><span class="cs-name">Use “${esc(q)}” as Typed</span><span class="cs-list">no picture</span>`;
+        typed.innerHTML = `${GTC.art(null, 'class="cs-thumb"')}<span class="cs-name">Use “${esc(q)}” as Typed</span><span class="cs-list">no picture</span>`;
         typed.addEventListener('click', () => { const name = q.slice(0, 60); clear(); onChoose({ name, typed: true }); });
         results.appendChild(typed);
       }, 200);

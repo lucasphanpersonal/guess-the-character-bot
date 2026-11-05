@@ -294,7 +294,7 @@ function pickSlot(p) {
     current.classList.toggle('random', !pick);
     if (!pick) return void (current.textContent = 'Random');
     current.innerHTML =
-      (pick.imageUrl ? `<img class="pickthumb" src="${esc(pick.imageUrl)}" alt="" />` : '') +
+      GTC.art(pick.imageUrl, 'class="pickthumb"') +
       `<span class="lbl" title="${esc(pick.typed ? 'Typed in, so no picture' : pick.list || '')}">${esc(pick.typed ? `“${pick.name}”` : pick.name)}</span>` +
       `<button type="button" class="pickclear" aria-label="${esc(`Back to random for ${p.nickname}`)}">✕</button>`;
     current.querySelector('.pickclear').addEventListener('click', () => { hostPicks.delete(p.playerId); paint(); });
@@ -352,8 +352,7 @@ function cardHtml({ name, character, badge = '', current = false, mystery = fals
   if (mystery) art = '<div class="art mystery">?</div>';
   // A seat not picked for yet (pick-for-each-other). Not the mystery face: that one means "yours".
   else if (empty) art = '<div class="art"><span class="noimg">Not picked yet</span></div>';
-  else if (character?.imageUrl) art = `<div class="art"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
-  else art = '<div class="art"><span class="noimg">No picture</span></div>';
+  else art = `<div class="art">${GTC.art(character?.imageUrl, 'referrerpolicy="no-referrer" loading="lazy"')}</div>`;
   return `<div class="pcard${current ? ' current' : ''}${done ? ' done' : ''}">
       <div class="who">${esc(name)}${badge}${turns != null ? `<span class="turns">${turns} turn${turns === 1 ? '' : 's'}</span>` : ''}</div>
       ${art}
@@ -374,8 +373,7 @@ function fillNotes() {
 // The art of a seat on the board: its character, or the mystery face for your own.
 function artHtml(cls, character) {
   if (!character) return `<div class="${cls} mystery">?</div>`;
-  if (character.imageUrl) return `<div class="${cls}"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
-  return `<div class="${cls}"><span class="noimg">No picture</span></div>`;
+  return `<div class="${cls}">${GTC.art(character.imageUrl, 'referrerpolicy="no-referrer" loading="lazy"')}</div>`;
 }
 
 // The middle of the screen: whoever is asking questions. For everyone else, their character, big
@@ -759,8 +757,7 @@ socket.on('game:over', (res) => {
   gameView = null;
   heardTurn = '';
   heardRuling = null;
-  const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
-  $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
+  $('overTitle').textContent = GTC.winnersTitle(res.winners.map((w) => ({ name: w.name, you: w.playerId === me })));
   // Once per game: a reconnect on this screen is sent game:over again (re-armed by setup:state).
   if (!overHeard) { overHeard = true; sound('over', res.winners.some((w) => w.playerId === me)); }
   GTC.confetti();
@@ -774,7 +771,7 @@ socket.on('game:over', (res) => {
         : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
       return GTC.hiscoreRow({
         place: s.place,
-        imageUrl: s.character?.imageUrl,
+        imageUrl: s.character?.imageUrl ?? null,
         name: s.name,
         detail: `was ${s.character?.name ?? '—'}${out}`,
         score: s.turns ?? '--',

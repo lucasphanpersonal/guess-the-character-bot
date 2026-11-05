@@ -147,9 +147,7 @@ function renderLobby(state) {
 
 // --- setup / confirm ----------------------------------------------------------------------
 function charCardHtml(ch) {
-  const img = ch.imageUrl
-    ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'(no image)'}))">`
-    : `<div class="noimg">No image — reveal by name</div>`;
+  const img = GTC.art(ch.imageUrl);
   // Wrapped in .charcard so the fixed image box (.charcard img { height:230px }) applies wherever
   // this is inserted -- not just inside #checkCard. Without the wrapper the image rendered at
   // full natural size on the finished/tap screens and blew out the layout.
@@ -413,7 +411,7 @@ function renderHostList(rows) {
     // Remove button on the right the text column is narrow, and the status wrapped mid-phrase.
     li.innerHTML =
       `<span style="font-weight:900;min-width:1.1em;text-align:center">${escapeHtml(r.icon)}</span>` +
-      (ch?.imageUrl ? `<img class="pickthumb" src="${escapeHtml(ch.imageUrl)}" alt="">` : '') +
+      GTC.art(ch?.imageUrl, 'class="pickthumb"') +
       `<span style="flex:1;min-width:0"><span class="name">${escapeHtml(r.name)}</span><br>` +
       `<span style="font-weight:700">${escapeHtml(ch?.name ?? '—')}</span><br>` +
       `<span class="you">${escapeHtml(r.meta)}</span></span>`;
@@ -637,7 +635,7 @@ function renderOver(result) {
       : s.secondsLeft == null ? '' : `${s.secondsLeft}s left`;
     return GTC.hiscoreRow({
       place: s.place,
-      imageUrl: s.character?.imageUrl,
+      imageUrl: s.character?.imageUrl ?? null,
       name: s.name,
       detail: `was ${s.character?.name ?? '—'}${how ? ` · ${how}` : ''}`,
       score: s.turns ?? '--',

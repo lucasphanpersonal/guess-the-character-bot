@@ -70,8 +70,49 @@
     return `<svg class="avatar" viewBox="-1 -1 7 7" aria-hidden="true" shape-rendering="crispEdges" fill="${colour}">${rects}</svg>`;
   }
 
+  // Every character picture goes through here. A picture that is missing, or fails to load (a
+  // Commons image gone, an upstream down), becomes a pixel "?" card at the same size, so a row never
+  // shows a broken-image icon and keeps its place. It stays an <img>, so every rule that sizes
+  // `img` still applies. The fallback is a data URI: no request, and it works when the image host
+  // does not. Colours are fixed here, because an image cannot read the page's tokens; the card is
+  // dark enough to sit on cream and on the dark theme alike.
+  const NO_ART_ROWS = ['.#####.', '##...##', '.....##', '....##.', '...##..', '..##...', '..##...', '.......', '..##...'];
+  const NO_ART = (() => {
+    let cells = '';
+    NO_ART_ROWS.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch === '#') cells += `<rect x="${x + 1}" y="${y + 1}" width="1" height="1"/>`;
+    }));
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 11" shape-rendering="crispEdges">' +
+      `<rect width="9" height="11" fill="#2a2238"/><g fill="#ffd23f">${cells}</g></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  })();
+  // `attrs` is any extra markup for the tag (class, loading...), already written by the caller.
+  // data-art marks it for the error listener below; a missing url shows the card straight away.
+  function art(url, attrs = '') {
+    return url
+      ? `<img src="${esc(url)}" alt="" data-art ${attrs} />`
+      : `<img src="${NO_ART}" alt="" data-art ${attrs} />`;
+  }
+  // Images are not always written as markup (the phones build some with createElement), so the
+  // fallback is also one document-wide listener. Image errors do not bubble, hence capture.
+  function artFallback(img) { if (img.src !== NO_ART) img.src = NO_ART; }
+  document.addEventListener('error', (e) => {
+    if (e.target instanceof HTMLImageElement && e.target.hasAttribute('data-art')) artFallback(e.target);
+  }, true);
+
+  // The results title. "You won!" when you did; "Carmen and you won!" when you tied with Carmen.
+  // Only the start of a sentence takes a capital, so "You" is lower case anywhere but first.
+  // `people` is [{ name, you }] in order.
+  function winnersTitle(people) {
+    if (!people.length) return 'Game over';
+    const names = people.map((p, i) => (p.you ? (i === 0 ? 'You' : 'you') : p.name));
+    return `${names.join(' and ')} won!`;
+  }
+
   // One row of the end screen's high-score table. `place` is the server's, so level players share
-  // one; `score` and `unit` are what this game ranks by. Everything is escaped here.
+  // one; `score` and `unit` are what this game ranks by. Everything is escaped here. Pass
+  // `imageUrl` (null when there is none) for a row that has a picture slot; leave the key out for
+  // a row that has none, as the draw game's players do.
   const ordinal = (n) => {
     const tens = n % 100;
     const end = tens >= 11 && tens <= 13 ? 'TH' : { 1: 'ST', 2: 'ND', 3: 'RD' }[n % 10] ?? 'TH';
@@ -79,7 +120,7 @@
   };
   function hiscoreRow({ place, imageUrl, name, detail, score, unit }) {
     const rank = place >= 1 && place <= 3 ? ` rank${place}` : '';
-    const img = imageUrl ? `<img src="${esc(imageUrl)}" alt="" referrerpolicy="no-referrer" />` : '';
+    const img = imageUrl !== undefined ? art(imageUrl, 'referrerpolicy="no-referrer"') : '';
     return `<li class="hs${rank}"><span class="hs-place">${place ? ordinal(place) : '--'}</span>${img}` +
       `<span class="hs-who"><span class="hs-name">${esc(name)}</span>${detail ? `<span class="hs-detail">${esc(detail)}</span>` : ''}</span>` +
       `<span class="hs-score">${esc(score)}${unit ? `<small>${esc(unit)}</small>` : ''}</span></li>`;
@@ -315,5 +356,5 @@
     words();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
 })();

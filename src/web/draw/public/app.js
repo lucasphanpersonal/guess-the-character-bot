@@ -372,7 +372,7 @@ function setClock(seconds, total, onTick = null, paused = false, ids = { secs: '
 }
 
 function characterArt(c) {
-  return c?.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="" referrerpolicy="no-referrer" />` : '<span class="hint">No picture</span>';
+  return GTC.art(c?.imageUrl, 'referrerpolicy="no-referrer"');
 }
 
 // The cue for each phase of each turn, sounded once however many states that phase sends (every
