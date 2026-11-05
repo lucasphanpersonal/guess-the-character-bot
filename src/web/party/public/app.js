@@ -212,7 +212,9 @@ function renderSetup(view) {
   clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
   overHeard = false; // a new game: its end will be news
   finishCelebrated = false;
-  if (!lastSetupView) removeArmedAt = Date.now() + REMOVE_HOLD_MS;
+  // Arm on ENTERING the deal screen, not on the first setup view of the page: a rematch, a second
+  // game or a re-deal after a removal all come back through here from another screen.
+  if (!document.getElementById('setup').classList.contains('active')) removeArmedAt = Date.now() + REMOVE_HOLD_MS;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
   // finished game's view lying around made a tilt during the NEXT game's reroll stage look like
