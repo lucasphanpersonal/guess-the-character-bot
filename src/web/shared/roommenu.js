@@ -9,30 +9,29 @@
 // The server has always allowed both at every stage, so this is the one place that offers them.
 //
 // Loaded after /shared/common.js on every page (GTC.esc); its styles are its own, scoped to the
-// dialog, because the phones' page has no theme.css. It reuses each page's own way of leaving, so
+// dialog, because the phones' page has no theme.css (only retro.css's tokens). It reuses each page's own way of leaving, so
 // what leaving costs is asked in that game's words, and a leave from here is the same leave as
 // anywhere else.
 (function () {
   const { esc } = window.GTC;
 
-  // Styles, scoped to the dialog. Tokens with fallbacks: the phones' page and the computer pages
-  // define the same names, and either may be missing one.
+  // Styles, scoped to the dialog. The tokens are /shared/retro.css, which every page loads.
   const CSS = `
-    dialog.roommenu { border:none; border-radius:18px; padding:20px; width:min(26rem, calc(100vw - 32px));
+    dialog.roommenu { border:none; padding:20px; width:min(26rem, calc(100vw - 32px));
       max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain;
-      background:var(--paper, #fff); color:var(--ink, #1b1033); box-shadow:0 6px 0 rgba(0,0,0,.22); }
-    dialog.roommenu::backdrop { background:rgba(20,8,45,.62); }
+      background:var(--paper); color:var(--ink); box-shadow:var(--frame), var(--drop); }
+    dialog.roommenu::backdrop { background:rgba(8,8,24,.7); }
     .roommenu h2 { margin:0 44px 4px 0; font-size:1.35rem; }
-    .roommenu .rmsub { margin:0 0 14px; color:var(--muted, #6b6480); font-size:.88rem; }
+    .roommenu .rmsub { margin:0 0 14px; color:var(--muted); font-size:.88rem; }
     .roommenu .rmclose { position:absolute; top:12px; right:12px; width:2.5rem; height:2.5rem; padding:0; font-size:1.05rem; line-height:1; }
     .roommenu ul { list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:8px; }
-    .roommenu li { display:flex; align-items:center; gap:8px; background:var(--soft, #f6f4fa); border-radius:12px; padding:8px 10px; min-height:2.9rem; }
+    .roommenu li { display:flex; align-items:center; gap:8px; background:var(--soft); padding:8px 10px; min-height:2.9rem; }
     .roommenu .rmname { flex:1; min-width:0; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .roommenu .rmtag { flex:none; font-size:.66rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
-      border-radius:999px; padding:2px 7px; background:var(--amber, #ffa602); color:#2b1c00; }
-    .roommenu .rmtag.off { background:var(--muted, #6b6480); color:#fff; }
+ padding:2px 7px; background:var(--amber); color:#2b1c00; }
+    .roommenu .rmtag.off { background:var(--muted); color:#fff; }
     .roommenu .rmkick { flex:none; width:auto; padding:7px 12px; font-size:.85rem; }
-    .roommenu .rmerr { color:var(--red, #e21b3c); font-weight:800; min-height:0; margin:0 0 10px; }
+    .roommenu .rmerr { color:var(--red); font-weight:800; min-height:0; margin:0 0 10px; }
     .roommenu .rmerr:empty { display:none; }
     .roommenu .rmleave { width:100%; }
     .roommenu .rmpause { width:100%; margin-bottom:10px; }
@@ -41,13 +40,13 @@
        forehead is exactly the screen that most needs to say the clock has stopped. Plain and
        large, read across a room. */
     .pauseveil { position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
-      padding:16px; background:rgba(20,8,45,.82); }
+      padding:16px; background:rgba(8,8,24,.85); }
     .pauseveil[hidden] { display:none; }
-    .pauseveil .pausecard { width:min(24rem, 100%); text-align:center; background:var(--paper, #fff); color:var(--ink, #1b1033);
-      border-radius:18px; padding:24px 20px; box-shadow:0 6px 0 rgba(0,0,0,.22); display:flex; flex-direction:column; gap:12px; }
-    .pauseveil .pausetitle { font-size:2.4rem; font-weight:900; letter-spacing:-.01em; line-height:1; }
+    .pauseveil .pausecard { width:min(24rem, 100%); text-align:center; background:var(--paper); color:var(--ink);
+      padding:24px 20px; box-shadow:var(--frame), var(--drop); display:flex; flex-direction:column; gap:12px; }
+    .pauseveil .pausetitle { font-family:var(--font-arcade); font-size:24px; line-height:1.2; }
     .pauseveil .pausetitle::before { content:"❚❚ "; font-size:.7em; vertical-align:.12em; }
-    .pauseveil p { margin:0; color:var(--muted, #6b6480); font-weight:700; }
+    .pauseveil p { margin:0; color:var(--muted); font-weight:700; }
     .pauseveil button { width:100%; }
     .pauseveil button[hidden] { display:none; }
     .roommenu .rmtheme { display:none; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; font-weight:800; }

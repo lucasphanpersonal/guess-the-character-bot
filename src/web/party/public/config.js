@@ -77,7 +77,6 @@ function syncPickMode() {
     host ? 'Anyone left blank is drawn from' : pickMode === 'each' ? 'Random picks come from' : 'Draw characters from';
   $('dealBtn').textContent = host ? 'Start With These Picks' : pickMode === 'each' ? 'Start Picking' : 'Deal Characters';
   if (host) renderPicker();
-  retilt($('config'));
 }
 
 function renderPicker() {

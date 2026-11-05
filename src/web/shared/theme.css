@@ -1,44 +1,18 @@
-/* The look of the computer games (/desk/, /draw/): the phones' game-show language at desk width.
-   Saturated field, white slabs with a hard bottom edge, chunky buttons whose shadow IS the feel,
-   colour always paired with a shape. The tokens are the phones' own
-   (src/web/party/public/index.html), so a change to the palette is made in both.
+/* The computer games' layouts (/desk/, /draw/). The palette, the fonts and the base components are
+   in retro.css, shared with the phones and loaded before this.
 
    Shared, not copied per game, so the two can't drift apart. A game's own pieces (the board,
    the canvas) stay in its own page. */
-:root {
-  --brand:#46178f; --ink:#1b1033; --paper:#fff;
-  --muted:#6b6480; --edge:#e6e2ef;
-  --red:#e21b3c; --red-d:#a81430; --blue:#1368ce; --blue-d:#0e4a95;
-  --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
-  --ok:#26890c; --off:#b9b3c7;
-  /* Surfaces dark mode redefines (see the end of this file). A hard-coded #fff in a new rule is
-     a white slab in the dark. */
-  --soft:#f6f4fa; --chip:#f3f0f8; --chip-edge:#d9d3e6; --input:#fff; --ghost-ink:var(--brand);
-  --mystery-a:#ede8f6; --mystery-b:#e3dcf0; --mystery-ink:#b8acd0; --toast:#1b1033;
-  --link:#0e4a95;
-  --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
-                  'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
-}
-:root[data-season="spooky"] { --brand:#cc4a0c; --blue:#6d28d9; --blue-d:#4c1d95; }
-* { box-sizing:border-box; }
-/* `hidden` must win over any display rule: .row and .turnbar are flex, and a flex rule beats the
-   browser's own [hidden] style -- so `hidden` on one silently did nothing. */
-[hidden] { display:none !important; }
 html { overflow-x:clip; }
-body { margin:0; min-height:100vh; font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
-       background:var(--brand); color:#fff; display:flex; justify-content:center; }
+body { margin:0; min-height:100vh; font-size:16px; line-height:1.5; display:flex; justify-content:center; }
 main { width:100%; max-width:72rem; padding:28px 28px 48px; }
-h1 { font-family:var(--font-display); font-size:2.6rem; font-weight:900; letter-spacing:-.02em;
-     margin:0 0 1.2rem; text-shadow:0 3px 0 rgba(0,0,0,.28); }
-h1 .wob-word { white-space:nowrap; }
+h1 { margin:0 0 1.2rem; }
 /* The title is the way home. A link that looks like the title, not like a link. */
 h1 a { color:inherit; text-decoration:none; }
-h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; border-radius:8px; }
-h1 .wob { display:inline-block; transform:rotate(var(--rot)); }
-h1 .wob.w0 { color:var(--red); } h1 .wob.w1 { color:#fff; } h1 .wob.w2 { color:var(--amber); } h1 .wob.w3 { color:#7fd6ff; }
+h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; }
 :root[data-season="spooky"] h1 .wob.w0, :root[data-season="spooky"] h1 .wob.w2 { color:#fff; }
 :root[data-season="spooky"] h1 .wob.w1, :root[data-season="spooky"] h1 .wob.w3 { color:var(--ink); text-shadow:0 3px 0 rgba(255,255,255,.2); }
-h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
+h2 { font-size:1.35rem; margin:0 0 .6rem; }
 /* The title row: the title, then Sound (/shared/sound.js) and dark mode together at its end. A
    flex row rather than a corner overlay, so a long title wraps beside the controls instead of
    under them. Sound stays on every screen, play included: the cues happen during play, so that
@@ -47,9 +21,9 @@ h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
    mode pinned in the window corner, Sound centred on the row -- and once the title wrapped, Sound
    hung between its two lines, a step below the switch beside it. So the row aligns to the top,
    and the group is exactly one title line tall (the h1's line-height, set here for that). */
-.titlebar { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin:0 0 1.2rem; }
-.titlebar h1 { margin:0; line-height:1.2; }
-.titletools { flex:none; display:flex; align-items:center; gap:12px; height:calc(2.6rem * 1.2); }
+.titlebar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 1.2rem; }
+.titlebar h1 { margin:0; }
+.titletools { flex:none; display:flex; align-items:center; gap:12px; height:calc(var(--title-size) * 1.3); }
 .soundtoggle, .roombtn { flex:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:34px;
                padding:0 14px; font-size:.92rem;
                background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.22); }
@@ -72,33 +46,15 @@ h2 { font-family:var(--font-display); font-size:1.35rem; margin:0 0 .6rem; }
 }
 .screen { display:none; }
 .screen.active { display:block; }
-.card { background:var(--paper); color:var(--ink); border-radius:18px; padding:20px;
-        box-shadow:0 6px 0 rgba(0,0,0,.22); }
+.card { padding:20px; }
 .stack > * + * { margin-top:16px; }
 .cols { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; }
 @media (max-width: 760px) { .cols { grid-template-columns:1fr; } main { padding:20px 16px 40px; } }
-label { display:block; font-size:.78rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
-        color:var(--muted); margin:0 0 6px; }
-input, select, textarea { width:100%; padding:12px 14px; font-size:1.05rem; font-weight:600; border-radius:12px;
-                border:3px solid var(--edge); background:var(--input); color:var(--ink); font-family:inherit; }
+label { display:block; font-size:.92rem; text-transform:uppercase; color:var(--muted); margin:0 0 6px; }
+input, select, textarea { width:100%; padding:12px 14px; font-size:1.05rem; }
 textarea { resize:vertical; min-height:6.5em; font-weight:500; line-height:1.4; }
-input:focus, select:focus, textarea:focus { outline:none; border-color:var(--blue); }
-#codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.3rem; }
-button { padding:14px 18px; font-size:1.02rem; font-weight:900; border:none; border-radius:14px;
-         background:var(--blue); color:#fff; cursor:pointer; box-shadow:0 6px 0 var(--blue-d);
-         transition:transform .05s, box-shadow .05s; font-family:inherit; }
-button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
+button { padding:14px 18px; font-size:1.1rem; }
 button.wide { width:100%; }
-button.ghost { background:var(--paper); color:var(--ghost-ink); box-shadow:0 6px 0 rgba(0,0,0,.22); }
-button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
-.card button.ghost { background:var(--chip); color:var(--ink); box-shadow:0 6px 0 var(--chip-edge); }
-button.alt { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); }
-button.alt:active { box-shadow:0 2px 0 var(--amber-d); }
-button.good { background:var(--green); box-shadow:0 6px 0 var(--green-d); }
-button.good:active { box-shadow:0 2px 0 var(--green-d); }
-button.bad { background:var(--red); box-shadow:0 6px 0 var(--red-d); }
-button.bad:active { box-shadow:0 2px 0 var(--red-d); }
-button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
 .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
 .row > .grow { flex:1; }
 .err { color:var(--red); font-weight:700; min-height:1.3em; }
@@ -109,28 +65,26 @@ button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
 .card a { color:var(--link); font-weight:800; }
 .light { color:rgba(255,255,255,.88); }
 kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px solid var(--edge);
-      border-bottom-width:3px; border-radius:6px; padding:1px 6px; color:var(--ink); }
+      border-bottom-width:3px; padding:1px 6px; color:var(--ink); }
 
 /* Lobby */
-.roomcode { font-family:var(--font-display); font-size:3.4rem; font-weight:900; letter-spacing:.06em; }
-.roomcode .ch { display:inline-block; transform:rotate(var(--rot)); }
 .roomcode .ch:nth-child(1) { color:var(--red); } .roomcode .ch:nth-child(2) { color:var(--blue); }
 .roomcode .ch:nth-child(3) { color:var(--amber-d); } .roomcode .ch:nth-child(4) { color:var(--green); }
 .roster { display:flex; flex-wrap:wrap; gap:8px; list-style:none; margin:0; padding:0; }
 .pill { display:inline-flex; align-items:center; gap:8px; background:var(--amber); color:#2b1c00;
-        border-radius:999px; padding:8px 14px; font-weight:900; }
-.dot { width:10px; height:10px; border-radius:50%; background:var(--ok); }
+ padding:8px 14px; font-weight:900; }
+.dot { width:10px; height:10px; background:var(--ok); }
 .dot.off { background:var(--off); }
-.crown { font-size:.62rem; letter-spacing:.1em; background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; border-radius:999px; }
+.crown { font-size:.62rem; letter-spacing:.1em; background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; }
 /* The host's Remove, on a player's row: the phones' small red pill, still a chunky button. */
-.rmbtn { padding:4px 10px; font-size:.74rem; border-radius:999px; background:var(--red);
+.rmbtn { padding:4px 10px; font-size:.74rem; background:var(--red);
          box-shadow:0 3px 0 var(--red-d); }
 .rmbtn:active { transform:translateY(2px); box-shadow:0 1px 0 var(--red-d); }
 /* Where a row has no room for the word: a round ✕, named for screen readers and on hover. */
 .rmbtn.icon { width:26px; height:26px; padding:0; font-size:.8rem; line-height:1; display:inline-flex;
               align-items:center; justify-content:center; }
 .choices { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
-.choice { display:flex; align-items:center; gap:10px; padding:12px; border-radius:14px; color:#fff;
+.choice { display:flex; align-items:center; gap:10px; padding:12px; color:#fff;
           font-weight:800; cursor:pointer; box-shadow:0 5px 0 rgba(0,0,0,.25); }
 .choice input { width:auto; accent-color:#fff; margin:0; }
 .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); } .choice.c2 { background:var(--green); }
@@ -141,20 +95,20 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 
 /* I'll pick them (desk): one slot per player -- who, what they have now, and a search under it. */
 .pickslots { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(17rem, 1fr)); gap:10px; }
-.pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--soft); border-radius:14px; }
+.pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--soft); }
 .pickhead { display:flex; align-items:center; gap:10px; min-height:36px; }
 .pickhead .name { font-weight:900; }
 .pickcurrent { margin-left:auto; display:flex; align-items:center; gap:8px; font-weight:800; min-width:0; }
 .pickcurrent.random { color:var(--muted); font-weight:700; }
 .pickcurrent .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px; flex:none; }
-.pickclear { flex:none; padding:4px 10px; font-size:.8rem; border-radius:999px; background:var(--paper); color:var(--ink); box-shadow:0 2px 0 var(--chip-edge); }
+.pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; flex:none; }
+.pickclear { flex:none; padding:4px 10px; font-size:.8rem; background:var(--paper); color:var(--ink); box-shadow:0 2px 0 var(--chip-edge); }
 .pickslot .cs-row { background:var(--paper); }
 
 /* The pool picker (/shared/pickers.js poolPicker). The phones style the same classes in their own
    page; this is the same design at desk width. Selected = filled blue AND a tick, never colour alone. */
 .pp-chips { display:flex; flex-wrap:wrap; gap:8px; }
-.pp-chip { display:inline-flex; align-items:center; gap:6px; padding:9px 14px; border-radius:999px;
+.pp-chip { display:inline-flex; align-items:center; gap:6px; padding:9px 14px;
            background:var(--chip); color:var(--ink); font-weight:800; font-size:.95rem; text-align:left;
            box-shadow:0 4px 0 var(--chip-edge); }
 .pp-chip:active { transform:translateY(3px); box-shadow:0 1px 0 var(--chip-edge); }
@@ -162,25 +116,25 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 .pp-chip.on:active { box-shadow:0 1px 0 var(--blue-d); }
 .pp-tick:empty { display:none; }
 .pp-n { font-size:.75rem; font-weight:700; opacity:.7; }
-.pp-quick .pp-chip { flex:1 1 0; border-radius:14px; padding:11px 14px; }
+.pp-quick .pp-chip { flex:1 1 0; padding:11px 14px; }
 .pp-quick .pp-n { margin-left:auto; }
 .pp-or { color:var(--muted); font-size:.8rem; font-weight:700; margin:12px 0 8px; }
 .pp-summary { margin:12px 0 0; font-weight:700; font-size:.92rem; }
 .pp-summary.warn { color:var(--red); }
 .pp-fallback { color:var(--red); font-weight:700; font-size:.88rem; margin:0 0 8px; }
-.pp-cat { background:var(--soft); border-radius:12px; margin-top:8px; }
+.pp-cat { background:var(--soft); margin-top:8px; }
 .pp-cat summary { display:flex; align-items:center; gap:10px; padding:10px 12px; cursor:pointer; list-style:none; }
 .pp-cat summary::-webkit-details-marker { display:none; }
 .pp-catname { font-weight:900; }
 .pp-count { color:var(--muted); font-size:.82rem; font-weight:700; }
 .pp-cat.off .pp-count { color:var(--red); }
 .pp-edit { margin-left:auto; font-size:.8rem; font-weight:900; color:var(--ghost-ink); background:var(--paper);
-           padding:4px 11px; border-radius:999px; box-shadow:0 2px 0 var(--chip-edge); }
+           padding:4px 11px; box-shadow:0 2px 0 var(--chip-edge); }
 .pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
 /* Popular / A-Z, above the chosen categories' lists. The chosen one is filled AND pressed. */
 .pp-sort { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:10px; }
 .pp-sortlabel { color:var(--muted); font-size:.8rem; font-weight:800; margin-right:2px; }
-.pp-sort button { padding:5px 12px; font-size:.82rem; border-radius:999px; background:var(--paper); color:var(--ink); box-shadow:0 3px 0 var(--chip-edge); }
+.pp-sort button { padding:5px 12px; font-size:.82rem; background:var(--paper); color:var(--ink); box-shadow:0 3px 0 var(--chip-edge); }
 .pp-sort button:active { transform:translateY(2px); box-shadow:0 1px 0 var(--chip-edge); }
 .pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; box-shadow:0 3px 0 var(--blue-d); }
 .pp-bulk { display:flex; gap:8px; padding:0 12px; }
@@ -198,31 +152,31 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .cs-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:8px 12px;
           background:var(--soft); color:var(--ink); font-weight:800; box-shadow:0 3px 0 var(--chip-edge); margin-bottom:6px; }
 .cs-row:active { transform:translateY(2px); box-shadow:0 1px 0 var(--chip-edge); }
-.cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px; flex:none; background:var(--paper); }
+.cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; flex:none; background:var(--paper); }
 .cs-name { flex:1; min-width:0; overflow-wrap:anywhere; }
 .cs-list { color:var(--muted); font-weight:700; font-size:.78rem; flex:none; max-width:40%; text-align:right; }
 
 /* Character cards. FIXED image height: artwork arrives asynchronously, and a box that grows
    when it lands shoves everything below it -- here, the guess box being typed into. */
 .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:16px; }
-.pcard { background:var(--paper); color:var(--ink); border-radius:16px; padding:12px; box-shadow:0 6px 0 rgba(0,0,0,.22);
+.pcard { background:var(--paper); color:var(--ink); padding:12px; box-shadow:0 6px 0 rgba(0,0,0,.22);
          display:flex; flex-direction:column; gap:6px; position:relative; }
 .pcard .who { font-weight:900; display:flex; align-items:center; gap:6px; min-height:1.5em; }
 .pcard .who .turns { margin-left:auto; color:var(--muted); font-weight:700; font-size:.82rem; }
-.pcard .art { height:170px; border-radius:12px; background:var(--chip); display:flex; align-items:center;
+.pcard .art { height:170px; background:var(--chip); display:flex; align-items:center;
               justify-content:center; overflow:hidden; }
 .pcard .art img { width:100%; height:100%; object-fit:contain; }
 .pcard .art .noimg { color:var(--muted); font-size:.85rem; padding:10px; text-align:center; }
 .pcard .art.mystery { background:repeating-linear-gradient(45deg, var(--mystery-a) 0 12px, var(--mystery-b) 12px 24px);
-                      font-family:var(--font-display); font-size:4.4rem; font-weight:900; color:var(--mystery-ink); }
+                      font-family:var(--font-arcade); font-size:64px; color:var(--mystery-ink); }
 /* A player's notes, under their card, for everyone. Below the art on purpose: they change as the
    player types, and nothing anyone aims at sits beneath them. Empty notes take no room. */
-.pcard .cname { font-family:var(--font-display); font-weight:900; font-size:1.12rem; line-height:1.2;
+.pcard .cname { font-family:var(--font-name); font-weight:900; font-size:1.12rem; line-height:1.2;
                 min-height:2.4em; display:flex; align-items:center; }
 .pcard .src { color:var(--muted); font-size:.78rem; min-height:1.2em; }
 .pcard.current { outline:5px solid var(--amber); outline-offset:3px; }
 .pcard.done { opacity:.72; }
-.badge { font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase; border-radius:999px;
+.badge { font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
          padding:2px 8px; background:var(--chip); color:var(--muted); }
 .badge.go { background:var(--amber); color:#2b1c00; }
 .badge.got { background:var(--green); color:#fff; }
@@ -231,11 +185,10 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 /* Play */
 .turnbar { display:flex; align-items:center; gap:16px; margin-bottom:16px; }
 .turnbar .who { font-family:var(--font-display); font-size:1.5rem; font-weight:900; }
-.clock { flex:1; height:14px; border-radius:999px; background:rgba(255,255,255,.25); overflow:hidden; }
-.clock i { display:block; height:100%; width:100%; background:#fff; transition:width 1s linear, background .3s; }
+.clock { flex:1; }
+.clock i { display:block; height:100%; width:100%; transition:width 1s linear, background .3s; }
 /* The colour carries "time is short" without moving, for anyone with motion turned down. */
-.clock.crit i { background:#ffd166; }
-.secs { font-family:var(--font-display); font-weight:900; font-size:1.3rem; min-width:3ch; text-align:right; }
+.secs { font-size:16px; min-width:3ch; text-align:right; }
 .guessbox { display:flex; gap:12px; }
 .guessbox input { font-size:1.3rem; }
 .verdict { font-weight:800; }
@@ -258,25 +211,25 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
    pushing the faces off the bottom. Its padding is room for the cards' shadows. */
 @media (min-width: 901px) {
   .stage > .stack { max-height:max(24rem, calc(100dvh - 21rem)); overflow-y:auto; overscroll-behavior:contain;
-                    padding:0 6px 8px 0; }
+                    padding:4px 8px 14px 4px; }
 }
 @media (max-width: 900px) { .stage { grid-template-columns:1fr; } }
 .notescard textarea { min-height:4.5em; }
 .spotlight { display:flex; flex-direction:column; gap:10px; outline:5px solid var(--amber); outline-offset:3px; }
 .spothead { display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; }
-.spothead .spotwho { font-family:var(--font-display); font-weight:900; font-size:1.3rem; overflow-wrap:anywhere; }
+.spothead .spotwho { font-family:var(--font-name); font-weight:900; font-size:1.3rem; overflow-wrap:anywhere; }
 .spothead .turnno { margin-left:auto; color:var(--muted); font-weight:800; font-size:.9rem; }
-.spotlight .art { height:clamp(12rem, calc(100dvh - 36rem), 26rem); border-radius:14px; background:var(--chip); display:flex;
+.spotlight .art { height:clamp(12rem, calc(100dvh - 36rem), 26rem); background:var(--chip); display:flex;
                   align-items:center; justify-content:center; overflow:hidden; }
 .spotlight .art img { width:100%; height:100%; object-fit:contain; }
 .spotlight .art .noimg { color:var(--muted); }
 .spotlight .art.mystery, .tile .tart.mystery { background:repeating-linear-gradient(45deg, var(--mystery-a) 0 12px, var(--mystery-b) 12px 24px);
-                  color:#fff; font-family:var(--font-display); font-weight:900; text-shadow:0 3px 0 rgba(0,0,0,.3); }
-.spotlight .art.mystery { font-size:8rem; }
-.spotname { font-family:var(--font-display); font-weight:900; font-size:2rem; line-height:1.15; overflow-wrap:anywhere; }
+                  color:var(--mystery-ink); font-family:var(--font-arcade); }
+.spotlight .art.mystery { font-size:96px; }
+.spotname { font-family:var(--font-name); font-weight:900; font-size:2rem; line-height:1.15; overflow-wrap:anywhere; }
 .spotlight .src { color:var(--muted); font-size:.9rem; margin-top:-6px; }
 .spotlight .src:empty { display:none; }
-.spotlight .notes { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.4; background:var(--soft); border-radius:10px; padding:10px 12px; }
+.spotlight .notes { white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.4; background:var(--soft); padding:10px 12px; }
 .spotlight .notes:empty { display:none; }
 .spotlight .notes::before { content:"Their notes"; display:block; font-size:.72rem; font-weight:900; letter-spacing:.05em;
                             text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
@@ -285,16 +238,16 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
    needs inside a scrolling box. */
 .strip { display:flex; justify-content:safe center; gap:12px; overflow-x:auto; padding:10px 8px 14px; margin-top:16px; }
 .tile { flex:0 0 10.5rem; display:flex; flex-direction:column; gap:3px; background:var(--paper); color:var(--ink);
-        border-radius:14px; padding:8px; box-shadow:0 4px 0 rgba(0,0,0,.22); min-width:0; }
-.tile .tart { height:4.5rem; border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center;
+ padding:8px; box-shadow:0 4px 0 rgba(0,0,0,.22); min-width:0; }
+.tile .tart { height:4.5rem; background:var(--chip); display:flex; align-items:center; justify-content:center;
               overflow:hidden; margin-bottom:3px; }
 .tile .tart img { width:100%; height:100%; object-fit:contain; }
 .tile .tart .noimg { color:var(--muted); font-size:.75rem; }
-.tile .tart.mystery { font-size:2.4rem; }
+.tile .tart.mystery { font-size:32px; }
 .tile .tname { display:flex; align-items:center; gap:6px; font-weight:900; font-size:.88rem; }
 .tile .tname .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tile .tname .turns { flex:none; color:var(--muted); font-weight:700; font-size:.75rem; }
-.tile .tchar { font-family:var(--font-display); font-weight:900; font-size:.95rem; line-height:1.2; overflow-wrap:anywhere; }
+.tile .tchar { font-family:var(--font-name); font-weight:900; font-size:.95rem; line-height:1.2; overflow-wrap:anywhere; }
 .tile .badge { align-self:flex-start; }
 /* Two lines of someone's notes; the whole of them is the tile's tooltip, and the spotlight's. */
 .tile .tnotes { font-size:.75rem; line-height:1.3; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2;
@@ -304,43 +257,33 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .tile.done { opacity:.72; }
 .ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
 .feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
-.toast { background:var(--toast); color:#fff; border-radius:12px; padding:10px 14px; box-shadow:0 5px 0 rgba(0,0,0,.3);
+.toast { background:var(--toast); color:#fff; padding:10px 14px; box-shadow:0 5px 0 rgba(0,0,0,.3);
          font-weight:700; animation:pop .2s ease-out; }
 @keyframes pop { from { transform:scale(.8); opacity:0 } to { transform:scale(1); opacity:1 } }
 @media (prefers-reduced-motion: reduce) { .toast { animation:none; } .clock i { transition:none; } }
 .standings { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-.standings li { display:flex; align-items:center; gap:12px; background:var(--soft); border-radius:12px; padding:10px 12px; }
-.standings .place { font-family:var(--font-display); font-weight:900; font-size:1.4rem; min-width:2ch; }
-.standings img { width:52px; height:52px; object-fit:contain; border-radius:8px; background:var(--chip); }
+.standings li { display:flex; align-items:center; gap:12px; background:var(--soft); padding:10px 12px; }
+.standings .place { font-family:var(--font-arcade); font-size:16px; min-width:2ch; }
+.standings img { width:52px; height:52px; object-fit:contain; background:var(--chip); }
 
 /* The theme switch: a small track with a knob that slides -- the same switch as the phones' page
    (src/web/party/public/index.html), so the site has one dark-mode control, not two styles of it.
    Wired by GTC.bindThemeToggles. Here it sits in the title row beside Sound (.titletools); relative
    only so the knob has something to slide within. The outline keeps it visible on the dark field. */
 .themetoggle { position:relative; flex:none; width:56px; height:30px; padding:0;
-               border-radius:999px; background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
+ background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
                border:2px solid rgba(255,255,255,.4); }
 .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
-.themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px; border-radius:50%;
+.themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px;
                      background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center;
                      box-shadow:0 2px 0 rgba(0,0,0,.25); transition:left .18s ease; }
-.themetoggle[aria-checked="true"] .knob { left:27px; background:#251a3d; color:#eee9f8; }
+.themetoggle[aria-checked="true"] .knob { left:27px; background:var(--paper); color:var(--ink); }
 .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
 
-/* Dark mode: the same game show with the house lights down. Chosen by the toggle (gtc_theme,
-   shared with the phones' page) or, until somebody touches it, by the computer's own setting;
-   set in <head> by season.js before first paint. Token-based, so a game's own page inherits it
-   by using the tokens above -- the canvas Draw draws on stays white on purpose, like paper. */
-:root[data-theme="dark"] {
-  --brand:#170d2b; --paper:#251a3d; --ink:#eee9f8; --muted:#aca3c4; --edge:#41355f;
-  --soft:#31264c; --chip:#31264c; --chip-edge:#160f28; --input:#1b1330; --ghost-ink:var(--ink);
-  --mystery-a:#2c2245; --mystery-b:#251c3c; --mystery-ink:#6f6290; --toast:#0b0616;
-  --link:#9fc4ff;
-}
-:root[data-theme="dark"][data-season="spooky"] { --brand:#2a1307; }
-:root[data-theme="dark"] h1 .wob.w0 { color:#ff5a73; }
-:root[data-theme="dark"] h1 .wob.w2 { color:#ffb52e; }
+/* Dark mode's tokens are in retro.css; chosen by the toggle (gtc_theme, shared with the phones'
+   page) or, until somebody touches it, by the computer's own setting, and set in <head> by
+   season.js before first paint. The canvas Draw draws on stays white on purpose, like paper. */
 :root[data-theme="dark"][data-season="spooky"] h1 .wob.w1,
 :root[data-theme="dark"][data-season="spooky"] h1 .wob.w3 { color:#ff9a4d; text-shadow:0 3px 0 rgba(0,0,0,.3); }
 :root[data-theme="dark"] .roomcode .ch:nth-child(1) { color:#ff5a73; }

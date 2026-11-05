@@ -3,11 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#46178f" />
+  <meta name="theme-color" content="#1f1a4d" />
   <title>Draw the Character</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎨</text></svg>" />
   <!-- The look and the seasonal switch are shared with /desk/ (src/web/shared). -->
   <script src="/shared/season.js"></script>
+  <link rel="preload" href="/shared/fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/shared/fonts/pixelify-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/shared/retro.css" />
   <link rel="stylesheet" href="/shared/theme.css" />
   <style>
     /* This game's own pieces. Three columns: who is playing, the picture, the guesses. */
@@ -29,27 +32,27 @@
     .mask { min-height:2.4rem; }
     /* The same dashed "still to come" pill as the clue bar's, here where the blanks will be. */
     .mask .tag.later { font-family:var(--font-display); font-size:.95rem; letter-spacing:0; font-weight:800; text-shadow:none;
-                       border:2px dashed rgba(255,255,255,.55); border-radius:999px; padding:1px 12px; }
+                       border:2px dashed rgba(255,255,255,.55); padding:1px 12px; }
 
     /* The blanks: a slot per letter, each with its own underline, and the letters WRITTEN in as
        they come -- a pen (✎) sweeps across the slot and the letter appears behind it, in the
-       display face at the title's hand-set tilt. The underlines draw themselves in when the blanks
+       display face. The underlines draw themselves in when the blanks
        first arrive. Only the new letter moves: the rest are re-rendered still. */
     .mask.blanks { font-family:var(--font-display); letter-spacing:0; white-space:normal; display:flex; flex-wrap:wrap;
                    justify-content:center; align-items:flex-end; gap:.35em .7em; }
     .mask .mword { display:inline-flex; gap:.16em; white-space:nowrap; }
     .mask .slot { position:relative; display:inline-flex; align-items:flex-end; justify-content:center; width:.8em; height:1.2em; }
-    .mask .slot::before { content:""; position:absolute; left:0; right:0; bottom:0; height:.12em; border-radius:999px;
+    .mask .slot::before { content:""; position:absolute; left:0; right:0; bottom:0; height:.12em;
                           background:currentColor; opacity:.9; transform-origin:left center; }
-    .mask .slot b { display:inline-block; font-weight:900; line-height:1; padding-bottom:.14em; transform:rotate(var(--rot, 0deg)); }
+    .mask .slot b { display:inline-block; font-weight:900; line-height:1; padding-bottom:.14em; }
     .mask .punct { display:inline-flex; align-items:flex-end; height:1.2em; padding-bottom:.14em; }
     .mask.drawlines .slot::before { animation:drawline .45s ease-out both; animation-delay:calc(var(--i) * 28ms); }
     @keyframes drawline { from { transform:scaleX(0); } to { transform:scaleX(1); } }
     .mask .slot.fresh b { animation:inkin .9s cubic-bezier(.3,.6,.35,1) both; }
     @keyframes inkin {
-      from { clip-path:inset(-40% 100% -40% -40%); transform:rotate(var(--rot, 0deg)) scale(1.35); }
-      70% { transform:rotate(var(--rot, 0deg)) scale(1.08); }
-      to { clip-path:inset(-40% -40% -40% -40%); transform:rotate(var(--rot, 0deg)) scale(1); }
+      from { clip-path:inset(-40% 100% -40% -40%); transform:scale(1.35); }
+      70% { transform:scale(1.08); }
+      to { clip-path:inset(-40% -40% -40% -40%); transform:scale(1); }
     }
     .mask .slot.fresh::after { content:"✎"; position:absolute; left:0; bottom:.35em; font-size:.8em; line-height:1;
                                text-shadow:0 2px 0 rgba(0,0,0,.3); pointer-events:none; animation:pen .9s cubic-bezier(.3,.6,.35,1) both; }
@@ -68,16 +71,16 @@
        so a translucent dark pill reads in both themes. */
     .cluebar { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; font-weight:800; font-size:.95rem; }
     .cluebar:empty { display:none; }
-    .cluebar .tag { background:rgba(0,0,0,.28); color:#fff; padding:3px 12px; border-radius:999px; overflow-wrap:anywhere; }
+    .cluebar .tag { background:rgba(0,0,0,.28); color:#fff; padding:3px 12px; overflow-wrap:anywhere; }
     .cluebar .tag.work { font-family:ui-monospace, 'Cascadia Mono', Consolas, monospace; letter-spacing:.08em; }
     .cluebar .tag.later { background:none; border:2px dashed rgba(255,255,255,.55); padding:1px 10px; font-weight:700; }
     /* The canvas is paper: white in both themes, on purpose -- the colour swatches are judged
        against it, and a drawing should look the same on every screen in the room. */
-    :root { --veil:rgba(255,255,255,.94); --got-bg:#e3f5dc; --insider-ink:#5a4b78; }
-    :root[data-theme="dark"] { --veil:rgba(37,26,61,.96); --got-bg:#1d3420; --insider-ink:#c3b5e6; }
+    :root { --veil:rgba(255,246,224,.95); --got-bg:#dcefc9; --insider-ink:#4f4668; }
+    :root[data-theme="dark"] { --veil:rgba(28,28,51,.96); --got-bg:#1d3420; --insider-ink:#c3b5e6; }
     :root[data-theme="dark"] .chat li.sys { color:#55d43f; }
     :root[data-theme="dark"] .chat li.close { color:#ffb52e; }
-    .canvaswrap { background:#fff; border-radius:18px; box-shadow:0 6px 0 rgba(0,0,0,.22); overflow:hidden;
+    .canvaswrap { background:#fff; box-shadow:0 6px 0 rgba(0,0,0,.22); overflow:hidden;
                   aspect-ratio:4/3; position:relative; }
     canvas { width:100%; height:100%; display:block; touch-action:none; }
     canvas.can-draw { cursor:crosshair; }
@@ -100,7 +103,7 @@
     @media (max-width: 1000px) { .telgrid { grid-template-columns:1fr; } }
     .telmain > div { max-width:max(20rem, calc((100svh - 24rem) * 4 / 3)); margin-inline:auto; }
     .telmain > #telReplay, .telmain > #telAlbum { max-width:none; }
-    .telprompt { font-family:var(--font-display); font-size:1.4rem; font-weight:800; text-align:center; overflow-wrap:anywhere; }
+    .telprompt { font-family:var(--font-name); font-size:1.4rem; font-weight:800; text-align:center; overflow-wrap:anywhere; }
     .telprompt b { font-weight:900; font-size:1.15em; }
     .telclock { display:flex; align-items:center; gap:12px; flex:1; min-width:10rem; }
     .telclock[hidden] { display:none; }
@@ -111,20 +114,20 @@
     .telnav[hidden] { display:none; }
     .telalbum { display:grid; grid-template-columns:repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); gap:16px; align-items:start; margin-top:18px; }
     .telchain { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px; }
-    .tc { background:var(--soft); border-radius:14px; padding:12px; }
+    .tc { background:var(--soft); padding:12px; }
     .tc .tcby { font-size:.75rem; font-weight:900; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px; }
-    .tc .tctext { font-family:var(--font-display); font-weight:900; font-size:1.35rem; line-height:1.2; overflow-wrap:anywhere; }
+    .tc .tctext { font-family:var(--font-name); font-weight:900; font-size:1.35rem; line-height:1.2; overflow-wrap:anywhere; }
     .tc.blank .tctext { color:var(--muted); font-style:italic; font-weight:700; }
     .tc .tcrow { display:flex; align-items:center; gap:12px; }
-    .tc .tcart { flex:none; width:4rem; height:4rem; border-radius:10px; overflow:hidden; background:var(--chip); display:flex;
+    .tc .tcart { flex:none; width:4rem; height:4rem; overflow:hidden; background:var(--chip); display:flex;
                  align-items:center; justify-content:center; }
     .tc .tcart img { width:100%; height:100%; object-fit:cover; object-position:50% 20%; }
     .tc .tcart .hint { font-size:.65rem; text-align:center; }
     /* Drawings on paper, white in both themes, like every other drawing here. */
-    .tc .tcpic { display:block; width:100%; padding:0; border-radius:10px; overflow:hidden; background:#fff;
+    .tc .tcpic { display:block; width:100%; padding:0; overflow:hidden; background:#fff;
                  border:2px solid var(--edge); box-shadow:none; }
     .tc .tcpic canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; }
-    .tcend { text-align:center; font-family:var(--font-display); font-weight:900; font-size:1.25rem; padding:10px; border-radius:14px; }
+    .tcend { text-align:center; font-family:var(--font-display); font-weight:900; font-size:1.25rem; padding:10px; }
     .tcend.yes { background:var(--green); color:#fff; }
     .tcend.no { background:var(--amber); color:#2b1c00; }
     /* The replay's newest card arrives; nothing else moves. */
@@ -152,19 +155,18 @@
        watch the drawing. Dark and translucent, so a line reads over any drawing without hiding it. */
     .bubbles { position:absolute; left:8px; bottom:8px; z-index:2; display:flex; flex-direction:column; align-items:flex-start;
                gap:4px; max-width:75%; pointer-events:none; }
-    .bubble { background:rgba(27,16,51,.82); color:#fff; font-weight:800; font-size:.85rem; line-height:1.25;
-              padding:4px 10px; border-radius:12px; overflow-wrap:anywhere; animation:bubble 3.2s ease-out forwards; }
+    .bubble { background:rgba(12,10,36,.85); color:#fff; font-weight:800; font-size:.85rem; line-height:1.25;
+              padding:4px 10px; overflow-wrap:anywhere; animation:bubble 3.2s ease-out forwards; }
     .bubble .who { opacity:.75; }
-    .bubble.right { background:rgba(38,137,12,.9); }
+    .bubble.right { background:rgba(28,130,55,.92); }
     .bubble.near { background:rgba(214,138,0,.92); color:#2b1c00; }
     @keyframes bubble { 0% { opacity:0; transform:translateY(6px); } 8% { opacity:1; transform:none; } 80% { opacity:1; } 100% { opacity:0; } }
     @media (prefers-reduced-motion: reduce) { .bubble { animation-name:fadeonly; } }
     @media (prefers-reduced-motion: reduce) { .floater { animation-name:fadeonly; } }
     /* Someone got it (app.js burst): pieces flung out from their row. Fixed, over everything,
        never in the way of a click. The script makes none under reduced motion; this is the backstop. */
-    .bit { position:fixed; z-index:50; width:9px; height:9px; margin:-4px 0 0 -4px; border-radius:50%;
+    .bit { position:fixed; z-index:50; width:9px; height:9px; margin:-4px 0 0 -4px;
            pointer-events:none; animation:bitburst .75s cubic-bezier(.2,.7,.3,1) forwards; }
-    .bit.sq { border-radius:2px; }
     @keyframes bitburst {
       0% { transform:translate(0, 0) rotate(0) scale(1.2); opacity:1; }
       100% { transform:translate(var(--dx), var(--dy)) rotate(var(--spin)) scale(.5); opacity:0; }
@@ -181,7 +183,7 @@
     .overlay h2 { font-size:1.6rem; }
     .pick { display:grid; grid-template-columns:repeat(3, minmax(0, 12rem)); gap:14px; }
     .pick button { background:var(--paper); color:var(--ink); box-shadow:0 6px 0 rgba(0,0,0,.18); border:3px solid var(--edge);
-                   display:flex; flex-direction:column; gap:8px; padding:10px; font-family:var(--font-display); }
+                   display:flex; flex-direction:column; gap:8px; padding:10px; font-family:var(--font-name); }
     .pick button:hover { border-color:var(--blue); }
     .choosehead { display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; }
     .choosehead h2 { margin:0; }
@@ -200,7 +202,7 @@
       .pick { gap:8px; }
       #chooseOverlay > p.hint { display:none; }
     }
-    .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); border-radius:10px; background:var(--chip); display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .pick .art { height:clamp(3rem, calc(75cqw - 15rem), 9rem); background:var(--chip); display:flex; align-items:center; justify-content:center; overflow:hidden; }
     /* The drawer's Search (when the host allowed it) puts the header on a second line in a narrow
        canvas, where the overlay was already exactly full with the pictures at their smallest. So
        the header's wrap gap tightens from 14px, and the pictures' floor drops from 3rem to 2.5rem
@@ -214,16 +216,16 @@
        rather than off the bottom when the keyboard takes half the screen. */
     dialog.confirmpick { border:none; width:min(27rem, calc(100vw - 32px)); max-height:calc(100dvh - 32px);
                          overflow-y:auto; overscroll-behavior:contain; }
-    dialog.confirmpick::backdrop { background:rgba(20,8,45,.62); }
+    dialog.confirmpick::backdrop { background:rgba(8,8,24,.7); }
     .confirmhead { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
-    .confirmhead .art { width:4.5rem; height:4.5rem; flex:none; border-radius:12px; background:var(--chip); overflow:hidden;
+    .confirmhead .art { width:4.5rem; height:4.5rem; flex:none; background:var(--chip); overflow:hidden;
                         display:flex; align-items:center; justify-content:center; }
     .confirmhead .art img { width:100%; height:100%; object-fit:cover; object-position:50% 20%; }
     .confirmhead .art .hint { font-size:.7rem; text-align:center; }
     .confirmhead .hint { margin:0; }
     .confirmhead h2 { margin:0; font-size:1.4rem; overflow-wrap:anywhere; }
     .confirmpick .counts { list-style:none; margin:0; padding:0; display:flex; flex-wrap:wrap; gap:6px; }
-    .confirmpick .counts li { background:var(--chip); border:2px solid var(--chip-edge); border-radius:999px; padding:3px 12px;
+    .confirmpick .counts li { background:var(--chip); border:2px solid var(--chip-edge); padding:3px 12px;
                               font-weight:800; overflow-wrap:anywhere; }
     .confirmpick .hint { font-size:.82rem; margin:6px 0 16px; }
     .confirmactions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
@@ -231,7 +233,7 @@
     .spellings { display:flex; flex-wrap:wrap; gap:6px; }
     .spellings label { display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; text-transform:none; letter-spacing:0;
                        font-size:.95rem; font-weight:800; color:var(--ink); background:var(--chip); border:2px solid var(--chip-edge);
-                       border-radius:999px; padding:4px 12px; overflow-wrap:anywhere; }
+ padding:4px 12px; overflow-wrap:anywhere; }
     .spellings input { position:absolute; opacity:0; width:1px; height:1px; }
     .spellings label:has(input:checked) { background:var(--blue); border-color:var(--blue); color:#fff; }
     .spellings label:has(input:checked)::before { content:"✓"; }
@@ -241,8 +243,8 @@
     .overextra { margin-top:18px; }
     .overextra[hidden] { display:none; }
     .accolades { list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(min(22rem, 100%), 1fr)); gap:12px; }
-    .accolades li { display:flex; align-items:center; gap:12px; background:var(--soft); border-radius:14px; padding:12px; }
-    .accolades .medal { flex:none; width:2.6rem; height:2.6rem; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    .accolades li { display:flex; align-items:center; gap:12px; background:var(--soft); padding:12px; }
+    .accolades .medal { flex:none; width:2.6rem; height:2.6rem; display:flex; align-items:center; justify-content:center;
                         font-size:1.2rem; color:#fff; box-shadow:0 3px 0 rgba(0,0,0,.2); }
     .accolades li:nth-child(4n+1) .medal { background:var(--red); }
     .accolades li:nth-child(4n+2) .medal { background:var(--blue); }
@@ -250,10 +252,10 @@
     .accolades li:nth-child(4n+4) .medal { background:var(--green); }
     .accolades .what { flex:1; min-width:0; }
     .accolades .title { font-family:var(--font-display); font-weight:900; font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
-    .accolades .who { font-family:var(--font-display); font-weight:900; font-size:1.25rem; overflow-wrap:anywhere; }
+    .accolades .who { font-family:var(--font-name); font-weight:900; font-size:1.25rem; overflow-wrap:anywhere; }
     .accolades .detail { font-size:.9rem; overflow-wrap:anywhere; }
     /* A thumbnail of the drawing it is for, which opens it. */
-    .accolades .thumbbtn { flex:none; width:4.5rem; padding:0; border-radius:8px; overflow:hidden; background:#fff;
+    .accolades .thumbbtn { flex:none; width:4.5rem; padding:0; overflow:hidden; background:#fff;
                            box-shadow:0 3px 0 rgba(0,0,0,.2); border:2px solid var(--edge); }
     /* Two across even on a phone (min() lets a column shrink to half the row): a night of a dozen
        drawings one per row is a long way to scroll. */
@@ -266,25 +268,25 @@
     .gitem .vote:disabled { opacity:.55; }
     .accolades li.crowd .medal { background:var(--amber); color:#2b1c00; }
     .gallery .open { display:flex; flex-direction:column; gap:6px; padding:8px; text-align:left; background:var(--soft); color:var(--ink);
-                      border-radius:14px; box-shadow:0 4px 0 var(--chip-edge); font-weight:700; }
+ box-shadow:0 4px 0 var(--chip-edge); font-weight:700; }
     .gallery .open:active { box-shadow:0 1px 0 var(--chip-edge); }
-    .gallery .name { font-family:var(--font-display); font-weight:900; overflow-wrap:anywhere; }
+    .gallery .name { font-family:var(--font-name); font-weight:900; overflow-wrap:anywhere; }
     .gallery .hint { font-size:.8rem; margin:0; }
     /* Drawings are on paper, white in both themes, like the canvas they were drawn on. */
-    .gallery canvas, .accolades canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; background:#fff; border-radius:8px; }
+    .gallery canvas, .accolades canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; background:#fff; }
     dialog.viewer { border:none; width:min(56rem, calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; overscroll-behavior:contain;
                     padding-top:58px; }
     /* Close in the corner, over the dialog's own top margin; the row below is for moving through. */
     .viewer .viewerclose { position:absolute; top:10px; right:12px; width:2.5rem; height:2.5rem; padding:0; font-size:1.1rem; line-height:1; }
-    dialog.viewer::backdrop { background:rgba(20,8,45,.72); }
-    .viewer canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; background:#fff; border-radius:12px; border:2px solid var(--edge); }
+    dialog.viewer::backdrop { background:rgba(8,8,24,.78); }
+    .viewer canvas { display:block; width:100%; height:auto; aspect-ratio:4/3; background:#fff; border:2px solid var(--edge); }
     .viewercap { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; margin:12px 0; }
-    .viewercap strong { font-family:var(--font-display); font-size:1.3rem; overflow-wrap:anywhere; }
+    .viewercap strong { font-family:var(--font-name); font-size:1.3rem; overflow-wrap:anywhere; }
     .viewernav { display:flex; align-items:center; gap:10px; }
     .viewernav #viewerSave { flex:1; }
     .viewernav #viewerPrev, .viewernav #viewerNext { flex:none; width:3.2rem; padding:6px 0 10px; font-size:2rem; line-height:1; }
     .refaccept { font-size:.85rem; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
-    .reveal-art { width:14rem; height:11rem; border-radius:12px; background:var(--chip); overflow:hidden; display:flex;
+    .reveal-art { width:14rem; height:11rem; background:var(--chip); overflow:hidden; display:flex;
                   align-items:center; justify-content:center; }
     .reveal-art img { width:100%; height:100%; object-fit:contain; }
     /* The left column: the drawer's reference above who is playing. */
@@ -294,10 +296,10 @@
     .refcard .hint { margin:6px 0 0; font-size:.8rem; }
     /* A FIXED height: the picture arrives after the turn starts, and a box that grew when it landed
        would shove the players list (and, in one column, the canvas) down mid-stroke. */
-    .refart { height:13rem; border-radius:12px; background:var(--chip); display:flex; align-items:center;
+    .refart { height:13rem; background:var(--chip); display:flex; align-items:center;
               justify-content:center; overflow:hidden; }
     .refart img { width:100%; height:100%; object-fit:contain; }
-    .refname { font-family:var(--font-display); font-weight:900; font-size:1.1rem; line-height:1.2; margin-top:8px; }
+    .refname { font-family:var(--font-name); font-weight:900; font-size:1.1rem; line-height:1.2; margin-top:8px; }
     @media (max-width: 1000px) { .refart { height:11rem; } }
     .tools { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:14px; }
     .tools[hidden] { display:none; }
@@ -306,7 +308,7 @@
        than hold at 2.4rem: twelve of those are ~570px, wider than the canvas in a one-column window
        just over phone width, where they ran past the card and panned the page sideways. */
     #swatches { display:grid; grid-template-columns:repeat(12, minmax(0, 2.4rem)); gap:10px; width:100%; }
-    .swatch { width:100%; height:auto; aspect-ratio:1; padding:0; border-radius:50%; border:3px solid #fff;
+    .swatch { width:100%; height:auto; aspect-ratio:1; padding:0; border:3px solid #fff;
               box-shadow:0 4px 0 rgba(0,0,0,.25); }
     .swatch:active { box-shadow:0 1px 0 rgba(0,0,0,.25); }
     /* The picked colour and size are marked with a ring AND a check -- never by colour alone. */
@@ -321,17 +323,17 @@
        shadow, which the scroll box would otherwise clip. */
     .players { list-style:none; margin:0; padding:0 2px 6px 0; display:flex; flex-direction:column; gap:8px;
                max-height:min(36rem, 64vh); overflow-y:auto; overscroll-behavior:contain; }
-    .players li { display:flex; align-items:center; gap:6px; background:var(--paper); color:var(--ink); border-radius:12px;
+    .players li { display:flex; align-items:center; gap:6px; background:var(--paper); color:var(--ink);
                   padding:10px; box-shadow:0 4px 0 rgba(0,0,0,.18); font-weight:800; }
     /* One line per player, whatever the name: in a 15rem column a long name used to push the tag
        onto two lines and the host's Remove out past the row's edge. The name takes what is left
        and ends in an ellipsis; nothing else in the row may wrap or shrink. */
     .players li .pname { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .players li .score { font-family:var(--font-display); }
+    .players li .score { font-family:var(--font-arcade); font-size:.75rem; }
     .players li .tag, .players li .score, .players li .rmbtn { flex:none; white-space:nowrap; }
     .players li.got { background:var(--got-bg); }
     .players li.left { opacity:.55; }
-    .players .tag { font-size:.68rem; font-weight:900; letter-spacing:.01em; text-transform:uppercase; border-radius:999px;
+    .players .tag { font-size:.68rem; font-weight:900; letter-spacing:.01em; text-transform:uppercase;
                     padding:1px 6px; }
     .players .tag.drawing { background:var(--amber); color:#2b1c00; }
     .players .tag.got { background:var(--green); color:#fff; }
@@ -348,7 +350,7 @@
     .chat li.right { color:var(--green-d); font-style:normal; font-weight:800; }
     .chat li.near { font-style:normal; }
     .chat li .kind { font-size:.72rem; font-weight:900; text-transform:uppercase; letter-spacing:.04em;
-                     background:var(--amber); color:#2b1c00; border-radius:999px; padding:0 6px; }
+                     background:var(--amber); color:#2b1c00; padding:0 6px; }
     .chat form { display:flex; gap:8px; margin-top:10px; }
     .chat form input { font-size:1rem; padding:10px 12px; }
     .chat form button { padding:10px 14px; }
@@ -398,7 +400,7 @@
        still a fingertip wide (twelve to a row would be two rows of ~24px targets). */
     @media (max-width: 560px) {
       body:is(:has(#game.active), :has(#tel.active)) .titlebar { align-items:center; margin-bottom:.8rem; }
-      body:is(:has(#game.active), :has(#tel.active)) .titlebar h1 { font-size:1.45rem; }
+      body:is(:has(#game.active), :has(#tel.active)) { --title-size:16px; }
       body:is(:has(#game.active), :has(#tel.active)) .titletools { height:auto; }
       .topbar { gap:6px 12px; margin-bottom:10px; }
       .cluebox { order:-1; flex-basis:100%; gap:4px; }

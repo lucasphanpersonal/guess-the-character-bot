@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#46178f" />
+  <meta name="theme-color" content="#1f1a4d" />
   <title>Guess the Character</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
   <!-- Seasonal theme: spooky season. Decided here, in <head>, so the attribute is on <html>
@@ -30,100 +30,63 @@
       if (!dark) return;
       document.documentElement.dataset.theme = 'dark';
       document.querySelector('meta[name=theme-color]').content =
-        document.documentElement.dataset.season === 'spooky' ? '#2a1307' : '#170d2b';
+        document.documentElement.dataset.season === 'spooky' ? '#2a1307' : '#0e0f1a';
     })();
   </script>
+  <link rel="preload" href="/shared/fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/shared/fonts/pixelify-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="/shared/retro.css" />
   <style>
-    /* Game-show palette: saturated violet field, white slabs, four shape-paired choice colours.
-       Deliberately NOT applied to forehead mode below -- that overlay is a display surface read
-       across a dim room, so its high-contrast black/white stays as-is. */
-    :root {
-      --brand:#46178f; --ink:#1b1033; --paper:#fff;
-      --muted:#6b6480; --edge:#e6e2ef;
-      --red:#e21b3c; --red-d:#a81430; --blue:#1368ce; --blue-d:#0e4a95;
-      --amber:#ffa602; --amber-d:#c47f00; --green:#26890c; --green-d:#1a6108;
-      --ok:#26890c; --off:#b9b3c7; --warn:#ffa602;
-      --card:var(--paper);
-      /* Surfaces dark mode redefines: the pale rows inside cards, form fields, and the text of a
-         ghost button (the field colour on white, which would vanish on a dark card). */
-      --soft:#f6f4fa; --input:#fff; --ghost-ink:var(--brand);
-      --font-display: ui-rounded, 'SF Pro Rounded', 'Hiragino Maru Gothic ProN',
-                      'Segoe UI Variable Display', 'Trebuchet MS', system-ui, sans-serif;
-    }
-    * { box-sizing: border-box; }
-    body { margin:0; min-height:100vh; min-height:100dvh;
-           font:16px/1.5 "Trebuchet MS", "Segoe UI", system-ui, -apple-system, sans-serif;
-           background:var(--brand); color:#fff; display:flex; flex-direction:column; align-items:center; }
+    /* The palette, the fonts and the base components are /shared/retro.css. Deliberately NOT applied
+       to forehead mode below -- that overlay is a display surface read across a dim room, so its
+       high-contrast black/white stays as-is. */
+    body { margin:0; min-height:100vh; min-height:100dvh; font-size:16px; line-height:1.5;
+           display:flex; flex-direction:column; align-items:center; }
     main { width:100%; max-width:32rem; padding:22px 20px 40px; flex:1; display:flex; flex-direction:column; }
-    h1 { font-family:var(--font-display); font-size:clamp(1.7rem, 8.2vw, 2.3rem); font-weight:900;
-         letter-spacing:-.02em; margin:.2rem 0 1rem; text-shadow:0 3px 0 rgba(0,0,0,.28);
-         text-wrap:balance; }
+    h1 { font-size:24px; margin:.2rem 0 1rem; }
     /* The title is the way home. A link that looks like the title, not like a link. */
     h1 a { color:inherit; text-decoration:none; -webkit-tap-highlight-color:transparent; }
-    h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; border-radius:8px; }
-    .roomcode, .countnum, .charname, .big-emoji, #foreheadNoImg, #foreheadCount { font-family:var(--font-display); }
-    .tag { display:inline-block; padding:.2rem .7rem; border-radius:999px; background:rgba(255,255,255,.18);
+    h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; }
+    .charname, #foreheadNoImg, #foreheadCount { font-family:var(--font-name); }
+    .big-emoji { font-family:var(--font-arcade); font-weight:400; letter-spacing:0; }
+    .tag { display:inline-block; padding:.2rem .7rem; background:rgba(255,255,255,.18);
            font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#fff; }
     .screen { display:none; flex-direction:column; gap:14px; }
     .screen.active { display:flex; }
-    /* White slabs on the colour field, with a hard bottom edge instead of a border. */
-    .card { background:var(--card); color:var(--ink); border:none; border-radius:18px; padding:18px;
-            box-shadow:0 6px 0 rgba(0,0,0,.22); }
-    label { display:block; font-size:.8rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em;
-            color:var(--muted); margin:0 0 8px; }
-    input, select { width:100%; padding:14px; font-size:1.05rem; font-weight:600; border-radius:12px;
-            border:3px solid var(--edge); background:var(--input); color:var(--ink); }
-    input:focus, select:focus { outline:none; border-color:var(--blue); }
-    #codeInput { text-transform:uppercase; letter-spacing:.4em; font-weight:900; text-align:center; font-size:1.4rem; }
-    /* Chunky tactile slabs: the hard bottom shadow + press-down is most of the feel.
-       `touch-action:manipulation` opts out of double-tap-to-zoom, which is the browser's other
-       reading of two quick taps on the same button -- and this is a party game, so two quick
-       taps on the same button is ordinary use. It leaves pinch-zoom alone, unlike
-       `user-scalable=no`, so nobody loses the ability to zoom the page.
-       The tap highlight is a grey box iOS paints over the slab on touch, which reads as a
-       rendering fault next to a button whose whole feel is the press-down. */
-    button { width:100%; padding:16px; font-size:1.05rem; font-weight:900; border:none; border-radius:14px;
-             background:var(--blue); color:#fff; cursor:pointer; box-shadow:0 6px 0 var(--blue-d);
-             touch-action:manipulation; -webkit-tap-highlight-color:transparent;
-             transition:transform .05s, box-shadow .05s; }
-    button:active { transform:translateY(4px); box-shadow:0 2px 0 var(--blue-d); }
-    button.ghost, a.linkbtn { background:var(--paper); color:var(--ghost-ink); box-shadow:0 6px 0 rgba(0,0,0,.22); }
+    .card { padding:18px; }
+    label { display:block; font-size:.95rem; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+    input, select { width:100%; padding:14px; font-size:1.05rem; }
+    /* Full width on a phone. `touch-action:manipulation` (in retro.css) opts out of double-tap-to-zoom,
+       which is the browser's other reading of two quick taps on the same button -- and this is a
+       party game, so two quick taps on the same button is ordinary use. It leaves pinch-zoom alone,
+       unlike `user-scalable=no`, so nobody loses the ability to zoom the page. */
+    button { width:100%; padding:16px; font-size:1.15rem; }
     /* The computer-version link, dressed as the ghost button beside it. */
-    a.linkbtn { display:block; padding:16px; border-radius:14px; text-align:center; font-weight:900; line-height:normal;
-                font-size:1.05rem; text-decoration:none; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
-    a.linkbtn:active { transform:translateY(4px); box-shadow:0 2px 0 rgba(0,0,0,.22); }
-    button.ghost:active { box-shadow:0 2px 0 rgba(0,0,0,.22); }
-    button.alt { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); }
-    button.alt:active { box-shadow:0 2px 0 var(--amber-d); }
-    button.good { background:var(--green); color:#fff; box-shadow:0 6px 0 var(--green-d); }
-    button.good:active { box-shadow:0 2px 0 var(--green-d); }
-    button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    a.linkbtn { display:block; padding:16px; text-align:center; font-family:var(--font-display); font-weight:700; line-height:normal;
+                font-size:1.15rem; text-decoration:none; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
     .divider { display:flex; align-items:center; gap:12px; color:rgba(255,255,255,.75); font-size:.8rem; font-weight:800; }
     .divider::before,.divider::after { content:""; height:2px; flex:1; background:rgba(255,255,255,.25); }
     .err { color:#ffd7dd; font-weight:700; font-size:.9rem; min-height:1.2em; }
     /* The room code is the hero of the lobby -- it's what the whole room reads off a screen. */
-    .roomcode { font-size:3.6rem; font-weight:900; text-align:center; margin:.3rem 0 .5rem; color:var(--ink); }
-    /* Each character sits at its own angle so the code reads as hand-set, not typed. */
-    .roomcode .ch { display:inline-block; margin:0 .06em; transform:rotate(var(--rot));
-                    transition:transform .2s ease; }
+    .roomcode { font-size:48px; text-align:center; margin:.3rem 0 .5rem; color:var(--ink); }
     .roomcode .ch:nth-child(1) { color:var(--red); }  .roomcode .ch:nth-child(2) { color:var(--blue); }
     .roomcode .ch:nth-child(3) { color:var(--amber-d); } .roomcode .ch:nth-child(4) { color:var(--green); }
     .share { text-align:center; color:var(--muted); font-size:.8rem; word-break:break-all; }
     .roster { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
     .seat { display:flex; align-items:center; gap:10px; padding:12px; background:var(--soft);
-            border-radius:12px; color:var(--ink); }
+ color:var(--ink); }
     /* Joined players read as pills that pop in, not as list rows. */
     #roster { flex-direction:row; flex-wrap:wrap; gap:8px; }
-    #roster .seat { width:auto; background:var(--amber); color:#2b1c00; border-radius:999px;
+    #roster .seat { width:auto; background:var(--amber); color:#2b1c00;
                     padding:9px 15px; font-weight:900; animation:pop .25s ease-out; }
     @keyframes pop { from { transform:scale(.6); opacity:0 } to { transform:scale(1); opacity:1 } }
-    .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); flex:none; }
+    .dot { width:10px; height:10px; background:var(--ok); flex:none; }
     .dot.off { background:var(--off); }
     .seat .name { font-weight:800; }
     .seat .you { color:var(--muted); font-weight:600; font-size:.82rem; }
     #roster .seat .you { color:rgba(0,0,0,.55); }
     .crown { margin-left:auto; font-size:.62rem; font-weight:900; letter-spacing:.1em;
-             background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; border-radius:999px; }
+             background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; }
     .count { color:var(--muted); font-size:.85rem; font-weight:700; }
     .hint { color:var(--muted); font-size:.88rem; }
     .card .hint { color:var(--muted); }
@@ -133,7 +96,7 @@
     .row { display:flex; gap:10px; }
     .row > * { flex:1; }
     /* Choice slabs: colour + shape, so they're told apart without relying on colour alone. */
-    .choice { display:flex; align-items:center; gap:12px; padding:14px; border:none; border-radius:14px;
+    .choice { display:flex; align-items:center; gap:12px; padding:14px; border:none;
               background:var(--blue); color:#fff; font-weight:800; margin-bottom:10px; cursor:pointer;
               box-shadow:0 5px 0 rgba(0,0,0,.25); }
     .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); }
@@ -149,11 +112,11 @@
        thumb. A fixed box with object-fit:contain holds the space from first paint and letterboxes
        whatever shape the image turns out to be, so nothing moves. The same height on .noimg keeps
        the card stable when a reroll swaps an illustrated character for a text-only one. */
-    .charcard img { width:100%; height:230px; object-fit:contain; border-radius:14px; margin:6px auto;
+    .charcard img { width:100%; height:230px; object-fit:contain; margin:6px auto;
                     display:block; background:var(--soft); }
     .charcard .noimg { display:flex; align-items:center; justify-content:center; height:230px;
                        color:var(--muted); font-size:.9rem; margin:6px 0; padding:12px;
-                       border:3px dashed var(--edge); border-radius:14px; }
+                       border:3px dashed var(--edge); }
     /* Both reserve their lines whether or not they are filled, so a one-line name and a
        two-line name occupy the same box. Together with the fixed image height above, the whole
        character block is a constant size -- which is what lets the controls sit below it
@@ -166,13 +129,13 @@
     /* Coloured, so it does not read as an exit, but visibly lighter than Reroll: it is the
        rarer, corrective action and should not compete with the one you press repeatedly. */
     .undo { margin-top:8px; padding:11px; font-size:.92rem; }
-    .rmbtn { width:auto; flex:none; padding:7px 12px; font-size:.78rem; border-radius:999px;
+    .rmbtn { width:auto; flex:none; padding:7px 12px; font-size:.78rem;
              background:var(--red); box-shadow:0 3px 0 var(--red-d); }
     .rmbtn:active { transform:translateY(2px); box-shadow:0 1px 0 var(--red-d); }
     .gatetitle { text-align:center; font-family:var(--font-display); font-weight:900;
                  font-size:1.15rem; color:var(--ink); margin-bottom:6px; }
     .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
-    .big-emoji { font-size:1.6rem; font-weight:900; letter-spacing:.12em; text-align:center; color:var(--brand); }
+    .big-emoji { font-size:24px; line-height:1.4; text-align:center; color:var(--ink); }
     /* Podium colouring for the top three on the results screen. */
     .seat.rank1 { background:linear-gradient(#ffd75e,#ffc107); }
     .seat.rank2 { background:linear-gradient(#e8e8ef,#cfcfdb); }
@@ -185,7 +148,7 @@
     .howto li { position:relative; padding:0 0 12px 38px; counter-increment:step; }
     .howto li:last-child { padding-bottom:0; }
     .howto li::before { content:counter(step); position:absolute; left:0; top:0;
-                        width:26px; height:26px; border-radius:50%; background:var(--brand);
+                        width:26px; height:26px; background:var(--brand);
                         color:#fff; font-weight:900; font-size:.85rem; display:flex;
                         align-items:center; justify-content:center; }
     .howto b { display:block; }
@@ -195,34 +158,11 @@
     #howtoToggle { background:none; box-shadow:none; color:var(--muted); font-size:.82rem;
                    font-weight:700; padding:6px; width:auto; margin:0 auto; display:block; }
     #howtoToggle:active { transform:none; }
-    /* --- whimsy -------------------------------------------------------------------------
-       Hand-set lettering: each character gets its own angle (and often its own colour) so
-       headings read as arranged by hand rather than typed. Kept to the big type only -- body
-       copy has to stay readable, and the forehead card is read across a room so it stays plain. */
-    .wob { display:inline-block; transform:rotate(var(--rot)); }
-    /* Keeps a word's letters together so a line can only break between words -- see wobble(). */
-    .wob-word { display:inline-block; white-space:nowrap; }
+    /* Big type on a card takes one colour per letter (wobble() in app.js), kept to the big type:
+       body copy has to stay readable, and the forehead card is read across a room so it stays plain. */
     .wob.w0 { color:var(--red); } .wob.w1 { color:var(--blue); }
     .wob.w2 { color:var(--amber); } .wob.w3 { color:var(--green); }
-    h1 .wob { text-shadow:0 3px 0 rgba(0,0,0,.3); }
-    .card .wob.w2 { color:var(--amber-d); } /* amber needs weight on white */
-    /* Cards sit at faint alternating angles, like things laid on a table rather than a grid.
-       Under half a degree: enough to feel placed, not enough to look broken.
-       
-       `.flat` opts a card out, and long-scrolling cards MUST use it. A rotation displaces a box
-       by height * sin(angle), which is nothing on a card a few hundred pixels tall and severe on
-       one that is not: the compendium's list card runs ~20,000px, where 0.35deg shears it ~120px
-       sideways and pushes content off the screen edge. The tilt is decoration, so it only belongs
-       on cards short enough for it to read as a tilt rather than a lean.
-
-       The angle is set per card by retilt() rather than by :nth-of-type, which counts every
-       sibling of the same TAG -- so a non-card div between two cards (the landing divider, the
-       playing screen's motion banner) ate a slot and left the two cards either side of it
-       leaning the SAME way. Most visible exactly where it mattered: the turn banner and the play
-       area, the two cards you look at all game. */
-    .screen .card:not(.flat) { transform:rotate(var(--tilt, 0deg)); }
-    .choice:nth-of-type(odd)  { transform:rotate(-0.5deg); }
-    .choice:nth-of-type(even) { transform:rotate(0.5deg); }
+    .card .wob.w2 { color:var(--amber-d); } /* amber needs weight on cream */
     /* Roster pills cycle the palette instead of all being amber. */
     #roster .seat:nth-child(4n+1) { background:var(--amber); color:#2b1c00; }
     #roster .seat:nth-child(4n+2) { background:var(--blue);  color:#fff; }
@@ -233,7 +173,7 @@
     #roster .seat:nth-child(4n+4) .you { color:rgba(255,255,255,.75); }
     /* Reference characters: whose is whose, tinted so the rows are told apart at a glance. */
     .seat .owner { font-weight:900; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase;
-                   background:var(--brand); color:#fff; padding:3px 9px; border-radius:999px; flex:none; }
+                   background:var(--brand); color:#fff; padding:3px 9px; flex:none; }
     .seat.tint0 { background:#fdeef0; } .seat.tint0 .owner { background:var(--red); }
     .seat.tint1 { background:#eaf1fc; } .seat.tint1 .owner { background:var(--blue); }
     .seat.tint2 { background:#fdf3e0; } .seat.tint2 .owner { background:var(--amber-d); }
@@ -249,38 +189,37 @@
 
     /* --- compendium ---------------------------------------------------------------------- */
     .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    .tile { border:none; border-radius:16px; padding:16px 12px; color:#fff; font-weight:900;
+    .tile { border:none; padding:16px 12px; color:#fff; font-weight:900;
             box-shadow:0 5px 0 rgba(0,0,0,.25); cursor:pointer; text-align:left; width:100%; }
     .tile .n { display:block; font-size:.75rem; font-weight:700; opacity:.85; margin-top:3px; }
     .tile.c0 { background:var(--red); } .tile.c1 { background:var(--blue); }
     .tile.c2 { background:var(--amber); color:#2b1c00; } .tile.c3 { background:var(--green); }
-    .tile:nth-child(odd) { transform:rotate(-0.6deg); } .tile:nth-child(even) { transform:rotate(0.6deg); }
     .tile:active { transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
     /* Rows are buttons, so the whole strip is the tap target rather than the text. */
     .rowbtn { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px;
-              border:none; border-radius:12px; background:var(--soft); color:var(--ink); font-weight:800;
+              border:none; background:var(--soft); color:var(--ink); font-weight:800;
               box-shadow:none; margin-bottom:8px; cursor:pointer; }
     .rowbtn:active { transform:translateY(2px); }
     .rowbtn .n { margin-left:auto; color:var(--muted); font-weight:700; font-size:.8rem; flex:none; }
     /* Host-picks: one slot per player -- who, what they have now, and a search under it. */
     .pickslot { display:flex; flex-direction:column; gap:8px; padding:12px; background:var(--soft);
-                border-radius:14px; color:var(--ink); }
+ color:var(--ink); }
     .pickhead { display:flex; align-items:center; gap:10px; min-height:36px; }
     .pickcurrent { margin-left:auto; display:flex; align-items:center; gap:8px; font-weight:800;
                    min-width:0; text-align:right; }
     .pickcurrent.random { color:var(--muted); font-weight:700; }
     .pickcurrent .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px;
+    .pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%;
                  flex:none; }
-    .pickclear { width:auto; flex:none; padding:4px 10px; font-size:.8rem; border-radius:999px;
+    .pickclear { width:auto; flex:none; padding:4px 10px; font-size:.8rem;
                  background:var(--edge); color:var(--ink); box-shadow:0 2px 0 rgba(0,0,0,.15); }
     /* Search results (/shared/pickers.js characterSearch): rows dressed as .rowbtn. White, not the
        slot's grey, or the results would disappear into the slot behind them. */
     .cs-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:10px 12px;
-              border:none; border-radius:12px; background:var(--paper); color:var(--ink); font-weight:800;
+              border:none; background:var(--paper); color:var(--ink); font-weight:800;
               box-shadow:0 3px 0 rgba(0,0,0,.12); margin-bottom:6px; cursor:pointer; }
     .cs-row:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.12); }
-    .cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; border-radius:8px;
+    .cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%;
                 flex:none; background:var(--soft); }
     .cs-name { flex:1; min-width:0; overflow-wrap:anywhere; }
     .cs-list { color:var(--muted); font-weight:700; font-size:.78rem; flex:none; max-width:40%; text-align:right; }
@@ -289,7 +228,7 @@
     /* Chips: tap what you want to play. Selected = filled blue AND a tick, never colour alone. */
     .pp-chips { display:flex; flex-wrap:wrap; gap:8px; }
     .pp-chip { width:auto; display:inline-flex; align-items:center; gap:6px; padding:10px 14px;
-               border-radius:999px; background:var(--soft); color:var(--ink); font-weight:800;
+ background:var(--soft); color:var(--ink); font-weight:800;
                font-size:.95rem; box-shadow:0 4px 0 rgba(0,0,0,.14); text-align:left; }
     .pp-chip:active { transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.14); }
     .pp-chip.on { background:var(--blue); color:#fff; box-shadow:0 4px 0 var(--blue-d); }
@@ -297,13 +236,13 @@
     .pp-tick:empty { display:none; }
     .pp-n { font-size:.75rem; font-weight:700; opacity:.7; }
     /* The two quick choices sit side by side as equals, each saying what it means. */
-    .pp-quick .pp-chip { flex:1 1 0; flex-wrap:wrap; border-radius:14px; padding:12px 14px; }
+    .pp-quick .pp-chip { flex:1 1 0; flex-wrap:wrap; padding:12px 14px; }
     .pp-quick .pp-n { flex-basis:100%; }
     .pp-or { color:var(--muted); font-size:.8rem; font-weight:700; margin:14px 0 8px; }
     .pp-summary { margin:14px 0 0; font-weight:700; color:var(--ink); font-size:.92rem; }
     .pp-summary.warn { color:var(--red); }
     .pp-fallback { color:var(--red); font-weight:700; font-size:.88rem; margin:0 0 8px; }
-    .pp-cat { background:var(--soft); border-radius:12px; margin-top:8px; }
+    .pp-cat { background:var(--soft); margin-top:8px; }
     .pp-cat summary { display:flex; align-items:center; gap:10px; padding:12px; cursor:pointer;
                       list-style:none; -webkit-tap-highlight-color:transparent; }
     .pp-cat summary::-webkit-details-marker { display:none; }
@@ -311,12 +250,12 @@
     .pp-count { color:var(--muted); font-size:.82rem; font-weight:700; }
     .pp-cat.off .pp-count { color:var(--red); }
     .pp-edit { margin-left:auto; flex:none; font-size:.8rem; font-weight:900; color:var(--ghost-ink);
-               background:var(--paper); padding:5px 11px; border-radius:999px; box-shadow:0 2px 0 rgba(0,0,0,.12); }
+               background:var(--paper); padding:5px 11px; box-shadow:0 2px 0 rgba(0,0,0,.12); }
     .pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
     /* Popular / A-Z: the picker's lists and the library browser's. Filled AND pressed when chosen. */
     .pp-sort { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:10px; }
     .pp-sortlabel { color:var(--muted); font-size:.8rem; font-weight:800; margin-right:2px; }
-    .pp-sort button { width:auto; padding:6px 13px; font-size:.82rem; border-radius:999px; background:var(--paper);
+    .pp-sort button { width:auto; padding:6px 13px; font-size:.82rem; background:var(--paper);
                       color:var(--ink); box-shadow:0 3px 0 rgba(0,0,0,.14); }
     .pp-sort button:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.14); }
     .pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; box-shadow:0 3px 0 var(--blue-d); }
@@ -335,10 +274,10 @@
     .pp-rowname { flex:1; min-width:0; overflow-wrap:anywhere; }
     .pp-row .pp-n { opacity:1; color:var(--muted); }
     .off-pool { font-size:.6rem; font-weight:900; letter-spacing:.08em; background:var(--edge);
-                color:var(--muted); padding:2px 6px; border-radius:999px; flex:none; }
+                color:var(--muted); padding:2px 6px; flex:none; }
     /* A grid of faces. Fixed tile heights so nothing reflows as thumbnails arrive. */
     .chargrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; }
-    .chartile { background:var(--soft); border-radius:12px; overflow:hidden; text-align:center; }
+    .chartile { background:var(--soft); overflow:hidden; text-align:center; }
     /* `cover` crops to fill, and the default centre crop takes the MIDDLE of the image -- which
        on a standing portrait is a torso and a pair of legs. Biasing the crop toward the top puts
        the face in the tile instead. 20% rather than 0% leaves a little headroom, so hats, hair
@@ -368,62 +307,16 @@
                         top:-60px; bottom:-26px; z-index:-1; background:var(--brand);
                         -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
                         mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
-    .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem; border-radius:999px;
+    .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem;
                background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.25); }
     .backbtn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
     #browseCrumb { color:#fff; font-size:.85rem; font-weight:800; line-height:1.25; flex:1;
                    overflow:hidden; text-overflow:ellipsis; }
     #browseCrumb .up { text-decoration:underline; cursor:pointer; }
 
-    /* --- idle whimsy ---------------------------------------------------------------------
-       The page breathes a little when nobody is doing anything. Rules this obeys:
-
-       - transform/opacity only, 1-2px, periods of 5-9s. It should read as "alive" at the edge
-         of vision and be invisible if you look straight at it. Anything you can consciously
-         watch is too much.
-       - every keyframe re-states the element's resting transform via its var, because an
-         animation OVERRIDES the static transform -- omitting it would flatten the hand-set
-         angles retilt()/wobble() set up.
-       - :active kills the animation, or the press-down would be overridden and buttons would
-         stop feeling like buttons.
-       - nothing idles during play (see .at-play): by then every phone is on a forehead and the
-         only thing that should move is the game. It is battery, too.
-       - the whole block is behind prefers-reduced-motion, so asking for less gets exactly the
-         static page that shipped before this. */
+    /* The smooth idle float that used to live here is gone with the game-show look. Motion comes back
+       in the new style in a later stage: stepped, and never during play. */
     @media (prefers-reduced-motion: no-preference) {
-      @keyframes idleFloat {
-        0%,100% { transform:rotate(var(--tilt,0deg)) translateY(0); }
-        50%     { transform:rotate(var(--tilt,0deg)) translateY(-2px); }
-      }
-      .screen.active .card:not(.flat) { animation:idleFloat 7.5s ease-in-out infinite; }
-      /* Staggered, or the cards pulse in unison and the page looks like it is snoring. */
-      .screen.active .card:nth-of-type(2) { animation-delay:-2.4s; }
-      .screen.active .card:nth-of-type(3) { animation-delay:-4.9s; }
-      .screen.active .card:nth-of-type(4) { animation-delay:-1.2s; }
-
-      @keyframes idleBob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-1.5px); } }
-      .screen.active > button { animation:idleBob 5.5s ease-in-out infinite; }
-      .screen.active > button:nth-of-type(2) { animation-delay:-1.8s; }
-      .screen.active > button:nth-of-type(3) { animation-delay:-3.6s; }
-      button:active, .tile:active, .rowbtn:active { animation:none; }
-
-      /* The room code is the hero of the lobby, so it gets the most life: each character eases
-         between its own angle and a shallower one, on its own clock. */
-      @keyframes idleSway {
-        0%,100% { transform:rotate(var(--rot)); }
-        50%     { transform:rotate(calc(var(--rot) * 0.4)); }
-      }
-      .roomcode .ch { animation:idleSway 6s ease-in-out infinite; }
-      .roomcode .ch:nth-child(2) { animation-delay:-1.5s; }
-      .roomcode .ch:nth-child(3) { animation-delay:-3s; }
-      .roomcode .ch:nth-child(4) { animation-delay:-4.5s; }
-
-      /* Roster pills bob after their pop-in. The delay lets pop finish first -- two animations
-         on one property means the later one wins while both are running. */
-      @keyframes idlePill { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-1.5px); } }
-      #roster .seat { animation:pop .25s ease-out, idlePill 4.5s ease-in-out .3s infinite; }
-      #roster .seat:nth-child(even) { animation-delay:0s, 2.1s; }
-
       /* --- easter eggs ---
          Fired from JS at a long random interval, never during play. Each is a one-shot class
          that removes itself. !important because the idle animation above sits on a more
@@ -438,21 +331,21 @@
       .egg-hop { animation:eggHop .8s cubic-bezier(.3,1.5,.5,1) !important; }
 
       @keyframes eggWave {
-        0%,100% { transform:rotate(var(--rot)) translateY(0); }
-        45%     { transform:rotate(calc(var(--rot) * -1.6)) translateY(-9px); }
+        0%,100% { transform:translateY(0); }
+        45%     { transform:translateY(-9px); }
       }
       .egg-wave { animation:eggWave .55s ease-in-out !important; }
 
-      @keyframes eggRoll { to { transform:rotate(calc(var(--rot) + 360deg)); } }
+      @keyframes eggRoll { to { transform:rotate(360deg); } }
       .egg-roll { animation:eggRoll .9s cubic-bezier(.5,0,.3,1.2) !important; }
 
-      @keyframes eggSpin { to { transform:rotate(calc(var(--rot,0deg) + 360deg)); } }
+      @keyframes eggSpin { to { transform:rotate(360deg); } }
       .egg-spin { animation:eggSpin 1s cubic-bezier(.5,0,.3,1.25) !important; }
 
       @keyframes eggNudge {
-        0%,100% { transform:rotate(var(--tilt,0deg)); }
-        30%     { transform:rotate(calc(var(--tilt,0deg) * -3)); }
-        65%     { transform:rotate(calc(var(--tilt,0deg) * 2)); }
+        0%,100% { transform:translateX(0); }
+        30%     { transform:translateX(-3px); }
+        65%     { transform:translateX(3px); }
       }
       .egg-nudge { animation:eggNudge 1.1s ease-in-out !important; }
     }
@@ -484,10 +377,6 @@
        compendium's sticky bar fades into --brand and would show a band against a gradient.
        Purple replaces blue for the primary buttons and the ◆ choice -- the other Halloween
        colour -- and the shape pairing is untouched, so colour is still never the only signal. */
-    :root[data-season="spooky"] {
-      --brand:#cc4a0c;
-      --blue:#6d28d9; --blue-d:#4c1d95;
-    }
     /* The title is the one wobbled heading that sits on the page background itself -- every
        other one is on a white card -- and its red and green letters measure 1.02:1 against this
        orange: to a red-green colour-blind player they are simply not there. Jack-o'-lantern
@@ -515,7 +404,7 @@
       100% { transform:translate(2vw, -118vh) rotate(4deg);   opacity:0 }
     }
     /* Grace countdown + forehead mode */
-    .countnum { font-size:7rem; font-weight:900; text-align:center; line-height:1.05; color:var(--ink); }
+    .countnum { font-size:96px; text-align:center; line-height:1.1; color:var(--ink); }
     #forehead { position:fixed; inset:0; display:none; background:#000; z-index:50; overflow:hidden; }
     #forehead.active { display:block; }
     /* The inner wrapper is rotated to landscape (100vh wide x 100vw tall, swapped) so the card
@@ -548,8 +437,9 @@
        while a phone is in forehead mode. Deliberately small/low-opacity: not something to bump
        into while playing normally. */
     #foreheadLeave { position:fixed; top:34px; left:10px; z-index:5; width:auto; padding:5px 11px;
+                      font-family:var(--font-name); font-weight:700; box-shadow:none;
                       font-size:.8rem; opacity:.45; background:#000; color:#fff; border:1px solid #555;
-                      border-radius:8px; }
+ }
     #foreheadLeave:active { opacity:.9; }
     /* The turn clock, drawn on the card the ROOM is looking at.
        This is the important half of the fix for "nobody knows whose turn it is": the wearer
@@ -576,7 +466,7 @@
 
     /* Give-up hold progress: visible proof the hold is counting, since audio can be suspended. */
     #foreheadGiveUpBar { display:none; position:fixed; left:6%; right:6%; bottom:14%; height:16px; z-index:6;
-                         background:rgba(255,255,255,.22); border-radius:999px; overflow:hidden; }
+                         background:rgba(255,255,255,.22); overflow:hidden; }
     #foreheadGiveUpBar > div { width:0%; height:100%; background:#e21b3c; transition:width .08s linear; }
     /* Bright pulsing border while it's YOUR turn */
     #forehead.mine #foreheadRot::after { content:''; position:absolute; inset:0; pointer-events:none;
@@ -587,18 +477,11 @@
     .tiltbig { font-size:2.6rem; font-weight:900; text-align:center; min-height:3rem; }
     .tiltvals { font:0.95rem monospace; text-align:center; color:var(--muted); }
 
-    /* Dark mode: the same game show with the house lights down. Chosen by the toggle (stored per
-       phone as gtc_theme), or by the phone's own setting until somebody touches the toggle; set
-       in <head> before first paint. Token-based, so nothing above needs to know it exists -- the
-       field goes deep violet (deep pumpkin in spooky season), the white slabs go dark, and the
-       accent letters are lifted so they still clear contrast on dark.
+    /* Dark mode. Chosen by the toggle (stored per phone as gtc_theme), or by the phone's own setting
+       until somebody touches the toggle; set in <head> before first paint. The tokens are in
+       /shared/retro.css, so nothing above needs to know it exists; these are the accents lifted so
+       they still clear contrast on dark.
        The forehead overlay is untouched: it is already black and white, read across a room. */
-    :root[data-theme="dark"] {
-      --brand:#170d2b; --paper:#251a3d; --card:var(--paper);
-      --ink:#eee9f8; --muted:#aca3c4; --edge:#41355f;
-      --soft:#31264c; --input:#1b1330; --ghost-ink:var(--ink);
-    }
-    :root[data-theme="dark"][data-season="spooky"] { --brand:#2a1307; }
     :root[data-theme="dark"] .wob.w0 { color:#ff5a73; }
     :root[data-theme="dark"] .wob.w1 { color:#6aa8ff; }
     :root[data-theme="dark"] .wob.w2, :root[data-theme="dark"] .card .wob.w2 { color:#ffb52e; }
@@ -620,49 +503,50 @@
        themes. Absolute, not fixed: fixed would ride over content as the page scrolls. */
     .themetoggle { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
                    right:calc(14px + env(safe-area-inset-right, 0px)); width:56px; height:30px; padding:0;
-                   border-radius:999px; background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
+ background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
                    border:2px solid rgba(255,255,255,.4); }  /* the outline keeps it visible on the dark field */
     .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
-    .themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px; border-radius:50%;
+    .themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px;
                          background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center;
                          box-shadow:0 2px 0 rgba(0,0,0,.25); transition:left .18s ease; }
-    .themetoggle[aria-checked="true"] .knob { left:27px; background:#251a3d; color:#eee9f8; }
+    .themetoggle[aria-checked="true"] .knob { left:27px; background:var(--paper); color:var(--ink); }
     .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
     body.at-play .themetoggle { display:none; }
     /* Room for the switch: the title must never run under it. */
     h1 { padding-right:64px; }
+    /* The arcade face is wide and has no narrower width to fall back on, so in a room, with Room
+       beside the switch, the title takes the next size down rather than running under them. */
+    body:has(.roombtn:not([hidden])) h1 { font-size:16px; }
     /* The Room button, dressed as the switch beside it: a small translucent pill on the field. */
     .roombtn { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
                right:calc(80px + env(safe-area-inset-right, 0px)); width:auto; height:30px; padding:0 12px;
                display:inline-flex; align-items:center; gap:6px; font-size:.85rem; font-weight:900; color:#fff;
-               border-radius:999px; background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
+ background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
                border:2px solid rgba(255,255,255,.4); }
     .roombtn:active { transform:none; opacity:.8; }
     .roombtn:focus-visible { outline:3px solid #fff; outline-offset:3px; }
-    body.at-play .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); }
+    /* During play the button can sit over the forehead overlay, which stays plain. */
+    body.at-play .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); font-family:var(--font-name); }
     body:has(.roombtn:not([hidden])) h1 { padding-right:150px; }
     body.at-play:has(.roombtn:not([hidden])) h1 { padding-right:96px; }
     @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }
     /* The first question: big slabs, colour AND shape, a line under each saying what it means. */
-    .devicebtn { display:flex; align-items:center; gap:14px; text-align:left; padding:20px 18px; border-radius:18px;
-                 font-size:1.3rem; position:relative; font-family:inherit; }
-    /* font-family: the page's, as the Draw slab (a link) has anyway -- a bare <button> falls back to
-       the browser's own face, and two slabs in Arial beside one in the page font looked pasted in. */
+    .devicebtn { display:flex; align-items:center; gap:14px; text-align:left; padding:20px 18px;
+                 font-size:1.3rem; position:relative; }
     .devicebtn .shape { font-size:1.6rem; flex:none; }
-    .devicebtn b { display:block; font-family:var(--font-display); font-size:1.5rem; }
-    .devicebtn small { display:block; font-size:.88rem; font-weight:700; opacity:.9; }
-    .devicebtn.c0 { background:var(--red); box-shadow:0 6px 0 var(--red-d); }
-    .devicebtn.c0:active { box-shadow:0 2px 0 var(--red-d); }
-    .devicebtn.c1 { background:var(--blue); box-shadow:0 6px 0 var(--blue-d); }
-    .devicebtn.c1:active { box-shadow:0 2px 0 var(--blue-d); }
+    .devicebtn b { display:block; font-family:var(--font-display); font-size:1.5rem; line-height:1.15; }
+    /* A sentence, so the readable face: the pixel face is for the slab's name above it. */
+    .devicebtn small { display:block; font-family:var(--font-name); font-size:.88rem; font-weight:700; line-height:1.35; margin-top:3px; }
+    .devicebtn.c0 { --face:var(--red); --deep:var(--red-d); }
+    .devicebtn.c1 { --face:var(--blue); --deep:var(--blue-d); }
     /* Draw is a link (it is another page), dressed as the slabs beside it. */
-    .devicebtn.c2 { background:var(--amber); color:#2b1c00; box-shadow:0 6px 0 var(--amber-d); text-decoration:none; }
-    .devicebtn.c2:active { box-shadow:0 2px 0 var(--amber-d); transform:translateY(4px); }
-    .devicebtn.c2:focus-visible { outline:3px solid #fff; outline-offset:3px; }
+    .devicebtn.c2 { background:var(--amber); color:#2b1c00; text-decoration:none;
+                    box-shadow:var(--frame), inset 0 calc(var(--px) * -2) 0 0 var(--amber-d), inset 0 var(--px) 0 0 rgba(255,255,255,.28), var(--drop); }
+    .devicebtn.c2:active { transform:translateY(var(--px)); box-shadow:var(--frame), inset 0 var(--px) 0 0 var(--amber-d); }
     /* ● is a smaller glyph than ▲ and ◆ at the same size; this evens them up. */
     .devicebtn.c2 .shape { font-size:2rem; }
     .devicebtn .likely { position:absolute; top:-10px; right:12px; font-size:.68rem; font-weight:900; letter-spacing:.05em;
-                         background:var(--amber); color:#2b1c00; padding:3px 9px; border-radius:999px; }
+                         background:var(--amber); color:#2b1c00; padding:3px 9px; }
     /* Back to the first question: quiet, above the screen it leaves. */
     .backlink { width:auto; align-self:flex-start; padding:6px 2px; background:none; box-shadow:none;
                 color:rgba(255,255,255,.88); font-size:.92rem; font-weight:800; }
@@ -794,7 +678,7 @@
       <div class="card">
         <div class="hint center">Room code — read it out, share the link, or scan the QR</div>
         <div class="roomcode" id="lobbyCode">····</div>
-        <img id="qrImg" alt="Join QR" style="display:none; width:160px; height:160px; margin:6px auto; background:#fff; border-radius:10px; padding:6px" />
+        <img id="qrImg" alt="Join QR" style="display:none; width:160px; height:160px; margin:6px auto; background:#fff; padding:6px" />
         <div class="share" id="shareUrl"></div>
       </div>
       <div class="card">

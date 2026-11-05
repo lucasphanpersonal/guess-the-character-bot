@@ -19,8 +19,8 @@ if (new Date() < new Date(2026, 10, 1)) {
   try { saved = localStorage.getItem('gtc_theme'); } catch { /* follow the computer */ }
   const dark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
   if (dark) document.documentElement.dataset.theme = 'dark';
-  // The browser's own chrome matches the field: purple or orange, or their dark versions.
+  // The browser's own chrome matches the field: indigo or orange, or their dark versions.
   const spooky = document.documentElement.dataset.season === 'spooky';
   const meta = document.querySelector('meta[name=theme-color]');
-  if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
+  if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#0e0f1a') : spooky ? '#cc4a0c' : '#1f1a4d';
 })();

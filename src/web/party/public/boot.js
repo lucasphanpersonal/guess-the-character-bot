@@ -40,7 +40,6 @@ function syncHowto() {
   const hidden = howtoHidden();
   $('howtoCard').style.display = hidden ? 'none' : '';
   $('howtoToggle').textContent = hidden ? 'How to Play' : 'Hide How to Play';
-  retilt($('lobby')); // one fewer card changes the alternation below it
 }
 $('howtoToggle').addEventListener('click', () => {
   store.set('gtc_howto', howtoHidden() ? 'shown' : 'hidden');
@@ -221,7 +220,7 @@ $('themeToggle').addEventListener('click', () => {
   else delete document.documentElement.dataset.theme;
   store.set('gtc_theme', dark ? 'dark' : 'light');
   const spooky = document.documentElement.dataset.season === 'spooky';
-  document.querySelector('meta[name=theme-color]').content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
+  document.querySelector('meta[name=theme-color]').content = dark ? (spooky ? '#2a1307' : '#0e0f1a') : spooky ? '#cc4a0c' : '#1f1a4d';
   syncThemeToggle();
 });
 syncThemeToggle();
@@ -256,7 +255,6 @@ for (const ev of ['focus', 'click']) {
 }
 // The landing screen is active from the markup, so show() never runs for it -- tilt it here or
 // the first screen anyone sees is the one screen with no lean at all.
-retilt(document.querySelector('.screen.active'));
 scheduleEgg();
 wobble($('homeTitle'), 'Guess the Character');
 for (const el of document.querySelectorAll('[data-wobble]')) wobble(el, el.textContent, { colour: false });

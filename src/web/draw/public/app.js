@@ -551,7 +551,7 @@ function renderBlanks(mask, turn) {
   const slot = ([ch, i]) => {
     if (ch === '_') return `<span class="slot" style="--i:${n++}"></span>`;
     if (!isLetterCh(ch)) return `<span class="punct">${esc(ch)}</span>`;
-    return `<span class="slot inked${fresh.has(i) ? ' fresh' : ''}" style="--i:${n++};--rot:${GTC.ANGLES[i % GTC.ANGLES.length]}deg"><b>${esc(ch)}</b></span>`;
+    return `<span class="slot inked${fresh.has(i) ? ' fresh' : ''}" style="--i:${n++}"><b>${esc(ch)}</b></span>`;
   };
   // A screen reader gets it in words ("blank" for each gap), not as a row of empty boxes.
   const spoken = words.map((w) => w.map(([ch]) => (ch === '_' ? 'blank' : ch)).join(' ')).join(', ');

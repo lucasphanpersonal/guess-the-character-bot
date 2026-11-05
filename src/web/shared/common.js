@@ -25,9 +25,8 @@
     return id;
   }
 
-  // Big headings are hand-set: a per-character angle, words kept whole (a per-character inline
-  // block otherwise breaks words anywhere -- a lone "r" on line two).
-  const ANGLES = [-6, 4, -3, 5, -5, 3, -4, 6];
+  // The title, one colour per letter, words kept whole (a per-character inline block otherwise
+  // breaks words anywhere -- a lone "r" on line two).
   function wobble(el, text) {
     el.innerHTML = '';
     let i = 0;
@@ -37,7 +36,6 @@
       for (const ch of word) {
         const s = document.createElement('span');
         s.className = `wob w${i % 4}`;
-        s.style.setProperty('--rot', `${ANGLES[i % ANGLES.length]}deg`);
         s.textContent = ch;
         holder.appendChild(s);
         i++;
@@ -47,9 +45,9 @@
     });
   }
 
-  // The room code, a letter per colour at its own angle -- what everyone reads off the screen.
+  // The room code, a letter per colour -- what everyone reads off the screen.
   const roomCodeHtml = (code) =>
-    [...String(code)].map((ch, i) => `<span class="ch" style="--rot:${ANGLES[i % ANGLES.length]}deg">${esc(ch)}</span>`).join('');
+    [...String(code)].map((ch) => `<span class="ch">${esc(ch)}</span>`).join('');
 
   function show(id) {
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
@@ -140,12 +138,12 @@
         store.set('gtc_theme', dark ? 'dark' : 'light');
         const spooky = root.dataset.season === 'spooky';
         const meta = document.querySelector('meta[name=theme-color]');
-        if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#170d2b') : spooky ? '#cc4a0c' : '#46178f';
+        if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#0e0f1a') : spooky ? '#cc4a0c' : '#1f1a4d';
         label();
       });
     }
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, ANGLES };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles };
 })();

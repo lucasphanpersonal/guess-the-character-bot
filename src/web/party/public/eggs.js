@@ -46,7 +46,7 @@ const EGGS = [
     playOnce(btn, 'egg-hop');
     return true;
   },
-  // A card rocks on its corner and settles back to its own angle.
+  // A card shuffles side to side and settles back.
   () => {
     const card = pick(inActiveScreen('.card:not(.flat)'));
     if (!card) return false;

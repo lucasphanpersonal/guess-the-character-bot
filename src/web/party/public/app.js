@@ -52,16 +52,14 @@ socket.on('hello', ({ you }) => {
   me = you;
 });
 
-// Sets text one character at a time, each at its own angle and colour, so headings read as
-// hand-placed rather than typed. Written with textContent per span, so the source string is
-// never treated as markup.
+// Sets text one character at a time, each in its own colour. Written with textContent per span, so
+// the source string is never treated as markup.
 //
 // Characters are grouped into WORDS, and that grouping is load-bearing rather than tidiness:
 // giving every character its own inline-block box removes ordinary word-boundary line breaking,
 // because the browser may then break between any two boxes. "Guess the Character" duly wrapped
 // with a lone "r" on the second line. A nowrap word wrapper puts the break opportunities back
 // where they belong -- between words only.
-const WOBBLE_ANGLES = [-6, 4, -3, 7, -5, 3, -7, 5];
 function wobble(el, text, { colour = true } = {}) {
   if (!el) return;
   el.innerHTML = '';
@@ -73,7 +71,6 @@ function wobble(el, text, { colour = true } = {}) {
     for (const ch of word) {
       const span = document.createElement('span');
       span.className = 'wob' + (colour ? ` w${i % 4}` : '');
-      span.style.setProperty('--rot', `${WOBBLE_ANGLES[i % WOBBLE_ANGLES.length]}deg`);
       span.textContent = ch;
       holder.appendChild(span);
       i++;
@@ -85,7 +82,6 @@ function wobble(el, text, { colour = true } = {}) {
 
 function show(screen) {
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === screen);
-  retilt($(screen));
   // Idle whimsy stops once play starts -- phones are on foreheads, and the only thing that
   // should be moving is the game.
   document.body.classList.toggle('at-play', screen === 'playing' || screen === 'countdown');
@@ -93,31 +89,17 @@ function show(screen) {
   roomMenu?.update();
 }
 
-// Alternates the decorative lean across the cards actually visible on a screen. Hidden cards are
-// skipped so toggling one (how-to-play) doesn't flip every card below it, and this runs after
-// dynamic inserts too, so the reveal log keeps the rhythm going.
-function retilt(root) {
-  if (!root) return;
-  let i = 0;
-  for (const card of root.querySelectorAll('.card:not(.flat)')) {
-    if (card.style.display === 'none') continue;
-    card.style.setProperty('--tilt', `${i % 2 ? 0.35 : -0.35}deg`);
-    i++;
-  }
-}
 const amHost = () => lastState && lastState.hostPlayerId === me;
 
 // --- lobby rendering ----------------------------------------------------------------------
 function renderLobby(state) {
-  // Rendered per character so each can carry its own angle (see .roomcode .ch).
+  // Rendered per character so each can carry its own colour (see .roomcode .ch).
   const codeEl = $('lobbyCode');
   codeEl.innerHTML = '';
-  const angles = ['-7deg', '5deg', '-4deg', '8deg'];
-  [...state.code].forEach((c, i) => {
+  [...state.code].forEach((c) => {
     const sp = document.createElement('span');
     sp.className = 'ch';
     sp.textContent = c;
-    sp.style.setProperty('--rot', angles[i % angles.length]);
     codeEl.appendChild(sp);
   });
   const joinUrl = `${location.origin}/?room=${state.code}`;
@@ -410,7 +392,6 @@ function renderHostList(rows) {
     if (r.removable) li.append(removeButton(r));
     ul.appendChild(li);
   }
-  retilt($('hosting'));
 }
 
 // --- playing ------------------------------------------------------------------------------
@@ -588,7 +569,6 @@ function logReveal(html) {
   div.innerHTML = html;
   log.prepend(div);
   while (log.children.length > 4) log.lastChild.remove();
-  retilt($('playing'));
 }
 
 function renderOver(result) {
@@ -625,7 +605,7 @@ function renderOver(result) {
     else place = `#${s.place} — ${turnsText(s.turns)}${s.secondsLeft == null ? '' : ` · ${s.secondsLeft}s left`}`;
     const ch = s.character;
     const thumb = ch && ch.imageUrl
-      ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;object-position:50% 20%;border-radius:9px;flex:none">`
+      ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;object-position:50% 20%;flex:none">`
       : '';
     // Podium colouring for the top three finishers; everyone else is a plain row.
     const rank = s.place ?? 0;
