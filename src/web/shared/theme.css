@@ -62,7 +62,7 @@ button.wide { width:100%; }
    disappears on a dark card. */
 .card a { color:var(--link); font-weight:800; }
 .light { color:rgba(255,255,255,.88); }
-kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px solid var(--edge);
+kbd { font:400 .9rem var(--font-name); background:var(--chip); border:1px solid var(--edge);
       border-bottom-width:3px; padding:1px 6px; color:var(--ink); }
 
 /* Lobby */

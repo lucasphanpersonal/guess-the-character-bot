@@ -128,9 +128,12 @@ like it was always there.
   canvas and the QR code stay at full resolution, framed but never pixelated.
 - **Three faces, each with a job.** Press Start 2P (`--font-arcade`) for the title, room code,
   countdown, clock and scores: wide, so short strings only, and crisp only at multiples of 8px, so
-  sized in px. Pixelify Sans (`--font-display`) for buttons, labels, headings. `--font-name` for
-  sentences and anything a person typed or the library holds: names need accents and scripts no
-  pixel font has, and small pixel type blurs together.
+  sized in px. Pixelify Sans (`--font-display`) for buttons, labels, headings. VT323
+  (`--font-name`), a terminal face, for sentences and anything a person typed or the library holds:
+  it reads fast where small pixel type would blur, and the system faces behind it in the stack carry
+  the scripts it lacks (Cyrillic, CJK...), glyph by glyph. It is scaled by `size-adjust` in its
+  `@font-face`, so set sizes as you would for any face. No system font shows anywhere but the
+  forehead view (`--font-plain`).
 - **Frames are shadows, no radius.** `--frame` is four offset shadows, which leaves the corners
   missing — that is what reads as a pixel corner. Not `clip-path`, which would cut off the focus
   ring. No `border-radius` anywhere but the brush-size dot, which pictures a round brush.
@@ -166,8 +169,10 @@ like it was always there.
   unnamed voice is scaled by `PULSE_LEVEL`. Off by default on the computers, where everyone can see
   the screen; on by default on the phones, where the wearer hears the clock or does not know it.
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
-  screen*). It lies over the cream panels people read, so it stays faint: raise the scanlines'
-  alpha and body text is what pays. Shared CSS names no game's elements: a page sets `data-plain`
+  screen*). It lies over the cream panels people read, so it is held in check: scanlines cost no
+  contrast (they darken text and paper alike), but the green wash does, and its comment holds the
+  measured ratios. Raise the wash and the red error line and white-on-blue buttons drop below 4.5:1
+  first. Shared CSS names no game's elements: a page sets `data-plain`
   on `<html>` while a display surface is up (the forehead view: it sits in `main`'s stacking
   context, so only `display:none` can clear the glass), and a screen marked `data-play` sets
   `data-playing`, which stills the flicker. Art, drawings and the QR code stay under it alike (the

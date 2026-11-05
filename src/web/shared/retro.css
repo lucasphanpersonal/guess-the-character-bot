@@ -27,6 +27,21 @@
 @font-face { font-family:'Pixelify Sans'; font-weight:700; font-display:swap;
   src:url('/shared/fonts/pixelify-sans-latin-ext-700-normal.woff2') format('woff2');
   unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+/* VT323, a terminal's face, for sentences and names: the readable one of the three. It is drawn
+   small in its em (x-height .40 against a sans's ~.52) and thin, so size-adjust scales it a little
+   past the system face it replaced: every rem and px in the pages keeps its meaning and reads at
+   least as large as before. It is wider for it (.54em a letter), which the overflow check covers. Three subsets: Latin, Latin Extended, Vietnamese. A script
+   it has no glyphs for (Cyrillic, Greek, CJK...) falls through to the system faces after it in
+   --font-name, glyph by glyph, so no name ever shows as boxes. One weight: bold is synthesized. */
+@font-face { font-family:'VT323'; font-weight:400; font-display:swap; size-adjust:135%;
+  src:url('/shared/fonts/vt323-latin-400-normal.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'VT323'; font-weight:400; font-display:swap; size-adjust:135%;
+  src:url('/shared/fonts/vt323-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'VT323'; font-weight:400; font-display:swap; size-adjust:135%;
+  src:url('/shared/fonts/vt323-vietnamese-400-normal.woff2') format('woff2');
+  unicode-range:U+0102-0103,U+0110-0111,U+0128-0129,U+0168-0169,U+01A0-01A1,U+01AF-01B0,U+0300-0301,U+0303-0304,U+0308-0309,U+0323,U+0329,U+1EA0-1EF9,U+20AB; }
 
 :root {
   /* The field and what stands on it. Every surface is a token because dark mode redefines them; a
@@ -43,12 +58,14 @@
   --title-a:#ff6b82; --title-b:#fff6e0; --title-c:#ffb000; --title-d:#7fd6ff;
 
   /* Arcade: the title, room code, countdown, clock. Wide, and crisp only at multiples of 8px, so
-     it is sized in px and kept to short strings. UI: buttons, labels, headings. Name: anything a
-     person typed or the library holds -- names need accents and scripts no pixel font has, and
-     have to be read fast. */
-  --font-arcade:'Press Start 2P', ui-monospace, 'Cascadia Mono', Consolas, monospace;
-  --font-display:'Pixelify Sans', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
-  --font-name:'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
+     it is sized in px and kept to short strings. UI: buttons, labels, headings. Name: sentences and
+     anything a person typed or the library holds, in a terminal's face (VT323) that still reads
+     fast; the system faces behind it carry the scripts it has no glyphs for. Plain: the one surface
+     that opts out of the look, the forehead view, read across a dim room. */
+  --font-arcade:'Press Start 2P', 'VT323', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --font-display:'Pixelify Sans', 'VT323', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --font-name:'VT323', 'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-plain:'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
   --title-size:32px;
   --px:3px; /* one "pixel" of UI chrome: frames, bevels */
@@ -353,9 +370,12 @@ dialog.card, dialog.roommenu { color:var(--ink); }
    season.js and the phones' <head>; the switches are GTC.bindCrtToggles). One fixed layer over the
    page, never a transform of the page itself: bending the page would blur every line of text and
    make anything fixed inside it scroll away.
-   Kept faint on purpose, because it lies over the cream panels people read: a line every 3px at 12%,
-   so the darkest it gets is a row of slightly greyer cream, and body text keeps its contrast. It
-   takes no taps, and screen readers never see it (a pseudo-element with no text).
+   Kept in check, because it lies over the cream panels people read. A line every 3px at 16% darkens
+   text and paper alike, so it costs no contrast. The wash is what costs it: 8% of a phosphor green
+   over everything, which tints the whites and lifts the blacks the way an old tube did. Measured
+   against the palette: ink on cream 16.2:1 -> 13.3:1, muted on cream 6.8 -> 5.7, white on a blue
+   button 5.4 -> 4.7, the red error line 4.6 -> 4.5. Raise the wash and those last two go first.
+   It takes no taps, and screen readers never see it (a pseudo-element with no text).
    Below the flash and confetti (44, 45), which are their own effects, and below the forehead overlay
    only by being switched off there (data-plain): that overlay sits inside main's stacking context
    (z-index 1 on the phones), so no z-index of its own could put it above a layer here.
@@ -365,8 +385,9 @@ dialog.card, dialog.roommenu { color:var(--ink); }
    checked: it still decodes with the glass over it. */
 :root[data-crt] body::after { content:""; position:fixed; inset:0; z-index:40; pointer-events:none;
   background:
-    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 58%, rgba(0,0,0,.4) 100%),
-    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.12) 2px 3px); }
+    radial-gradient(ellipse 120% 100% at 50% 50%, transparent 52%, rgba(0,0,0,.5) 100%),
+    repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0,0,0,.16) 2px 3px),
+    linear-gradient(rgba(80,255,150,.08), rgba(80,255,150,.08)); }
 /* A page sets data-plain on <html> while a display surface is up (the phones' forehead view), and the
    glass steps aside. A page-set attribute rather than a selector for the surface, so this file names
    no game's elements and works without :has(). */
@@ -379,7 +400,7 @@ dialog.card, dialog.roommenu { color:var(--ink); }
    own drop shadow underneath. Set on each letter as well as the heading: currentColor resolves where
    the shadow is declared, so the heading's alone would give every letter of the marquee a cream glow. */
 @media (prefers-contrast: no-preference) {
-  :root[data-crt] h1, :root[data-crt] h1 .wob { text-shadow:var(--px) var(--px) 0 rgba(0,0,0,.55), 0 0 10px color-mix(in srgb, currentColor 45%, transparent); }
+  :root[data-crt] h1, :root[data-crt] h1 .wob { text-shadow:var(--px) var(--px) 0 rgba(0,0,0,.55), 0 0 12px color-mix(in srgb, currentColor 60%, transparent); }
   :root[data-crt] .hiscore .hs-place, :root[data-crt] .hiscore .hs-score, :root[data-crt] .flash-stamp {
     text-shadow:0 0 8px color-mix(in srgb, currentColor 55%, transparent); }
 }

@@ -12,6 +12,7 @@
   <script src="/shared/season.js"></script>
   <link rel="preload" href="/shared/fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/shared/fonts/pixelify-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="/shared/fonts/vt323-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="/shared/retro.css" />
   <style>
     /* The palette, the fonts and the base components are /shared/retro.css. Deliberately NOT applied
@@ -26,7 +27,10 @@
     /* The title is the way home. A link that looks like the title, not like a link. */
     h1 a { color:inherit; text-decoration:none; -webkit-tap-highlight-color:transparent; }
     h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; }
-    .charname, #foreheadNoImg, #foreheadCount { font-family:var(--font-name); }
+    .charname { font-family:var(--font-name); }
+    /* The forehead view is the one surface in the plain face: read across a dim room by people who
+       did not choose it, so it stays a bold system sans, like its black and white. */
+    #forehead, #foreheadNoImg, #foreheadCount, #foreheadLeave { font-family:var(--font-plain); }
     .big-emoji { font-family:var(--font-arcade); font-weight:400; letter-spacing:0; }
     .tag { display:inline-block; padding:.2rem .7rem; background:rgba(255,255,255,.18);
            font-size:.7rem; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:#fff; }
@@ -406,7 +410,7 @@
        while a phone is in forehead mode. Deliberately small/low-opacity: not something to bump
        into while playing normally. */
     #foreheadLeave { position:fixed; top:34px; left:10px; z-index:5; width:auto; padding:5px 11px;
-                      font-family:var(--font-name); font-weight:700; box-shadow:none;
+                      font-weight:700; box-shadow:none;
                       font-size:.8rem; opacity:.45; background:#000; color:#fff; border:1px solid #555;
  }
     #foreheadLeave:active { opacity:.9; }
@@ -446,7 +450,7 @@
     .enable-motion { --face:var(--amber); --deep:var(--amber-d); color:#231a03; }
     /* Tilt test */
     .tiltbig { font-size:2.6rem; font-weight:900; text-align:center; min-height:3rem; }
-    .tiltvals { font:0.95rem monospace; text-align:center; color:var(--muted); }
+    .tiltvals { font:1rem var(--font-name); text-align:center; color:var(--muted); }
 
     /* Dark mode. Chosen by the toggle (stored per phone as gtc_theme), or by the phone's own setting
        until somebody touches the toggle; set in <head> before first paint. The tokens are in
