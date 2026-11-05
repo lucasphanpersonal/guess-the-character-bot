@@ -168,8 +168,8 @@ like it was always there.
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
   screen*). It lies over the cream panels people read, so it stays faint: raise the scanlines'
   alpha and body text is what pays. It is off over the forehead view (which sits in `main`'s
-  stacking context, so only `display:none` can clear it), and the drawing canvas is lifted above
-  it. Glow goes on dark surfaces only; on cream it is just blur.
+  stacking context, so only `display:none` can clear it). Drawings stay under it: lifting the canvas
+  alone striped the same drawing in the gallery but not in play, and covered the toast feed. Glow goes on dark surfaces only; on cream it is just blur.
 - **No emoji in UI copy.** Text-presentation glyphs (✓ ✗ ▲ ‹ › ✕ →) are typography and are
   fine. Anything with Emoji_Presentation (⏭, most pictographs) renders in colour on iOS and
   looks pasted in next to plain-text buttons. The favicon is the one deliberate exception.

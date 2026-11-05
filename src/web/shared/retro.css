@@ -373,9 +373,10 @@ body:has(#forehead.active)::after { display:none; }
 :root[data-crt] h1, :root[data-crt] h1 .wob { text-shadow:var(--px) var(--px) 0 rgba(0,0,0,.55), 0 0 10px color-mix(in srgb, currentColor 45%, transparent); }
 :root[data-crt] .hiscore .hs-place, :root[data-crt] .hiscore .hs-score, :root[data-crt] .flash-stamp {
   text-shadow:0 0 8px color-mix(in srgb, currentColor 55%, transparent); }
-/* The drawing is paper on every screen, so it goes above the glass (Draw's main is no stacking
-   context, so this z-index reaches the page's). */
-:root[data-crt] .canvaswrap { z-index:41; }
+/* Drawings stay UNDER the glass, the canvas included. Lifting the canvas alone left the same drawing
+   striped in the gallery and the Telephone chain (outside .canvaswrap, some inside stacking contexts
+   no z-index escapes) and put the canvas over the toast feed (z-index 20). Under the glass, a drawing
+   looks the same everywhere on this screen; the paper itself is still white in both themes. */
 /* The switch: a small track and a sliding knob, like dark mode's beside it, and labelled in words
    in the row that holds it (.crtrow). Its state is aria-checked, which is also what moves the knob. */
 .crttoggle { position:relative; flex:none; width:56px; height:30px; padding:0; color:#fff;
