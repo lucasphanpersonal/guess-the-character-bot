@@ -61,6 +61,11 @@
     .dot { width:10px; height:10px; background:var(--ok); flex:none; }
     .dot.off { background:var(--off); }
     .seat .name { font-weight:800; }
+    /* A name with no spaces (a 20-letter nickname, a long single-word character) is wider than a
+       320px phone's row, and a word never breaks by default: it ran out past the card's edge. A
+       flex item will not shrink below its longest word either, hence the min-width. */
+    .seat > span { min-width:0; }
+    .seat .name, .seat .owner, .charname { overflow-wrap:anywhere; }
     .seat .you { color:var(--muted); font-weight:600; font-size:.82rem; }
     #roster .seat .you { color:rgba(0,0,0,.55); }
     .crown { margin-left:auto; font-size:.62rem; font-weight:900; letter-spacing:.1em;
@@ -144,7 +149,7 @@
     #roster .seat:nth-child(4n+4) .you { color:rgba(255,255,255,.75); }
     /* Reference characters: whose is whose, tinted so the rows are told apart at a glance. */
     .seat .owner { font-weight:900; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase;
-                   background:var(--brand); color:#fff; padding:3px 9px; flex:none; }
+                   background:var(--brand); color:#fff; padding:3px 9px; flex:0 1 auto; max-width:45%; }
     .seat.tint0 { background:#fdeef0; } .seat.tint0 .owner { background:var(--red); }
     .seat.tint1 { background:#eaf1fc; } .seat.tint1 .owner { background:var(--blue); }
     .seat.tint2 { background:#fdf3e0; } .seat.tint2 .owner { background:var(--amber-d); }
@@ -405,11 +410,18 @@
     /* Emergency exit -- the overlay covers the normal Leave button, so this is the only way out
        while a phone is in forehead mode. Deliberately small/low-opacity: not something to bump
        into while playing normally. */
-    #foreheadLeave { position:fixed; top:34px; left:10px; z-index:5; width:auto; padding:5px 11px;
+    /* Its corner is the card's top-left. On a portrait screen the card is turned a quarter, so that
+       corner lands at the SCREEN's top-right -- exactly where the Room button sits, which covered
+       it on every phone width. Turned, it takes the card's top-right instead (the screen's
+       bottom-right), clear of Room; the inset there is the screen's bottom one, because that is
+       the edge the card's right side lies along. Unturned (landscape), the card's left is the
+       screen's left, which is where a notch is when the phone lies one way. */
+    #foreheadLeave { position:fixed; top:34px; left:calc(10px + env(safe-area-inset-left, 0px)); z-index:5; width:auto; padding:5px 11px;
                       font-family:var(--font-name); font-weight:700; box-shadow:none;
                       font-size:.8rem; opacity:.45; background:#000; color:#fff; border:1px solid #555;
  }
     #foreheadLeave:active { opacity:.9; }
+    @media (orientation: portrait) { #foreheadLeave { left:auto; right:calc(10px + env(safe-area-inset-bottom, 0px)); } }
     /* The turn clock, drawn on the card the ROOM is looking at.
        This is the important half of the fix for "nobody knows whose turn it is": the wearer
        cannot see their own screen, and half the phones in a party are on silent, so sound alone
@@ -507,7 +519,9 @@
     /* :has as well as .at-play, because the card is up during the countdown too, while the screen
        behind it is still setup. Nobody should be reaching for dark mode with a phone on their head. */
     body:has(#forehead.active) .themetoggle { display:none; }
-    body:has(#forehead.active) .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); }
+    /* Fixed while the card is up: absolute, it belongs to the page under the card, and a page left
+       scrolled (a short landscape screen) carried it off the top. Nothing scrolls under the card. */
+    body:has(#forehead.active) .roombtn { position:fixed; right:calc(14px + env(safe-area-inset-right, 0px)); }
     body.at-play .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); font-family:var(--font-name); }
     body:has(.roombtn:not([hidden])) h1 { padding-right:190px; }
     h1 { padding-right:104px; }
