@@ -223,7 +223,28 @@ button.tile:active { box-shadow:var(--frame), inset 0 2px 0 0 rgba(0,0,0,.25); }
 .choice .sub { font-family:var(--font-name); line-height:1.3; margin-top:2px; }
 
 /* --- people ---------------------------------------------------------------------------------- */
-.avatar { flex:none; width:28px; height:28px; display:block; background:var(--screen); }
+/* A player's face (shared/avatars.js): its own square and colours, sized by the SVG's width and
+   height at a whole multiple of its 12px grid, so every pixel lands on whole screen pixels. */
+.avatar { flex:none; display:block; }
+
+/* The lobby's face picker. Closed, one row: your face, its name, and Change. Open, every face as a
+   44px button. Chosen is a mark inside and a heavier frame; taken is dimmed, a ✕, and disabled. */
+.avpick summary { display:flex; align-items:center; gap:10px; min-height:44px; cursor:pointer; list-style:none;
+                  font-family:var(--font-display); font-weight:700; color:var(--ink); }
+.avpick summary::-webkit-details-marker { display:none; }
+.avpick .avme .avatar { --px:2px; box-shadow:var(--frame); }
+.avpick .avchange { margin-left:auto; color:var(--link); text-decoration:underline; text-underline-offset:3px; }
+/* Padding below for the frames and their drops, which a grid would otherwise clip at its edge. */
+.avgrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(48px, 1fr)); gap:10px; padding:6px 3px 10px; margin-top:6px; }
+.avopt { --px:2px; --face:var(--soft); --deep:var(--chip-edge); position:relative; min-width:44px; min-height:48px;
+         padding:4px 0 6px; display:flex; align-items:center; justify-content:center; }
+.avopt[aria-checked="true"] { --px:3px; --face:var(--amber); --deep:var(--amber-d); }
+.avopt.taken { opacity:.4; }
+.avmark { position:absolute; right:2px; top:0; font-family:var(--font-display); font-weight:700; font-size:.85rem; line-height:1;
+          color:var(--ink); }
+.avopt[aria-checked="true"] .avmark { color:#2b1c00; }
+.avnote:empty { display:none; }
+.avnote { color:var(--red); margin:4px 0 0; }
 .pill, #roster .seat { --px:2px; box-shadow:var(--frame), var(--drop); font-family:var(--font-name); }
 .crown { font-family:var(--font-display); letter-spacing:.06em; }
 .dot { flex:none; }

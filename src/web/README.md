@@ -88,6 +88,14 @@ a short fanfare at game over, with a step on top for the winners (Draw's Telepho
 winners and no fanfare). Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
 screen, play included; the choice is the phones' own `gtc_muted`, one per browser. The phones default to on, because a wearer has no other way to hear the clock, and have a switch of their own in the corner on every screen but the forehead view.
 
+**Faces** (`shared/avatars.js`), in all three games: everyone wears one of 16 original pixel
+sprites (a cat, a frog, a robot...), each on its own coloured square, shown beside their name in the
+lobby, the Room menu, the play screens' player lists and the end screen. A newcomer gets the face
+their browser last picked if it is free, otherwise a free one at random; the lobby's picker
+(`room:avatar`) changes it. Faces are one per seat while a room has no more people than faces, and a
+worn one is refused with the wearer's name; a bigger Draw room shares them. The server keeps only a
+number per seat and reads the count from the same file the pages draw from.
+
 **Room** (`shared/roommenu.js`), in all three games, is a button by the title on every screen once
 you are in a room, play included: who is in the room, **Leave Room** (asking first, in the game's
 own words for what leaving costs), and for the host **Remove** beside everyone else, at any

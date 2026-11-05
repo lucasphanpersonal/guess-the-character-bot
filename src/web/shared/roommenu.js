@@ -8,7 +8,7 @@
 // beside the players it listed; the phones' Remove appeared only for players holding up a deal.
 // The server has always allowed both at every stage, so this is the one place that offers them.
 //
-// Loaded after /shared/common.js on every page (GTC.esc); its styles are its own, scoped to the
+// Loaded after /shared/common.js and /shared/avatars.js on every page (GTC.esc, GTC.avatar); its styles are its own, scoped to the
 // dialog, because the phones' page has no theme.css (only retro.css's tokens). It reuses each page's own way of leaving, so
 // what leaving costs is asked in that game's words, and a leave from here is the same leave as
 // anywhere else.
@@ -165,7 +165,7 @@
           const you = p.playerId === me;
           const tags = `${p.isHost ? '<span class="rmtag">Host</span>' : ''}${p.connected === false ? '<span class="rmtag off">Away</span>' : ''}`;
           const kick = host && !you ? `<button type="button" class="bad rmkick" data-kick="${esc(p.playerId)}" data-name="${esc(p.nickname)}">Remove</button>` : '';
-          return `<li><span class="rmname" title="${esc(p.nickname)}">${esc(p.nickname)}${you ? ' (you)' : ''}</span>${tags}${kick}</li>`;
+          return `<li>${GTC.avatar(p.avatar)}<span class="rmname" title="${esc(p.nickname)}">${esc(p.nickname)}${you ? ' (you)' : ''}</span>${tags}${kick}</li>`;
         })
         .join('');
       if (list.dataset.html !== html) list.innerHTML = list.dataset.html = html;

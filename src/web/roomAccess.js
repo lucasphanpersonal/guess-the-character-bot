@@ -17,7 +17,7 @@
 // table to keep; the key changes on a restart, which is fine because rooms do not survive one.
 
 const crypto = require('crypto');
-const { clientKey, createLimiter } = require('./rateLimit');
+const { clientKey, createLimiter, perSocket, SLOW_DOWN } = require('./rateLimit');
 
 const MAX_ROOMS_PER_SOCKET = 5;
 const MAX_FAILED_JOINS = 20;
@@ -78,23 +78,23 @@ function seat(socket, registry, room) {
 }
 
 /** @returns {{ok: true, room} | {ok: false, error: string}} */
-function createRoom(socket, registry, kind, nickname) {
+function createRoom(socket, registry, kind, nickname, avatar) {
   socket.data.created = (socket.data.created || 0) + 1;
   if (socket.data.created > MAX_ROOMS_PER_SOCKET || !roomsByClient.take(socket.data.client)) {
     return { ok: false, error: 'Too many rooms from this device. Try again in a few minutes.' };
   }
-  const res = registry.createRoom({ hostPlayerId: socket.data.playerId, nickname, kind });
+  const res = registry.createRoom({ hostPlayerId: socket.data.playerId, nickname, kind, avatar });
   if (!res.ok) return { ok: false, error: res.error };
   seat(socket, registry, res.room);
   return { ok: true, room: res.room };
 }
 
 /** @returns {{ok: true, room, reconnected: boolean} | {ok: false, error: string}} */
-function joinRoom(socket, registry, kind, code, nickname) {
+function joinRoom(socket, registry, kind, code, nickname, avatar) {
   if ((socket.data.failedJoins || 0) >= MAX_FAILED_JOINS || !failedJoinsByClient.allows(socket.data.client)) {
     return { ok: false, error: 'Too many failed attempts. Try again in a few minutes.' };
   }
-  const res = registry.joinRoom(code, { playerId: socket.data.playerId, nickname, kind });
+  const res = registry.joinRoom(code, { playerId: socket.data.playerId, nickname, kind, avatar });
   if (!res.ok) {
     socket.data.failedJoins = (socket.data.failedJoins || 0) + 1;
     failedJoinsByClient.take(socket.data.client);
@@ -106,4 +106,17 @@ function joinRoom(socket, registry, kind, code, nickname) {
   return { ok: true, room: res.room, reconnected: res.reconnected };
 }
 
-module.exports = { identify, createRoom, joinRoom, publicIdOf, MAX_ROOMS_PER_SOCKET, MAX_FAILED_JOINS };
+// Every face change is a roster broadcast to the whole room -- fifty sockets, in Draw -- so a
+// stranger tapping through faces is bounded like any other free action.
+const faceBudget = perSocket({ max: 12, windowMs: 5000 });
+
+/** The lobby's picker, the same in every game. @returns the ack, and whether to broadcast. */
+function setAvatar(socket, registry, avatar) {
+  const room = registry.getRoom(socket.data.code);
+  if (!room) return { ok: false, error: 'Not in a room.' };
+  if (!faceBudget(socket)) return SLOW_DOWN;
+  const res = room.setAvatar(socket.data.playerId, avatar);
+  return res.ok ? { ...res, room } : res;
+}
+
+module.exports = { identify, createRoom, joinRoom, setAvatar, publicIdOf, MAX_ROOMS_PER_SOCKET, MAX_FAILED_JOINS };

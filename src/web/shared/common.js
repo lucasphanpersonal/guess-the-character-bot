@@ -49,27 +49,6 @@
   const roomCodeHtml = (code) =>
     [...String(code)].map((ch) => `<span class="ch">${esc(ch)}</span>`).join('');
 
-  // A small pixel face for a player, drawn from their name: a 5x5 mirrored grid, so it reads as a
-  // creature rather than noise, and the same name gets the same face on every screen. Decoration,
-  // alongside the name and never instead of it. Only numbers and our own colours reach the markup.
-  const AVATAR_COLOURS = ['#ff6b82', '#ffb000', '#7fd6ff', '#7ee07e', '#c9a0ff', '#ff9a4d'];
-  function avatar(name) {
-    let h = 2166136261;
-    for (const ch of String(name)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
-    const colour = AVATAR_COLOURS[h % AVATAR_COLOURS.length];
-    let rects = '';
-    for (let y = 0; y < 5; y++) {
-      for (let x = 0; x < 3; x++) {
-        h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-        if (h % 100 < 58) {
-          rects += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
-          if (x < 2) rects += `<rect x="${4 - x}" y="${y}" width="1" height="1"/>`;
-        }
-      }
-    }
-    return `<svg class="avatar" viewBox="-1 -1 7 7" aria-hidden="true" shape-rendering="crispEdges" fill="${colour}">${rects}</svg>`;
-  }
-
   // Every character picture goes through here. A picture that is missing, or fails to load (a
   // Commons image gone, an upstream down), becomes a pixel picture frame with a break in it at the
   // same size, so a row never shows a broken-image icon and keeps its place. It is drawn to read as
@@ -132,10 +111,11 @@
     const end = tens >= 11 && tens <= 13 ? 'TH' : { 1: 'ST', 2: 'ND', 3: 'RD' }[n % 10] ?? 'TH';
     return `${n}${end}`;
   };
-  function hiscoreRow({ place, imageUrl, name, detail, score, unit }) {
+  // `face` is a player's avatar markup (GTC.faceOf), built from numbers only, so it goes in as is.
+  function hiscoreRow({ place, imageUrl, name, detail, score, unit, face = '' }) {
     const rank = place >= 1 && place <= 3 ? ` rank${place}` : '';
     const img = imageUrl !== undefined ? art(imageUrl, 'referrerpolicy="no-referrer"') : '';
-    return `<li class="hs${rank}"><span class="hs-place">${place ? ordinal(place) : '--'}</span>${img}` +
+    return `<li class="hs${rank}"><span class="hs-place">${place ? ordinal(place) : '--'}</span>${face}${img}` +
       `<span class="hs-who"><span class="hs-name">${esc(name)}</span>${detail ? `<span class="hs-detail">${esc(detail)}</span>` : ''}</span>` +
       `<span class="hs-score">${esc(score)}${unit ? `<small>${esc(unit)}</small>` : ''}</span></li>`;
   }
@@ -526,5 +506,5 @@
   }
   const asking = () => openAsks > 0;
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, ask, asking, typeOut, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, select, flash, shake, confetti };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, ask, asking, typeOut, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, select, flash, shake, confetti };
 })();

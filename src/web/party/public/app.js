@@ -115,6 +115,9 @@ function show(screen) {
 const amHost = () => lastState && lastState.hostPlayerId === me;
 
 // --- lobby rendering ----------------------------------------------------------------------
+// The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+
 function renderLobby(state) {
   // Rendered per character so each can carry its own colour (see .roomcode .ch).
   const codeEl = $('lobbyCode');
@@ -146,11 +149,12 @@ function renderLobby(state) {
     name.className = 'name';
     name.textContent = p.nickname;
     if (p.playerId === me) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
-    li.innerHTML = GTC.avatar(p.nickname);
+    li.innerHTML = GTC.avatar(p.avatar);
     li.append(dot, name);
     if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
     roster.appendChild(li);
   }
+  avPicker.update(state.players, me);
   const host = amHost();
   const enough = state.players.length >= 2;
   $('setupBtn').style.display = host ? '' : 'none';
@@ -325,6 +329,7 @@ function renderWaitingList(view) {
     name.className = 'name';
     name.style.flex = '1';
     name.textContent = p.name;
+    li.innerHTML = GTC.faceOf(lastState?.players, p.playerId);
     li.append(name);
     if (amHost()) li.append(removeButton(p));
     ul.appendChild(li);
@@ -427,6 +432,7 @@ function renderHostList(rows) {
     // Remove button on the right the text column is narrow, and the status wrapped mid-phrase.
     li.innerHTML =
       `<span style="font-weight:900;min-width:1.1em;text-align:center">${escapeHtml(r.icon)}</span>` +
+      GTC.faceOf(lastState?.players, r.playerId) +
       GTC.art(ch?.imageUrl, 'class="pickthumb"') +
       `<span style="flex:1;min-width:0"><span class="name">${escapeHtml(r.name)}</span><br>` +
       `<span style="font-weight:700">${escapeHtml(ch?.name ?? '—')}</span><br>` +
@@ -454,7 +460,7 @@ function renderStandings(el, rows) {
     const tail = s.status === 'finished' ? ` — turn ${s.turns}${s.secondsLeft == null ? '' : `, ${s.secondsLeft}s left`}`
       : s.status === 'guessing' ? ` — turn ${s.turns} (guessing)`
       : s.status === 'gave_up' ? ' — gave up' : ' — waiting';
-    li.innerHTML = `<span>${STATUS_ICON[s.status] || '•'}</span><span class="name">${escapeHtml(s.name)}</span><span class="you">${tail}</span>`;
+    li.innerHTML = `<span>${STATUS_ICON[s.status] || '•'}</span>${GTC.faceOf(lastState?.players, s.playerId)}<span class="name">${escapeHtml(s.name)}</span><span class="you">${tail}</span>`;
     el.appendChild(li);
   }
 }
@@ -651,6 +657,7 @@ function renderOver(result) {
       : s.secondsLeft == null ? '' : `${s.secondsLeft}s left`;
     return GTC.hiscoreRow({
       place: s.place,
+      face: GTC.faceOf(lastState?.players, s.playerId),
       imageUrl: s.character?.imageUrl ?? null,
       name: s.name,
       detail: `was ${s.character?.name ?? '—'}${how ? ` · ${how}` : ''}`,
@@ -1047,7 +1054,7 @@ function createRoom() {
   if (!nick) return ($('landingErr').textContent = 'Enter your name first.');
   $('landingErr').textContent = '';
   primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
-  socket.emit('room:create', { nickname: nick }, (res) => {
+  socket.emit('room:create', { nickname: nick, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     lastState = res.state; enterRoom(res.state); routeByStatus(res.state);
   });
@@ -1059,7 +1066,7 @@ function joinRoom() {
   if (code.length !== 4) return ($('landingErr').textContent = 'Room codes are 4 letters.');
   $('landingErr').textContent = '';
   primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
-  socket.emit('room:join', { code, nickname: nick }, (res) => {
+  socket.emit('room:join', { code, nickname: nick, avatar: GTC.preferredAvatar() }, (res) => {
     // A Draw room plays on phones too, so a Draw code typed here is sent there rather than
     // refused: from the home page it is one box for any code a phone can play.
     if (res?.kind === 'draw') return location.assign(`/draw/?room=${encodeURIComponent(code)}&name=${encodeURIComponent(nick)}`);
@@ -1149,7 +1156,7 @@ socket.on('connect', () => {
   // on screen for the rest of the party, long after everything had come back.
   $('connState').textContent = '';
   if (currentRoom && nickname) {
-    socket.emit('room:join', { code: currentRoom.code, nickname }, (res) => {
+    socket.emit('room:join', { code: currentRoom.code, nickname, avatar: GTC.preferredAvatar() }, (res) => {
       if (res?.ok) { lastState = res.state; enterRoom(res.state); routeByStatus(res.state); }
       else { currentRoom = null; store.del('gtc_lastRoom'); show('landing'); }
     });
