@@ -81,7 +81,12 @@ function wobble(el, text, { colour = true } = {}) {
 }
 
 function show(screen) {
+  // A screen that was not showing starts at the top. The page keeps its scroll across screens, so
+  // the deal screen opened where the settings screen had been scrolled to, with its check card off
+  // the top. Only on entry: the setup screen re-renders on every state push and must not jump.
+  const entering = document.getElementById(screen) && !document.getElementById(screen).classList.contains('active');
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === screen);
+  if (entering) window.scrollTo(0, 0);
   // Idle whimsy stops once play starts -- phones are on foreheads, and the only thing that
   // should be moving is the game.
   document.body.classList.toggle('at-play', screen === 'playing' || screen === 'countdown');

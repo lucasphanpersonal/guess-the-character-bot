@@ -18,7 +18,7 @@ socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts
   // Once per game: a reconnect on this screen is sent draw:over again (re-armed by draw:state).
   if (!overHeard) { overHeard = true; sound('over', standings.some((s) => s.place === 1 && s.playerId === me)); }
   GTC.confetti();
-  window.GTCFx?.podium(standings.slice(0, 3).map((s) => s.name));
+  window.GTCFx?.podium(standings);
   $('standings').innerHTML = standings
     .map((s) => GTC.hiscoreRow({ place: s.place, name: s.name, detail: s.left ? '(left)' : '', score: s.score, unit: 'pts' }))
     .join('');

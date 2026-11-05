@@ -315,11 +315,17 @@
       if (players >= 0 && n > players && !reduced.matches) hopAt = performance.now();
       players = n;
     },
-    // The names under the podium, at most three: first, second, third. textContent, because they are
-    // whatever people typed.
-    podium(names) {
+    // The names under the podium: one step per place, 1st to 3rd. Takes standings ({ place, name })
+    // and groups by place, because a tie shares a place: two players tied for 1st stand on the same
+    // step, not one on 1st and the other on 2nd. Names join with " & ". textContent, because they
+    // are whatever people typed.
+    podium(standings) {
       for (const el of document.querySelectorAll('[data-podium-place]')) {
-        el.textContent = names[Number(el.dataset.podiumPlace) - 1] ?? '';
+        const place = Number(el.dataset.podiumPlace);
+        el.textContent = standings
+          .filter((s) => s.place === place)
+          .map((s) => s.name)
+          .join(' & ');
       }
     },
     // What is running, for checking by hand and in a browser: there is no other way to tell a sprite

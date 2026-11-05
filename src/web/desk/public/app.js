@@ -752,7 +752,7 @@ socket.on('game:over', (res) => {
   // Once per game: a reconnect on this screen is sent game:over again (re-armed by setup:state).
   if (!overHeard) { overHeard = true; sound('over', res.winners.some((w) => w.playerId === me)); }
   GTC.confetti();
-  window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
+  window.GTCFx?.podium(res.standings);
   $('standings').innerHTML = res.standings
     .map((s) => {
       const out = s.turns != null ? '' : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
