@@ -755,7 +755,11 @@ socket.on('game:over', (res) => {
   window.GTCFx?.podium(res.standings);
   $('standings').innerHTML = res.standings
     .map((s) => {
-      const out = s.turns != null ? '' : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
+      // Same tiebreak the phones show: two players on the same turns are split by time left, so
+      // a 3RD beside two 1STs with equal turns needs its seconds to look right.
+      const out = s.turns != null
+        ? (s.secondsLeft == null ? '' : ` · ${s.secondsLeft}s left`)
+        : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
       return GTC.hiscoreRow({
         place: s.place,
         imageUrl: s.character?.imageUrl,
