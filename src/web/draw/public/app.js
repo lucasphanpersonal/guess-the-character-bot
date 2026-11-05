@@ -136,6 +136,7 @@ $('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('jo
 
 // A reload mid-game rejoins -- but only the room this link is for.
 socket.on('connect', () => {
+  GTC.forgetRosters(); // the room may have changed while this page was away (common.js)
   const last = store.get('gtc_draw_room');
   const name = store.get('gtc_draw_name');
   const linked = params.get('room')?.toUpperCase();
@@ -153,6 +154,7 @@ socket.on('connect', () => {
 // Resolves once the server has the leave (or after a moment without an answer), so a caller that is
 // about to navigate away -- the title -- does not cut the request off and leave the seat held.
 function leave() {
+  GTC.forgetRosters();
   const done = new Promise((resolve) => {
     socket.emit('room:leave', {}, resolve);
     setTimeout(resolve, 1500);
@@ -200,6 +202,7 @@ function renderRoom() {
   show('lobby');
   $('roomCode').innerHTML = roomCodeHtml(roomState.code);
   $('shareLink').value = `${location.origin}/draw/?room=${roomState.code}`;
+  if (GTC.someoneArrived(roomState.code, roomState.players, me)) sound('join');
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
@@ -376,6 +379,7 @@ function characterArt(c) {
 // guess sends one). Keyed by round and drawer as well as phase, so a turn is never mistaken for
 // the last one.
 let heardPhase = '';
+let overHeard = false; // this game's end fanfare has played (gallery.js, draw:over)
 // The hurry cue sounds once per drawing turn, as the clock is SEEN to cross into the last ten
 // seconds -- so a reload with nine seconds left does not knock the moment it arrives.
 let hurry = { turn: '', above: false, done: false };
@@ -397,6 +401,7 @@ socket.on('draw:state', (v) => {
   // lines ("... is close!") go with it rather than piling up under the next drawing.
   if (!view || view.drawer.playerId !== v.drawer.playerId || view.round !== v.round) localLines = [];
   view = v;
+  overHeard = false; // a game is on: its end will be news
   // A rematch from the end screen: last game's drawing must not stay open over the new one.
   closeViewer();
   show('game');

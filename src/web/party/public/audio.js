@@ -36,12 +36,20 @@ let muted = store.get('gtc_muted') === '1';
 // energy than a sine at the same level, so an unnamed voice is scaled down to keep the balance every
 // gain here was set for. The time-up alarm names 'square' on purpose, to be as loud as it was.
 const PULSE_LEVEL = 0.4;
+// Every note not routed to the bed goes out through this one node, so muting can cut what is
+// already sounding: a cue's notes are all scheduled up front, and a fanfare runs over a second
+// after the switch was pressed. setMuted() disconnects it, and the next cue makes a fresh one.
+let cueGain = null;
+function cueOut() {
+  if (!cueGain) { cueGain = audioCtx.createGain(); cueGain.connect(audioCtx.destination); }
+  return cueGain;
+}
 function tone(freq = 880, ms = 180, { gain = 0.5, type, at = null, out = null } = {}) {
   if (!audioCtx || muted) return;
   if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
   try {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    o.type = type ?? 'square'; o.frequency.value = freq; o.connect(g); g.connect(out || audioCtx.destination);
+    o.type = type ?? 'square'; o.frequency.value = freq; o.connect(g); g.connect(out || cueOut());
     if (!type) gain *= PULSE_LEVEL;
     const t = at ?? audioCtx.currentTime;
     g.gain.setValueAtTime(0.0001, t);
@@ -51,6 +59,45 @@ function tone(freq = 880, ms = 180, { gain = 0.5, type, at = null, out = null } 
   } catch {}
 }
 const beep = (freq = 880, ms = 180) => tone(freq, ms);
+
+// --- one-shot cues --------------------------------------------------------------------------
+// Placed on the audio clock, like the bed, so a cue's notes keep their spacing in a tab whose
+// timers are throttled. Unlike the older beeps, these play only on a RUNNING context: the clock
+// stands still while iOS holds it suspended, so a lobby filling up meanwhile would stack every
+// join on one instant and sound them as a single chord when it resumed. Missed is better.
+const live = () => !!audioCtx && audioCtx.state === 'running';
+
+// The tunes the computers play too (GTC.TUNES, common.js), louder: a phone speaker across a room,
+// against the computers' cues at a desk, often into headphones.
+const TUNE_SCALE = 1.8;
+function playTune(name, delay = 0) {
+  const t0 = audioCtx.currentTime + delay;
+  for (const [f, ms, gain, type, at] of GTC.TUNES[name]) tone(f, ms, { gain: gain * TUNE_SCALE, type, at: t0 + at });
+}
+
+// The grace countdown, one blip per second while the number is above zero. It is spent raising
+// the phone to a forehead, so the wearer counts it by ear -- the number is out of sight. There is
+// no "go" on zero: the first player's turn chime and bed land at that same moment, and the phones
+// have no queue to keep two phrases apart. The phone buzzes on the same beats (startCountdown).
+function countBlip(n) {
+  if (live() && n > 0) tone(523, 90, { gain: 0.4 });
+}
+
+// Somebody joined the lobby. A whole party joins in the same minute, often with the phones side
+// by side, so it is quieter than any game cue.
+function joinBlip() {
+  if (live()) playTune('join');
+}
+
+// The end of the game, a step up on top for a winner's phone. The last finisher's reveal chime
+// arrives a moment before game:over and runs 160ms, so the fanfare waits for it: on top of it, the
+// end would open on the got-it chime and be heard as one more finish.
+const AFTER_REVEAL_S = 0.2;
+function fanfare(won) {
+  if (!live()) return;
+  playTune('over', AFTER_REVEAL_S);
+  if (won) playTune('overWon', AFTER_REVEAL_S);
+}
 
 // --- the turn bed ---------------------------------------------------------------------------
 //
@@ -186,7 +233,10 @@ function renderSoundCheck() {
 function setMuted(next) {
   muted = next;
   store.set('gtc_muted', muted ? '1' : '0');
-  if (muted) stopBed();
+  if (muted) {
+    stopBed();
+    if (cueGain) { try { cueGain.disconnect(); } catch {} cueGain = null; }
+  }
   renderSoundCheck();
 }
 

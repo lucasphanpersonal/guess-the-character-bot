@@ -101,7 +101,15 @@
     hurry() { tone(698, 100, { gain: 0.2 }); tone(698, 100, { gain: 0.2, at: 0.16 }); },
     // The reveal: a falling-then-resolving phrase, the turn closing.
     reveal() { [784, 659, 523, 784].forEach((f, i) => tone(f, i === 3 ? 360 : 140, { gain: 0.22, type: 'triangle', at: i * 0.12 })); },
+    // Somebody joined the lobby, and game over (`won`: you are among the winners). Shared with the
+    // phones, so their notes live in GTC.TUNES (common.js). Lobbies fill in bursts; the queue
+    // keeps a burst of joins from piling into one chord.
+    join() { tune('join'); },
+    over(won) { tune('over'); if (won) tune('overWon'); },
   };
+  function tune(name) {
+    for (const [f, ms, gain, type, at] of GTC.TUNES[name]) tone(f, ms, { gain, type, at });
+  }
   // Cues queue rather than overlap. Two arrive together often -- the last right guess and the
   // reveal it causes come in the same moment -- and two phrases on top of each other are a mush in
   // which neither means anything. The wait is capped, so a backlog never makes a cue late enough
