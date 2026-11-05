@@ -11,8 +11,9 @@
 //     hidden (the one in flight is paused where it is and carries on when the tab comes back).
 //   - Stepped, like the rest of the motion: the crossing moves in whole sprite pixels, never eased.
 //   - Not for reduced motion (none are launched, and one in flight is removed), and not during play
-//     on the phones (body.at-play), where the screen is on a forehead or about to be. retro.css hides
-//     the layer in both cases too, so nothing slips past a launch that was already decided.
+//     on any page (data-playing on <html>, set by each game's show()) or while a display surface
+//     like the forehead view is up (data-plain). retro.css hides the layer in all of these too, so
+//     nothing slips past a launch that was already decided.
 //   - All of it is drawn here, as pixel grids: no images, no fetches, nobody else's sprites.
 //
 // Loaded as a plain script on every page. Its one global is GTCFlybys; GTCFlybys.launch(kind) sends
@@ -182,7 +183,8 @@
 
   let timer = 0, dueAt = 0, flight = null;
   const between = (a, b) => a + Math.random() * (b - a);
-  const quiet = () => reduced.matches || document.body.classList.contains('at-play');
+  const root = document.documentElement;
+  const quiet = () => reduced.matches || root.hasAttribute('data-playing') || root.hasAttribute('data-plain');
 
   function pick() {
     const kinds = Object.keys(SPRITES);

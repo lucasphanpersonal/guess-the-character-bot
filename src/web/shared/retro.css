@@ -345,6 +345,17 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   @keyframes confettiFall { from { transform:translateY(-20px); } to { transform:translateY(calc(100vh + 40px)); } }
   .confetti { position:fixed; inset:0; z-index:44; overflow:hidden; pointer-events:none; }
   .confetti i { position:absolute; top:0; animation:confettiFall 1.6s steps(18) backwards; }
+
+  /* Flybys (/shared/flybys.js): two frames for the rocket's flame and the saucer's lights; floating
+     things bob; rocks turn a quarter at a time, which keeps every pixel square. */
+  @keyframes fbFrameA { 0%, 49% { visibility:visible; } 50%, 100% { visibility:hidden; } }
+  @keyframes fbFrameB { 0%, 49% { visibility:hidden; } 50%, 100% { visibility:visible; } }
+  .fb-anim .fb-f0 { animation:fbFrameA .4s steps(1) infinite; }
+  .fb-anim .fb-f1 { animation:fbFrameB .4s steps(1) infinite; }
+  @keyframes fbBob { 0%, 100% { transform:translateY(0); } 50% { transform:translateY(6px); } }
+  .fb-bob svg { animation:fbBob 2.4s steps(4) infinite; }
+  @keyframes fbTumble { to { transform:rotate(360deg); } }
+  .fb-tumble svg { animation:fbTumble 3.2s steps(4) infinite; }
 }
 
 /* --- the CRT screen -------------------------------------------------------------------------
@@ -434,24 +445,12 @@ dialog.card, dialog.roommenu { color:var(--ink); }
 
 /* --- flybys (/shared/flybys.js) --------------------------------------------------------------
    Now and then something crosses the stars. Just above them (z-index -1, after body::before) and
-   under everything else; no taps, nothing to read. Hidden outright for reduced motion and during play
-   on the phones (body.at-play, the forehead view included), whatever the script has already sent up.
-   The crossing itself is the script's; the small motions on the sprite are here, stepped. */
+   under everything else; no taps, nothing to read. Hidden outright for reduced motion, during play on
+   any page (data-playing) and under a display surface (data-plain), whatever the script has already
+   sent up. The crossing itself is the script's; the sprite's own small motions are in *motion*. */
 .flybys { position:fixed; inset:0; z-index:-1; overflow:hidden; pointer-events:none; contain:strict; }
 .flyby { position:absolute; top:0; left:0; opacity:.85; will-change:transform; }
 .flyby svg { display:block; }
 .flyby .fb-f1 { visibility:hidden; }
-body.at-play .flybys, body:has(#forehead.active) .flybys { display:none; }
+:root[data-playing] .flybys, :root[data-plain] .flybys { display:none; }
 @media (prefers-reduced-motion: reduce) { .flybys { display:none; } }
-@media (prefers-reduced-motion: no-preference) {
-  /* Two frames: the rocket's flame, the saucer's lights. */
-  @keyframes fbFrameA { 0%, 49% { visibility:visible; } 50%, 100% { visibility:hidden; } }
-  @keyframes fbFrameB { 0%, 49% { visibility:hidden; } 50%, 100% { visibility:visible; } }
-  .fb-anim .fb-f0 { animation:fbFrameA .4s steps(1) infinite; }
-  .fb-anim .fb-f1 { animation:fbFrameB .4s steps(1) infinite; }
-  /* Floating things bob; rocks turn a quarter at a time, which keeps every pixel square. */
-  @keyframes fbBob { 0%, 100% { transform:translateY(0); } 50% { transform:translateY(6px); } }
-  .fb-bob svg { animation:fbBob 2.4s steps(4) infinite; }
-  @keyframes fbTumble { to { transform:rotate(360deg); } }
-  .fb-tumble svg { animation:fbTumble 3.2s steps(4) infinite; }
-}
