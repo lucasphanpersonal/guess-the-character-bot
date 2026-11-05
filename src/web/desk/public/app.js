@@ -496,7 +496,9 @@ socket.on('game:state', (view) => {
   gameView = view;
   show('game');
   renderGame();
-  if (view.isMyTurn && !wasMyTurn) $('guessInput').focus();
+  // Not on a touch screen: in one column the guess box is under the spotlight, and a focus nobody
+  // tapped for scrolled the page to it, taking the picture off the top as the turn began.
+  if (view.isMyTurn && !wasMyTurn && matchMedia('(pointer: fine)').matches) $('guessInput').focus();
 
   // By turn number, not by isMyTurn flipping: the last player still guessing takes turn after
   // turn of their own, and each is a new turn.
