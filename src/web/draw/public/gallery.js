@@ -139,6 +139,12 @@ $('viewer').addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft' && viewing > 0) openViewer(viewing - 1);
   if (e.key === 'ArrowRight' && viewing < galleryItems.length - 1) openViewer(viewing + 1);
 });
+// The caption's face: the site's own (VT323, --font-name), the system faces only for scripts it
+// lacks. A canvas never waits for a web font -- it draws in a fallback if the face is not loaded
+// yet -- and the save below must stay synchronous, so the face is asked for here, long before
+// anyone presses Save (every page also preloads it).
+const CAPTION_FACE = '"VT323", "Trebuchet MS", system-ui, sans-serif';
+document.fonts?.load('34px "VT323"').catch(() => {});
 // The picture as a PNG, with a strip under it saying what it is and who drew it -- a drawing
 // saved to a phone's photos is otherwise a mystery a week later.
 $('viewerSave').addEventListener('click', () => {
@@ -154,11 +160,11 @@ $('viewerSave').addEventListener('click', () => {
   c.fillStyle = '#e6e2ef';
   c.fillRect(0, 900, 1200, 2);
   c.fillStyle = '#1b1033';
-  c.font = '900 34px "Trebuchet MS", system-ui, sans-serif';
+  c.font = `34px ${CAPTION_FACE}`;
   c.textBaseline = 'middle';
   c.fillText(`${d.character?.name ?? '?'} — drawn by ${d.drawer}`, 28, 946, 860);
   c.fillStyle = '#6b6480';
-  c.font = '700 24px "Trebuchet MS", system-ui, sans-serif';
+  c.font = `24px ${CAPTION_FACE}`;
   c.textAlign = 'right';
   c.fillText('Draw the Character', 1172, 946);
   const file = `${d.character?.name ?? 'drawing'} by ${d.drawer}`.replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80) || 'drawing';
