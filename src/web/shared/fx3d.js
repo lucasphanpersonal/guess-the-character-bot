@@ -177,6 +177,9 @@
     if (gap < 1000 / fps() - 2) return;
     last = now;
     watchPace(gap, now);
+    // watchPace can stop the 3D right here (too slow): stop() disposes the renderer, so this frame
+    // must not go on to draw with it.
+    if (status.startsWith('off')) return;
     pose(now);
     renderer.render(scene, camera);
     frames++;
@@ -317,15 +320,15 @@
     },
     // The names under the podium: one step per place, 1st to 3rd. Takes standings ({ place, name })
     // and groups by place, because a tie shares a place: two players tied for 1st stand on the same
-    // step, not one on 1st and the other on 2nd. Names join with " & ". textContent, because they
-    // are whatever people typed.
+    // step, not one on 1st and the other on 2nd. Each name is its own line (the CSS wraps them), so
+    // a tie never runs one name into another or pushes the second off the step. textContent, because
+    // they are whatever people typed.
     podium(standings) {
       for (const el of document.querySelectorAll('[data-podium-place]')) {
         const place = Number(el.dataset.podiumPlace);
-        el.textContent = standings
+        el.replaceChildren(...standings
           .filter((s) => s.place === place)
-          .map((s) => s.name)
-          .join(' & ');
+          .map((s) => { const line = document.createElement('i'); line.textContent = s.name; return line; }));
       }
     },
     // What is running, for checking by hand and in a browser: there is no other way to tell a sprite

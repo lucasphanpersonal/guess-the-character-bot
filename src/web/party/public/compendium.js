@@ -156,9 +156,7 @@ async function loadCharacterPage(first) {
       // loading="lazy": a 60-tile page would otherwise fire 60 image requests at once, and each
       // miss makes the server fetch upstream. Only what scrolls into view is paid for.
       tile.innerHTML =
-        (c.imageUrl
-          ? `<img src="${escapeHtml(c.imageUrl)}" alt="" loading="lazy" decoding="async">`
-          : '<div class="noimg">no picture</div>') +
+        GTC.art(c.imageUrl, 'loading="lazy" decoding="async"') +
         `<span class="cname">${escapeHtml(c.name)}</span>`;
       grid.appendChild(tile);
     }

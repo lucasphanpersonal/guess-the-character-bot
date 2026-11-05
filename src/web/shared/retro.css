@@ -462,10 +462,13 @@ dialog.card, dialog.roommenu { color:var(--ink); }
 @media (min-width: 761px) {
   .fx3d-names { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; max-width:34rem; margin:0 auto 14px; text-align:center;
                 font-family:var(--font-name); font-weight:700; color:var(--on-field); }
-  .fx3d-names span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  /* A tie stacks its names one per line under the place, and every line wraps: a long name is never
+     cut off, and a second winner on the same step is never hidden. */
+  .fx3d-names > span { min-width:0; overflow-wrap:anywhere; }
+  .fx3d-names i { display:block; font-style:normal; }
   /* Each says its place, because the names cannot line up with steps that turn. */
-  .fx3d-names span:empty { visibility:hidden; }
-  .fx3d-names span::before { font-family:var(--font-arcade); font-weight:400; font-size:12px; margin-right:.6em; }
+  .fx3d-names > span:empty { visibility:hidden; }
+  .fx3d-names > span::before { display:block; font-family:var(--font-arcade); font-weight:400; font-size:12px; margin-bottom:.5em; }
   [data-podium-place="1"]::before { content:"1ST"; color:var(--gold); }
   [data-podium-place="2"]::before { content:"2ND"; color:var(--silver); }
   [data-podium-place="3"]::before { content:"3RD"; color:var(--bronze); }

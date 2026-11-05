@@ -13,8 +13,8 @@ socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts
   view = null;
   localLines = [];
   heardPhase = '';
-  const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === me ? 'You' : s.name));
-  $('overTitle').textContent = top.length ? `${top.join(' and ')} won!` : 'Game over';
+  const top = standings.filter((s) => s.place === 1).map((s) => ({ name: s.name, you: s.playerId === me }));
+  $('overTitle').textContent = GTC.winnersTitle(top);
   // Once per game: a reconnect on this screen is sent draw:over again (re-armed by draw:state).
   if (!overHeard) { overHeard = true; sound('over', standings.some((s) => s.place === 1 && s.playerId === me)); }
   GTC.confetti();
