@@ -16,7 +16,7 @@ socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts
   const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === me ? 'You' : s.name));
   $('overTitle').textContent = top.length ? `${top.join(' and ')} won!` : 'Game over';
   $('standings').innerHTML = standings
-    .map((s) => `<li><span class="place">${s.place}</span><div><strong>${esc(s.name)}</strong>${s.left ? ' <span class="hint">(left)</span>' : ''}<div class="hint">${s.score} points</div></div></li>`)
+    .map((s) => GTC.hiscoreRow({ place: s.place, name: s.name, detail: s.left ? '(left)' : '', score: s.score, unit: 'pts' }))
     .join('');
   $('hostOver').hidden = !isHost();
   $('guestOver').hidden = isHost();

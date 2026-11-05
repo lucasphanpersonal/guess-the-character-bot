@@ -161,10 +161,11 @@ web/
                        curation, dealing. Games use this, never the compendium directly.
   rooms.js             The room registry -- one for every game, so a code means one room.
   roomAccess.js        Identifying, creating and joining, with the limits on strangers.
-  shared/              The computer games' look (theme.css), seasonal switch, client helpers and
-                       sound (sound.js), served at /shared/ so /desk/ and /draw/ cannot drift
-                       apart. The phones load three of them too: common.js, pickers.js (the pool
-                       picker and character search) and roommenu.js (Room: leave, remove, pause).
+  shared/              Served at /shared/ so the games cannot drift apart. retro.css is the look
+                       on every page: fonts (in fonts/, self-hosted), palette, base components, the
+                       high-score table. The computer games add their layouts (theme.css), seasonal
+                       switch and sound (sound.js). The phones also load common.js, pickers.js (the
+                       pool picker and character search) and roommenu.js (Room: leave, remove, pause).
   publicCharacter.js   A character as clients see it (artwork through /img).
   imageCache.js        The local read-through artwork cache behind /img.
   guess/               Guess the Character on the web, however it is played.

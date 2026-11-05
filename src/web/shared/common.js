@@ -49,6 +49,42 @@
   const roomCodeHtml = (code) =>
     [...String(code)].map((ch) => `<span class="ch">${esc(ch)}</span>`).join('');
 
+  // A small pixel face for a player, drawn from their name: a 5x5 mirrored grid, so it reads as a
+  // creature rather than noise, and the same name gets the same face on every screen. Decoration,
+  // alongside the name and never instead of it. Only numbers and our own colours reach the markup.
+  const AVATAR_COLOURS = ['#ff6b82', '#ffb000', '#7fd6ff', '#7ee07e', '#c9a0ff', '#ff9a4d'];
+  function avatar(name) {
+    let h = 2166136261;
+    for (const ch of String(name)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+    const colour = AVATAR_COLOURS[h % AVATAR_COLOURS.length];
+    let rects = '';
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 3; x++) {
+        h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+        if (h % 100 < 58) {
+          rects += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+          if (x < 2) rects += `<rect x="${4 - x}" y="${y}" width="1" height="1"/>`;
+        }
+      }
+    }
+    return `<svg class="avatar" viewBox="-1 -1 7 7" aria-hidden="true" shape-rendering="crispEdges" fill="${colour}">${rects}</svg>`;
+  }
+
+  // One row of the end screen's high-score table. `place` is the server's, so level players share
+  // one; `score` and `unit` are what this game ranks by. Everything is escaped here.
+  const ordinal = (n) => {
+    const tens = n % 100;
+    const end = tens >= 11 && tens <= 13 ? 'TH' : { 1: 'ST', 2: 'ND', 3: 'RD' }[n % 10] ?? 'TH';
+    return `${n}${end}`;
+  };
+  function hiscoreRow({ place, imageUrl, name, detail, score, unit }) {
+    const rank = place >= 1 && place <= 3 ? ` rank${place}` : '';
+    const img = imageUrl ? `<img src="${esc(imageUrl)}" alt="" referrerpolicy="no-referrer" />` : '';
+    return `<li class="hs${rank}"><span class="hs-place">${place ? ordinal(place) : '--'}</span>${img}` +
+      `<span class="hs-who"><span class="hs-name">${esc(name)}</span>${detail ? `<span class="hs-detail">${esc(detail)}</span>` : ''}</span>` +
+      `<span class="hs-score">${esc(score)}${unit ? `<small>${esc(unit)}</small>` : ''}</span></li>`;
+  }
+
   function show(id) {
     for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === id);
   }
@@ -145,5 +181,5 @@
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow };
 })();

@@ -44,6 +44,8 @@
            display:flex; flex-direction:column; align-items:center; }
     main { width:100%; max-width:32rem; padding:22px 20px 40px; flex:1; display:flex; flex-direction:column; }
     h1 { font-size:24px; margin:.2rem 0 1rem; }
+    /* A phone on its side has little height to give: one line of the small size. */
+    @media (max-height: 500px) { h1, body:has(.roombtn:not([hidden])) h1 { font-size:16px; margin-bottom:.6rem; } }
     /* The title is the way home. A link that looks like the title, not like a link. */
     h1 a { color:inherit; text-decoration:none; -webkit-tap-highlight-color:transparent; }
     h1 a:focus-visible { outline:4px solid #fff; outline-offset:6px; }
@@ -97,11 +99,9 @@
     .row > * { flex:1; }
     /* Choice slabs: colour + shape, so they're told apart without relying on colour alone. */
     .choice { display:flex; align-items:center; gap:12px; padding:14px; border:none;
-              background:var(--blue); color:#fff; font-weight:800; margin-bottom:10px; cursor:pointer;
-              box-shadow:0 5px 0 rgba(0,0,0,.25); }
+              background:var(--blue); color:#fff; font-weight:800; margin-bottom:10px; cursor:pointer; }
     .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); }
     .choice.c2 { background:var(--amber); color:#2b1c00; } .choice.c3 { background:var(--green); }
-    .choice input { width:auto; accent-color:#fff; }
     .choice .shape { font-size:1.15rem; }
     .choice .sub { color:rgba(255,255,255,.85); font-size:.78rem; font-weight:600; }
     .choice.c2 .sub { color:rgba(0,0,0,.6); }
@@ -130,17 +130,12 @@
        rarer, corrective action and should not compete with the one you press repeatedly. */
     .undo { margin-top:8px; padding:11px; font-size:.92rem; }
     .rmbtn { width:auto; flex:none; padding:7px 12px; font-size:.78rem;
-             background:var(--red); box-shadow:0 3px 0 var(--red-d); }
-    .rmbtn:active { transform:translateY(2px); box-shadow:0 1px 0 var(--red-d); }
+             background:var(--red); }
+    .rmbtn:active { transform:translateY(2px); }
     .gatetitle { text-align:center; font-family:var(--font-display); font-weight:900;
                  font-size:1.15rem; color:var(--ink); margin-bottom:6px; }
     .checkowner { text-align:center; font-weight:900; font-size:1.1rem; color:var(--ink); }
     .big-emoji { font-size:24px; line-height:1.4; text-align:center; color:var(--ink); }
-    /* Podium colouring for the top three on the results screen. */
-    .seat.rank1 { background:linear-gradient(#ffd75e,#ffc107); }
-    .seat.rank2 { background:linear-gradient(#e8e8ef,#cfcfdb); }
-    .seat.rank3 { background:linear-gradient(#f0c08a,#dda15e); }
-    .seat.rank1 .you, .seat.rank2 .you, .seat.rank3 .you { color:rgba(0,0,0,.6); }
     /* How to play: shown in the lobby, where everyone is already waiting and looking at
        their screen. It is the only moment in the game when that is true -- once the reveal
        happens every phone is on a forehead. */
@@ -189,12 +184,11 @@
 
     /* --- compendium ---------------------------------------------------------------------- */
     .tiles { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-    .tile { border:none; padding:16px 12px; color:#fff; font-weight:900;
-            box-shadow:0 5px 0 rgba(0,0,0,.25); cursor:pointer; text-align:left; width:100%; }
-    .tile .n { display:block; font-size:.75rem; font-weight:700; opacity:.85; margin-top:3px; }
+    .tile { border:none; padding:16px 12px; color:#fff; font-weight:900; cursor:pointer; text-align:left; width:100%; }
+    .tile .n { display:block; font-family:var(--font-name); font-size:.75rem; font-weight:700; opacity:.85; margin-top:3px; }
     .tile.c0 { background:var(--red); } .tile.c1 { background:var(--blue); }
     .tile.c2 { background:var(--amber); color:#2b1c00; } .tile.c3 { background:var(--green); }
-    .tile:active { transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
+    .tile:active { transform:translateY(3px); }
     /* Rows are buttons, so the whole strip is the tap target rather than the text. */
     .rowbtn { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:12px;
               border:none; background:var(--soft); color:var(--ink); font-weight:800;
@@ -212,13 +206,12 @@
     .pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%;
                  flex:none; }
     .pickclear { width:auto; flex:none; padding:4px 10px; font-size:.8rem;
-                 background:var(--edge); color:var(--ink); box-shadow:0 2px 0 rgba(0,0,0,.15); }
+                 background:var(--edge); color:var(--ink); }
     /* Search results (/shared/pickers.js characterSearch): rows dressed as .rowbtn. White, not the
        slot's grey, or the results would disappear into the slot behind them. */
     .cs-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:10px 12px;
-              border:none; background:var(--paper); color:var(--ink); font-weight:800;
-              box-shadow:0 3px 0 rgba(0,0,0,.12); margin-bottom:6px; cursor:pointer; }
-    .cs-row:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.12); }
+              border:none; background:var(--paper); color:var(--ink); font-weight:800; margin-bottom:6px; cursor:pointer; }
+    .cs-row:active { transform:translateY(2px); }
     .cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%;
                 flex:none; background:var(--soft); }
     .cs-name { flex:1; min-width:0; overflow-wrap:anywhere; }
@@ -229,10 +222,9 @@
     .pp-chips { display:flex; flex-wrap:wrap; gap:8px; }
     .pp-chip { width:auto; display:inline-flex; align-items:center; gap:6px; padding:10px 14px;
  background:var(--soft); color:var(--ink); font-weight:800;
-               font-size:.95rem; box-shadow:0 4px 0 rgba(0,0,0,.14); text-align:left; }
-    .pp-chip:active { transform:translateY(3px); box-shadow:0 1px 0 rgba(0,0,0,.14); }
-    .pp-chip.on { background:var(--blue); color:#fff; box-shadow:0 4px 0 var(--blue-d); }
-    .pp-chip.on:active { box-shadow:0 1px 0 var(--blue-d); }
+               font-size:.95rem; text-align:left; }
+    .pp-chip:active { transform:translateY(3px); }
+    .pp-chip.on { background:var(--blue); color:#fff; }
     .pp-tick:empty { display:none; }
     .pp-n { font-size:.75rem; font-weight:700; opacity:.7; }
     /* The two quick choices sit side by side as equals, each saying what it means. */
@@ -250,21 +242,19 @@
     .pp-count { color:var(--muted); font-size:.82rem; font-weight:700; }
     .pp-cat.off .pp-count { color:var(--red); }
     .pp-edit { margin-left:auto; flex:none; font-size:.8rem; font-weight:900; color:var(--ghost-ink);
-               background:var(--paper); padding:5px 11px; box-shadow:0 2px 0 rgba(0,0,0,.12); }
+               background:var(--paper); padding:5px 11px; }
     .pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
     /* Popular / A-Z: the picker's lists and the library browser's. Filled AND pressed when chosen. */
     .pp-sort { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:10px; }
     .pp-sortlabel { color:var(--muted); font-size:.8rem; font-weight:800; margin-right:2px; }
     .pp-sort button { width:auto; padding:6px 13px; font-size:.82rem; background:var(--paper);
-                      color:var(--ink); box-shadow:0 3px 0 rgba(0,0,0,.14); }
-    .pp-sort button:active { transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.14); }
-    .pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; box-shadow:0 3px 0 var(--blue-d); }
+                      color:var(--ink); }
+    .pp-sort button:active { transform:translateY(2px); }
+    .pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; }
     #browseSort { margin:0 0 10px; }
     #browseSort .pp-sortlabel { color:rgba(255,255,255,.85); }
     .pp-bulk { display:flex; gap:8px; padding:0 12px; }
-    .pp-bulk button { width:auto; padding:7px 16px; font-size:.85rem; background:var(--paper); color:var(--ink);
-                      box-shadow:0 3px 0 rgba(0,0,0,.14); }
-    .pp-bulk button:active { box-shadow:0 1px 0 rgba(0,0,0,.14); }
+    .pp-bulk button { width:auto; padding:7px 16px; font-size:.85rem; background:var(--paper); color:var(--ink); }
     .pp-rows { max-height:280px; overflow-y:auto; padding:6px 12px 12px; overscroll-behavior:contain; }
     label.pp-row { display:flex; align-items:center; gap:10px; padding:9px 2px; margin:0; cursor:pointer;
                    text-transform:none; letter-spacing:0; font-size:.98rem; font-weight:700; color:var(--ink);
@@ -299,17 +289,18 @@
     /* The scrim behind the bar fades out rather than ending in a ruled line, so rows dissolve
        as they slide under it instead of being guillotined. It reaches exactly as far as `main`'s
        own padding and no further -- anything wider makes the page pannable sideways, and past
-       that edge the body is this same violet anyway. The extra height above covers iOS
-       overscroll. No backdrop-filter here on purpose: WebKit can paint a blur ignoring the mask,
-       which is the hard edge all over again. `mask-image` is the whole effect, so a browser
-       without it just keeps a solid bar. */
+       that edge the body is this same field colour anyway. It rises no further than the gap under
+       the title, or it paints over the title at the top of the page, and it stops short of the
+       card below for the same reason. No backdrop-filter here on purpose: WebKit can paint a blur
+       ignoring the mask, which is the hard edge all over again. `mask-image` is the whole effect,
+       so a browser without it just keeps a solid bar. */
     #browseBar::after { content:''; position:absolute; left:-20px; right:-20px;
-                        top:-60px; bottom:-26px; z-index:-1; background:var(--brand);
-                        -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
-                        mask-image:linear-gradient(to bottom, #000 calc(100% - 24px), transparent); }
+                        top:-14px; bottom:-8px; z-index:-1; background:var(--brand);
+                        -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
+                        mask-image:linear-gradient(to bottom, #000 calc(100% - 16px), transparent); }
     .backbtn { width:auto; flex:none; padding:9px 15px; font-size:.9rem;
-               background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.25); }
-    .backbtn:active { transform:translateY(2px); box-shadow:0 2px 0 rgba(0,0,0,.25); }
+               background:var(--paper); color:var(--ghost-ink); }
+    .backbtn:active { transform:translateY(2px); }
     #browseCrumb { color:#fff; font-size:.85rem; font-weight:800; line-height:1.25; flex:1;
                    overflow:hidden; text-overflow:ellipsis; }
     #browseCrumb .up { text-decoration:underline; cursor:pointer; }
@@ -353,9 +344,11 @@
        in JS, so a screen mid-animation simply settles. */
     .at-play .card, .at-play button, .at-play .seat { animation:none !important; }
 
-    /* Ambient drifting shapes. Fixed + pointer-events:none so they can never intercept a tap,
-       and z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. */
-    .bg { position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+    /* The spooky season's bats. Fixed + pointer-events:none so they can never intercept a tap, and
+       z-index 0 so every screen (and the forehead overlay at z-index 50) sits above them. Out of
+       season the starfield in retro.css is the whole of the background. */
+    .bg { display:none; position:fixed; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
+    :root[data-season="spooky"] .bg { display:block; }
     .bg i { position:absolute; bottom:-12vh; font-style:normal; color:#fff; opacity:0;
             animation:drift linear infinite; }
     @keyframes drift {
@@ -472,7 +465,7 @@
     #forehead.mine #foreheadRot::after { content:''; position:absolute; inset:0; pointer-events:none;
                             border:14px solid #ffd23f; animation:pulseBorder 1s ease-in-out infinite; }
     @keyframes pulseBorder { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
-    .enable-motion { background:var(--warn); color:#231a03; }
+    .enable-motion { --face:var(--amber); --deep:var(--amber-d); color:#231a03; }
     /* Tilt test */
     .tiltbig { font-size:2.6rem; font-weight:900; text-align:center; min-height:3rem; }
     .tiltvals { font:0.95rem monospace; text-align:center; color:var(--muted); }
@@ -497,8 +490,6 @@
     :root[data-theme="dark"] .seat.tint1 { background:#1c2a46; }
     :root[data-theme="dark"] .seat.tint2 { background:#3a2c14; }
     :root[data-theme="dark"] .seat.tint3 { background:#1d3420; }
-    :root[data-theme="dark"] .seat.rank1, :root[data-theme="dark"] .seat.rank2,
-    :root[data-theme="dark"] .seat.rank3 { color:#1b1033; }
     /* The theme switch: a small track in the top corner with a knob that slides, the same in both
        themes. Absolute, not fixed: fixed would ride over content as the page scrolls. */
     .themetoggle { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
@@ -507,8 +498,7 @@
                    border:2px solid rgba(255,255,255,.4); }  /* the outline keeps it visible on the dark field */
     .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
     .themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px;
-                         background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center;
-                         box-shadow:0 2px 0 rgba(0,0,0,.25); transition:left .18s ease; }
+                         background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center; transition:left .18s ease; }
     .themetoggle[aria-checked="true"] .knob { left:27px; background:var(--paper); color:var(--ink); }
     .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
     body.at-play .themetoggle { display:none; }
@@ -520,12 +510,11 @@
     /* The Room button, dressed as the switch beside it: a small translucent pill on the field. */
     .roombtn { position:absolute; z-index:5; top:calc(14px + env(safe-area-inset-top, 0px));
                right:calc(80px + env(safe-area-inset-right, 0px)); width:auto; height:30px; padding:0 12px;
-               display:inline-flex; align-items:center; gap:6px; font-size:.85rem; font-weight:900; color:#fff;
- background:rgba(0,0,0,.28); box-shadow:inset 0 2px 0 rgba(0,0,0,.2);
-               border:2px solid rgba(255,255,255,.4); }
-    .roombtn:active { transform:none; opacity:.8; }
+               display:inline-flex; align-items:center; gap:6px; font-size:.95rem;
+               --px:2px; --face:var(--paper); --deep:var(--edge); color:var(--ghost-ink); }
     .roombtn:focus-visible { outline:3px solid #fff; outline-offset:3px; }
-    /* During play the button can sit over the forehead overlay, which stays plain. */
+    /* During play the button can sit over the forehead overlay, which stays plain and dark. */
+    body.at-play .roombtn { --face:rgba(0,0,0,.5); --deep:transparent; --lit:transparent; --outline:rgba(255,255,255,.4); color:#fff; }
     body.at-play .roombtn { right:calc(14px + env(safe-area-inset-right, 0px)); font-family:var(--font-name); }
     body:has(.roombtn:not([hidden])) h1 { padding-right:150px; }
     body.at-play:has(.roombtn:not([hidden])) h1 { padding-right:96px; }
@@ -727,7 +716,7 @@
       <div class="card">
         <label>Artwork</label>
         <label class="seat" style="font-size:1rem;text-transform:none;letter-spacing:0;color:var(--ink);cursor:pointer">
-          <input type="checkbox" id="preferImagesInput" style="width:auto">
+          <input type="checkbox" id="preferImagesInput">
           <span style="flex:1">Only deal characters that have a picture<br>
             <span class="you">Smaller pool, but no text-only reveals</span></span>
         </label>
@@ -880,7 +869,7 @@
       <div class="card">
         <div class="hint">Final standings</div>
         <div style="height:8px"></div>
-        <ul class="roster" id="finalStandings"></ul>
+        <ol class="hiscore" id="finalStandings"></ol>
       </div>
       <p class="err" id="overErr"></p>
       <p class="hint center" id="overCode"></p>

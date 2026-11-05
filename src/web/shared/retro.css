@@ -31,7 +31,7 @@
 :root {
   /* The field and what stands on it. Every surface is a token because dark mode redefines them; a
      hard-coded cream in a new rule is a bright slab in the dark. */
-  --brand:#1f1a4d; --on-field:#fff6e0; --outline:#0c0a24;
+  --brand:#1f1a4d; --on-field:#fff6e0; --frame-ink:#0c0a24; --outline:var(--frame-ink);
   --paper:#fff6e0; --card:var(--paper); --ink:#1a1633; --muted:#5a5272; --edge:#cfc3a3;
   --soft:#f3e7c8; --chip:#f3e7c8; --chip-edge:#cfc3a3; --input:#fffdf5; --ghost-ink:var(--ink);
   --mystery-a:#ece0c2; --mystery-b:#e2d5b3; --mystery-ink:#a99c7c; --toast:#0c0a24; --link:#163f8f;
@@ -52,18 +52,27 @@
 
   --title-size:32px;
   --px:3px; /* one "pixel" of UI chrome: frames, bevels */
-  /* A frame with its corners missing: four offset shadows and no radius, which is what reads as a
-     pixel corner. Shadows rather than clip-path, because clip-path would cut off the focus ring. */
+  /* The high-score table: an arcade screen set into a panel, the same in both themes. */
+  --screen:#0c0a24; --on-screen:#fff6e0; --on-screen-soft:#b9b4d0;
+  --gold:#ffb000; --silver:#d6d6e8; --bronze:#e8a36a;
+}
+/* A frame with its corners missing: four offset shadows and no radius, which is what reads as a
+   pixel corner. Shadows rather than clip-path, because clip-path would cut off the focus ring.
+   Declared on every element, not on :root: a custom property holding var() is resolved where it is
+   declared, so on :root a small control's own --px or --outline would change nothing. */
+*, *::before, *::after {
   --frame:0 calc(var(--px) * -1) 0 0 var(--outline), 0 var(--px) 0 0 var(--outline),
           calc(var(--px) * -1) 0 0 0 var(--outline), var(--px) 0 0 0 var(--outline);
   --drop:0 calc(var(--px) * 3) 0 calc(var(--px) * -1) rgba(0,0,0,.4);
 }
-@media (max-width: 400px) { :root { --title-size:24px; } }
+@media (max-width: 560px) { :root { --title-size:24px; } }
+/* A phone on its side has little height to give the title. */
+@media (max-height: 500px) { :root { --title-size:16px; } }
 
 /* Dark mode: the house lights down, a night sky. The accents are lifted to clear contrast here,
    and the frame goes lighter, because a dark frame would vanish into the field. */
 :root[data-theme="dark"] {
-  --brand:#0e0f1a; --outline:#62629e;
+  --brand:#0e0f1a; --frame-ink:#62629e;
   --paper:#1c1c33; --ink:#fff6e0; --muted:#aaa5c2; --edge:#3e3e66;
   --soft:#29294a; --chip:#29294a; --chip-edge:#0a0a16; --input:#12122a;
   --mystery-a:#25254a; --mystery-b:#1e1e3c; --mystery-ink:#6f6c9a; --toast:#05050c; --link:#9fc4ff;
@@ -128,8 +137,17 @@ button.bad { --face:var(--red); --deep:var(--red-d); }
 input, select, textarea { font-family:var(--font-name); font-weight:600; color:var(--ink); background-color:var(--input);
          border:var(--px) solid var(--outline); box-shadow:inset var(--px) var(--px) 0 rgba(0,0,0,.1); }
 input:focus, select:focus, textarea:focus { outline:var(--px) solid var(--blue); outline-offset:2px; border-color:var(--outline); }
-/* Checkboxes and radios keep the browser's own control: a frame around one looks like a mistake. */
-input[type="checkbox"], input[type="radio"] { box-shadow:none; border:none; }
+/* Checkboxes and radios, drawn: the browser's own are round and smooth. Checked is a mark inside,
+   never only a colour. A control in a row is sized here; the row around it is the tap target. */
+input[type="checkbox"], input[type="radio"] { appearance:none; -webkit-appearance:none; flex:none; width:22px; height:22px; padding:0; margin:0;
+         cursor:pointer; background:var(--input) center/14px 14px no-repeat; box-shadow:none; border:var(--px) solid var(--outline); }
+input[type="checkbox"]:checked { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges' fill='%231c8237'%3E%3Cpath d='M6 1h1v2H6v1H5v1H4v1H2V5H1V4H0V3h2v1h1V3h1V2h1V1z'/%3E%3C/svg%3E"); }
+input[type="radio"]:checked { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 3' fill='%231a1633'%3E%3Crect width='3' height='3'/%3E%3C/svg%3E"); background-size:10px 10px; }
+:root[data-theme="dark"] input[type="radio"]:checked { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 3 3' fill='%23fff6e0'%3E%3Crect width='3' height='3'/%3E%3C/svg%3E"); }
+input[type="checkbox"]:focus, input[type="radio"]:focus { outline:none; }
+input[type="checkbox"]:focus-visible, input[type="radio"]:focus-visible { outline:var(--px) dashed currentColor; outline-offset:2px; }
+/* What a field is typed into must never end up under whatever is stuck to the screen's edge. */
+input, textarea, select { scroll-margin-block:96px; }
 /* The browser's own rounded arrow gives the field away; this one is stepped. Two copies because a
    data: image cannot read a token. */
 select { appearance:none; -webkit-appearance:none; padding-right:38px; background-repeat:no-repeat; background-position:right 12px center;
@@ -154,3 +172,105 @@ a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-v
   outline:var(--px) dashed var(--on-field); outline-offset:calc(var(--px) * 2); }
 .card a:focus-visible, .card button:focus-visible, .card summary:focus-visible, dialog button:focus-visible {
   outline-color:var(--ink); }
+
+/* --- small controls -------------------------------------------------------------------------
+   The same button at a finer pixel. Each says what its lower edge is; a page may still set its
+   own background and colour. Selected is a filled face AND a tick, set by the page's own rule. */
+.pp-chip, .pp-sort button, .pp-bulk button, .pp-edit, .pickclear, .backbtn, .cs-row, .rowbtn, .rmbtn, .tile button,
+.viewernav button, .viewerclose, .accolades .thumbbtn { --px:2px; --deep:var(--chip-edge); }
+.pp-chip.on, .pp-sort button[aria-pressed="true"] { --deep:var(--blue-d); }
+.rmbtn { --deep:var(--red-d); position:relative; }
+.pickclear { position:relative; }
+button.ghost.backbtn, .backbtn { --deep:var(--edge); }
+.pp-edit { box-shadow:var(--frame); font-family:var(--font-display); }
+/* Small counts and sentences stay in the readable face: the pixel face blurs together under about 1rem. */
+.pp-n, .pp-summary, .pp-or, .pp-fallback { font-family:var(--font-name); }
+.pp-cat, .pickslot { box-shadow:inset 0 0 0 2px var(--edge); }
+.soundtoggle[aria-checked="false"] { --deep:rgba(0,0,0,.5); --lit:transparent; }
+.rowbtn { font-family:var(--font-name); }
+.cs-row { font-family:var(--font-name); }
+/* A list row whose whole strip is the target, in the phones' browser: names, so the readable face. */
+button.tile { font-family:var(--font-display); font-size:1.05rem; box-shadow:var(--frame), inset 0 -4px 0 0 rgba(0,0,0,.25), var(--drop); --px:2px; }
+button.tile:active { box-shadow:var(--frame), inset 0 2px 0 0 rgba(0,0,0,.25); }
+
+/* --- choice tiles: colour AND shape AND a mark when chosen ------------------------------------
+   Labels, not buttons, so they carry the frame and the edge themselves. */
+.choice { --px:2px; --deep:rgba(0,0,0,.3); text-transform:none; letter-spacing:.01em; font-family:var(--font-display); font-weight:700; font-size:1.1rem;
+          line-height:1.15; color:#fff; box-shadow:var(--frame), inset 0 calc(var(--px) * -2) 0 0 var(--deep), var(--drop); }
+.choice.c0 { --deep:var(--red-d); } .choice.c1 { --deep:var(--blue-d); }
+.choice:has(input:checked) { --px:3px; }
+.choice:has(input:focus-visible) { outline:var(--px) dashed var(--ink); outline-offset:calc(var(--px) * 2); }
+.choice .sub { font-family:var(--font-name); line-height:1.3; margin-top:2px; }
+
+/* --- people ---------------------------------------------------------------------------------- */
+.avatar { flex:none; width:28px; height:28px; display:block; background:var(--screen); }
+.pill, #roster .seat { --px:2px; box-shadow:var(--frame), var(--drop); font-family:var(--font-name); }
+.crown { font-family:var(--font-display); letter-spacing:.06em; }
+.dot { flex:none; }
+.badge, .players .tag, .chat li .kind { font-family:var(--font-display); letter-spacing:.04em; }
+
+/* --- panels within panels -------------------------------------------------------------------- */
+.pcard, .tile:not(button), .players li, .toast { --px:2px; box-shadow:var(--frame), var(--drop); }
+.pcard.current, .tile.current, .spotlight { --px:4px; }
+/* A highlighted panel's colour and weight are for its own frame, not for what sits inside it. */
+.ruling button, .spotlight button { --outline:var(--frame-ink); --px:3px; }
+.canvaswrap { box-shadow:var(--frame), var(--drop); }
+.toast { font-family:var(--font-name); }
+dialog.card, dialog.roommenu { color:var(--ink); }
+/* Character art: framed, never pixelated. The frame is a border rather than a shadow because it has
+   to stay inside the fixed box that keeps a loading picture from shoving the page. */
+.art, .tart, .refart, .reveal-art, .tcart, .charcard img, .charcard .noimg, .chartile img, .chartile .noimg, .pickthumb, .cs-thumb {
+  border:var(--px, 3px) solid var(--outline); image-rendering:auto; }
+.tart, .pickthumb, .cs-thumb, .tcart, .chartile img, .chartile .noimg { --px:2px; }
+.chartile { box-shadow:inset 0 0 0 2px var(--edge); }
+.chartile .cname { font-family:var(--font-name); }
+#qrImg { border:var(--px) solid var(--outline); }
+
+/* --- the high-score table: every game's results ---------------------------------------------- */
+.hiscore { list-style:none; margin:0; padding:6px 12px; display:flex; flex-direction:column; background:var(--screen); color:var(--on-screen);
+           box-shadow:var(--frame); }
+.hs { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:2px dashed rgba(255,255,255,.16); }
+.hs:last-child { border-bottom:none; }
+.hs-place { flex:none; width:3.1em; font-family:var(--font-arcade); font-size:12px; }
+.hs img { flex:none; width:44px; height:44px; object-fit:cover; object-position:50% 20%; background:rgba(255,255,255,.08); border:2px solid currentColor; }
+.hs-who { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.hs-name { font-family:var(--font-name); font-weight:700; line-height:1.2; overflow-wrap:anywhere; }
+.hs-detail { font-size:.84rem; line-height:1.25; color:var(--on-screen-soft); overflow-wrap:anywhere; }
+.hs-score { flex:none; font-family:var(--font-arcade); font-size:16px; text-align:right; }
+.hs-score small { display:block; margin-top:5px; font-size:8px; color:var(--on-screen-soft); text-transform:uppercase; }
+.rank1 .hs-place, .rank1 .hs-score { color:var(--gold); }
+.rank2 .hs-place, .rank2 .hs-score { color:var(--silver); }
+.rank3 .hs-place, .rank3 .hs-score { color:var(--bronze); }
+
+/* Telephone's first step has no canvas to measure against, and the faces are what people choose by:
+   they get their own size, and the heading some room above them. */
+#telPick .choosehead { margin-bottom:12px; }
+#telPick .pick .art { height:clamp(5rem, 22vw, 9rem); }
+
+/* --- wrapping --------------------------------------------------------------------------------
+   Button labels in a wrapping row stay on one line: the row wraps first. */
+.row > button, .telnav > button, .confirmactions > button { white-space:nowrap; }
+
+/* --- fingers ---------------------------------------------------------------------------------
+   Everything aimed at with a thumb is 44px, in one of two ways. Where the room is there, the control
+   grows. Where a row has none to give (Draw's palette holds the canvas on the screen; a player row
+   holds a Remove), the control keeps its size and a transparent ::before takes the taps around it;
+   the gaps between them are what makes that room, so neighbours' targets do not overlap. */
+@media (pointer: coarse), (max-width: 1024px) {
+  .size.fill { min-width:44px; }
+  .pp-chip, .pp-sort button, .pp-bulk button, .pp-cat summary, label.pp-row, .backbtn, .backlink, .cs-row, .rowbtn, .mode,
+  .reactions button, .gitem .vote, .tools button.ghost, .tools button.bad, .pick button, .viewernav button, .viewerclose,
+  .spellings label, #howtoToggle, .choice, .chat .giveup, .pp-chip, button.tile, .rmbtn:not(.icon) { min-height:44px; }
+  .rmbtn:not(.icon) { display:inline-flex; align-items:center; justify-content:center; }
+  .themetoggle::before, .roombtn::before, .soundtoggle::before, .swatch::before, .size::before, .rmbtn.icon::before, .pickclear::before {
+    content:""; position:absolute; }
+  .themetoggle::before { inset:-8px -2px; }
+  .roombtn::before, .soundtoggle::before { inset:-8px 0; }
+  .swatch::before, .size::before { inset:-4px; }
+  .rmbtn.icon::before { inset:-9px; }
+  .pickclear::before { inset:-10px -6px; }
+  /* The Draw search toggle's row, and any label that is a whole row with a checkbox in it. */
+  label.seat { min-height:44px; }
+  /* A Telephone or Draw guess box: the keyboard opens over this, and the same 44px holds. */
+  .guessbox button, .telguess button, .chat form button { min-height:44px; }
+}

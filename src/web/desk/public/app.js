@@ -187,7 +187,7 @@ function renderLobby() {
   $('shareLink').value = `${location.origin}/desk/?room=${code}`;
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill"><span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => `<li class="pill">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
@@ -736,9 +736,15 @@ socket.on('game:over', (res) => {
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
   $('standings').innerHTML = res.standings
     .map((s) => {
-      const img = s.character?.imageUrl ? `<img src="${esc(s.character.imageUrl)}" alt="" referrerpolicy="no-referrer" />` : '';
-      const how = s.outcome === 'gave_up' ? 'gave up' : s.turns != null ? `${s.turns} turn${s.turns === 1 ? '' : 's'}` : 'did not get it';
-      return `<li><span class="place">${s.place ?? '-'}</span>${img}<div><strong>${esc(s.name)}</strong> was <strong>${esc(s.character?.name)}</strong><div class="hint">${esc(how)}</div></div></li>`;
+      const out = s.turns != null ? '' : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
+      return GTC.hiscoreRow({
+        place: s.place,
+        imageUrl: s.character?.imageUrl,
+        name: s.name,
+        detail: `was ${s.character?.name ?? '—'}${out}`,
+        score: s.turns ?? '--',
+        unit: s.turns === 1 ? 'turn' : 'turns',
+      });
     })
     .join('');
   $('hostOver').hidden = !isHost();

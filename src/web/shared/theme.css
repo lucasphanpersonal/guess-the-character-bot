@@ -23,22 +23,20 @@ h2 { font-size:1.35rem; margin:0 0 .6rem; }
    and the group is exactly one title line tall (the h1's line-height, set here for that). */
 .titlebar { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:0 0 1.2rem; }
 .titlebar h1 { margin:0; }
-.titletools { flex:none; display:flex; align-items:center; gap:12px; height:calc(var(--title-size) * 1.3); }
-.soundtoggle, .roombtn { flex:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:34px;
-               padding:0 14px; font-size:.92rem;
-               background:var(--paper); color:var(--ghost-ink); box-shadow:0 4px 0 rgba(0,0,0,.22); }
-.soundtoggle:active, .roombtn:active { box-shadow:0 1px 0 rgba(0,0,0,.22); transform:translateY(3px); }
+.titletools { flex:none; display:flex; align-items:center; gap:12px; min-height:calc(var(--title-size) * 1.3); }
+.soundtoggle, .roombtn { position:relative; flex:none; display:inline-flex; align-items:center; justify-content:center; gap:8px; height:34px;
+               padding:0 14px; font-size:.98rem; --px:2px; --face:var(--paper); --deep:var(--edge); color:var(--ghost-ink); }
 .soundtoggle .note, .roombtn .note { font-size:1.1rem; line-height:1; }
 .roombtn:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 /* Off says so in words; the struck-through note is a second signal, not the only one. */
-.soundtoggle[aria-checked="false"] { background:rgba(0,0,0,.28); color:#fff; box-shadow:0 4px 0 rgba(0,0,0,.3); }
+.soundtoggle[aria-checked="false"] { background:rgba(0,0,0,.28); color:#fff; }
 .soundtoggle[aria-checked="false"] .note { text-decoration:line-through; opacity:.8; }
 .soundtoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 /* A phone gives the title every pixel it can: Sound becomes its note alone. Off still reads
    without colour -- the note is struck through -- and the switch's name and state are unchanged
    for a screen reader (aria-label, aria-checked). */
 @media (max-width: 560px) {
-  .soundtoggle, .roombtn { width:44px; padding:0; }
+  .titletools .soundtoggle, .titletools .roombtn { width:44px; height:44px; padding:0; }
   .soundtoggle .label, .roombtn .label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
   /* In a room the row holds Room as well, and the title needs the width more than dark mode does:
      the switch moves into the Room menu (roommenu.js) for as long as the button is showing. */
@@ -77,16 +75,14 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 .dot.off { background:var(--off); }
 .crown { font-size:.62rem; letter-spacing:.1em; background:rgba(0,0,0,.28); color:#fff; padding:2px 7px; }
 /* The host's Remove, on a player's row: the phones' small red pill, still a chunky button. */
-.rmbtn { padding:4px 10px; font-size:.74rem; background:var(--red);
-         box-shadow:0 3px 0 var(--red-d); }
-.rmbtn:active { transform:translateY(2px); box-shadow:0 1px 0 var(--red-d); }
+.rmbtn { padding:4px 10px; font-size:.74rem; background:var(--red); }
+.rmbtn:active { transform:translateY(2px); }
 /* Where a row has no room for the word: a round ✕, named for screen readers and on hover. */
 .rmbtn.icon { width:26px; height:26px; padding:0; font-size:.8rem; line-height:1; display:inline-flex;
               align-items:center; justify-content:center; }
 .choices { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
 .choice { display:flex; align-items:center; gap:10px; padding:12px; color:#fff;
-          font-weight:800; cursor:pointer; box-shadow:0 5px 0 rgba(0,0,0,.25); }
-.choice input { width:auto; accent-color:#fff; margin:0; }
+          font-weight:800; cursor:pointer; }
 .choice.c0 { background:var(--red); } .choice.c1 { background:var(--blue); } .choice.c2 { background:var(--green); }
 .choice .shape { font-size:1.1rem; }
 @media (max-width: 520px) { .choices { grid-template-columns:1fr; } }
@@ -102,18 +98,16 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 .pickcurrent.random { color:var(--muted); font-weight:700; }
 .pickcurrent .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .pickthumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; flex:none; }
-.pickclear { flex:none; padding:4px 10px; font-size:.8rem; background:var(--paper); color:var(--ink); box-shadow:0 2px 0 var(--chip-edge); }
+.pickclear { flex:none; padding:4px 10px; font-size:.8rem; background:var(--paper); color:var(--ink); }
 .pickslot .cs-row { background:var(--paper); }
 
 /* The pool picker (/shared/pickers.js poolPicker). The phones style the same classes in their own
    page; this is the same design at desk width. Selected = filled blue AND a tick, never colour alone. */
 .pp-chips { display:flex; flex-wrap:wrap; gap:8px; }
 .pp-chip { display:inline-flex; align-items:center; gap:6px; padding:9px 14px;
-           background:var(--chip); color:var(--ink); font-weight:800; font-size:.95rem; text-align:left;
-           box-shadow:0 4px 0 var(--chip-edge); }
-.pp-chip:active { transform:translateY(3px); box-shadow:0 1px 0 var(--chip-edge); }
-.pp-chip.on { background:var(--blue); color:#fff; box-shadow:0 4px 0 var(--blue-d); }
-.pp-chip.on:active { box-shadow:0 1px 0 var(--blue-d); }
+           background:var(--chip); color:var(--ink); font-weight:800; font-size:.95rem; text-align:left; }
+.pp-chip:active { transform:translateY(3px); }
+.pp-chip.on { background:var(--blue); color:#fff; }
 .pp-tick:empty { display:none; }
 .pp-n { font-size:.75rem; font-weight:700; opacity:.7; }
 .pp-quick .pp-chip { flex:1 1 0; padding:11px 14px; }
@@ -129,17 +123,16 @@ kbd { font:700 .8rem ui-monospace, monospace; background:var(--chip); border:1px
 .pp-count { color:var(--muted); font-size:.82rem; font-weight:700; }
 .pp-cat.off .pp-count { color:var(--red); }
 .pp-edit { margin-left:auto; font-size:.8rem; font-weight:900; color:var(--ghost-ink); background:var(--paper);
-           padding:4px 11px; box-shadow:0 2px 0 var(--chip-edge); }
+           padding:4px 11px; }
 .pp-cat[open] .pp-edit .closed, .pp-cat:not([open]) .pp-edit .opened { display:none; }
 /* Popular / A-Z, above the chosen categories' lists. The chosen one is filled AND pressed. */
 .pp-sort { display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-top:10px; }
 .pp-sortlabel { color:var(--muted); font-size:.8rem; font-weight:800; margin-right:2px; }
-.pp-sort button { padding:5px 12px; font-size:.82rem; background:var(--paper); color:var(--ink); box-shadow:0 3px 0 var(--chip-edge); }
-.pp-sort button:active { transform:translateY(2px); box-shadow:0 1px 0 var(--chip-edge); }
-.pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; box-shadow:0 3px 0 var(--blue-d); }
+.pp-sort button { padding:5px 12px; font-size:.82rem; background:var(--paper); color:var(--ink); }
+.pp-sort button:active { transform:translateY(2px); }
+.pp-sort button[aria-pressed="true"] { background:var(--blue); color:#fff; }
 .pp-bulk { display:flex; gap:8px; padding:0 12px; }
-.pp-bulk button { padding:6px 14px; font-size:.85rem; background:var(--paper); color:var(--ink); box-shadow:0 3px 0 var(--chip-edge); }
-.pp-bulk button:active { box-shadow:0 1px 0 var(--chip-edge); }
+.pp-bulk button { padding:6px 14px; font-size:.85rem; background:var(--paper); color:var(--ink); }
 .pp-rows { max-height:260px; overflow-y:auto; padding:6px 12px 12px; display:grid;
            grid-template-columns:repeat(auto-fill, minmax(15rem, 1fr)); column-gap:16px; }
 label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; margin:0; cursor:pointer;
@@ -150,8 +143,8 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 
 /* Character search (/shared/pickers.js characterSearch). */
 .cs-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:8px 12px;
-          background:var(--soft); color:var(--ink); font-weight:800; box-shadow:0 3px 0 var(--chip-edge); margin-bottom:6px; }
-.cs-row:active { transform:translateY(2px); box-shadow:0 1px 0 var(--chip-edge); }
+          background:var(--soft); color:var(--ink); font-weight:800; margin-bottom:6px; }
+.cs-row:active { transform:translateY(2px); }
 .cs-thumb { width:36px; height:36px; object-fit:cover; object-position:50% 20%; flex:none; background:var(--paper); }
 .cs-name { flex:1; min-width:0; overflow-wrap:anywhere; }
 .cs-list { color:var(--muted); font-weight:700; font-size:.78rem; flex:none; max-width:40%; text-align:right; }
@@ -159,7 +152,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 /* Character cards. FIXED image height: artwork arrives asynchronously, and a box that grows
    when it lands shoves everything below it -- here, the guess box being typed into. */
 .cards { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:16px; }
-.pcard { background:var(--paper); color:var(--ink); padding:12px; box-shadow:0 6px 0 rgba(0,0,0,.22);
+.pcard { background:var(--paper); color:var(--ink); padding:12px;
          display:flex; flex-direction:column; gap:6px; position:relative; }
 .pcard .who { font-weight:900; display:flex; align-items:center; gap:6px; min-height:1.5em; }
 .pcard .who .turns { margin-left:auto; color:var(--muted); font-weight:700; font-size:.82rem; }
@@ -167,14 +160,14 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
               justify-content:center; overflow:hidden; }
 .pcard .art img { width:100%; height:100%; object-fit:contain; }
 .pcard .art .noimg { color:var(--muted); font-size:.85rem; padding:10px; text-align:center; }
-.pcard .art.mystery { background:repeating-linear-gradient(45deg, var(--mystery-a) 0 12px, var(--mystery-b) 12px 24px);
+.pcard .art.mystery { background:conic-gradient(var(--mystery-a) 25%, var(--mystery-b) 0 50%, var(--mystery-a) 0 75%, var(--mystery-b) 0) 0 0/24px 24px;
                       font-family:var(--font-arcade); font-size:64px; color:var(--mystery-ink); }
 /* A player's notes, under their card, for everyone. Below the art on purpose: they change as the
    player types, and nothing anyone aims at sits beneath them. Empty notes take no room. */
 .pcard .cname { font-family:var(--font-name); font-weight:900; font-size:1.12rem; line-height:1.2;
                 min-height:2.4em; display:flex; align-items:center; }
 .pcard .src { color:var(--muted); font-size:.78rem; min-height:1.2em; }
-.pcard.current { outline:5px solid var(--amber); outline-offset:3px; }
+.pcard.current { --outline:var(--amber); --px:4px; }
 .pcard.done { opacity:.72; }
 .badge { font-size:.68rem; font-weight:900; letter-spacing:.06em; text-transform:uppercase;
          padding:2px 8px; background:var(--chip); color:var(--muted); }
@@ -198,7 +191,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .log { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:4px; }
 .log li { display:flex; gap:8px; align-items:baseline; }
 .log .by { color:var(--muted); font-size:.82rem; }
-.ruling { border:4px solid var(--amber); }
+.ruling { --outline:var(--amber); --px:4px; }
 
 /* Guess on computers, during play (desk): the stage and the strip. The spotlight is whoever is
    asking questions, big; the strip is everyone, small, in seat order -- the faces along the bottom
@@ -215,7 +208,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 }
 @media (max-width: 900px) { .stage { grid-template-columns:1fr; } }
 .notescard textarea { min-height:4.5em; }
-.spotlight { display:flex; flex-direction:column; gap:10px; outline:5px solid var(--amber); outline-offset:3px; }
+.spotlight { display:flex; flex-direction:column; gap:10px; --outline:var(--amber); --px:4px; }
 .spothead { display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; }
 .spothead .spotwho { font-family:var(--font-name); font-weight:900; font-size:1.3rem; overflow-wrap:anywhere; }
 .spothead .turnno { margin-left:auto; color:var(--muted); font-weight:800; font-size:.9rem; }
@@ -223,7 +216,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
                   align-items:center; justify-content:center; overflow:hidden; }
 .spotlight .art img { width:100%; height:100%; object-fit:contain; }
 .spotlight .art .noimg { color:var(--muted); }
-.spotlight .art.mystery, .tile .tart.mystery { background:repeating-linear-gradient(45deg, var(--mystery-a) 0 12px, var(--mystery-b) 12px 24px);
+.spotlight .art.mystery, .tile .tart.mystery { background:conic-gradient(var(--mystery-a) 25%, var(--mystery-b) 0 50%, var(--mystery-a) 0 75%, var(--mystery-b) 0) 0 0/24px 24px;
                   color:var(--mystery-ink); font-family:var(--font-arcade); }
 .spotlight .art.mystery { font-size:96px; }
 .spotname { font-family:var(--font-name); font-weight:900; font-size:2rem; line-height:1.15; overflow-wrap:anywhere; }
@@ -238,7 +231,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
    needs inside a scrolling box. */
 .strip { display:flex; justify-content:safe center; gap:12px; overflow-x:auto; padding:10px 8px 14px; margin-top:16px; }
 .tile { flex:0 0 10.5rem; display:flex; flex-direction:column; gap:3px; background:var(--paper); color:var(--ink);
- padding:8px; box-shadow:0 4px 0 rgba(0,0,0,.22); min-width:0; }
+ padding:8px; min-width:0; }
 .tile .tart { height:4.5rem; background:var(--chip); display:flex; align-items:center; justify-content:center;
               overflow:hidden; margin-bottom:3px; }
 .tile .tart img { width:100%; height:100%; object-fit:contain; }
@@ -253,18 +246,14 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
 .tile .tnotes { font-size:.75rem; line-height:1.3; color:var(--muted); display:-webkit-box; -webkit-line-clamp:2;
                 -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
 .tile .tnotes:empty { display:none; }
-.tile.current { outline:4px solid var(--amber); outline-offset:2px; }
+.tile.current { --outline:var(--amber); --px:4px; }
 .tile.done { opacity:.72; }
 .ruling .q { font-family:var(--font-display); font-size:1.3rem; font-weight:900; }
 .feed { position:fixed; right:20px; bottom:20px; display:flex; flex-direction:column; gap:8px; z-index:20; max-width:24rem; }
-.toast { background:var(--toast); color:#fff; padding:10px 14px; box-shadow:0 5px 0 rgba(0,0,0,.3);
+.toast { background:var(--toast); color:#fff; padding:10px 14px;
          font-weight:700; animation:pop .2s ease-out; }
 @keyframes pop { from { transform:scale(.8); opacity:0 } to { transform:scale(1); opacity:1 } }
 @media (prefers-reduced-motion: reduce) { .toast { animation:none; } .clock i { transition:none; } }
-.standings { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px; }
-.standings li { display:flex; align-items:center; gap:12px; background:var(--soft); padding:10px 12px; }
-.standings .place { font-family:var(--font-arcade); font-size:16px; min-width:2ch; }
-.standings img { width:52px; height:52px; object-fit:contain; background:var(--chip); }
 
 /* The theme switch: a small track with a knob that slides -- the same switch as the phones' page
    (src/web/party/public/index.html), so the site has one dark-mode control, not two styles of it.
@@ -275,8 +264,7 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
                border:2px solid rgba(255,255,255,.4); }
 .themetoggle:active { transform:none; box-shadow:inset 0 2px 0 rgba(0,0,0,.2); }
 .themetoggle .knob { position:absolute; top:1px; left:1px; width:24px; height:24px;
-                     background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center;
-                     box-shadow:0 2px 0 rgba(0,0,0,.25); transition:left .18s ease; }
+                     background:#fff; color:var(--brand); font-size:1.15rem; line-height:24px; text-align:center; transition:left .18s ease; }
 .themetoggle[aria-checked="true"] .knob { left:27px; background:var(--paper); color:var(--ink); }
 .themetoggle:focus-visible { outline:3px solid #fff; outline-offset:3px; }
 @media (prefers-reduced-motion: reduce) { .themetoggle .knob { transition:none; } }

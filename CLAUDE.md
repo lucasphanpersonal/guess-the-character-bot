@@ -16,7 +16,8 @@ src/web/         The web games: shared server/rooms/content, one folder per game
   party/           Phones (forehead view, tilt). Owns the site root + default namespace.
   desk/            Computers (board view, typed guesses, rulings). /desk/ + namespace /desk.
   draw/            Draw the Character -- a separate game. /draw/ + namespace /draw.
-  shared/          The computer games' CSS + client helpers, at /shared/. Change the look HERE.
+  shared/          What the games share, at /shared/: the look (retro.css on every page, theme.css on
+                   the computers) and client helpers. Change the look HERE.
 ```
 
 **The forehead view and the board view are opposites, and only one may carry your own
@@ -119,14 +120,29 @@ Both must pass before a commit. Beyond that:
 
 ## Web client: the design language
 
-Game-show look: saturated violet field, white slabs, four paired colours. Kept deliberately
-consistent — new UI should look like it was always there.
+Retro arcade: pixel chrome on a starfield, cream panels, four paired colours. All of it is
+`shared/retro.css`, loaded first on every page. Kept deliberately consistent — new UI should look
+like it was always there.
 
-- **Chunky tactile buttons.** Hard bottom shadow (`box-shadow: 0 6px 0 …`) plus a press-down
-  on `:active`. That shadow *is* the feel; a flat button reads as a different app.
-- **Colour is never the only signal.** Choice rows pair a colour with a shape (▲ ◆ ● ■).
-- **Hand-set type.** `wobble()` gives big headings a per-character angle; cards sit at faint
-  alternating angles. Body copy stays plain — the whimsy is decoration on the large type only.
+- **Pixels are for the UI layer only.** Type, frames, buttons, icons. Character art, the drawing
+  canvas and the QR code stay at full resolution, framed but never pixelated.
+- **Three faces, each with a job.** Press Start 2P (`--font-arcade`) for the title, room code,
+  countdown, clock and scores: wide, so short strings only, and crisp only at multiples of 8px, so
+  sized in px. Pixelify Sans (`--font-display`) for buttons, labels, headings. `--font-name` for
+  sentences and anything a person typed or the library holds: names need accents and scripts no
+  pixel font has, and small pixel type blurs together.
+- **Frames are shadows, no radius.** `--frame` is four offset shadows, which leaves the corners
+  missing — that is what reads as a pixel corner. Not `clip-path`, which would cut off the focus
+  ring. No `border-radius` anywhere but the brush-size dot, which pictures a round brush.
+- **A button is a face, a lower edge and a press-down.** That edge *is* the feel. Set `--face` and
+  `--deep`, never a background alone (a bare one keeps the default blue edge: Enable Motion came
+  out amber-on-blue that way). Small controls set `--px:2px`. They work per element because
+  `--frame` is declared on `*`: a custom property holding `var()` resolves where it is declared.
+- **Colour is never the only signal.** Choice rows pair a colour with a shape (▲ ◆ ● ■), and chosen
+  is a mark inside as well as a heavier frame.
+- **Everything a thumb aims at is 44px.** Grow the control, or where the row has no room (Draw's
+  palette holds the canvas on screen) give it a transparent `::before` hit area out to 44px. Both
+  live in retro.css under *fingers*.
 - **The forehead overlay opts out of all of it.** Black, white, huge, plain. It is read across
   a dim room by other people, not admired up close. Do not decorate it.
 - **Sound sits under the room, not over it.** The turn bed runs for a full minute at a time,
@@ -140,11 +156,11 @@ consistent — new UI should look like it was always there.
 - **Escape every interpolated value**, including URLs going into a `src` attribute. The one
   place that lapsed was an image URL, reachable whenever a row falls back to an upstream URL.
 - **Every surface colour is a token, because dark mode redefines them.** `--paper`, `--ink`,
-  `--soft`, `--input`, `--ghost-ink` and the field `--brand` change under
-  `:root[data-theme="dark"]` (phones: `party/public/index.html`; computers: `shared/theme.css`,
-  which Desk and Draw inherit); a new rule with a hard-coded `#fff` or `#f6f4fa` is a white
-  slab in the dark. The exceptions are deliberate: the forehead overlay (always black and white)
-  and the QR code (a scanner needs it white).
+  `--soft`, `--input`, `--frame-ink` and the field `--brand` change under
+  `:root[data-theme="dark"]`, in `shared/retro.css` and nowhere else; a new rule with a hard-coded
+  cream is a bright slab in the dark. The exceptions are deliberate: the forehead overlay (always
+  black and white), the QR code (a scanner needs it white), the canvas (paper, so a drawing looks
+  the same on every screen) and the high-score table (an arcade screen in both themes).
 - **Button labels are Title Case.** Every word capitalised except a, an, the, and, or, but, of,
   to, in, on, at, by, for, as (unless first); no full stops; " — " is the one separator. Rows
   that list characters, lists or categories are content and keep their own case.
@@ -154,11 +170,14 @@ consistent — new UI should look like it was always there.
 ## Web client: CSS traps already hit here
 
 - **`transform: rotate()` displaces a box by `height · sin θ`.** Nothing on a short card,
-  ~120px sideways on the compendium's ~20,000px list — it sheared off-screen. Long-scrolling
-  cards must carry `.flat` to opt out of the decorative tilt.
-- **`:nth-of-type` counts siblings by TAG, not by class.** A non-card div between two cards
-  ate a slot and left both neighbours leaning the same way. The alternation is set per card by
-  `retilt()` in JS for this reason.
+  ~120px sideways on the compendium's ~20,000px list — it sheared off-screen. The old tilted cards
+  are gone, but never rotate anything that can get long. `.flat` still marks the long cards.
+- **`:nth-of-type` counts siblings by TAG, not by class.** A non-card div between two cards ate a
+  slot and threw off a per-card alternation. Set anything that alternates from JS.
+- **A frame sticks out past its box.** Shadows are clipped by any scrolling ancestor, so a scroll
+  box holding framed things needs padding of at least `--px` (and three times that underneath).
+- **A `--outline` set on a panel is inherited by what is inside it.** The ruling panel's amber
+  frame turned its Yes and No buttons amber too. Reset it on the children (`--frame-ink`).
 - **Full-bleed by negative margin equal to the container's padding — never viewport units.**
   `left:-50vw; right:-50vw` made the document twice the viewport wide and the whole page
   draggable sideways.
@@ -170,8 +189,8 @@ consistent — new UI should look like it was always there.
 - **Reserve space for async images with a FIXED height, not `max-height`.** `max-height`
   reserves nothing until the image lands, so the card snaps open and shoves whatever is below
   it. Controls that a thumb aims at go *above* anything that can change size.
-- **Per-character inline-blocks remove word-boundary line breaking.** `wobble()` wraps each
-  word in a `nowrap` span, or headings break mid-word (a lone "r" on line two).
+- **Per-character inline-blocks remove word-boundary line breaking.** `wobble()` (one colour per
+  letter now, no angles) wraps each word in a `nowrap` span, or headings break mid-word (a lone "r" on line two).
 - **Without `touch-action: manipulation`, two quick taps are a zoom.** That is ordinary use in a
   party game. Decline that one gesture rather than reaching for `user-scalable=no`, which takes
   pinch-zoom away from everyone. Pull-to-refresh needs declining too (`overscroll-behavior-y:

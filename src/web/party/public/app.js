@@ -121,6 +121,7 @@ function renderLobby(state) {
     name.className = 'name';
     name.textContent = p.nickname;
     if (p.playerId === me) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
+    li.innerHTML = GTC.avatar(p.nickname);
     li.append(dot, name);
     if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
     roster.appendChild(li);
@@ -592,30 +593,21 @@ function renderOver(result) {
       : result.wonOnTime
         ? `${escapeHtml(names[0])} wins on time — got it in ${turnsText(result.bestTurnCount)}${leftText(w0.secondsLeft)}!`
         : `${escapeHtml(names[0])} wins — got it in ${turnsText(result.bestTurnCount)}!`;
-  const ul = $('finalStandings');
-  ul.innerHTML = '';
-  for (const s of result.standings) {
-    const li = document.createElement('li');
-    li.className = 'seat';
-    // `place` comes from the server (Game.standings): turns first, then time left, with level
-    // players sharing a place. Re-deriving it here from turns alone is how this screen and the
-    // Discord reveal could have ranked one game two different ways.
-    let place;
-    if (s.turns === null) place = s.outcome === 'gave_up' ? 'gave up' : 'did not finish';
-    else place = `#${s.place} — ${turnsText(s.turns)}${s.secondsLeft == null ? '' : ` · ${s.secondsLeft}s left`}`;
-    const ch = s.character;
-    const thumb = ch && ch.imageUrl
-      ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" style="width:44px;height:44px;object-fit:cover;object-position:50% 20%;flex:none">`
-      : '';
-    // Podium colouring for the top three finishers; everyone else is a plain row.
-    const rank = s.place ?? 0;
-    if (rank >= 1 && rank <= 3) li.classList.add(`rank${rank}`);
-    li.style.alignItems = 'center';
-    li.innerHTML = `${rank ? `<span style="font-weight:900;font-size:1.2rem;min-width:1.4em">${rank}</span>` : ''}${thumb}`
-      + `<span style="flex:1"><span class="name">${escapeHtml(s.name)}</span>`
-      + `<span class="you"> ${place}</span><br><span class="you">was ${ch ? escapeHtml(ch.name) : '—'}</span></span>`;
-    ul.appendChild(li);
-  }
+  // `place` comes from the server (Game.standings): turns first, then time left, with level
+  // players sharing a place. Re-deriving it here from turns alone is how this screen and the
+  // Discord reveal could have ranked one game two different ways.
+  $('finalStandings').innerHTML = result.standings.map((s) => {
+    const how = s.turns === null ? (s.outcome === 'gave_up' ? 'gave up' : 'did not finish')
+      : s.secondsLeft == null ? '' : `${s.secondsLeft}s left`;
+    return GTC.hiscoreRow({
+      place: s.place,
+      imageUrl: s.character?.imageUrl,
+      name: s.name,
+      detail: `was ${s.character?.name ?? '—'}${how ? ` · ${how}` : ''}`,
+      score: s.turns ?? '--',
+      unit: s.turns === 1 ? 'turn' : 'turns',
+    });
+  }).join('');
   const host = amHost();
   // Repeat the code here: if someone left, the fix is to get a replacement in, and the code
   // is otherwise only on the lobby screen which nobody is looking at any more.

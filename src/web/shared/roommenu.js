@@ -23,14 +23,14 @@
     dialog.roommenu::backdrop { background:rgba(8,8,24,.7); }
     .roommenu h2 { margin:0 44px 4px 0; font-size:1.35rem; }
     .roommenu .rmsub { margin:0 0 14px; color:var(--muted); font-size:.88rem; }
-    .roommenu .rmclose { position:absolute; top:12px; right:12px; width:2.5rem; height:2.5rem; padding:0; font-size:1.05rem; line-height:1; }
+    .roommenu .rmclose { position:absolute; top:12px; right:12px; width:44px; height:44px; padding:0; font-size:1.05rem; line-height:1; }
     .roommenu ul { list-style:none; margin:0 0 14px; padding:0; display:flex; flex-direction:column; gap:8px; }
     .roommenu li { display:flex; align-items:center; gap:8px; background:var(--soft); padding:8px 10px; min-height:2.9rem; }
     .roommenu .rmname { flex:1; min-width:0; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .roommenu .rmtag { flex:none; font-size:.66rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
  padding:2px 7px; background:var(--amber); color:#2b1c00; }
     .roommenu .rmtag.off { background:var(--muted); color:#fff; }
-    .roommenu .rmkick { flex:none; width:auto; padding:7px 12px; font-size:.85rem; }
+    .roommenu .rmkick { flex:none; width:auto; min-height:44px; padding:7px 12px; font-size:.95rem; }
     .roommenu .rmerr { color:var(--red); font-weight:800; min-height:0; margin:0 0 10px; }
     .roommenu .rmerr:empty { display:none; }
     .roommenu .rmleave { width:100%; }
