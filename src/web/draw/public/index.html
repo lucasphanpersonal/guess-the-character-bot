@@ -228,6 +228,18 @@
                               font-weight:800; overflow-wrap:anywhere; }
     .confirmpick .hint { font-size:.82rem; margin:6px 0 16px; }
     .confirmactions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+    /* "No Other Name — Start Drawing" is wider than a 320px phone's dialog: it takes the row and
+       wraps inside itself rather than running off the left edge. */
+    .confirmactions #confirmGo { flex:1 1 auto; min-width:0; white-space:normal; }
+    /* The other-name panel: amber-framed, an amber title strip, the box itself full width. Its
+       --outline is amber for the frame, and the input inside draws its border from --outline too,
+       so the input takes the ink back. Room around it for the frame (a scroll box clips shadows). */
+    .aka { --outline:var(--amber); box-shadow:var(--frame); background:var(--soft); padding:0 12px 2px; margin:var(--px) var(--px) 18px; }
+    .aka input { --outline:var(--frame-ink); width:100%; font-size:1.15rem; }
+    .aka .akatitle { display:flex; align-items:center; gap:8px; margin:0 -12px 8px; padding:8px 12px;
+                     background:var(--amber); color:#1a1633; font-size:1.15rem; }
+    .aka .akasub { margin:0 0 8px; font-family:var(--font-name); font-size:1.1rem; line-height:1.2; }
+    .aka .hint { margin:6px 0 10px; }
     /* The spellings: chips you pick one of. Picked = filled blue AND a tick, never colour alone. */
     .spellings { display:flex; flex-wrap:wrap; gap:6px; }
     .spellings label { display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; text-transform:none; letter-spacing:0;
@@ -671,12 +683,20 @@
           <h2 id="confirmName"></h2>
         </div>
       </div>
-      <label>Guessers get it with</label>
+      <!-- The other name, first and loudest. Playtests kept starting without it: as one quiet field
+           between two hints it read as small print, and the room then typed "Endeavor" at a picture
+           of Endeavor to no avail. So it is its own amber panel above everything else, and the
+           button below says out loud when there is no other name (app.js syncConfirmGo), which
+           makes skipping it a choice rather than a miss -- without ever making anyone type. -->
+      <div class="aka" id="akaBox">
+        <label for="alsoAccept" class="akatitle"><span class="akamark nudge" aria-hidden="true">▶</span> Called Something Else?</label>
+        <p class="akasub">A nickname, hero name or dub name? Add it, or a guess of it won't count.</p>
+        <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. Endeavor" aria-describedby="akaHint" />
+        <p class="hint" id="akaHint">Comma-separated, up to three. Nobody else sees them until the reveal.</p>
+      </div>
+      <label>Guessers already get it with</label>
       <ul class="counts" id="confirmCounts"></ul>
       <p class="hint">In any order, any capitals, with or without accents — and a small typo still counts.</p>
-      <label for="alsoAccept">Known by another name?</label>
-      <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. a hero name, the dub's name" />
-      <p class="hint">Comma-separated, up to three. Nobody else sees them until the reveal.</p>
       <!-- Which spelling the blanks take: the room says "Rock Lee", the library "Lee Rock". -->
       <label id="spellLabel">Blanks spell out</label>
       <div class="spellings" id="confirmSpellings" role="radiogroup" aria-labelledby="spellLabel"></div>
