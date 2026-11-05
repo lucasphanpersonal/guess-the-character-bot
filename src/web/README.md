@@ -83,7 +83,8 @@ everyone can see the screen, so sound is only for the moments worth looking up f
 another tab. Guess the Character: your turn starting, a right guess (yours sounds different), and
 — for the guesser alone — a miss or a close call; a call to rule goes only to those who can rule.
 Draw the Character: your turn to draw, someone getting it, the last ten seconds (once), and the
-reveal. Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
+reveal. Both: someone new joining the lobby (never the roster already there when you open it), and
+a short fanfare at game over, with a step on top for the winners. Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
 screen, play included; the choice is the phones' own `gtc_muted`, one per browser. The phones default to on, because a wearer has no other way to hear the clock, and have a switch of their own in the corner on every screen but the forehead view.
 
 **Room** (`shared/roommenu.js`), in all three games, is a button by the title on every screen once
@@ -365,5 +366,6 @@ Endpoints that prove the shared core is reachable from this frontend:
   config screen (OFF by default -- restricting to image-having characters shrinks the pool and
   biases it toward better-documented franchises, so it is the host's call; via
   `getRandomCharacters(..., { preferImages })`); and light **audio cues** (turn-start chime,
-  finish/give-up chime, win sting). Not yet: an optional read-only **scoreboard device**
+  finish/give-up chime, a blip per second of the grace countdown, a join blip in the lobby, and a
+  game-over fanfare with a step on top for the winner's phone). Not yet: an optional read-only **scoreboard device**
   (spectator join) and any richer haptics.

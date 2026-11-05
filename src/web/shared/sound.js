@@ -101,6 +101,18 @@
     hurry() { tone(698, 100, { gain: 0.2 }); tone(698, 100, { gain: 0.2, at: 0.16 }); },
     // The reveal: a falling-then-resolving phrase, the turn closing.
     reveal() { [784, 659, 523, 784].forEach((f, i) => tone(f, i === 3 ? 360 : 140, { gain: 0.22, type: 'triangle', at: i * 0.12 })); },
+    // Somebody joined the lobby: a tiny rising blip. Lobbies fill in bursts, so it is the
+    // quietest cue here, and the queue keeps a burst from piling into one chord.
+    join() { tone(988, 60, { gain: 0.14 }); tone(1319, 90, { gain: 0.14, at: 0.06 }); },
+    // Game over: a short fanfare, three repeated notes and a held one over a triangle bass -- not
+    // the got-it arpeggio, so the end of the game is not mistaken for one more right answer.
+    // `won` (you are among the winners) adds a step up on top, the one part that is yours.
+    over(won) {
+      [784, 784, 784].forEach((f, i) => tone(f, 80, { gain: 0.24, at: i * 0.11 }));
+      tone(1047, 480, { gain: 0.26, at: 0.33 });
+      tone(262, 480, { gain: 0.24, type: 'triangle', at: 0.33 });
+      if (won) { tone(1319, 110, { gain: 0.22, type: 'triangle', at: 0.86 }); tone(1568, 380, { gain: 0.24, type: 'triangle', at: 0.97 }); }
+    },
   };
   // Cues queue rather than overlap. Two arrive together often -- the last right guess and the
   // reveal it causes come in the same moment -- and two phrases on top of each other are a mush in

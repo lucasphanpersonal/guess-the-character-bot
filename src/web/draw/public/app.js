@@ -199,6 +199,7 @@ function renderRoom() {
   show('lobby');
   $('roomCode').innerHTML = roomCodeHtml(roomState.code);
   $('shareLink').value = `${location.origin}/draw/?room=${roomState.code}`;
+  if (GTC.someoneArrived(roomState.code, roomState.players, me)) sound('join');
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players

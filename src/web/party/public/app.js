@@ -109,6 +109,7 @@ function renderLobby(state) {
   // 'block' (not '') -- an <img> defaults to inline, and margin:auto centering (see CSS) only
   // takes effect on a block-level box. Leaving it inline was why the QR rendered off-center.
   qr.style.display = 'block';
+  if (GTC.someoneArrived(state.code, state.players, me)) joinBlip();
   $('playerCount').textContent = `Players (${state.players.length}/${state.maxPlayers ?? 8})`;
   window.GTCFx?.players(state.players.length);
   const roster = $('roster');
@@ -629,8 +630,7 @@ function renderOver(result) {
   lastOverHostPicked = !!result.hostPicked;
   if (result.hostPicked) hostPicks.clear();
   $('rematchBtn').textContent = result.hostPicked ? 'Pick Characters Again' : 'Rematch — Same Settings';
-  // a little win sting
-  beep(880, 160); setTimeout(() => beep(1320, 260), 170);
+  fanfare(result.winners.some((w) => w.playerId === me));
   show('over');
 }
 
@@ -956,10 +956,12 @@ function startCountdown(seconds) {
     else wobble($('countNum'), text);
   };
   paint();
+  countBlip(n);
   navigator.vibrate?.(80);
   countdown = setInterval(() => {
     n -= 1;
     paint();
+    countBlip(n);
     if (n <= 0) { clearInterval(countdown); return; }
     navigator.vibrate?.(40);
   }, 1000);

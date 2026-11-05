@@ -95,6 +95,16 @@
     return true;
   }
 
+  // Whether somebody else sat down since this page last drew this room's lobby: the moment for a
+  // join chime. Unlike isNewSeat, the roster the page first draws is not news -- opening a lobby
+  // of five must not sound five arrivals, and nobody needs a chime for their own arrival.
+  const rostersSeen = new Map(); // room code -> the ids in its lobby when last drawn
+  function someoneArrived(code, players, me) {
+    const before = rostersSeen.get(code);
+    rostersSeen.set(code, new Set(players.map((p) => p.playerId)));
+    return !!before && players.some((p) => p.playerId !== me && !before.has(p.playerId));
+  }
+
   // Right, wrong, close: one quick tint of the whole screen and a stamped word. Rules, because this
   // is the one effect that covers everything:
   //   - One flash per event, never a loop, at a low opacity, and at most one in `FLASH_GAP_MS`. A
@@ -247,5 +257,5 @@
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, flash, shake, confetti };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, someoneArrived, flash, shake, confetti };
 })();

@@ -52,6 +52,42 @@ function tone(freq = 880, ms = 180, { gain = 0.5, type, at = null, out = null } 
 }
 const beep = (freq = 880, ms = 180) => tone(freq, ms);
 
+// --- one-shot cues --------------------------------------------------------------------------
+// Placed on the audio clock, like the bed, so a cue's notes keep their spacing in a tab whose
+// timers are throttled. All no-ops until the first gesture has made the context.
+const cueAt = (s) => (audioCtx ? audioCtx.currentTime + s : null);
+
+// The grace countdown, one blip per second as the number changes, and a higher "go" on zero. The
+// countdown is spent raising the phone to a forehead, so the wearer counts it by ear -- the number
+// is already out of sight. The phone buzzes on the same beats (startCountdown).
+function countBlip(n) {
+  if (!audioCtx) return;
+  if (n > 0) tone(523, 90, { gain: 0.4 });
+  else { tone(1047, 90, { gain: 0.38, type: 'triangle' }); tone(1568, 260, { gain: 0.38, type: 'triangle', at: cueAt(0.09) }); }
+}
+
+// Somebody joined the lobby: a tiny rising blip, quieter than any game cue. A whole party joins
+// in the same minute, often with the phones side by side, so it must not become a din.
+function joinBlip() {
+  if (!audioCtx) return;
+  tone(988, 60, { gain: 0.28 });
+  tone(1319, 90, { gain: 0.28, at: cueAt(0.06) });
+}
+
+// The end of the game: three repeated notes and a held one over a triangle bass -- not the
+// got-it chime, so the end is not heard as one more finish. A winner's phone adds a step up on
+// top, the one part that is theirs. Same shape as the computers' (shared/sound.js, over).
+function fanfare(won) {
+  if (!audioCtx) return;
+  [784, 784, 784].forEach((f, i) => tone(f, 80, { gain: 0.45, at: cueAt(i * 0.11) }));
+  tone(1047, 480, { gain: 0.48, at: cueAt(0.33) });
+  tone(262, 480, { gain: 0.4, type: 'triangle', at: cueAt(0.33) });
+  if (won) {
+    tone(1319, 110, { gain: 0.38, type: 'triangle', at: cueAt(0.86) });
+    tone(1568, 380, { gain: 0.4, type: 'triangle', at: cueAt(0.97) });
+  }
+}
+
 // --- the turn bed ---------------------------------------------------------------------------
 //
 // A quiet two-chord vamp under the current player's turn, doing two jobs at once. The wearer

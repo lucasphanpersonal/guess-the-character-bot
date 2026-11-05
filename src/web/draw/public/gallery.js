@@ -15,6 +15,7 @@ socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts
   heardPhase = '';
   const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === me ? 'You' : s.name));
   $('overTitle').textContent = top.length ? `${top.join(' and ')} won!` : 'Game over';
+  sound('over', standings.some((s) => s.place === 1 && s.playerId === me));
   GTC.confetti();
   window.GTCFx?.podium(standings.slice(0, 3).map((s) => s.name));
   $('standings').innerHTML = standings

@@ -44,7 +44,7 @@ GTC.bindThemeToggles();
 // Sound (/shared/sound.js): short cues for your turn, a result, and a call to rule. Optional-
 // chained like the pickers: a missing sound script costs the cues, never the game -- and hides the
 // switch rather than leave one that does nothing.
-const sound = (cue) => window.GTCSound?.play(cue);
+const sound = (cue, ...args) => window.GTCSound?.play(cue, ...args);
 $('soundToggle').hidden = !window.GTCSound;
 window.GTCSound?.mountToggle($('soundToggle'));
 
@@ -185,6 +185,7 @@ function renderLobby() {
   const code = roomState.code;
   $('roomCode').innerHTML = roomCodeHtml(code);
   $('shareLink').value = `${location.origin}/desk/?room=${code}`;
+  if (GTC.someoneArrived(code, roomState.players, me)) sound('join');
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
@@ -743,6 +744,7 @@ socket.on('game:over', (res) => {
   heardRuling = null;
   const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
   $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
+  sound('over', res.winners.some((w) => w.playerId === me));
   GTC.confetti();
   window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
   $('standings').innerHTML = res.standings
