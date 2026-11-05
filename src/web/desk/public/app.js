@@ -40,6 +40,7 @@ const roomMenu = GTCRoomMenu.mount({
         : `Remove ${name} from the room?`,
 });
 GTC.bindThemeToggles();
+GTC.bindCrtToggles();
 
 // Sound (/shared/sound.js): short cues for your turn, a result, and a call to rule. Optional-
 // chained like the pickers: a missing sound script costs the cues, never the game -- and hides the

@@ -32,6 +32,13 @@
       document.querySelector('meta[name=theme-color]').content =
         document.documentElement.dataset.season === 'spooky' ? '#2a1307' : '#0e0f1a';
     })();
+    // The CRT screen, the same way and for the same reason: on unless this phone turned it off
+    // (gtc_crt, shared with /desk/ and /draw/, whose season.js decides it identically).
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('gtc_crt'); } catch (e) { /* the default */ }
+      if (saved !== 'off') document.documentElement.dataset.crt = 'on';
+    })();
   </script>
   <link rel="preload" href="/shared/fonts/press-start-2p-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="/shared/fonts/pixelify-sans-latin-700-normal.woff2" as="font" type="font/woff2" crossorigin />
@@ -615,6 +622,9 @@
         <span><b>Guess on Computers</b><small>Guess the Character at a screen. You see every character but your own.</small></span>
         <span class="likely" id="likelyComputer" hidden>Looks Like a Computer</span>
       </button>
+      <!-- The CRT screen's switch (GTC.bindCrtToggles): here on the first screen, and in the Room
+           menu once in a room. Not in the corner, which already holds three controls. -->
+      <div class="crtrow"><span>CRT Screen</span><button class="crttoggle" type="button" role="switch" aria-checked="true" aria-label="CRT screen effect"><span class="knob" aria-hidden="true">▤</span></button><span class="crtstate" aria-hidden="true">On</span></div>
     </section>
 
     <!-- Computer: the same create / join as the phones, for Guess the Character on computers, which

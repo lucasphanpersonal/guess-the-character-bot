@@ -54,6 +54,11 @@
     /* On a phone the title row has no room for the dark-mode switch beside Room and Sound, so it
        moves in here (theme.css hides the one in the row). */
     @media (max-width: 560px) { .roommenu .rmtheme { display:flex; } }
+    .roommenu .rmcrt { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0 0 14px; font-weight:800; }
+    /* On the cream card the track needs the card's own ink to show when off. */
+    .roommenu .rmcrt .crttoggle { --outline:var(--frame-ink); }
+    .roommenu .rmcrt .crttoggle[aria-checked="false"] { --face:var(--soft); }
+    .roommenu .rmcrt .crttoggle:focus-visible { outline-color:var(--ink); }
   `;
 
   /**
@@ -85,8 +90,11 @@
       <p class="rmerr" role="alert"></p>
       <button type="button" class="good rmpause" hidden>Pause Game</button>
       ${o.themeToggle ? '<div class="rmtheme"><span>Dark Mode</span><button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode"><span class="knob" aria-hidden="true">◐</span></button></div>' : ''}
+      <div class="rmcrt"><span>CRT Screen</span><button class="crttoggle" type="button" role="switch" aria-checked="true" aria-label="CRT screen effect"><span class="knob" aria-hidden="true">▤</span></button></div>
       <button type="button" class="bad rmleave">Leave Room</button>`;
     document.body.append(dlg);
+    // The CRT switch is in every Room menu, on every width: in a room it is the only one in reach.
+    window.GTC.bindCrtToggles?.(dlg);
     const list = dlg.querySelector('ul');
     const err = dlg.querySelector('.rmerr');
 

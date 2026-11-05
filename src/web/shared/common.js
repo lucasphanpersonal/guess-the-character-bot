@@ -247,5 +247,31 @@
     label();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, avatar, hiscoreRow, isNewSeat, flash, shake, confetti };
+  // The CRT screen's switches (retro.css, *the CRT screen*). The look is on until someone turns it
+  // off; season.js and the phones' <head> applied the saved choice (gtc_crt, shared by every page)
+  // before first paint. Idempotent and scoped, because switches arrive at different times: the
+  // page's own at boot, the Room menu's when it mounts (roommenu.js binds those itself). Every
+  // switch on the page is kept true to the one setting, whichever was pressed.
+  function bindCrtToggles(scope = document) {
+    const root = document.documentElement;
+    const sync = () => {
+      const on = 'crt' in root.dataset;
+      for (const b of document.querySelectorAll('.crttoggle')) b.setAttribute('aria-checked', String(on));
+      for (const s of document.querySelectorAll('.crtstate')) s.textContent = on ? 'On' : 'Off';
+    };
+    for (const b of scope.querySelectorAll('.crttoggle')) {
+      if (b.dataset.bound) continue;
+      b.dataset.bound = '1';
+      b.addEventListener('click', () => {
+        const on = !('crt' in root.dataset);
+        if (on) root.dataset.crt = 'on';
+        else delete root.dataset.crt;
+        store.set('gtc_crt', on ? 'on' : 'off');
+        sync();
+      });
+    }
+    sync();
+  }
+
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, hiscoreRow, isNewSeat, flash, shake, confetti };
 })();

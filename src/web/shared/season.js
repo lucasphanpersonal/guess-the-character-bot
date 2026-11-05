@@ -24,3 +24,11 @@ if (new Date() < new Date(2026, 10, 1)) {
   const meta = document.querySelector('meta[name=theme-color]');
   if (meta) meta.content = dark ? (spooky ? '#2a1307' : '#0e0f1a') : spooky ? '#cc4a0c' : '#1f1a4d';
 })();
+
+// The CRT screen (retro.css): on unless this browser turned it off (gtc_crt, the same key as the
+// phones' page). Here rather than at boot so the first paint already has the glass, or never does.
+(function () {
+  let saved = null;
+  try { saved = localStorage.getItem('gtc_crt'); } catch { /* the default */ }
+  if (saved !== 'off') document.documentElement.dataset.crt = 'on';
+})();

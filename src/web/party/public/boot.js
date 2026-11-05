@@ -160,6 +160,8 @@ roomMenu = GTCRoomMenu.mount({
         : `Remove ${name} from the room?`,
 });
 roomMenu.update();
+// The CRT screen's switch on the first screen (the Room menu's is bound by roommenu.js).
+GTC.bindCrtToggles();
 
 // --- the start: which game ---------------------------------------------------------------
 //

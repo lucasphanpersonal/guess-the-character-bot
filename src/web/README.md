@@ -110,7 +110,10 @@ Browse and Test Tilt; *Computers* gets create, join and Browse, and is handed of
 `GET /api/room?code=` which game a code belongs to; it answers with the game's path and nothing
 else. A Draw code typed into the phones' join box goes to `/draw/` too. A room link or a rejoin
 skips the question. Dark mode is a small switch: in the corner on the phones' page (hidden during
-play), in the title row on the computer pages.
+play), in the title row on the computer pages. The CRT screen (scanlines, a darker rim, a glow on
+the arcade type, a faint flicker) is on by default; its switch is on each game's first screen and
+in the Room menu, and the choice is remembered per browser (`gtc_crt`). It steps aside for the
+forehead view, for `prefers-contrast: more`, and its flicker for reduced motion.
 
 Phone play flow: create/join a room by 4-letter code → host picks a pool + difficulty and deals →
 everyone checks/rerolls their assigned character and taps **Good to go** → a grace countdown
