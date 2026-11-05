@@ -71,16 +71,30 @@
   }
 
   // Every character picture goes through here. A picture that is missing, or fails to load (a
-  // Commons image gone, an upstream down), becomes a pixel "?" card at the same size, so a row never
-  // shows a broken-image icon and keeps its place. It stays an <img>, so every rule that sizes
-  // `img` still applies. The fallback is a data URI: no request, and it works when the image host
-  // does not. Colours are fixed here, because an image cannot read the page's tokens; the card is
-  // dark enough to sit on cream and on the dark theme alike.
-  const NO_ART_ROWS = ['.#####.', '##...##', '.....##', '....##.', '...##..', '..##...', '..##...', '.......', '..##...'];
+  // Commons image gone, an upstream down), becomes a pixel picture frame with a break in it at the
+  // same size, so a row never shows a broken-image icon and keeps its place. It is drawn to read as
+  // "no picture here" and not as the desk's "?" for a hidden character. It stays an <img>, so every
+  // rule that sizes `img` still applies. The fallback is a data URI: no request, and it works when
+  // the image host does not. Colours are fixed here, because an image cannot read the page's tokens;
+  // the card is dark enough to sit on cream and on the dark theme alike.
+  // Grid is 9 x 11 and the viewBox matches it cell for cell (no margin), so the rows below are the art.
+  const NO_ART_ROWS = [
+    '.........',
+    '####.####',
+    '#.......#',
+    '#.....#.#',
+    '#.......#',
+    '#...#...#',
+    '#..###..#',
+    '#.#####.#',
+    '#.......#',
+    '##.######',
+    '.........',
+  ];
   const NO_ART = (() => {
     let cells = '';
     NO_ART_ROWS.forEach((row, y) => [...row].forEach((ch, x) => {
-      if (ch === '#') cells += `<rect x="${x + 1}" y="${y + 1}" width="1" height="1"/>`;
+      if (ch === '#') cells += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
     }));
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 9 11" shape-rendering="crispEdges">' +
       `<rect width="9" height="11" fill="#2a2238"/><g fill="#ffd23f">${cells}</g></svg>`;
