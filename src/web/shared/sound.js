@@ -126,27 +126,15 @@
   }
 
   // --- menu selects ----------------------------------------------------------------------------
-  // Every button and choice on the page gives a small select blip on click, so a tap is answered
-  // by sound without anyone wiring it in. Delegated, so buttons rendered later are covered too.
-  // Throttled, because a row of palette buttons tapped quickly would otherwise chirp in a run.
-  // Outside the cue queue (free), so a select never holds back a turn or a got-it cue. The sound
-  // controls are left out: they play their own confirmation, and a blip on top would mush with it.
-  const SELECT_GAP_MS = 70;
-  const SELECT_SKIP = '#soundToggle, #muteBtn, #soundCheckBtn, [data-no-blip]';
-  const SELECT_TARGET = 'button, [role="radio"], [role="option"], [role="checkbox"], [role="switch"], [role="tab"]';
-  let selectedAt = 0;
-  function select() {
-    if (muted || !ctx || ctx.state !== 'running') return;
-    const now = performance.now();
-    if (now - selectedAt < SELECT_GAP_MS) return;
-    selectedAt = now;
+  // Every button and choice gives a small select blip on click, so a tap is answered by sound
+  // without anyone wiring it in. Which clicks count, and the throttle, are GTC.select (common.js),
+  // shared with the phones. Outside the cue queue (free), so a select never holds back a turn or a
+  // got-it cue.
+  function selectBlip() {
+    if (muted || !ctx || ctx.state !== 'running' || !GTC.select.due()) return;
     for (const [f, ms, gain, type, at] of GTC.TUNES.select) tone(f, ms, { gain, type, at, free: true });
   }
-  document.addEventListener('click', (e) => {
-    const el = e.target.closest?.(SELECT_TARGET);
-    if (!el || el.disabled || el.matches(SELECT_SKIP) || el.closest('[data-no-blip]')) return;
-    select();
-  }, true);
+  document.addEventListener('click', (e) => { if (GTC.select.from(e.target)) selectBlip(); }, true);
 
   // --- reactions (Draw) ------------------------------------------------------------------------
   // A guesser's reaction, as the drawer hears it: a tiny pop, so they know people are watching

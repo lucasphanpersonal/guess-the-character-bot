@@ -154,6 +154,32 @@
   // (party/public/audio.js) -- kept here, once, so the same moment cannot come to sound different
   // on a phone and a computer. Each note: [Hz, ms, gain, voice, start in seconds]. A voice of
   // undefined is the pulse; gains are the computers', and the phones scale them up (TUNE_SCALE).
+  // Menu selects: which click answers with a blip, and how often. Both sound systems (shared/sound.js
+  // and party/public/audio.js) ask here, so they cannot disagree on what counts as a select.
+  // `[data-no-blip]` opts a whole region out (Draw's tools: a colour change mid-drawing is not a menu).
+  const SELECT = {
+    target: 'button, [role="radio"], [role="option"], [role="checkbox"], [role="switch"], [role="tab"]',
+    skip: '#soundToggle, #muteBtn, #soundCheckBtn, [data-no-blip]',
+    gapMs: 70, // a run of quick taps chirps once, not per tap
+  };
+  let lastSelect = -1e9;
+  const select = {
+    // The element a click answers, or null: nothing for a disabled control, a sound control, or
+    // anything inside a region that opted out.
+    from(node) {
+      const el = node?.closest?.(SELECT.target);
+      if (!el || el.disabled || el.matches(SELECT.skip) || el.closest('[data-no-blip]')) return null;
+      return el;
+    },
+    // True at most once per gap, and records the time when it says yes.
+    due() {
+      const now = performance.now();
+      if (now - lastSelect < SELECT.gapMs) return false;
+      lastSelect = now;
+      return true;
+    },
+  };
+
   const TUNES = {
     // Somebody joined the lobby: a short rising jingle, three bright steps and a held top note. Long
     // enough to be a welcome, short enough that a whole party joining in a minute is not a song.
@@ -370,5 +396,5 @@
     words();
   }
 
-  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, flash, shake, confetti };
+  window.GTC = { $, esc, store, playerIdFor, wobble, roomCodeHtml, show, toast, homeTitle, mountPoolPicker, bindThemeToggles, bindCrtToggles, avatar, art, artFallback, winnersTitle, hiscoreRow, isNewSeat, someoneArrived, forgetRosters, TUNES, select, flash, shake, confetti };
 })();

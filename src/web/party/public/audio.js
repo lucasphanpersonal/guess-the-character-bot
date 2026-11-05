@@ -70,6 +70,10 @@ const live = () => !!audioCtx && audioCtx.state === 'running';
 // The tunes the computers play too (GTC.TUNES, common.js), louder: a phone speaker across a room,
 // against the computers' cues at a desk, often into headphones.
 const TUNE_SCALE = 1.8;
+// How long a tune sounds, from its first note to its last.
+function tuneLength(name) {
+  return Math.max(...GTC.TUNES[name].map(([, ms, , , at]) => at + ms / 1000));
+}
 function playTune(name, delay = 0) {
   const t0 = audioCtx.currentTime + delay;
   for (const [f, ms, gain, type, at] of GTC.TUNES[name]) tone(f, ms, { gain: gain * TUNE_SCALE, type, at: t0 + at });
@@ -91,36 +95,35 @@ function joinBlip() {
 
 // A correct guess on the guesser's own phone: the level-up fanfare (GTC.TUNES.levelUp). Everyone
 // else's got-it stays the single chime it was.
+// Until when the level-up is still sounding on the audio clock, so the game-over fanfare can wait for
+// it (see fanfare).
+let levelUpEndsAt = 0;
 function levelUpFanfare() {
-  if (live()) playTune('levelUp');
+  if (!live()) return;
+  playTune('levelUp');
+  levelUpEndsAt = audioCtx.currentTime + tuneLength('levelUp');
 }
 
-// Menu selects: the same blip the computers play on a button or a choice (shared/sound.js). Quiet
-// by design, a throttle for a run of quick taps, and off the cue clock so it never holds a turn
-// cue back. The sound controls are skipped: they play their own confirmation.
-const SELECT_GAP_MS = 70;
-const SELECT_SKIP = '#soundToggle, #muteBtn, #soundCheckBtn, [data-no-blip]';
-const SELECT_TARGET = 'button, [role="radio"], [role="option"], [role="checkbox"], [role="switch"], [role="tab"]';
-let selectedAt = 0;
+// Menu selects: the same blip the computers play on a button or a choice (shared/sound.js). Which
+// clicks count, and the throttle, are GTC.select (common.js). Off the cue clock, so it never holds
+// a turn cue back. The first tap also starts audio on iOS.
 document.addEventListener('click', (e) => {
-  const el = e.target.closest?.(SELECT_TARGET);
-  if (!el || el.disabled || el.matches(SELECT_SKIP) || el.closest('[data-no-blip]') || muted) return;
-  ensureAudio(); // a tap is a gesture: the first one also starts audio on iOS
-  if (!live()) return;
-  const now = performance.now();
-  if (now - selectedAt < SELECT_GAP_MS) return;
-  selectedAt = now;
+  if (muted || !GTC.select.from(e.target)) return;
+  ensureAudio();
+  if (!live() || !GTC.select.due()) return;
   for (const [f, ms, gain, type, at] of GTC.TUNES.select) tone(f, ms, { gain: gain * TUNE_SCALE, type, at: audioCtx.currentTime + at });
 }, true);
 
-// The end of the game, a step up on top for a winner's phone. The last finisher's reveal chime
-// arrives a moment before game:over and runs 160ms, so the fanfare waits for it: on top of it, the
-// end would open on the got-it chime and be heard as one more finish.
+// The end of the game, a step up on top for a winner's phone. The last finisher's reveal sound comes a
+// moment before game:over: a 160ms chime, or the level-up fanfare, which runs most of a second. The
+// phones have no queue, so the game-over fanfare waits for whichever is still sounding; anything
+// shorter than the chime's gap starts on the gap.
 const AFTER_REVEAL_S = 0.2;
 function fanfare(won) {
   if (!live()) return;
-  playTune('over', AFTER_REVEAL_S);
-  if (won) playTune('overWon', AFTER_REVEAL_S);
+  const delay = Math.max(AFTER_REVEAL_S, levelUpEndsAt - audioCtx.currentTime);
+  playTune('over', delay);
+  if (won) playTune('overWon', delay);
 }
 
 // --- the turn bed ---------------------------------------------------------------------------
