@@ -24,6 +24,10 @@ const MAX_FAILED_JOINS = 20;
 const SECRET_MAX = 200;
 
 const SEAT_KEY = crypto.randomBytes(32);
+// What a test bot (./bots.js) shows in its handshake to be seated as one. Made fresh by this
+// process and never sent anywhere, so only the bots this server runs can carry it: a stranger
+// cannot pass for a bot, and a bot is never more than a player anyway.
+const BOT_KEY = crypto.randomBytes(24).toString('base64url');
 
 // Per client, so reconnecting does not reset them. Generous for real use: a party on one Wi-Fi
 // shares an address, and a host may make a few rooms in an evening.
@@ -55,6 +59,7 @@ function identify(socket) {
   socket.data.playerId = playerId;
   socket.data.code = null;
   socket.data.client = clientOf(socket);
+  socket.data.bot = socket.handshake.auth?.botKey === BOT_KEY;
   socket.emit('hello', { you: playerId });
   return playerId;
 }
@@ -94,7 +99,7 @@ function joinRoom(socket, registry, kind, code, nickname, avatar) {
   if ((socket.data.failedJoins || 0) >= MAX_FAILED_JOINS || !failedJoinsByClient.allows(socket.data.client)) {
     return { ok: false, error: 'Too many failed attempts. Try again in a few minutes.' };
   }
-  const res = registry.joinRoom(code, { playerId: socket.data.playerId, nickname, kind, avatar });
+  const res = registry.joinRoom(code, { playerId: socket.data.playerId, nickname, kind, avatar, bot: !!socket.data.bot });
   if (!res.ok) {
     socket.data.failedJoins = (socket.data.failedJoins || 0) + 1;
     failedJoinsByClient.take(socket.data.client);
@@ -119,4 +124,4 @@ function setAvatar(socket, registry, avatar) {
   return res.ok ? { ...res, room } : res;
 }
 
-module.exports = { identify, createRoom, joinRoom, setAvatar, publicIdOf, MAX_ROOMS_PER_SOCKET, MAX_FAILED_JOINS };
+module.exports = { identify, createRoom, joinRoom, setAvatar, publicIdOf, botKey: () => BOT_KEY, MAX_ROOMS_PER_SOCKET, MAX_FAILED_JOINS };

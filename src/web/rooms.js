@@ -82,11 +82,13 @@ class Room {
     this.order = [];
   }
 
-  addSeat(playerId, nickname, avatar) {
+  addSeat(playerId, nickname, avatar, { bot = false } = {}) {
     // `conns` is the set of live socket ids for this seat. A seat is "connected" while any
     // socket holds it -- so a second tab, or a reconnect whose new socket arrives before the old
     // one's disconnect, never flips the player to offline. See attach/detachConnection.
-    this.players.set(playerId, { playerId, nickname, avatar: this.#faceFor(avatar), joinedAt: Date.now(), conns: new Set() });
+    // `bot`: a test player the server runs itself (../bots.js). Published, so the Room menu can
+    // say so, and never counted as somebody being there (sweepAbandoned).
+    this.players.set(playerId, { playerId, nickname, avatar: this.#faceFor(avatar), joinedAt: Date.now(), conns: new Set(), ...(bot ? { bot: true } : {}) });
     this.order.push(playerId);
   }
 
@@ -154,6 +156,7 @@ class Room {
           avatar: p.avatar,
           connected: p.conns.size > 0,
           isHost: p.playerId === this.hostPlayerId,
+          ...(p.bot ? { bot: true } : {}),
         };
       }),
     };
@@ -208,7 +211,9 @@ class RoomRegistry {
   sweepAbandoned(ttlMs = 30 * 60 * 1000, now = Date.now()) {
     let removed = 0;
     for (const room of [...this.rooms.values()]) {
-      const anyConnected = [...room.players.values()].some((p) => p.conns.size > 0);
+      // A bot is always connected -- it lives in this process -- so it is not somebody being
+      // there. Counting bots would keep a room the humans walked away from forever.
+      const anyConnected = [...room.players.values()].some((p) => !p.bot && p.conns.size > 0);
       if (anyConnected) {
         room.lastSeen = now;
         continue;
@@ -253,7 +258,7 @@ class RoomRegistry {
    * rejected for a full room -- they already hold a seat. A new playerId is subject to the
    * lobby being open and not full.
    */
-  joinRoom(code, { playerId, nickname, kind = 'party', avatar }) {
+  joinRoom(code, { playerId, nickname, kind = 'party', avatar, bot = false }) {
     const room = this.getRoom(code);
     if (!room) return { ok: false, error: 'No room with that code.' };
     if (!playerId) return { ok: false, error: 'Missing player id.' };
@@ -280,7 +285,7 @@ class RoomRegistry {
     if (room.players.size >= maxPlayersFor(room.kind)) return { ok: false, error: 'That room is full.' };
 
     // `avatar` is only a preference, for a new seat: a reconnect keeps the face it already wears.
-    room.addSeat(playerId, nick, avatar);
+    room.addSeat(playerId, nick, avatar, { bot });
     return { ok: true, room, reconnected: false };
   }
 
