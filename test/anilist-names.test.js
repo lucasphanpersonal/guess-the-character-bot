@@ -5,7 +5,7 @@ const { assert } = require('./harness');
 const db = require('../src/core/db/connection');
 const lists = require('../src/compendium/characterLists');
 const { englishName, surnameFirstName, foldLongVowels } = require('../scripts/lib/anilistNames');
-const { planRenames, applyRenames, undoRenames } = require('../scripts/rename-anilist-characters');
+const { planRenames, applyRenames, undoRenames, planMerges, applyMerges, undoMerges } = require('../scripts/rename-anilist-characters');
 
 const n = (first, last, middle = null, full = null) => ({ first, middle, last, full });
 
@@ -156,5 +156,71 @@ module.exports = {
     const { renames, skipped } = planRenames(db, series);
     assert.equal(renames.filter((r) => r.listId === listId).length, 0);
     assert.ok(skipped.collision.some((c) => c.from === 'Elric Edward'));
+  },
+
+  // Inside a word "oo" is as often two syllables as one long vowel, so only the start folds.
+  'a long "oo" folds at the start of a word, and inside one only where listed'() {
+    for (const [word, folded] of [['Ootsutsuki', 'Otsutsuki'], ['Oota', 'Ota'], ['Oono', 'Ono'], ['Tooru', 'Toru'], ['Oouchi', 'Ouchi']]) {
+      assert.equal(foldLongVowels(word), folded, word);
+    }
+    for (const word of ['Hiroomi', 'Kiyoomi', 'Morooka', 'Kuroo', 'Moon', 'Goose', 'Moodie', 'Boota', 'Ooi']) {
+      assert.equal(foldLongVowels(word), word, word);
+    }
+  },
+
+  'official spellings and hand-set names win over the rules'() {
+    assert.equal(englishName(n('Shouei', 'Barou'), ['Blue Lock']), 'Shoei Barou');
+    // Kyouraku's middle names were added on AniList after seeding; the override ignores them.
+    assert.equal(englishName(n('Shunsui', 'Kyouraku', 'Jirou Soukyuu'), ['BLEACH']), 'Shunsui Kyoraku');
+  },
+
+  // The first pass ran with older rules; the next must find its output, not just the seed's.
+  'a second pass finds rows the first one already renamed'() {
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Tooru Oikawa', 'seed-script', 'https://s4.anilist.co/oikawa.png');
+    lists.addCharacter(listId, 'Shouei Baro', 'seed-script', 'https://s4.anilist.co/barou.png');
+    lists.addCharacter(listId, 'Kyouraku Shunsui', 'seed-script', 'https://s4.anilist.co/shunsui.png');
+    lists.addCharacter(listId, 'Satoru Gojo', 'seed-script', 'https://s4.anilist.co/gojo2.png');
+    const series = {
+      1: { label: 'Mixed', characters: [
+        { parts: n('Tooru', 'Oikawa'), image: 'https://s4.anilist.co/oikawa.png' },
+        { parts: n('Shouei', 'Barou'), image: 'https://s4.anilist.co/barou.png' },
+        { parts: n('Shunsui', 'Kyouraku', 'Jirou Soukyuu'), image: 'https://s4.anilist.co/shunsui.png' },
+        { parts: n('Satoru', 'Gojou'), image: 'https://s4.anilist.co/gojo2.png' },
+      ] },
+    };
+    const mine = planRenames(db, series).renames.filter((r) => r.listId === listId);
+    assert.deepEqual(mine.map((r) => r.to).sort(), ['Shoei Barou', 'Shunsui Kyoraku', 'Toru Oikawa']);
+  },
+
+  'a duplicate is merged into the row holding the name, and the merge undoes'() {
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Elric Alphonse', 'seed-script', 'https://s4.anilist.co/al.png');
+    lists.addCharacter(listId, 'Alphonse Elric', 'someone', null);
+    // Two different characters whose names fold alike: never merged.
+    lists.addCharacter(listId, 'Satou Yuuki', 'seed-script', 'https://s4.anilist.co/yuuki.png');
+    lists.addCharacter(listId, 'Yuki Sato', 'seed-script', 'https://s4.anilist.co/yuki.png');
+    const series = { 1: { characters: [
+      { parts: n('Alphonse', 'Elric'), image: 'https://s4.anilist.co/al.png' },
+      { parts: n('Yuuki', 'Satou'), image: 'https://s4.anilist.co/yuuki.png' },
+      { parts: n('Yuki', 'Sato', 'X'), image: 'https://s4.anilist.co/yuki.png' },
+    ] } };
+    const collisions = planRenames(db, series).skipped.collision;
+    const al = collisions.find((c) => c.from === 'Elric Alphonse');
+    const yuuki = collisions.find((c) => c.from === 'Satou Yuuki');
+    assert.equal(al.duplicate, true);
+    assert.equal(yuuki.duplicate, false, 'another AniList character\'s art means another character');
+
+    const merges = planMerges(db, [al, yuuki]);
+    assert.equal(merges.length, 1);
+    assert.equal(applyMerges(db, merges), 1);
+    const after = lists.getCharacters(listId);
+    assert.equal(after.filter((c) => /alphonse/i.test(c.name)).length, 1);
+    assert.equal(after.find((c) => c.name === 'Alphonse Elric').image_url, 'https://s4.anilist.co/al.png', 'the picture moves over');
+
+    undoMerges(db, merges);
+    const restored = lists.getCharacters(listId);
+    assert.deepEqual(restored.filter((c) => /alphonse/i.test(c.name)).map((c) => c.name).sort(), ['Alphonse Elric', 'Elric Alphonse']);
+    assert.equal(restored.find((c) => c.name === 'Alphonse Elric').image_url, null);
   },
 };
