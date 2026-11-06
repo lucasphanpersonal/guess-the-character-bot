@@ -24,7 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { surnameFirstName } = require('./lib/anilistNames');
+const { surnameFirstName, looksOrderSwapped } = require('./lib/anilistNames');
 const { writeFileAtomic } = require('./lib/writeAtomic');
 
 const SEED_PATH = path.join(__dirname, '..', 'data', 'seed', 'anilist-characters.json');
@@ -136,9 +136,10 @@ function main() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
   const csvPath = path.join(dataDir, `anilist-renames-${stamp}.csv`);
-  const lines = ['list,category,from,to,matched_by'];
+  // check_order marks a rename shaped like a character whose AniList parts are swapped; read those.
+  const lines = ['list,category,from,to,matched_by,check_order'];
   for (const r of [...renames].sort((a, b) => a.list.localeCompare(b.list) || a.from.localeCompare(b.from))) {
-    lines.push([r.list, r.category, r.from, r.to, r.matchedBy].map(csvCell).join(','));
+    lines.push([r.list, r.category, r.from, r.to, r.matchedBy, looksOrderSwapped(r.to) ? 'yes' : ''].map(csvCell).join(','));
   }
   writeFileAtomic(csvPath, `${lines.join('\n')}\n`);
 
@@ -150,6 +151,8 @@ function main() {
   for (const r of renames.slice(0, 8)) console.log(`  e.g. ${r.from} -> ${r.to}  (${r.list})`);
   for (const c of skipped.collision.slice(0, 5)) console.log(`  collision: ${c.from} -> ${c.to}  (${c.list})`);
   console.log(`Report: ${csvPath}`);
+  console.log(`${renames.filter((r) => looksOrderSwapped(r.to)).length} row(s) flagged check_order=yes: ` +
+    'the new last word looks like a Japanese given name, so AniList may have the parts swapped.');
   console.log('Read it before --apply: look for English words the long-vowel rule folded by mistake ' +
     '(add them to FOLD_EXCEPTIONS in scripts/lib/anilistNames.js).');
 

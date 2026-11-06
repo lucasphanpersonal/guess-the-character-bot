@@ -301,7 +301,12 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
 
   Read the CSV before `--apply`, and look in particular for English words the long-vowel rule
   folded by mistake: the rule's exceptions (`FOLD_EXCEPTIONS`) came from exactly that reading
-  (Urouge, Mouseman, Mousse, Rouge). Guesses typed the old way still count: both computer games
+  (Urouge, Mouseman, Mousse, Rouge, Mountain), and from it the rule that "-ura" never folds
+  (Minoura is Mino-ura). Read the rows marked `check_order` too: AniList files a few characters
+  with the surname as the given name, so the old flip happened to show them right ("Tim Marcoh")
+  and the new order scrambles them. The ones found so far are kept as they were
+  (`PARTS_SWAPPED`); `check_order` flags renames whose new last word ends like a Japanese given
+  name (Kuroda Heihachiro), the likeliest shape of more. Guesses typed the old way still count: both computer games
   judge Anime and Manga names with `romanised`, which folds long vowels and takes the words in
   any order, so "Gojou Satoru" is correct for "Satoru Gojo". The seed file also keeps AniList's
   other names for each character, for a later pass at nicknames such as "All Might".

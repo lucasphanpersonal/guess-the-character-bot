@@ -55,7 +55,39 @@ const FOLD_EXCEPTIONS = new Map([
   ['urouge', 'Urouge'],
   ['mouseman', 'Mouseman'],
   ['mousse', 'Mousse'],
+  // From the first full report on the live library: English and French words that parse as
+  // romaji, and Japanese words where the u starts the next syllable (To-un, Ka-no-u-ne, Haru-ue).
+  ['house', 'House'],
+  ['mouse', 'Mouse'],
+  ['mountain', 'Mountain'],
+  ['fouche', 'Fouche'],
+  ['toun', 'Toun'],
+  ['kanoune', 'Kanoune'],
+  ['haruue', 'Haruue'],
 ]);
+
+// Characters whose AniList name parts are the wrong way round (the surname filed as the given
+// name), so the old surname-first flip happened to show them correctly and the new order would
+// scramble them. Keyed by that old, correct-looking form, and kept exactly as it was (folded).
+// Found by reading the first full rename report; the report's check_order column flags rows
+// shaped like more of them.
+const PARTS_SWAPPED = new Set(
+  [
+    'Tim Marcoh',
+    'Basque Grand',
+    'Fouche Heran Antilene',
+    'Heihachirou Kuroda',
+    'Buichirou Shirase',
+    'Ichitarou Tomikouji',
+    'Soutatsu Tendou',
+    'Shoubei Idebuchi',
+    'Yoshimitsu Hourai',
+    'Hyouko Otowa',
+    'Yuudai Kadokura',
+    'Ubiquitous Seryuu',
+    'Reaper Riyou',
+  ].map((n) => n.toLowerCase())
+);
 
 function foldLongVowels(word) {
   const exception = FOLD_EXCEPTIONS.get(word.toLowerCase());
@@ -65,7 +97,9 @@ function foldLongVowels(word) {
   if (word.length <= 3 || !ROMAJI_WORD.test(word)) return word;
   // Not before a/e, where the u starts the next syllable: Inoue. Before i it is the lengthening
   // in the common names (Kyouichirou, Shouichi), so it folds.
-  return word.replace(/ou(?![ae])/gi, (m) => m[0]).replace(/uu/gi, (m) => m[0]);
+  // Neither folds before a final "ra": -ura is its own syllable in a great many surnames (Mino-ura, Kiyo-ura,
+  // Yotsu-ura, O-ura), and a long "ou" before "ra" is rare.
+  return word.replace(/ou(?![ae])(?!ra$)/gi, (m) => m[0]).replace(/uu(?!ra$)/gi, (m) => m[0]);
 }
 
 function foldName(text) {
@@ -86,8 +120,18 @@ const keepsSurnameFirst = (titles) =>
  * @param titles  The series' titles (English and romaji), to tell whether it keeps surname-first.
  */
 function englishName(name, titles = []) {
-  const ordered = keepsSurnameFirst(titles) ? surnameFirstName(name) : givenFirstName(name);
+  const stored = surnameFirstName(name);
+  const ordered = keepsSurnameFirst(titles) || PARTS_SWAPPED.has(stored.toLowerCase()) ? stored : givenFirstName(name);
   return foldName(ordered).replace(/\s+/g, ' ').trim();
 }
 
-module.exports = { englishName, surnameFirstName, givenFirstName, foldLongVowels, keepsSurnameFirst, SURNAME_FIRST_SERIES };
+// Japanese GIVEN names end like this far more often than surnames do. A rename whose last word
+// ends this way may be one more character whose AniList parts are swapped (Kuroda Heihachiro),
+// so the report flags it for a human to look at; nothing is changed on the strength of it.
+const GIVEN_NAME_ENDING = /(rou|ro|suke|ichi|tarou|taro|bei|hei|dai|mitsu|ko)$/i;
+const looksOrderSwapped = (newName) => {
+  const words = newName.split(' ');
+  return words.length === 2 && GIVEN_NAME_ENDING.test(words[1]) && !GIVEN_NAME_ENDING.test(words[0]);
+};
+
+module.exports = { looksOrderSwapped, englishName, surnameFirstName, givenFirstName, foldLongVowels, keepsSurnameFirst, SURNAME_FIRST_SERIES };
