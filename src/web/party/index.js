@@ -27,6 +27,8 @@ const variant = {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       if (r.game.hostPaused) return ack?.({ ok: false, error: 'The game is paused.' });
+      // The turn's opening beat: its clock has not started (turnLoop.inGrace).
+      if (loop.inGrace(r.game)) return ack?.({ ok: false, error: 'Your turn starts in a moment.' });
       const res = loop.gotIt(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, res.reveal);

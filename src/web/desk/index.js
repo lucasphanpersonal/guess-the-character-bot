@@ -97,6 +97,8 @@ const variant = {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       if (r.game.hostPaused) return ack?.({ ok: false, error: 'The game is paused.' });
+      // The turn's opening beat: its clock has not started (turnLoop.inGrace).
+      if (loop.inGrace(r.game)) return ack?.({ ok: false, error: 'Your turn starts in a moment.' });
       const mine = r.game.headByPlayer[playerId];
       const res = guessing.submitGuess(r.game, playerId, payload.text, { others: othersFor(r.game, mine), romanised: isRomanised(mine) });
       if (!res.ok) return ack?.(res);

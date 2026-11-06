@@ -65,8 +65,13 @@ function attach(bot, { rand, pick }) {
     bot.cancelAll('turn');
     // Inside the time there is, with some to spare: a bot that always timed out would test nothing.
     const budget = Math.max(3000, ((v.turnRemaining ?? v.turnSeconds ?? 60) * 1000) * 0.7);
-    if (desk) planGuesses(key, budget);
-    else planTilt(key, budget);
+    const plan = () => (desk ? planGuesses(key, budget) : planTilt(key, budget));
+    // The turn's opening beat (turnLoop.turnGraceMs): the server refuses anything sent in it, so
+    // the plan starts when its clock does. Divided by the bots' speed because bot.once scales every
+    // wait by it, and the beat is the server's, in real time.
+    const beatMs = (v.turnStartsIn ?? 0) * 1000;
+    if (beatMs > 0) bot.once('turn:beat', beatMs / (Number(process.env.WEB_BOT_SPEED) || 1), () => { if (stillMine(key)) plan(); });
+    else plan();
   });
 
   const stillMine = (key) => {

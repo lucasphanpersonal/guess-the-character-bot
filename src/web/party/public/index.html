@@ -448,6 +448,22 @@
       @keyframes critFlash { 0%,100% { background:#000 } 50% { background:#3a0008 } }
     }
     #forehead.mine.warn #foreheadRot::after { border-color:#ffd23f; }
+    /* The turn's opening beat on the wearer's phone (paintTurnStart): the card goes bright --
+       white, black type, as plain as the rest of the overlay -- so the room sees a phone light up
+       and the wearer sees it is their turn, before the character comes back with the clock. It
+       steps between white and yellow once a second, under the reduced-motion guard; held still,
+       it is just white. Once a second and two light colours: nowhere near a strobe. */
+    #forehead.starting #foreheadRot { background:#fff; }
+    #forehead.starting #foreheadImg, #forehead.starting #foreheadNoImg, #forehead.starting #foreheadName { visibility:hidden; }
+    #forehead.starting #foreheadCount { flex-direction:column; color:#000; line-height:1; }
+    /* The card says it all in two words; the turn line would only collide with them. */
+    #forehead.starting #foreheadTurn { visibility:hidden; }
+    #forehead.starting #foreheadTimeBar { display:none !important; }
+    .fh-yourturn { font-size:11vh; letter-spacing:.02em; }
+    @media (prefers-reduced-motion: no-preference) {
+      #forehead.starting #foreheadRot { animation:turnBeat 1s steps(1) infinite; }
+      @keyframes turnBeat { 0%,100% { background:#fff } 50% { background:#ffd23f } }
+    }
 
     /* Give-up hold progress: visible proof the hold is counting, since audio can be suspended. */
     #foreheadGiveUpBar { display:none; position:fixed; left:6%; right:6%; bottom:14%; height:16px; z-index:6;
