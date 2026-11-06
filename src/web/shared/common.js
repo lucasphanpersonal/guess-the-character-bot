@@ -84,11 +84,11 @@
   function art(url, attrs = '') {
     return url
       ? `<img src="${esc(url)}" alt="" data-art ${attrs} />`
-      : `<img src="${NO_ART}" alt="" data-art ${attrs} />`;
+      : `<img src="${NO_ART}" alt="" data-art data-noart ${attrs} />`;
   }
   // Images are not always written as markup (the phones build some with createElement), so the
   // fallback is also one document-wide listener. Image errors do not bubble, hence capture.
-  function artFallback(img) { if (img.src !== NO_ART) img.src = NO_ART; }
+  function artFallback(img) { if (img.src !== NO_ART) { img.src = NO_ART; img.setAttribute('data-noart', ''); } }
   document.addEventListener('error', (e) => {
     if (e.target instanceof HTMLImageElement && e.target.hasAttribute('data-art')) artFallback(e.target);
   }, true);

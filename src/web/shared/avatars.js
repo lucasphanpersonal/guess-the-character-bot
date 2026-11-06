@@ -351,6 +351,9 @@
       pick(n, (res) => {
         if (!res?.ok) { note.textContent = res?.error || 'That one did not work. Try another.'; return; }
         GTC.store.set(KEY, String(res.avatar));
+        // One tap is the whole choice: folding the grid away gives the lobby back its Start button,
+        // which an open grid pushed a screen further down on a phone. Change reopens it.
+        details.open = false;
       });
     });
 

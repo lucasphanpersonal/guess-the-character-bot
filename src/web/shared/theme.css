@@ -241,6 +241,17 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
   main.desk .stage > .stack h2, main.desk .notescard h2 { margin-bottom:.3rem; }
   main.desk .notescard .hint { margin:0; }
   main.desk .notescard textarea { min-height:2.8em; height:2.8em; }
+  /* While someone else guesses, the side column's cards rarely fill their row, and the notes sat
+     under an empty gap squeezed to 2.8em. So the column's row is only as tall as its cards (and
+     still gives, the log scrolling, when they are taller than the window), and the notes take the
+     rest, their box growing into it. Not on your own turn: there the notes sit under the spotlight,
+     which should keep the height. */
+  main.desk #game:not([data-spot-me]) .stage { grid-template-rows:minmax(0, max-content) minmax(min-content, auto); align-content:stretch; }
+  /* The spotlight spans both rows, and its own height would otherwise be shared out between them
+     (most of it to the notes' row): size containment makes it take the rows, not set them. */
+  main.desk #game:not([data-spot-me]) .stage > .spotlight { contain:size; }
+  main.desk #game:not([data-spot-me]) .stage > .notescard { align-self:stretch; display:flex; flex-direction:column; }
+  main.desk #game:not([data-spot-me]) .notescard textarea { flex:1 1 0; height:auto; }
   /* No line held open for an error that is rare here: when one comes, the log gives way for it. */
   main.desk .notescard .err:empty { display:none; }
   main.desk .stage > .stack > .logcard { flex:0 1 auto; min-height:5.5rem; display:flex; flex-direction:column; }
@@ -286,6 +297,9 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
                   align-items:center; justify-content:center; overflow:hidden; }
 .spotlight .art img { width:100%; height:100%; object-fit:contain; }
 .spotlight .art .noimg { color:var(--muted); }
+/* The missing-picture card (common.js, marked data-noart) is an icon, not a picture: filling the
+   spotlight with it made a broken frame the biggest thing on screen and the name an afterthought. */
+.spotlight .art img[data-noart] { width:auto; height:min(40%, 6rem); min-height:3rem; }
 .spotlight .art.mystery, .tile .tart.mystery { background:conic-gradient(var(--mystery-a) 25%, var(--mystery-b) 0 50%, var(--mystery-a) 0 75%, var(--mystery-b) 0) 0 0/24px 24px;
                   color:var(--mystery-ink); font-family:var(--font-arcade); }
 .spotlight .art.mystery { font-size:96px; }
