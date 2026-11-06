@@ -77,6 +77,8 @@ const FOLD_EXCEPTIONS = new Map([
   ['toosaka', 'Tosaka'],
   ['hoozuki', 'Hozuki'],
   ['koori', 'Kori'],
+  // Nausicaa's insects: the English releases write Ohmu.
+  ['oomu', 'Ohmu'],
   // O-ouchi: the "ou" rule would leave "Oochi".
   ['oouchi', 'Ouchi'],
   // Blue Lock's official spellings: Barou keeps its u, and Shou-ei is a long o before "ei".
@@ -84,10 +86,26 @@ const FOLD_EXCEPTIONS = new Map([
   ['shouei', 'Shoei'],
 ]);
 
-// Names no rule can produce, keyed by AniList's "surname given" with any middle name left out,
-// so a middle name AniList adds later does not lose the entry. Kyouraku's full name carries two
-// middle names English releases never use.
-const NAME_OVERRIDES = new Map([['kyouraku shunsui', 'Shunsui Kyoraku']]);
+// Names no rule can produce. Each is looked up by the name's old and new orders and by "surname
+// given", where "given" is the LAST word of AniList's first name: AniList files middle names
+// inside `first` ("Jirou Sakuranosuke Shunsui"), and changes them, so that is the stable key.
+const NAME_OVERRIDES = new Map([
+  // Kyouraku's full name carries two middle names English releases never use.
+  ['kyouraku shunsui', 'Shunsui Kyoraku'],
+  // Fairy Tail's official spelling; Ooba is a long o elsewhere (Keita Ooba is Oba).
+  ['ooba babasaama', 'Ooba Babasaama'],
+]);
+
+function overrideFor(name) {
+  const last = (name.last || '').trim();
+  const given = (name.first || '').trim().split(/\s+/).pop();
+  const keys = [surnameFirstName(name), givenFirstName(name), name.full || '', last && given ? `${last} ${given}` : ''];
+  for (const key of keys) {
+    const hit = NAME_OVERRIDES.get(key.trim().toLowerCase());
+    if (hit) return hit;
+  }
+  return null;
+}
 
 // Characters whose AniList name parts are the wrong way round (the surname filed as the given
 // name), so the old surname-first flip happened to show them correctly and the new order would
@@ -163,7 +181,7 @@ const keepsSurnameFirst = (titles) =>
  * @param titles  The series' titles (English and romaji), to tell whether it keeps surname-first.
  */
 function englishName(name, titles = []) {
-  const override = NAME_OVERRIDES.get(`${(name.last || '').trim()} ${(name.first || '').trim()}`.toLowerCase());
+  const override = overrideFor(name);
   if (override) return override;
   const stored = surnameFirstName(name);
   const ordered = keepsSurnameFirst(titles) || PARTS_SWAPPED.has(stored.toLowerCase()) ? stored : givenFirstName(name);

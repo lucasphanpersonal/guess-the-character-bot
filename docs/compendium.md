@@ -310,7 +310,9 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   different characters whose names come out alike are marked `distinct` and left alone.
   "oo" folds only at the start of a word (Ootsutsuki → Otsutsuki); inside one it is as often two
   syllables (Hiro-omi), so the long ones there are exceptions (Tooru → Toru). A name no rule can
-  make (Kyouraku's two middle names) goes in `NAME_OVERRIDES`.
+  make (Kyouraku's middle names, Fairy Tail's Ooba Babasaama) goes in `NAME_OVERRIDES`. AniList files
+  middle names inside the first name and changes them, so a row is also matched by its surname and
+  the last word of its first name ("Kyouraku Jirou Souzousa Shunsui" is Kyouraku Shunsui).
 
   Read the CSV before `--apply`, and look in particular for English words the long-vowel rule
   folded by mistake: the rule's exceptions (`FOLD_EXCEPTIONS`) came from exactly that reading

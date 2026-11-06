@@ -282,4 +282,23 @@ module.exports = {
     ]);
     assert.deepEqual(merges.map((m) => [m.gone.id, m.keepId]), [[b, c]]);
   },
+
+  // From the live report: AniList keeps middle names inside `first`, and they differ from the DB's.
+  'Kyouraku is found and renamed though his middle names sit in first and have changed'() {
+    assert.equal(englishName(n('Jirou Sakuranosuke Shunsui', 'Kyouraku'), ['BLEACH']), 'Shunsui Kyoraku');
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Kyouraku Jirou Souzousa Shunsui', 'seed-script', 'https://s4.anilist.co/kyo-live.png');
+    const series = { 1: { label: 'BLEACH', characters: [
+      { id: 10, parts: n('Jirou Sakuranosuke Shunsui', 'Kyouraku'), image: 'https://s4.anilist.co/kyo-live.png' },
+    ] } };
+    const mine = planRenames(db, series).renames.filter((r) => r.listId === listId);
+    assert.deepEqual(mine.map((r) => r.to), ['Shunsui Kyoraku']);
+  },
+
+  'official spellings the "oo" rule would shorten are kept'() {
+    assert.equal(englishName(n('Babasaama', 'Ooba'), ['FAIRY TAIL']), 'Ooba Babasaama');
+    assert.equal(englishName(n('Ooba', 'Babasaama'), ['FAIRY TAIL']), 'Ooba Babasaama');
+    assert.equal(englishName(n('Keita', 'Ooba'), []), 'Keita Oba', 'only the one character keeps Ooba');
+    assert.equal(foldLongVowels('Oomu'), 'Ohmu');
+  },
 };
