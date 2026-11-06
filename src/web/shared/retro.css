@@ -62,12 +62,11 @@
   /* Arcade: the title, room code, countdown, clock. Wide, and crisp only at multiples of 8px, so
      it is sized in px and kept to short strings. UI: buttons, labels, headings. Name: sentences and
      anything a person typed or the library holds, in a terminal's face (VT323) that still reads
-     fast; the system faces behind it carry the scripts it has no glyphs for. Plain: the one surface
-     that opts out of the look, the forehead view, read across a dim room. */
+     fast; the system faces behind it carry the scripts it has no glyphs for. No system face shows
+     on its own anywhere, the forehead view included. */
   --font-arcade:'Press Start 2P', 'VT323', ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --font-display:'Pixelify Sans', 'VT323', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
   --font-name:'VT323', 'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
-  --font-plain:'Trebuchet MS', 'Segoe UI', system-ui, -apple-system, sans-serif;
 
   --title-size:32px;
   --px:3px; /* one "pixel" of UI chrome: frames, bevels */
