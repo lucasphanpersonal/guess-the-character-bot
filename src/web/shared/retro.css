@@ -242,7 +242,12 @@ button.tile:active { box-shadow:var(--frame), inset 0 2px 0 0 rgba(0,0,0,.25); }
 .avnote:empty { display:none; }
 .avnote { color:var(--red); margin:4px 0 0; }
 .pill, #roster .seat { --px:2px; box-shadow:var(--frame), var(--drop); font-family:var(--font-name); }
-#roster .mine { cursor:pointer; min-height:44px; } /* your own row opens the face picker (shared/avatars.js): a thumb-sized target */
+/* Your own row opens the face picker (shared/avatars.js): a thumb-sized target, and a visible arrow
+   for it (down while the grid is shut, up while open). The arrow is CSS keyed off aria-expanded, so
+   the same attribute tells a screen reader and a player what the row is doing. */
+#roster .mine { cursor:pointer; min-height:44px; }
+#roster .mine::after { content:'▾'; margin-left:8px; font-family:var(--font-display); font-weight:700; color:var(--link); }
+#roster .mine[aria-expanded="true"]::after { content:'▴'; }
 .crown { font-family:var(--font-display); letter-spacing:.06em; }
 .dot { flex:none; }
 .badge, .players .tag, .chat li .kind { font-family:var(--font-display); letter-spacing:.04em; }

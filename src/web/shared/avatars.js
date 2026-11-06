@@ -332,7 +332,7 @@
    */
   function mountPicker(el, pick, roster) {
     el.classList.add('avpick');
-    el.innerHTML = `<div class="avgrid" role="radiogroup" aria-label="Pick your player"${GTC.store.get(KEY) == null ? '' : ' hidden'}>${SET.map((s, n) =>
+    el.innerHTML = `<div class="avgrid" id="avGrid" role="radiogroup" aria-label="Pick your player"${GTC.store.get(KEY) == null ? '' : ' hidden'}>${SET.map((s, n) =>
         `<button type="button" class="avopt" role="radio" aria-checked="false" data-av="${n}">${api.svg(n, 36)}<span class="avmark" aria-hidden="true"></span></button>`).join('')}</div>
       <p class="hint avnote" role="status"></p>`;
     const grid = el.querySelector('.avgrid');
@@ -340,7 +340,15 @@
     const buttons = [...el.querySelectorAll('.avopt')];
     let last = null;
 
-    const toggle = () => { grid.hidden = !grid.hidden; };
+    // The own row says whether the grid is open (aria-expanded, and the arrow CSS draws from it). A
+    // roster redraw makes a new row, so it is set again on every update() as well.
+    const sync = () => {
+      const row = roster.querySelector('.mine');
+      if (!row) return;
+      row.setAttribute('aria-controls', 'avGrid');
+      row.setAttribute('aria-expanded', String(!grid.hidden));
+    };
+    const toggle = () => { grid.hidden = !grid.hidden; sync(); };
     roster.addEventListener('click', (e) => { if (e.target.closest('.mine')) toggle(); });
     roster.addEventListener('keydown', (e) => {
       if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('.mine')) { e.preventDefault(); toggle(); }
@@ -355,12 +363,14 @@
         if (!res?.ok) { note.textContent = res?.error || 'That one did not work. Try another.'; return; }
         GTC.store.set(KEY, String(res.avatar));
         grid.hidden = true;
+        sync();
       });
     });
 
     return {
       /** Redraw from room state: your face, and who wears the rest. */
       update(players, me) {
+        sync(); // the roster was just redrawn, so its own row is new
         const mine = players.find((p) => p.playerId === me);
         if (!mine) return;
         const wornBy = new Map();
