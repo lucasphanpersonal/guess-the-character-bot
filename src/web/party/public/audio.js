@@ -16,9 +16,25 @@ function ensureAudio() {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     // iOS starts the context suspended and keeps re-suspending it; without this the cue beeps
     // are silently dropped, which is what made the give-up hold feel like it wasn't counting.
-    if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    // Anything but running, not just 'suspended': iOS also has 'interrupted' (a call, a locked
+    // screen, another app's audio), and a context left there plays nothing at all.
+    if (audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
   } catch {}
 }
+
+// Why the turn chime came and went. A browser only lets audio start or resume inside a gesture,
+// and the phones used to wake their audio only on taps that happened to be buttons (the select
+// blip) or on the setup screen. Between a player's turns nothing is tapped for minutes; iOS
+// suspends or interrupts the context meanwhile (a dimmed screen, a notification, a call), and a
+// resume() asked for from a socket event, outside any gesture, is refused. So whether your turn
+// made a sound came down to how recently you had touched a button. Every touch or key now wakes
+// it -- capture phase, so nothing on the page can swallow it -- and so does coming back to the tab.
+for (const ev of ['pointerdown', 'touchend', 'keydown']) {
+  document.addEventListener(ev, () => { if (!muted) ensureAudio(); }, { capture: true, passive: true });
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && audioCtx && audioCtx.state !== 'running') audioCtx.resume().catch(() => {});
+});
 
 // Every sound in the game goes through here, so this is also where "off" is honoured. The
 // preference is per phone and sticky: the turn bed runs for a full minute at a time, and anyone
@@ -85,6 +101,39 @@ function playTune(name, delay = 0) {
 // have no queue to keep two phrases apart. The phone buzzes on the same beats (startCountdown).
 function countBlip(n) {
   if (live() && n > 0) tone(523, 90, { gain: 0.4 });
+}
+
+// --- the turn's opening beat ----------------------------------------------------------------
+// Every turn after the first opens with a few seconds before its clock runs (turnLoop.turnGraceMs
+// on the server), and the player it belongs to is told three ways at once: the forehead card turns
+// bright and says YOUR TURN (app.js), the phone buzzes, and it plays GTC.TUNES.yourTurn, the
+// loudest cue in the game. Nothing else sounds under it: the bed waits for the clock.
+//
+// The previous turn's reveal chime lands on this phone in the same moment (game:reveal comes just
+// before the new turn's state), so the fanfare waits for it, as the game-over fanfare does.
+//
+// If audio is not running, it is asked to resume and the cue plays only if that happens within a
+// moment: a cue that turns up seconds later, after the beat, would be about nothing.
+const YOUR_TURN_LATE_MS = 1200;
+function yourTurnCue() {
+  navigator.vibrate?.([220, 90, 220, 90, 420]);
+  if (muted) return;
+  ensureAudio();
+  const play = () => playTune('yourTurn', Math.max(AFTER_REVEAL_S, levelUpEndsAt - audioCtx.currentTime));
+  if (live()) return play();
+  if (!audioCtx) return;
+  const asked = performance.now();
+  audioCtx.resume().then(() => {
+    if (live() && performance.now() - asked < YOUR_TURN_LATE_MS) play();
+  }).catch(() => {});
+}
+
+// The beat counts down on the wearer's phone like the game's countdown, and ends on a higher
+// note the moment the clock starts: the bed comes in under it, and the turn is on.
+function graceBlip(n) {
+  if (!live()) return;
+  if (n > 0) tone(523, 90, { gain: 0.4 });
+  else tone(1047, 160, { gain: 0.4, type: 'square' });
 }
 
 // Somebody joined the lobby. A whole party joins in the same minute, often with the phones side
@@ -218,6 +267,7 @@ function stopBed() {
 
 // The bed belongs to one live turn on one phone: the player's own, running, not paused, not
 // over. Called every second from the ticker, so it also picks up the change into the last ten.
+// `remaining` is null during the turn's opening beat: no clock yet, so no bed.
 function updateBed(view, remaining) {
   const live = view.isMyTurn && !frozen(view) && remaining != null && remaining > 0;
   if (live) startBed(remaining <= CRIT_SECONDS);

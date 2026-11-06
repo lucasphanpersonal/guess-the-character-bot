@@ -15,6 +15,9 @@ process.env.WEB_PORT = process.env.WEB_PORT || '4199';
 process.env.WEB_SCOPE = process.env.WEB_SCOPE || 'gtc-check-scope';
 process.env.WEB_GRACE_SECONDS = process.env.WEB_GRACE_SECONDS || '1'; // short grace so the check stays quick
 process.env.WEB_DRAW_REVEAL_SECONDS = process.env.WEB_DRAW_REVEAL_SECONDS || '1'; // and a short reveal between drawings
+// No opening beat on each turn, except in the one section that checks it (it turns it on there):
+// most of this check answers a turn the moment it begins.
+process.env.WEB_TURN_GRACE_SECONDS = '0';
 // Games seat players at random (core/game/seating.js), and much below asserts on who goes first: the
 // join order is kept, except in the section that checks the reseating itself.
 process.env.GTC_FIXED_SEATING = '1';
@@ -424,6 +427,57 @@ const connect = (playerId) => {
     check(!!game.turnEndsAt, 'pause: the new turn gets a real deadline');
     P2.close(); Q.close(); R.close();
   }
+
+  // ---- A turn's opening beat: a few seconds of "Your turn!" before its clock runs ----------
+  // Asserted on both ways of playing, positively: the beat is there (turnStartsIn, a full clock),
+  // an answer in it is refused with a reason, and the same answer once it is over goes through.
+  console.log('\n# a turn opens with a beat before its clock');
+  process.env.WEB_TURN_GRACE_SECONDS = '1';
+  {
+    const P = await connect('pBeatA');
+    let r = await P.emitWithAck('room:create', { nickname: 'Bea' });
+    const code = r.state.code;
+    const Q = await connect('pBeatB');
+    await Q.emitWithAck('room:join', { code, nickname: 'Ben' });
+    await P.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+    const pFirst = nextMatching(P, 'game:state', (v) => v.phase === 'playing');
+    for (const s of [P, Q]) await s.emitWithAck('setup:confirm', {});
+    const first = await pFirst;
+    // The phones' countdown already gave the first player their moment.
+    check(first.isMyTurn && first.turnStartsIn === 0, 'beat: the first turn on phones follows the countdown, with no second wait');
+    const qTurn = nextMatching(Q, 'game:state', (v) => v.isMyTurn);
+    await P.emitWithAck('game:pass', {});
+    const second = await qTurn;
+    check(second.turnStartsIn === 1 && second.turnRemaining === 60, `beat: the next turn opens with its beat and a whole clock (${second.turnStartsIn}s, ${second.turnRemaining}s)`);
+    r = await Q.emitWithAck('game:gotit', {});
+    check(!r.ok && /moment/.test(r.error), 'beat: a tilt in the beat is refused, and says why');
+    r = await Q.emitWithAck('game:pass', {});
+    check(!r.ok, 'beat: so is a pass');
+    await wait(1100);
+    r = await Q.emitWithAck('game:gotit', {});
+    check(r.ok && r.reveal.secondsLeft >= 59, `beat: once it is over the turn is on, its clock whole (${r.reveal?.secondsLeft}s left)`);
+    P.close(); Q.close();
+
+    // A computer: no countdown, so even the first turn opens with the beat.
+    const W = io(`${URL}/desk`, { auth: { playerId: 'dBeatW' } });
+    const X = io(`${URL}/desk`, { auth: { playerId: 'dBeatX' } });
+    await Promise.all([W, X].map((sock) => new Promise((ok) => sock.on('connect', ok))));
+    r = await W.emitWithAck('room:create', { nickname: 'Wes' });
+    await X.emitWithAck('room:join', { code: r.state.code, nickname: 'Xan' });
+    await W.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything', turnSeconds: 60 });
+    const wFirst = nextMatching(W, 'game:state', (v) => v.phase === 'playing');
+    for (const s of [W, X]) await s.emitWithAck('setup:confirm', {});
+    const wView = await wFirst;
+    check(wView.turnStartsIn === 1, 'beat: on a computer the first turn opens with it too');
+    const guesser = wView.isMyTurn ? W : X;
+    r = await guesser.emitWithAck('game:guess', { text: 'Nobody' });
+    check(!r.ok && /moment/.test(r.error), 'beat: a typed guess in the beat is refused, and says why');
+    await wait(1100);
+    r = await guesser.emitWithAck('game:guess', { text: 'Nobody' });
+    check(r.ok, 'beat: once it is over, guesses go through');
+    W.close(); X.close();
+  }
+  process.env.WEB_TURN_GRACE_SECONDS = '0';
 
   // ---- Host-picks mode: the host chooses everyone's character and sits the game out --------
   // The host's view carries EVERY character in play, so the property that matters most is who

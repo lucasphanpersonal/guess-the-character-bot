@@ -18,13 +18,38 @@ const rules = require('../../core/game/turnRules');
 /** Begin a turn for the current player: their turn counter ticks up. */
 const startTurn = (game) => rules.beginTurn(game);
 
+// The turn's opening beat: every turn begins with a few seconds of "Your turn!" before its clock
+// runs, so the player it belongs to -- phone in a lap, eyes on someone else's head, or a tab behind
+// a call -- has a moment to notice, raise the phone or find the box. A turn is armed with its
+// deadline pushed back by this much (socket.js, scheduleTurn) and game.turnStartsAt set to when
+// the clock starts; nobody can act on the turn until then (inGrace). Read on every turn rather
+// than once, so the socket check can turn it on for the one section that tests it.
+// WEB_TURN_GRACE_SECONDS=0 turns it off.
+const turnGraceMs = () => Math.max(0, Number(process.env.WEB_TURN_GRACE_SECONDS ?? 3) || 0) * 1000;
+
+// Still in a turn's opening beat: the clock has not started, so no answer, pass or give-up yet.
+const inGrace = (game, now = Date.now()) =>
+  game.turnEndsAt != null && game.turnStartsAt != null && now < game.turnStartsAt;
+
+/** Whole seconds until the turn's clock starts, 0 once it has (or with no opening beat). */
+function graceRemainingOf(game, now = Date.now()) {
+  return inGrace(game, now) ? Math.ceil((game.turnStartsAt - now) / 1000) : 0;
+}
+
+// The running clock's time left, in ms, or null when no deadline is armed. During the opening
+// beat it is the whole turn: the deadline sits that much further off, and none of it is spent.
+function clockMsLeft(game, now) {
+  if (game.turnEndsAt == null) return null;
+  return Math.max(0, game.turnEndsAt - Math.max(now, game.turnStartsAt ?? 0));
+}
+
 // How long the current turn's clock still has to run, in ms, or null with no clock. While
 // paused (the current player dropped) that is the frozen remainder, not a deadline in the past.
-// One owner for "time left": the clock players see and the tiebreak are both read from here.
+// One owner for "time left": the clock players see, the pauses and the tiebreak all read it here.
 function msLeftOf(game, now) {
   // Either pause holds the clock still, with the turn's time left in one place.
   if (game.pausedForDisconnect || game.hostPaused) return game.pausedRemaining ?? 0;
-  return game.turnEndsAt ? Math.max(0, game.turnEndsAt - now) : null;
+  return clockMsLeft(game, now);
 }
 
 // A resolved turn, followed straight through: who it was, and where the game goes next.
@@ -137,6 +162,7 @@ function buildHostGameView(game, names, now = Date.now()) {
     hostPaused: !!game.hostPaused,
     current: { playerId: currentId, name: names[currentId] ?? 'Player', turnNumber: game.turnsFor(currentId) },
     turnRemaining: turnRemainingOf(game, now),
+    turnStartsIn: graceRemainingOf(game, now),
     turnSeconds: game.turnSeconds,
     players: standingsView(game, names).map((s) => ({ ...s, character: publicCharacter(game.headByPlayer[s.playerId]) })),
   };
@@ -175,6 +201,10 @@ module.exports = {
   buildHostGameView,
   standingsView,
   turnRemainingOf,
+  graceRemainingOf,
+  inGrace,
+  turnGraceMs,
+  clockMsLeft,
   resultView,
   OUT_OF_CONTENTION_NOTE,
   // The table has gone quiet, and somebody is back: the core's count, for the socket layer.

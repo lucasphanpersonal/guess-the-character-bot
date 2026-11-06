@@ -150,6 +150,13 @@ everyone checks/rerolls their assigned character and taps **Good to go** → a g
 for the room → on your turn, **tilt up = got it, tilt down / time out = pass** → fewest turns
 wins (equal turns: most time left when they got it), and the end screen reveals who everyone was.
 
+**Every turn opens with a beat** before its clock runs (`turnLoop.turnGraceMs`, 3s,
+`WEB_TURN_GRACE_SECONDS=0` turns it off): the deadline is pushed back by it, `game.turnStartsAt`
+says when the clock starts, views carry `turnStartsIn`, and an answer, pass or give-up in it is
+refused. The player it belongs to gets the loudest cue in the game (`GTC.TUNES.yourTurn`) and a
+flash: on a phone the forehead card itself turns bright and says YOUR TURN, a computer gets
+`GTC.flash('turn')`. The phones skip it on the first turn, which follows their countdown.
+
 **Where the characters come from** is one picker, shared by all three clients
 (`shared/pickers.js`): *Surprise Me*, *Everything*, or any number of category chips played together
 (`poolType: 'categories'`). A chosen category's lists can be switched off for this room under
@@ -373,7 +380,7 @@ Endpoints that prove the shared core is reachable from this frontend:
   turn clock; per-player views; reveal/over broadcasts; leaving mid-game forfeits.
 - **4. Forehead mode + tilt — done.** A synchronized grace countdown ("phone on your
   forehead!"), then each phone shows its wearer's character full-screen for the room, with a
-  turn-start chime + buzz and a bright border on your turn.
+  bright YOUR TURN card, fanfare and buzz in the turn's opening beat, and a bright border on your turn.
   - **Tilt** reads how far the screen faces up or down -- from the orientation angles
     (`DeviceOrientation` beta/gamma), which every platform reports the same way, falling back to
     `accelerationIncludingGravity.z`, whose sign differs between browsers and is learned from a

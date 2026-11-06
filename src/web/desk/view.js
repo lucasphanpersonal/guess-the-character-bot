@@ -71,6 +71,8 @@ function buildBoardView(game, viewerId, names, now = Date.now()) {
     buttons: isMyTurn ? { ...loop.buttonsFor(game), gotIt: false } : null,
     outOfContentionNote: isMyTurn && game.isOutOfContention(viewerId) ? loop.OUT_OF_CONTENTION_NOTE : null,
     turnRemaining: loop.turnRemainingOf(game, now),
+    // Seconds of the turn's opening beat still to run (turnLoop.turnGraceMs): the clock waits on it.
+    turnStartsIn: loop.graceRemainingOf(game, now),
     turnSeconds: game.turnSeconds,
     board,
     // The current player's recent guesses, newest first: what they have already tried. Their

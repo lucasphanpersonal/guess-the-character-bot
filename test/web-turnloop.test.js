@@ -118,6 +118,45 @@ function aPausedClockCountsItsFrozenRemainder() {
   assert.equal(g.secondsLeftBy.get('p1'), 22);
 }
 
+// The turn's opening beat: armed the way socket.js arms it, the deadline pushed back by the beat.
+// Until the clock starts the turn shows its whole time, says how long until it starts, and is
+// in its beat; after, it counts down from the whole turn as if the beat had not been there.
+function theOpeningBeatHoldsTheClockAtTheWholeTurn() {
+  const g = game(['p1', 'p2'], [row(1, 'A'), row(2, 'B')]);
+  g.turnStartsAt = T + 3000;
+  g.turnEndsAt = T + 3000 + 60_000;
+  assert.equal(loop.inGrace(g, T), true);
+  assert.equal(loop.graceRemainingOf(g, T), 3);
+  assert.equal(loop.graceRemainingOf(g, T + 2100), 1, 'rounded up, so a client never opens early');
+  assert.equal(loop.turnRemainingOf(g, T), 60);
+  assert.equal(loop.clockMsLeft(g, T + 1000), 60_000, 'none of the turn is spent in the beat');
+  const view = buildGameView(g, 'p1', names, T);
+  assert.equal(view.turnStartsIn, 3);
+  assert.equal(view.turnRemaining, 60);
+
+  assert.equal(loop.inGrace(g, T + 3000), false);
+  assert.equal(loop.graceRemainingOf(g, T + 3000), 0);
+  assert.equal(loop.turnRemainingOf(g, T + 13_000), 50);
+  // Paused (no deadline armed), a leftover start time is not a beat.
+  g.turnEndsAt = null;
+  assert.equal(loop.inGrace(g, T), false);
+}
+
+function theOpeningBeatIsOnByDefaultAndCanBeTurnedOff() {
+  const before = process.env.WEB_TURN_GRACE_SECONDS;
+  try {
+    delete process.env.WEB_TURN_GRACE_SECONDS;
+    assert.equal(loop.turnGraceMs(), 3000);
+    process.env.WEB_TURN_GRACE_SECONDS = '0';
+    assert.equal(loop.turnGraceMs(), 0);
+    process.env.WEB_TURN_GRACE_SECONDS = 'nonsense';
+    assert.equal(loop.turnGraceMs(), 0);
+  } finally {
+    if (before === undefined) delete process.env.WEB_TURN_GRACE_SECONDS;
+    else process.env.WEB_TURN_GRACE_SECONDS = before;
+  }
+}
+
 function lastPlayerGetsGiveUpNotPass() {
   const g = game(['p1', 'p2'], [row(1, 'A'), row(2, 'B')]);
   loop.gotIt(g, 'p1'); // p1 done, p2 alone (turn2)
@@ -172,6 +211,8 @@ module.exports = {
   'equal turns and equal time tie': equalTurnsAndTimeTie,
   'on equal turns, more time left wins': onEqualTurnsMoreTimeLeftWins,
   'a paused clock counts its frozen remainder': aPausedClockCountsItsFrozenRemainder,
+  "the opening beat holds the clock at the whole turn": theOpeningBeatHoldsTheClockAtTheWholeTurn,
+  'the opening beat is on by default and can be turned off': theOpeningBeatIsOnByDefaultAndCanBeTurnedOff,
   'the last player gets give up, not pass': lastPlayerGetsGiveUpNotPass,
   'give up ends the game for the last player': giveUpEndsTheGameForTheLastPlayer,
   'out of contention offers give up alongside pass': outOfContentionOffersGiveUpAlongsidePass,

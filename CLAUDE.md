@@ -159,6 +159,8 @@ like it was always there.
 - **`GTC.flash` covers the screen, so it has rules** (common.js): one per event, low opacity, at most
   one in 800ms, nothing under reduced motion. Never during the forehead view, which it would show
   over (`main` is its own stacking context). In a game of fast guesses, a miss shakes the box instead.
+  The one bright flash is `turn`, once per turn for the player whose turn it is: it has to reach
+  someone looking elsewhere. On the forehead view the card itself does that job (`.starting`).
 - **Everything a thumb aims at is 44px.** Grow the control, or where the row has no room (Draw's
   palette holds the canvas on screen) give it a transparent `::before` hit area out to 44px. Both
   live in retro.css under *fingers*.
@@ -170,7 +172,8 @@ like it was always there.
   player's phone plays it, the sound is also how the room knows whose head to look at. Anything
   continuous needs an off switch (`gtc_muted`, honoured inside `tone()` so nothing can dodge it).
   The voice is a chip's, pulse and triangle. A pulse is far louder than a sine at the same gain, so an
-  unnamed voice is scaled by `PULSE_LEVEL`. Off by default on the computers, where everyone can see
+  unnamed voice is scaled by `PULSE_LEVEL`. The exception is `GTC.TUNES.yourTurn`, loud on purpose
+  (it names `'square'` to skip the scaling): it plays in the turn's opening beat, over nothing. Off by default on the computers, where everyone can see
   the screen; on by default on the phones, where the wearer hears the clock or does not know it.
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
   screen*). It lies over the panels people read, so it is held in check, and every layer costs

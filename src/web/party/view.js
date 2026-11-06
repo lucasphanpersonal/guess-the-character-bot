@@ -40,6 +40,8 @@ function buildGameView(game, viewerId, names, now = Date.now()) {
     wearing: !isMyTurn && game.isActive(currentId) && !game.finished ? publicCharacter(game.headByPlayer[currentId]) : null,
     outOfContentionNote: isMyTurn && game.isOutOfContention(viewerId) ? loop.OUT_OF_CONTENTION_NOTE : null,
     turnRemaining: loop.turnRemainingOf(game, now),
+    // Seconds of the turn's opening beat still to run (turnLoop.turnGraceMs): the clock waits on it.
+    turnStartsIn: loop.graceRemainingOf(game, now),
     turnSeconds: game.turnSeconds,
     standings: loop.standingsView(game, names),
     me: {

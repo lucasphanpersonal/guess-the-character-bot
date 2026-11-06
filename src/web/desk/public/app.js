@@ -498,14 +498,19 @@ socket.on('game:state', (view) => {
   renderGame();
   // Not on a touch screen: in one column the guess box is under the spotlight, and a focus nobody
   // tapped for scrolled the page to it, taking the picture off the top as the turn began.
-  if (view.isMyTurn && !wasMyTurn && matchMedia('(pointer: fine)').matches) $('guessInput').focus();
+  if (view.isMyTurn && !wasMyTurn) focusGuess();
 
   // By turn number, not by isMyTurn flipping: the last player still guessing takes turn after
   // turn of their own, and each is a new turn.
   const turn = view.phase === 'playing' ? `${view.current.playerId}:${view.current.turnNumber}` : '';
   if (turn !== heardTurn) {
     heardTurn = turn;
-    if (view.isMyTurn && !view.paused) sound('turn');
+    // Your turn: the fanfare and a bright flash, at the start of the turn's opening beat -- the few
+    // seconds before its clock runs (turnLoop.turnGraceMs) that are there for exactly this.
+    if (view.isMyTurn && !view.paused) {
+      sound('turn');
+      GTC.flash('turn', 'Your Turn!');
+    }
   }
   // A close guess wants a ruling, against a clock -- but only from those who can give one.
   const r = view.ruling;
@@ -513,12 +518,31 @@ socket.on('game:state', (view) => {
   heardRuling = r?.id ?? null;
 });
 
+// Not on a touch screen: in one column the guess box is under the spotlight, and a focus nobody
+// tapped for scrolled the page to it, taking the picture off the top as the turn began.
+function focusGuess() {
+  if (matchMedia('(pointer: fine)').matches && !$('guessInput').disabled) $('guessInput').focus();
+}
+
+// The turn's opening beat ran out on this page's count: the clock is running now, so the box opens.
+// Counted from the server's whole seconds rounded up, so it opens a little after the server's clock
+// starts, never before -- a guess sent in the beat is refused.
+function graceOver() {
+  if (!gameView || gameView.phase !== 'playing') return;
+  gameView.turnStartsIn = 0;
+  renderGame();
+  if (gameView.isMyTurn) focusGuess();
+}
+
 function renderGame() {
   const v = gameView;
   if (!v) return;
-  $('turnWho').textContent = v.isMyTurn ? 'Your turn' : `${v.current.name}'s turn`;
+  const frozen = v.paused || v.hostPaused;
+  const startsIn = frozen ? 0 : Math.max(0, v.turnStartsIn || 0);
+  // The clock beside it says when it starts (setClock).
+  $('turnWho').textContent = v.isMyTurn ? (startsIn ? 'Your turn!' : 'Your turn') : `${v.current.name}'s turn`;
   // Dropped: no reading (their turn waits for them). Host's pause: the reading it stopped at.
-  setClock(v.paused ? null : v.turnRemaining, v.turnSeconds, v.paused || v.hostPaused);
+  setClock(v.paused ? null : v.turnRemaining, v.turnSeconds, frozen, undefined, { startsIn, onStart: graceOver });
 
   // Redrawn only when something on it changed. Every guess and every clock correction sends a new
   // state, and rebuilding the cards each time reloaded every picture -- a board that blinks
@@ -542,11 +566,12 @@ function renderGame() {
 
   $('myTurnPanel').hidden = !v.isMyTurn;
   const waitingOnRuling = v.ruling?.waiting;
-  $('guessInput').disabled = !v.isMyTurn || !!waitingOnRuling;
+  $('guessInput').disabled = !v.isMyTurn || !!waitingOnRuling || startsIn > 0;
   $('guessForm').querySelector('button').disabled = $('guessInput').disabled;
   if (v.isMyTurn) {
     $('passBtn').hidden = !v.buttons?.pass;
     $('giveUpBtn').hidden = !v.buttons?.giveUp;
+    $('passBtn').disabled = $('giveUpBtn').disabled = startsIn > 0;
     $('contentionNote').hidden = !v.outOfContentionNote;
     $('contentionNote').textContent = v.outOfContentionNote ?? '';
     $('guessErr').textContent = waitingOnRuling ? `"${v.ruling.text}" is close. The others are deciding whether it counts.` : $('guessErr').textContent;
@@ -595,18 +620,26 @@ function renderGame() {
 // The clock is the server's: it sends seconds remaining, and this only counts down between
 // updates. A tab that was hidden asks for a fresh one on the way back (game:resync).
 // `ids`: the players' turn bar by default; the watching host has a bar of their own.
-function setClock(remaining, total, paused, ids = { bar: 'clock', fill: 'clockFill', secs: 'clockSecs' }) {
+// `startsIn`: seconds of the turn's opening beat still to run, during which the clock holds full;
+// `onStart` is called when this page's count of it runs out.
+function setClock(remaining, total, paused, ids = { bar: 'clock', fill: 'clockFill', secs: 'clockSecs' }, { startsIn = 0, onStart } = {}) {
   clearInterval(clock.timer);
-  clock = { remaining, total, timer: null };
+  clock = { remaining, total, timer: null, startsIn };
   const draw = () => {
     const secs = clock.remaining;
-    $(ids.secs).textContent = paused ? 'paused' : secs == null ? '' : `${secs}s`;
+    $(ids.secs).textContent = paused ? 'paused' : clock.startsIn > 0 ? `starts in ${clock.startsIn}` : secs == null ? '' : `${secs}s`;
     $(ids.fill).style.width = secs == null ? '100%' : `${Math.max(0, (secs / (clock.total || 60)) * 100)}%`;
     $(ids.bar).classList.toggle('crit', secs != null && secs <= 10);
   };
   draw();
   if (remaining == null || paused) return;
   clock.timer = setInterval(() => {
+    if (clock.startsIn > 0) {
+      clock.startsIn -= 1;
+      draw();
+      if (clock.startsIn === 0) onStart?.();
+      return;
+    }
     if (clock.remaining > 0) clock.remaining -= 1;
     draw();
   }, 1000);
@@ -710,7 +743,8 @@ socket.on('host:state', (view) => {
     $('hostTitle').textContent = 'Starting...';
   } else if (playing) {
     $('hostWho').textContent = view.paused ? `Waiting for ${view.current.name} to reconnect` : `${view.current.name} is guessing, turn ${view.current.turnNumber}`;
-    setClock(view.paused ? null : view.turnRemaining, view.turnSeconds, view.paused || view.hostPaused, { bar: 'hostClock', fill: 'hostClockFill', secs: 'hostClockSecs' });
+    setClock(view.paused ? null : view.turnRemaining, view.turnSeconds, view.paused || view.hostPaused, { bar: 'hostClock', fill: 'hostClockFill', secs: 'hostClockSecs' },
+      { startsIn: view.paused || view.hostPaused ? 0 : view.turnStartsIn || 0 });
     $('hostTitle').textContent = 'You picked these';
     $('hostNote').textContent = 'Close guesses are ruled by the players. You are watching.';
   }

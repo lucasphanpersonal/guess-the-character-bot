@@ -229,6 +229,7 @@ function renderSetup(view) {
   keepAwake();
   clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
   overHeard = false; // a new game: its end will be news
+  heardTurn = ''; // and its first turn, though it may carry the same key as the last game's
   finishCelebrated = false;
   // Arm on ENTERING the deal screen, not on the first setup view of the page: a rematch, a second
   // game or a re-deal after a removal all come back through here from another screen.
@@ -472,11 +473,27 @@ function bannerText(view, remaining) {
     : `<b>${escapeHtml(view.current.name)}</b> is guessing — turn ${view.current.turnNumber}${t}`;
 }
 
+// The turn this phone last announced, `${playerId}:${turnNumber}`, so the many states of one turn
+// (every clock correction, every reveal elsewhere) announce it once. By turn number rather than by
+// isMyTurn flipping: the last player still guessing takes turn after turn of their own.
+let heardTurn = '';
+function announceTurn(view) {
+  const key = view.phase === 'playing' ? `${view.current.playerId}:${view.current.turnNumber}` : '';
+  if (key === heardTurn) return;
+  heardTurn = key;
+  if (!key || !view.isMyTurn || frozen(view)) return;
+  yourTurnCue();
+  // Off the forehead view the page itself flashes. On it the card does (#forehead.starting):
+  // GTC.flash would show over the overlay, which stays plain.
+  if (!motionEnabled) GTC.flash('turn', 'Your Turn!');
+}
+
 function renderPlaying(view) {
   keepAwake();
   // Play began on the server's clock: a local countdown a beat behind would blip over the turn.
   clearInterval(countdown);
   lastPlayView = view;
+  if (!view.me?.finished) announceTurn(view);
   // You've got yours: drop out of forehead mode into a "you got it" screen with your reveal.
   if (view.me?.finished) { hideForehead(); return renderFinished(view); }
   // With motion we play the real thing: full-screen forehead card + tilt to answer.
@@ -524,6 +541,18 @@ function renderPlaying(view) {
 // and everyone else can see the bar on the wearer's forehead anyway.
 const CRIT_SECONDS = 10;
 
+// The turn's opening beat on the wearer's own card: bright, plain and huge -- YOUR TURN and the
+// seconds until the clock starts -- in place of the character, which the wearer may well be
+// looking at the phone to see. It is the flash: the room sees a phone light up and knows whose
+// head to look at. The card is shown when the beat ends.
+function paintTurnStart(view, startsIn) {
+  const fh = $('forehead');
+  const on = view.isMyTurn && startsIn > 0 && fh.classList.contains('active');
+  fh.classList.toggle('starting', on);
+  $('foreheadCount').style.display = on ? 'flex' : 'none';
+  if (on) $('foreheadCount').innerHTML = `<span class="fh-yourturn">YOUR TURN!</span><span>${startsIn}</span>`;
+}
+
 function paintTurnClock(view, remaining) {
   const bar = $('foreheadTimeBar');
   const fh = $('forehead');
@@ -561,9 +590,15 @@ function turnCue(view, remaining) {
 // The turn clock ticks locally each second and is re-synced on every server state push (so it
 // never trusts cross-device wall clocks).
 let turnTicker = null;
+// Seconds of the turn's opening beat left on this phone's count: the tilt waits for it, as the
+// server does (turnLoop.inGrace). Counted from the server's whole seconds rounded up, so this
+// reaches 0 a little after the server's clock starts, never before.
+let turnGraceLeft = 0;
 function startTurnTicker(view) {
   clearInterval(turnTicker);
   let remaining = view.turnRemaining;
+  let startsIn = frozen(view) ? 0 : Math.max(0, view.turnStartsIn || 0);
+  turnGraceLeft = startsIn;
   // Not "by the host": a game that went quiet for two rounds pauses itself (the Paused screen says so).
   const pausedMsg = view.hostPaused ? 'Paused' : `Waiting for ${escapeHtml(view.current.name)} to reconnect…`;
   const paint = () => {
@@ -577,19 +612,33 @@ function startTurnTicker(view) {
       const ooc = view.isMyTurn && view.outOfContentionNote
         ? `<div class="ooc">${escapeHtml(view.outOfContentionNote)}</div>` : '';
       $('foreheadTurn').innerHTML = (frozen(view) ? pausedMsg
+        : startsIn > 0 && !view.isMyTurn ? `${escapeHtml(view.current.name)}'s turn starts in ${startsIn}`
         : view.isMyTurn ? `YOUR TURN${remaining != null ? ` · ${remaining}s` : ''} — ${downHint}`
         : `${escapeHtml(view.current.name)}'s turn${remaining != null ? ` · ${remaining}s` : ''}`) + ooc;
     } else {
-      $('turnBanner').innerHTML = frozen(view) ? pausedMsg : bannerText(view, remaining);
+      $('turnBanner').innerHTML = frozen(view) ? pausedMsg
+        : startsIn > 0 ? (view.isMyTurn ? `<b>Your turn!</b> Starts in ${startsIn}` : `<b>${escapeHtml(view.current.name)}</b>'s turn starts in ${startsIn}`)
+        : bannerText(view, remaining);
     }
+    paintTurnStart(view, startsIn);
     paintTurnClock(view, remaining);
     // In paint() rather than turnCue(): this has to run on the first render of a turn as well as
-    // on every later second, or the bed would not start until a second in.
-    updateBed(view, remaining);
+    // on every later second, or the bed would not start until a second in. Not during the opening
+    // beat: the clock has not started, and the turn's fanfare has the room to itself.
+    updateBed(view, startsIn > 0 ? null : remaining);
   };
   paint();
   if (frozen(view) || remaining == null) return; // the current player is away, or the host paused
   turnTicker = setInterval(() => {
+    if (startsIn > 0) {
+      // The opening beat: the clock holds at the whole turn until it is over.
+      startsIn -= 1;
+      turnGraceLeft = startsIn;
+      if (view.isMyTurn) graceBlip(startsIn);
+      // The card (painted underneath all along) comes back as paint() drops .starting.
+      paint();
+      return;
+    }
     remaining = Math.max(0, remaining - 1);
     paint();
     turnCue(view, remaining);
@@ -885,7 +934,8 @@ function handleGameTilt() {
   const v = lastPlayView;
   // A question on screen (GTC.ask -- "Leave the game?") holds the tilt: the phone comes off the
   // forehead to read it, and that must not count as a gesture. confirm() used to freeze this for us.
-  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn || GTC.asking()) {
+  // The turn's opening beat holds it too: the clock has not started, and the server would refuse.
+  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn || GTC.asking() || turnGraceLeft > 0) {
     TiltRules.reset(tilt);
     showGiveUpProgress(0);
     return;
@@ -944,13 +994,12 @@ function renderForehead(view) {
   }
   startTurnTicker(view); // paints the turn banner and keeps its countdown ticking
   updateForeheadDebug();
-  // My turn just started: reset the tilt baseline, buzz, and chime so I know without looking.
+  // My turn just started: reset the tilt baseline. (The buzz and fanfare are announceTurn's, which
+  // runs on every screen a turn can start on, not only this one.)
   if (view.isMyTurn && !foreheadMyTurn) {
     // Disarmed until the phone is seen upright, so a turn that starts with the phone flat on a
     // table can't instantly fire a gesture.
     tilt.armed = false; TiltRules.reset(tilt); showGiveUpProgress(0);
-    navigator.vibrate?.([140, 60, 140]);
-    beep(880, 200); setTimeout(() => beep(1250, 220), 150);
   }
   foreheadMyTurn = view.isMyTurn;
   show('playing');
