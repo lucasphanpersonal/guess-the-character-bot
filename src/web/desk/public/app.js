@@ -186,7 +186,7 @@ function renderRoom() {
 }
 
 // The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
-const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done), $('roster'));
 
 function renderLobby() {
   const code = roomState.code;
@@ -195,8 +195,11 @@ function renderLobby() {
   if (GTC.someoneArrived(code, roomState.players, me)) sound('join');
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
+  // Your own row opens the face picker under the roster (shared/avatars.js).
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => p.playerId === me
+      ? `<li class="pill mine${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}" tabindex="0" role="button" title="Change your face">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)} (you)${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`
+      : `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
   avPicker.update(roomState.players, me);
   $('hostPanel').hidden = !isHost();

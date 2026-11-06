@@ -315,9 +315,11 @@
   const faceOf = (players, playerId, size) => api.svg((players || []).find((p) => p.playerId === playerId)?.avatar, size);
 
   /**
-   * The lobby's picker, in a <details> of its own: closed it is one row (your face and its name),
-   * so it costs a phone's lobby one line; open it is every face, a 44px button each. It opens by
-   * itself only for someone who has never picked, which is the moment it is news.
+   * The lobby's picker: a grid of every face, a 44px button each. It has no line of its own. The
+   * roster already shows who you are, so your own row there is what opens the grid (`mine`, set by
+   * each page's roster): tap it again, or press Enter on it, to fold the grid away. It opens by
+   * itself only for someone who has never picked, which is the moment it is news. One pick folds it
+   * away again, which gives the lobby back its Start button.
    *
    * Taken faces are disabled with the wearer's name on them: a face is one per seat while there are
    * enough to go round (rooms.js), and the server would refuse it anyway. Chosen is a mark and a
@@ -326,24 +328,25 @@
    *
    * @param {HTMLElement} el  an empty element to fill
    * @param {(n: number, done: (res) => void) => void} pick  asks the server for face n
+   * @param {HTMLElement} roster  the lobby's roster, whose own row opens and shuts the grid
    */
-  function mountPicker(el, pick) {
+  function mountPicker(el, pick, roster) {
     el.classList.add('avpick');
-    el.innerHTML = `<details${GTC.store.get(KEY) == null ? ' open' : ''}>
-      <summary><span class="avme"></span><span class="avwho"></span><span class="avchange"></span></summary>
-      <div class="avgrid" role="radiogroup" aria-label="Pick your player">${SET.map((s, n) =>
+    el.innerHTML = `<div class="avgrid" role="radiogroup" aria-label="Pick your player"${GTC.store.get(KEY) == null ? '' : ' hidden'}>${SET.map((s, n) =>
         `<button type="button" class="avopt" role="radio" aria-checked="false" data-av="${n}">${api.svg(n, 36)}<span class="avmark" aria-hidden="true"></span></button>`).join('')}</div>
-      <p class="hint avnote" role="status"></p>
-    </details>`;
-    const details = el.querySelector('details');
+      <p class="hint avnote" role="status"></p>`;
+    const grid = el.querySelector('.avgrid');
     const note = el.querySelector('.avnote');
     const buttons = [...el.querySelectorAll('.avopt')];
     let last = null;
-    const label = () => { el.querySelector('.avchange').textContent = details.open ? 'Done' : 'Change'; };
-    details.addEventListener('toggle', label);
-    label();
 
-    el.querySelector('.avgrid').addEventListener('click', (e) => {
+    const toggle = () => { grid.hidden = !grid.hidden; };
+    roster.addEventListener('click', (e) => { if (e.target.closest('.mine')) toggle(); });
+    roster.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('.mine')) { e.preventDefault(); toggle(); }
+    });
+
+    grid.addEventListener('click', (e) => {
       const b = e.target.closest('.avopt');
       if (!b || b.disabled) return;
       const n = Number(b.dataset.av);
@@ -351,9 +354,7 @@
       pick(n, (res) => {
         if (!res?.ok) { note.textContent = res?.error || 'That one did not work. Try another.'; return; }
         GTC.store.set(KEY, String(res.avatar));
-        // One tap is the whole choice: folding the grid away gives the lobby back its Start button,
-        // which an open grid pushed a screen further down on a phone. Change reopens it.
-        details.open = false;
+        grid.hidden = true;
       });
     });
 
@@ -369,8 +370,6 @@
         const key = `${mine.avatar}|${full}|${[...wornBy].join(',')}`;
         if (key === last) return;
         last = key;
-        el.querySelector('.avme').innerHTML = api.svg(mine.avatar, 36);
-        el.querySelector('.avwho').textContent = `You Are the ${api.nameOf(mine.avatar) || '?'}`;
         buttons.forEach((b, n) => {
           const chosen = n === mine.avatar;
           const by = wornBy.get(n);
@@ -383,7 +382,6 @@
           b.title = label;
         });
       },
-      close() { details.open = false; },
     };
   }
 
