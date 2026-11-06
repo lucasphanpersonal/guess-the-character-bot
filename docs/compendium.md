@@ -45,17 +45,27 @@ routinely resolves to the actor, a cosplayer, a wax figure, or a period illustra
 | Woody | a Toy Story Land mascot, photographed |
 | Santa Claus | an 1837 painting |
 
-The rule (`src/compendium/characterImages.js`) is about **medium**, not about guessing which files
-are bad: for live action a photo of the actor genuinely is the character's canonical look, so
-it stays; for animation and games no photograph can be right, so Commons images are dropped
-there outright. It costs some legitimate Commons-hosted game art, which is the accepted price
-of having no false positives — and a missing image costs little, while a wrong one actively
+The rule (`src/compendium/characterImages.js`) is about **source**, not about guessing which
+files are bad: Commons images are kept for Real People, where the photograph is the person, and
+dropped for every fictional character. It first dropped them only in Cartoon and Video Games, on
+the theory that a live-action character's photo is the actor. But the category does not say the
+medium: animated films and series are filed under Movies and Television Shows, and 543 Commons
+files had reached fictional characters that way, about 200 of them plainly cosplay, expo or
+wax-museum shots (Azula "cosplay at Katsucon", Gaston at the D23 Expo, Flo from Cars at a Disney
+resort). Live action still gets the actor, from TMDB, which credits them in that very role, or
+from the show's own wiki. It costs some legitimate Commons-hosted art, which is the accepted
+price of having no false positives — a missing image costs little, while a wrong one actively
 misleads whoever is answering questions.
 
-The seeder applies it going forward. For a database seeded before it existed:
+The seeder applies it going forward. For a database seeded before it existed, clear the Commons
+files the rule no longer trusts (only Commons: art set by hand with `/list image` is left alone),
+then let the wiki and TMDB backfills refill what they can, since both touch only characters with
+no image:
 
 ```bash
 node scripts/clean-character-images.js --dry-run
+npm run fetch:fandom -- --category=Movies
+npm run fetch:tmdb -- --category=Movies     # likewise for "Television Shows"
 ```
 
 ## Rerolls, and dropping a show

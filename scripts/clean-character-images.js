@@ -3,7 +3,12 @@
 // Sutherland captioned as a cartoon character.
 //
 // Clearing image_url only -- the character stays, and a later seed run will not put the
-// image back, because the seeder now applies the same rule.
+// image back, because the seeder now applies the same rule. Afterwards, `npm run fetch:fandom`
+// and `npm run fetch:tmdb` refill what they can, since both only touch characters with no image.
+//
+// Only Commons files are ever cleared. Images set by hand with /list image can come from any
+// host (a game's press kit, a publisher's site), and the rule has no way to vouch for those --
+// but a person chose them on purpose, and this script must not undo that wholesale.
 //
 //   node scripts/clean-character-images.js [--dry-run]
 //
@@ -11,7 +16,7 @@
 // plays the list.
 
 const db = require('../src/compendium/db');
-const { imageIsTrustworthy } = require('../src/compendium/characterImages');
+const { imageIsTrustworthy, isCommonsImage } = require('../src/compendium/characterImages');
 const { scriptArgs } = require('./lib/compendiumArgs');
 
 function main() {
@@ -26,7 +31,7 @@ function main() {
     )
     .all();
 
-  const doomed = rows.filter((r) => !imageIsTrustworthy(r.category, r.image_url));
+  const doomed = rows.filter((r) => isCommonsImage(r.image_url) && !imageIsTrustworthy(r.category, r.image_url));
   const byCategory = {};
   for (const r of doomed) byCategory[r.category] = (byCategory[r.category] ?? 0) + 1;
 
