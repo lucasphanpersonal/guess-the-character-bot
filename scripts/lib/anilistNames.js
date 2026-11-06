@@ -97,9 +97,9 @@ function foldLongVowels(word) {
   if (word.length <= 3 || !ROMAJI_WORD.test(word)) return word;
   // Not before a/e, where the u starts the next syllable: Inoue. Before i it is the lengthening
   // in the common names (Kyouichirou, Shouichi), so it folds.
-  // Neither folds before "ra": -ura is its own syllable in a great many surnames (Mino-ura, Kiyo-ura,
+  // Neither folds before a final "ra": -ura is its own syllable in a great many surnames (Mino-ura, Kiyo-ura,
   // Yotsu-ura, O-ura), and a long "ou" before "ra" is rare.
-  return word.replace(/ou(?![ae]|ra)/gi, (m) => m[0]).replace(/uu(?!ra)/gi, (m) => m[0]);
+  return word.replace(/ou(?![ae])(?!ra$)/gi, (m) => m[0]).replace(/uu(?!ra$)/gi, (m) => m[0]);
 }
 
 function foldName(text) {

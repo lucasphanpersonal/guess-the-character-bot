@@ -69,6 +69,8 @@ module.exports = {
     for (const word of ['House', 'Mouse', 'Mountain', 'Toun', 'Kanoune', 'Haruue']) assert.equal(foldLongVowels(word), word, word);
     for (const word of ['Minoura', 'Kiyoura', 'Yotsuura', 'Oura']) assert.equal(foldLongVowels(word), word, `${word}: -ura is its own syllable`);
     assert.equal(foldLongVowels('Kyouka'), 'Kyoka', 'a long ou before other consonants still folds');
+    assert.equal(foldLongVowels('Kyouraku'), 'Kyoraku', 'only a FINAL -ura is spared');
+    assert.equal(foldLongVowels('Shuuraku'), 'Shuraku');
   },
 
   'the old surname-first form is recomputed exactly, so the row can be found'() {
