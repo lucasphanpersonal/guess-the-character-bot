@@ -21,6 +21,7 @@
 
 const loop = require('./turnLoop');
 const access = require('../roomAccess');
+const bots = require('../bots');
 const { perSocket, SLOW_DOWN } = require('../rateLimit');
 
 // Dealing and rerolling read the pool; nobody deals or rerolls faster than this by hand.
@@ -713,6 +714,9 @@ function attachSockets(nsp, { registry, setup, variant }) {
     // The events only this way of playing has. Handed what they need to act like the handlers
     // above: the room, whether it is really playing, and the one path that resolves a turn.
     variant.attachHandlers?.(socket, { playerId, room, playing, handleTurnResult, emitGame, namesOf });
+
+    // The Room menu's Add Bot (../bots.js): a test player the server runs, for playing alone.
+    bots.attachControls(socket, { registry });
 
     socket.on('disconnect', () => {
       const code = socket.data.code;

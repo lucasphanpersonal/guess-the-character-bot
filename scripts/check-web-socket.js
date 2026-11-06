@@ -18,6 +18,8 @@ process.env.WEB_DRAW_REVEAL_SECONDS = process.env.WEB_DRAW_REVEAL_SECONDS || '1'
 // Games seat players at random (core/game/seating.js), and much below asserts on who goes first: the
 // join order is kept, except in the section that checks the reseating itself.
 process.env.GTC_FIXED_SEATING = '1';
+// Test bots (src/web/bots.js) wait like people do; here they take a fiftieth of the time.
+process.env.WEB_BOT_SPEED = process.env.WEB_BOT_SPEED || '0.02';
 const OWN_DB = !process.env.BOT_DB_PATH; // did we pick the path, or did the caller?
 process.env.BOT_DB_PATH = process.env.BOT_DB_PATH || path.join(os.tmpdir(), 'gtc-ws-check.sqlite');
 
@@ -1431,6 +1433,126 @@ const connect = (playerId) => {
     const reveal = (await ended).lastTurn;
     check(reveal?.reason === 'given-up' && reveal.gaveUp.length === 2, 'give up: once nobody is left guessing, the turn ends early, and says who gave up');
     G1.close(); G2.close(); G3.close();
+  }
+
+  // ---- Test bots: one person and the server's own players, through whole games -----------------
+  console.log('\n# test bots');
+  {
+    const bots = require('../src/web/bots');
+    const at = (ns, pid) => new Promise((r) => {
+      const sock = io(`${URL}${ns}`, { auth: { playerId: pid } });
+      sock.on('connect', () => r(sock));
+    });
+    const until = (sock, ev, pred, ms = 15000) => Promise.race([nextMatching(sock, ev, pred), wait(ms).then(() => null)]);
+    const botsIn = (code) => [...(registry.getRoom(code)?.players.values() ?? [])].filter((p) => p.bot);
+    const mine = (code, pid) => registry.getRoom(code).game.headByPlayer[pub(pid)].name;
+
+    // Computers: a host and two bots play Who Am I? to the end.
+    const H = await at('/desk', 'botHostDesk');
+    let r = await H.emitWithAck('room:create', { nickname: 'Solo' });
+    const dCode = r.state.code;
+    const stranger = await at('/desk', 'botStranger');
+    await stranger.emitWithAck('room:join', { code: dCode, nickname: 'Nosy' });
+    check(!(await stranger.emitWithAck('room:addBot', {})).ok, 'bots: only the host can add one');
+    await stranger.emitWithAck('room:leave', {});
+    stranger.close();
+    r = await H.emitWithAck('room:addBot', {});
+    const r2 = await H.emitWithAck('room:addBot', {});
+    await wait(100);
+    const seated = botsIn(dCode);
+    check(r.ok && r2.ok && seated.length === 2 && new Set(seated.map((p) => p.avatar)).size === 2,
+      `bots: the host adds two, each with a face of its own (${r.error ?? r2.error ?? 'ok'})`);
+    const rs = registry.getRoom(dCode).publicState();
+    check(rs.players.filter((p) => p.bot).length === 2 && rs.players.every((p) => p.connected), 'bots: the roster marks them, and they are connected');
+
+    const heardGuesses = [];
+    H.on('desk:guess', (g) => heardGuesses.push(g));
+    const over = until(H, 'game:over', () => true, 20000);
+    H.on('game:state', (v) => {
+      if (v.isMyTurn && !v.hostPaused) H.emit('game:guess', { text: mine(dCode, 'botHostDesk') }, () => {});
+    });
+    H.on('setup:state', (v) => { if (!v.confirmed) H.emit('setup:confirm', {}, () => {}); });
+    r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
+    check(r.ok, 'bots: the host deals to a room of bots');
+    check(!(await H.emitWithAck('room:addBot', {})).ok, 'bots: ...and none can join once a game is under way');
+    const desked = await over;
+    check(!!desked && desked.standings?.length === 3, 'bots: the bots confirm and take their turns, and the game ends');
+    check(heardGuesses.some((g) => /Bot$/.test(g.name)), 'bots: they type guesses on a computer');
+
+    // The host removes one, then leaves: the other leaves with them, and the room goes.
+    const one = botsIn(dCode)[0].playerId;
+    r = await H.emitWithAck('room:kick', { playerId: one });
+    await wait(150);
+    check(r.ok && botsIn(dCode).length === 1, 'bots: the host can remove one');
+    await H.emitWithAck('room:leave', {});
+    await wait(400);
+    check(!registry.getRoom(dCode), 'bots: once the last person leaves, the bots go and the room with them');
+    H.close();
+
+    // Phones: a host and two bots, tilting.
+    const P = await at('', 'botHostPhone');
+    r = await P.emitWithAck('room:create', { nickname: 'Solo' });
+    await P.emitWithAck('room:addBot', {});
+    await P.emitWithAck('room:addBot', {});
+    const pOver = until(P, 'game:over', () => true, 20000);
+    P.on('setup:state', (v) => { if (!v.confirmed) P.emit('setup:confirm', {}, () => {}); });
+    P.on('game:state', (v) => { if (v.isMyTurn && !v.hostPaused) P.emit('game:gotit', {}, () => {}); });
+    await P.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
+    const phoned = await pOver;
+    check(!!phoned && phoned.standings?.length === 3, 'bots: on the phones they tilt through a whole game');
+    await P.emitWithAck('room:leave', {});
+    P.close();
+
+    // Doodle Dash: the bots choose, draw and guess.
+    const Q = await at('/draw', 'botHostDraw');
+    r = await Q.emitWithAck('room:create', { nickname: 'Solo' });
+    const qCode = r.state.code;
+    await Q.emitWithAck('room:addBot', {});
+    await Q.emitWithAck('room:addBot', {});
+    const botStroke = until(Q, 'draw:stroke', () => true, 20000);
+    const botGot = until(Q, 'draw:correct', (c) => /Bot$/.test(c.name), 20000);
+    const qOver = until(Q, 'draw:over', () => true, 30000);
+    Q.on('draw:state', (v) => {
+      if (v.phase === 'choosing' && v.isDrawer) Q.emit('draw:choose', { index: 0 }, () => {});
+      if (v.phase === 'drawing' && !v.isDrawer && !v.guessedIt) {
+        const g = registry.getRoom(qCode).game;
+        Q.emit('draw:say', { text: g.shownAs ?? g.character.name }, () => {});
+      }
+    });
+    r = await Q.emitWithAck('draw:start', { poolType: 'everything', difficulty: 'everything', rounds: 1, drawSeconds: 60 });
+    check(r.ok, 'bots: a Doodle Dash game starts with bots');
+    check(!!(await botGot), 'bots: a bot guesses the drawing');
+    check(!!(await botStroke), 'bots: a bot draws, and the room sees its strokes');
+    const drawn = await qOver;
+    check(!!drawn && drawn.gallery.length === 3 && drawn.gallery.filter((d) => d.drawer !== 'Solo').every((d) => d.strokes.length),
+      "bots: the game ends with every drawing in the gallery, the bots' with strokes in");
+
+    // Telephone: a host and two bots, every step.
+    Q.removeAllListeners('draw:state');
+    await Q.emitWithAck('draw:again', {});
+    let telDone = false;
+    const replay = until(Q, 'tel:state', (v) => v.phase === 'replay', 30000);
+    Q.on('tel:state', (v) => {
+      if (!v.task || telDone) return;
+      if (v.task.kind === 'pick') Q.emit('tel:pick', { index: 0 }, () => {});
+      else if (v.task.kind === 'draw') {
+        Q.emit('tel:stroke', { id: 'solo1', color: '#1b1033', size: 8, points: [[0.2, 0.2], [0.8, 0.8]] });
+        Q.emit('tel:submit', {}, () => {});
+      } else Q.emit('tel:submit', { text: 'Somebody' }, () => {});
+    });
+    r = await Q.emitWithAck('draw:start', { mode: 'telephone', poolType: 'everything', difficulty: 'everything', drawSeconds: 60 });
+    check(r.ok, 'bots: Telephone starts with two bots (three is its least)');
+    const replayed = await replay;
+    telDone = true;
+    const tg = registry.getRoom(qCode).game;
+    const isBot = (id) => !!registry.getRoom(qCode).players.get(id)?.bot;
+    const botEntries = tg.chains.flatMap((c) => c.entries).filter((e) => e && isBot(e.by));
+    check(!!replayed && botEntries.some((e) => e.kind === 'draw' && e.strokes.length) && botEntries.some((e) => e.kind === 'guess' && !e.blank),
+      'bots: in Telephone they pick, draw and name what they were passed');
+    await Q.emitWithAck('room:leave', {});
+    Q.close();
+    await wait(300);
+    check(bots.liveCount() === 0, `bots: none left running (${bots.liveCount()})`);
   }
 
   C2.close(); D.close();

@@ -2,6 +2,7 @@
 // Leave Room -- one button away on every screen, from the lobby to the results. And, while a game
 // runs, the host's Pause Game: the clock stops for everyone, a Paused screen covers every page
 // (the phones' forehead view included), and Continue Game picks up where it stopped.
+// In test mode only (?bots, below), the host's Add Bot too: players the server runs (src/web/bots.js).
 //
 // Before it, leaving and removing were wherever each screen happened to put them: the computer
 // guessing game had no Remove anywhere and no way out mid-game but the title; Draw had Remove only
@@ -14,6 +15,23 @@
 // anywhere else.
 (function () {
   const { esc } = window.GTC;
+
+  // Test mode: Add Bot, for playing a game alone (src/web/bots.js). Hidden from everyone who has
+  // not asked for it -- a page opened with ?bots turns it on for this browser, ?bots=off turns it
+  // off -- because nobody at a party needs it, and it would read as the way to play. Read here, at
+  // load, because some pages wipe their address once they have acted on it (the desk's ?create=1).
+  const testMode = (() => {
+    try {
+      const flag = new URLSearchParams(location.search).get('bots');
+      if (flag !== null) {
+        if (['0', 'off', 'no', 'false'].includes(flag.toLowerCase())) localStorage.removeItem('gtc_bots');
+        else localStorage.setItem('gtc_bots', '1');
+      }
+      return localStorage.getItem('gtc_bots') === '1';
+    } catch {
+      return false;
+    }
+  })();
 
   // Styles, scoped to the dialog. The tokens are /shared/retro.css, which every page loads.
   const CSS = `
@@ -29,11 +47,14 @@
     .roommenu .rmname { flex:1; min-width:0; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .roommenu .rmtag { flex:none; font-size:.66rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
  padding:2px 7px; background:var(--amber); color:#2b1c00; }
-    .roommenu .rmtag.off { background:var(--muted); color:#fff; }
+    .roommenu .rmtag.off { background:var(--muted); color:var(--paper); }
     .roommenu .rmkick { flex:none; width:auto; min-height:44px; padding:7px 12px; font-size:.95rem; }
     .roommenu .rmerr { color:var(--red); font-weight:800; min-height:0; margin:0 0 10px; }
     .roommenu .rmerr:empty { display:none; }
     .roommenu .rmleave { width:100%; }
+    .roommenu .rmbots { width:100%; margin-bottom:10px; }
+    .roommenu .rmbots[hidden] { display:none; }
+    .roommenu .rmtag.bot { background:var(--muted); color:var(--paper); }
     .roommenu .rmpause { width:100%; margin-bottom:10px; }
     .roommenu .rmpause[hidden] { display:none; }
     /* Paused: over everything, the phones' forehead view (z-index 50) included -- a phone on a
@@ -89,6 +110,7 @@
       <ul></ul>
       <p class="rmerr" role="alert"></p>
       <button type="button" class="good rmpause" hidden>Pause Game</button>
+      <button type="button" class="ghost rmbots" hidden>Add Bot</button>
       ${o.themeToggle ? '<div class="rmtheme"><span>Dark Mode</span><button class="themetoggle" type="button" role="switch" aria-checked="false" aria-label="Dark mode"><span class="knob" aria-hidden="true">◐</span></button></div>' : ''}
       <div class="rmcrt"><span>CRT Screen</span><button class="crttoggle" type="button" role="switch" aria-checked="true" aria-label="CRT screen effect"><span class="knob" aria-hidden="true">▤</span></button></div>
       <button type="button" class="bad rmleave">Leave Room</button>`;
@@ -133,6 +155,18 @@
       dlg.close();
     });
 
+    // Test mode's Add Bot: one more player the server runs. The new seat arrives as a roster change.
+    const botBtn = dlg.querySelector('.rmbots');
+    botBtn.addEventListener('click', () => {
+      botBtn.disabled = true;
+      err.textContent = '';
+      o.socket.emit('room:addBot', {}, (res) => {
+        botBtn.disabled = false;
+        if (!res?.ok) err.textContent = res?.error || 'Could not add a bot.';
+        render();
+      });
+    });
+
     function render() {
       const room = o.room();
       o.button.hidden = !room;
@@ -155,6 +189,8 @@
       const pauseBtn = dlg.querySelector('.rmpause');
       pauseBtn.hidden = !(host && room.status === 'playing');
       pauseBtn.textContent = room.paused ? 'Continue Game' : 'Pause Game';
+      // Between games only: a bot joins as anyone would, and nobody can join a game under way.
+      botBtn.hidden = !(testMode && host && (room.status === 'lobby' || room.status === 'finished') && room.players.length < (room.maxPlayers ?? Infinity));
       if (!dlg.open) return;
       dlg.querySelector('h2').textContent = `Room ${room.code}`;
       dlg.querySelector('.rmsub').textContent = host ? 'You are the host: you can remove anyone, at any point.' : `${room.players.length} in the room.`;
@@ -163,7 +199,7 @@
       const html = room.players
         .map((p) => {
           const you = p.playerId === me;
-          const tags = `${p.isHost ? '<span class="rmtag">Host</span>' : ''}${p.connected === false ? '<span class="rmtag off">Away</span>' : ''}`;
+          const tags = `${p.isHost ? '<span class="rmtag">Host</span>' : ''}${p.bot ? '<span class="rmtag bot">Bot</span>' : ''}${p.connected === false ? '<span class="rmtag off">Away</span>' : ''}`;
           const kick = host && !you ? `<button type="button" class="bad rmkick" data-kick="${esc(p.playerId)}" data-name="${esc(p.nickname)}">Remove</button>` : '';
           return `<li>${GTC.avatar(p.avatar)}<span class="rmname" title="${esc(p.nickname)}">${esc(p.nickname)}${you ? ' (you)' : ''}</span>${tags}${kick}</li>`;
         })

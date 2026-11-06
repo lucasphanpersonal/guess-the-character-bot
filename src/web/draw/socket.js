@@ -13,6 +13,7 @@
 // the turn's strokes (so a reconnecting browser can redraw the picture) and passes each piece on.
 
 const access = require('../roomAccess');
+const bots = require('../bots');
 const draw = require('./game');
 const web = require('../content');
 const { poolIndex } = require('../../compendium/answers');
@@ -688,6 +689,9 @@ function attachDrawSockets(nsp, { registry }) {
       broadcastRoom(after);
       finishIfTooFew(after);
     });
+
+    // The Room menu's Add Bot (../bots.js): a test player the server runs, for playing alone.
+    bots.attachControls(socket, { registry });
 
     socket.on('disconnect', () => {
       const code = socket.data.code;

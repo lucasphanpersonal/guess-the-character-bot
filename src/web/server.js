@@ -420,6 +420,8 @@ const io = new Server(server); // serves its browser client at /socket.io/socket
 party.attach(io, { registry });
 desk.attach(io, { registry });
 drawGame.attach(io, { registry });
+// Test bots (./bots.js) connect back to this server, so they need its port once it is listening.
+require('./bots').configure({ server, registry });
 
 // Abandoned-room sweep, once for every game's rooms (they share the registry). Same role as
 // GameManager.evictStaleLobbies on the Discord side.

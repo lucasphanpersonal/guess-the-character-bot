@@ -111,6 +111,21 @@ not only the host, Continue Game. A room that is deleted (its last player leaves
 nobody connected) stops its game's clocks with it (`registry.onRoomDeleted`). On a phone-width computer page
 the dark-mode switch moves into it, so the title row keeps its room.
 
+**Test bots** (`bots.js`, with a brain per game in `guess/bot.js` and `draw/bot.js`), for playing
+any of the three alone. Open any page once with `?bots` (`/?bots`, `/desk/?bots`, `/draw/?bots`) and
+that browser's Room menu gets **Add Bot** for the host, between games; `?bots=off` hides it again.
+Nobody else ever sees it. A bot is a player the server runs: it connects back to this server over
+socket.io, joins by the code with a face of its own (marked *Bot* in the Room menu), and acts only
+through the events a browser sends -- so every rule and leak guard holds for it as for anyone. It
+reads its room in place to play plausibly: on the check screen it fills an empty seat and locks in;
+on phones it tilts got-it or pass; on computers it types a wrong guess or two and then its name
+(sometimes with a typo, for a person to rule on) or passes, and rules on others' close guesses after
+a pause long enough for a person to get there first; in Doodle Dash it picks, doodles a face and a
+scribble a stroke at a time, guesses wrong and then right, reacts and votes; in Telephone it picks,
+doodles and names what it was passed. Bots leave as soon as no person holds a seat, never keep a room
+from the abandoned-room sweep, and are removed like anyone (Remove). `WEB_BOTS=0` turns them off;
+`WEB_BOT_SPEED` scales their pauses (the socket check runs them at 0.02).
+
 **The home page** (`/`) asks one question first: which game, of two. That screen is titled with
 the site's name; every later screen on the page is titled *Who Am I?*, as `/desk/` is. Every game is guessing a
 character, so they are named for how they play. *Doodle Dash* (Draw the Character) goes to
@@ -178,6 +193,7 @@ web/
                        curation, dealing. Games use this, never the compendium directly.
   rooms.js             The room registry -- one for every game, so a code means one room.
   roomAccess.js        Identifying, creating and joining, with the limits on strangers.
+  bots.js              Test bots: players the server runs, for playing alone (Room menu, ?bots).
   shared/              Served at /shared/ so the games cannot drift apart. retro.css is the look
                        on every page: fonts (in fonts/, self-hosted), palette, base components, the
                        high-score table. The computer games add their layouts (theme.css), seasonal
@@ -198,6 +214,7 @@ web/
     turnLoop.js          Turns, standings, the clock, results (pure, unit-tested).
     service.js           The setup service both ways of playing drive.
     socket.js            The room/setup/turn protocol, parameterised by a VARIANT.
+    bot.js               A test bot's play, on phones and computers alike (../bots.js runs it).
   party/               Phones: the forehead variant. Served at the site root and on the default
                        socket.io namespace, because the links and QR codes out there point there.
     index.js             The variant: forehead view, a grace countdown, the tilt event.
@@ -228,6 +245,7 @@ means one room either way.
     game.js              The rules: choosing, guesses, hints, scoring, rounds (pure, unit-tested).
     gallery.js           The end screen: each drawing kept, simplified; the accolades (pure, tested).
     telephone.js         Telephone: the chains, the steps, the replay (pure, unit-tested).
+    bot.js               A test bot's play: picking, doodling, guessing, voting (../bots.js runs it).
     socket.js            The protocol and the clock: one timer per room aimed at whatever is due
                          next, a watchdog for sleeping laptops, strokes checked and relayed.
     public/              The drawing client: app.js, pad.js, gallery.js, tel.js, boot.js last.
