@@ -78,7 +78,7 @@ time, "Made it through!" kept back until its last card, and the album of every c
 a player is sent only their own task — never another chain — and a drawing travels only when its
 step is over (`draw/telephone.js`, unit-tested; the socket check searches every payload).
 
-**Sound on the computers** (`shared/sound.js`) is off until someone turns it on, and then a handful of short, quiet chip-voiced cues, never a bed:
+**Sound on the computers** (`shared/sound.js`) is on until someone turns it off: a handful of short, quiet chip-voiced cues (and one loud one, your turn), never a bed:
 everyone can see the screen, so sound is only for the moments worth looking up for — often from
 another tab. Guess the Character: your turn starting, a right guess (yours sounds different), and
 — for the guesser alone — a miss or a close call; a call to rule goes only to those who can rule.
@@ -86,7 +86,7 @@ Draw the Character: your turn to draw, someone getting it, the last ten seconds 
 reveal. Both: someone new joining the lobby (never the roster already there when you open it), and
 a short fanfare at game over, with a step on top for the winners (Draw's Telephone has no
 winners and no fanfare). Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
-screen, play included; the choice is the phones' own `gtc_muted`, one per browser. The phones default to on, because a wearer has no other way to hear the clock, and have a switch of their own in the corner on every screen but the forehead view.
+screen, play included; the choice is the phones' own `gtc_muted`, one per browser, on by default on both. The phones have a switch of their own in the corner on every screen but the forehead view.
 
 **Faces** (`shared/avatars.js`), in all three games: everyone wears one of 16 original pixel
 sprites (a cat, a frog, a robot...), each on its own coloured square, shown beside their name in the

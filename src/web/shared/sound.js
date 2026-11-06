@@ -14,14 +14,15 @@
 // are free and come by the dozen), and only a ruler hears the call to rule.
 //
 // Every sound goes through tone(), so "off" is honoured in one place and nothing can dodge it.
-// The preference is the phones' own key (gtc_muted): one per browser, sticky. OFF until somebody
-// turns it on, here: everyone can see the screen, so nothing is lost by default. The phones default
-// to on, because a wearer hears the clock or does not know it (audio.js). A stored choice wins on both.
+// The preference is the phones' own key (gtc_muted): one per browser, sticky. ON until somebody
+// turns it off, as on the phones. It used to start off here (everyone can see the screen), and then
+// "your turn" -- the cue for the player looking elsewhere, in another tab or on a call -- was silent
+// for anyone who had never found the switch. A stored choice wins.
 (function () {
   const { store } = GTC;
   let ctx = null;
   let master = null;
-  let muted = store.get('gtc_muted') !== '0';
+  let muted = store.get('gtc_muted') === '1';
 
   // Browsers only start audio after a gesture on the page. So the context is made on the first
   // click or key, not at load: made earlier, it would sit suspended and log a warning. It is
