@@ -116,7 +116,7 @@ const amHost = () => lastState && lastState.hostPlayerId === me;
 
 // --- lobby rendering ----------------------------------------------------------------------
 // The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
-const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done), $('roster'));
 
 function renderLobby(state) {
   // Rendered per character so each can carry its own colour (see .roomcode .ch).
@@ -148,7 +148,11 @@ function renderLobby(state) {
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = p.nickname;
-    if (p.playerId === me) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
+    if (p.playerId === me) {
+      const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y);
+      // Your own row opens the face picker under the roster (shared/avatars.js).
+      li.classList.add('mine'); li.tabIndex = 0; li.setAttribute('role', 'button'); li.title = 'Change your face';
+    }
     li.innerHTML = GTC.avatar(p.avatar);
     li.append(dot, name);
     if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
