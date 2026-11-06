@@ -39,9 +39,11 @@ module.exports = {
 
   'a rename shaped like swapped parts is flagged for a person to check'() {
     const { looksOrderSwapped } = require('../scripts/lib/anilistNames');
-    assert.equal(looksOrderSwapped('Kuroda Heihachiro'), true);
-    assert.equal(looksOrderSwapped('Heihachiro Kuroda'), false);
-    assert.equal(looksOrderSwapped('Satoru Gojo'), false);
+    // Judged on the OLD name, whose first word is AniList's surname.
+    assert.equal(looksOrderSwapped('Heihachirou Kuroda'), true);
+    assert.equal(looksOrderSwapped('Kuroda Heihachirou'), false);
+    assert.equal(looksOrderSwapped('Fushiguro Megumi'), false, 'a surname ending in -ro is ordinary');
+    assert.equal(looksOrderSwapped('Gojou Satoru'), false);
   },
 
   'a mononym is left whole'() {
@@ -71,6 +73,10 @@ module.exports = {
     assert.equal(foldLongVowels('Kyouka'), 'Kyoka', 'a long ou before other consonants still folds');
     assert.equal(foldLongVowels('Kyouraku'), 'Kyoraku', 'only a FINAL -ura is spared');
     assert.equal(foldLongVowels('Shuuraku'), 'Shuraku');
+    for (const [word, folded] of [['Juura', 'Jura'], ['Yuura', 'Yura'], ['Moura', 'Mora']]) {
+      assert.equal(foldLongVowels(word), folded, `${word}: too short to be a stem plus -ura`);
+    }
+    for (const word of ['Matsuura', 'Ouran', 'Rouran', 'Oura']) assert.equal(foldLongVowels(word), word, word);
   },
 
   'the old surname-first form is recomputed exactly, so the row can be found'() {
@@ -126,6 +132,20 @@ module.exports = {
     const { renames } = planRenames(db, series);
     assert.equal(renames.filter((r) => r.listId === anime.listId)[0]?.matchedBy, 'name');
     assert.equal(renames.filter((r) => r.listId === tv.listId).length, 0, 'a TV list is not AniList-seeded');
+  },
+
+  // The fetch stored a name computed with that day's rules; the rename must not trust it.
+  'the new name is recomputed from the parts, not read from the stored name'() {
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Cider House Leader', 'seed-script', 'https://s4.anilist.co/cider.png');
+    const series = {
+      1: { label: 'My Hero Academia', characters: [
+        // What an older fetch stored, before House was an exception.
+        { name: 'Cider Hose Leader', parts: n('Cider House Leader', null, null, 'Cider House Leader'), image: 'https://s4.anilist.co/cider.png' },
+      ] },
+    };
+    const { renames } = planRenames(db, series);
+    assert.equal(renames.filter((r) => r.listId === listId).length, 0, 'today\'s rules keep the name; the stale "Hose" is ignored');
   },
 
   'a rename that would collide with a name already in the list is skipped'() {
