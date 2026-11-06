@@ -741,6 +741,10 @@
         <ul class="roster" id="roster"></ul>
         <div id="avPick"></div>
       </div>
+      <!-- Start (and the guests' "waiting for the host" line) above How to Play: below it, a
+           first-time host on a phone had to scroll two screens past the rules to reach it. -->
+      <button id="setupBtn">Set Up Game →</button>
+      <p class="hint center" id="lobbyHint"></p>
       <div class="card" id="howtoCard">
         <div class="hint center" data-wobble style="font-weight:900; font-size:1.15rem; color:var(--ink); font-family:var(--font-display)">How to play</div>
         <div style="height:12px"></div>
@@ -753,8 +757,6 @@
         </ol>
       </div>
       <button id="howtoToggle">Hide How to Play</button>
-      <button id="setupBtn">Set Up Game →</button>
-      <p class="hint center" id="lobbyHint"></p>
       <button id="leaveBtn" class="ghost">Leave Room</button>
       <p class="hint center" id="connState"></p>
     </section>

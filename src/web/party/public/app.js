@@ -869,11 +869,13 @@ function motionProblem() {
     return { fix: 'device', text: 'This device has no motion sensor. The game is played with a phone on your forehead, so join from a phone instead.' };
   }
   if (motionDenied) {
-    // Not only iOS has requestPermission any more: Chrome does too, and answers it from the site's
+    // iOS 13 and later ask per site, and remember a refusal until Safari restarts -- the old global
+    // Settings switch (Safari > Motion & Orientation Access) is gone, so naming it sent people
+    // hunting for nothing. Not only iOS has requestPermission any more: Chrome does too, and answers it from the site's
     // Motion sensors setting. Telling an Android player to open Safari's settings sends them
     // looking for a browser they do not have.
     return isIOS
-      ? { fix: 'settings', text: 'Motion access was refused, and iOS will not ask a second time. Open Settings, then Safari, then Motion & Orientation Access, turn it on, and reload this page.' }
+      ? { fix: 'settings', text: 'Motion access was refused, and Safari will not ask again until it restarts. Close Safari completely (swipe it away in the app switcher), open this link again, and tap Allow when asked.' }
       : { fix: 'settings', text: 'Motion sensors are blocked for this site. Tap the icon at the left of the address bar, open Permissions or Site settings, allow Motion sensors, and reload this page.' };
   }
   // Screen-agnostic on purpose: this text renders on the setup gate AND mid-game, so anything
