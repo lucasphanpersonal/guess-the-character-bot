@@ -5,7 +5,7 @@ const { assert } = require('./harness');
 const db = require('../src/core/db/connection');
 const lists = require('../src/compendium/characterLists');
 const { englishName, surnameFirstName, foldLongVowels } = require('../scripts/lib/anilistNames');
-const { planRenames, applyRenames, undoRenames } = require('../scripts/rename-anilist-characters');
+const { planRenames, applyRenames, undoRenames, planMerges, applyMerges, undoMerges } = require('../scripts/rename-anilist-characters');
 
 const n = (first, last, middle = null, full = null) => ({ first, middle, last, full });
 
@@ -156,5 +156,130 @@ module.exports = {
     const { renames, skipped } = planRenames(db, series);
     assert.equal(renames.filter((r) => r.listId === listId).length, 0);
     assert.ok(skipped.collision.some((c) => c.from === 'Elric Edward'));
+  },
+
+  // Inside a word "oo" is as often two syllables as one long vowel, so only the start folds.
+  'a long "oo" folds at the start of a word, and inside one only where listed'() {
+    for (const [word, folded] of [['Ootsutsuki', 'Otsutsuki'], ['Oota', 'Ota'], ['Oono', 'Ono'], ['Tooru', 'Toru'], ['Oouchi', 'Ouchi']]) {
+      assert.equal(foldLongVowels(word), folded, word);
+    }
+    for (const word of ['Hiroomi', 'Kiyoomi', 'Morooka', 'Kuroo', 'Moon', 'Goose', 'Moodie', 'Boota', 'Ooi']) {
+      assert.equal(foldLongVowels(word), word, word);
+    }
+  },
+
+  'official spellings and hand-set names win over the rules'() {
+    assert.equal(englishName(n('Shouei', 'Barou'), ['Blue Lock']), 'Shoei Barou');
+    // Kyouraku's middle names were added on AniList after seeding; the override ignores them.
+    assert.equal(englishName(n('Shunsui', 'Kyouraku', 'Jirou Soukyuu'), ['BLEACH']), 'Shunsui Kyoraku');
+  },
+
+  // The first pass ran with older rules; the next must find its output, not just the seed's.
+  'a second pass finds rows the first one already renamed'() {
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Tooru Oikawa', 'seed-script', 'https://s4.anilist.co/oikawa.png');
+    lists.addCharacter(listId, 'Shouei Baro', 'seed-script', 'https://s4.anilist.co/barou.png');
+    lists.addCharacter(listId, 'Kyouraku Shunsui', 'seed-script', 'https://s4.anilist.co/shunsui.png');
+    lists.addCharacter(listId, 'Satoru Gojo', 'seed-script', 'https://s4.anilist.co/gojo2.png');
+    const series = {
+      1: { label: 'Mixed', characters: [
+        { parts: n('Tooru', 'Oikawa'), image: 'https://s4.anilist.co/oikawa.png' },
+        { parts: n('Shouei', 'Barou'), image: 'https://s4.anilist.co/barou.png' },
+        { parts: n('Shunsui', 'Kyouraku', 'Jirou Soukyuu'), image: 'https://s4.anilist.co/shunsui.png' },
+        { parts: n('Satoru', 'Gojou'), image: 'https://s4.anilist.co/gojo2.png' },
+      ] },
+    };
+    const mine = planRenames(db, series).renames.filter((r) => r.listId === listId);
+    assert.deepEqual(mine.map((r) => r.to).sort(), ['Shoei Barou', 'Shunsui Kyoraku', 'Toru Oikawa']);
+  },
+
+  'a duplicate is merged into the row holding the name, and the merge undoes'() {
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Elric Alphonse', 'seed-script', 'https://s4.anilist.co/al.png');
+    lists.addCharacter(listId, 'Alphonse Elric', 'someone', null);
+    // Two different characters whose names fold alike: never merged.
+    lists.addCharacter(listId, 'Satou Yuuki', 'seed-script', 'https://s4.anilist.co/yuuki.png');
+    lists.addCharacter(listId, 'Yuki Sato', 'seed-script', 'https://s4.anilist.co/yuki.png');
+    const series = { 1: { characters: [
+      { parts: n('Alphonse', 'Elric'), image: 'https://s4.anilist.co/al.png' },
+      { parts: n('Yuuki', 'Satou'), image: 'https://s4.anilist.co/yuuki.png' },
+      { parts: n('Yuki', 'Sato', 'X'), image: 'https://s4.anilist.co/yuki.png' },
+    ] } };
+    const collisions = planRenames(db, series).skipped.collision;
+    const al = collisions.find((c) => c.from === 'Elric Alphonse');
+    const yuuki = collisions.find((c) => c.from === 'Satou Yuuki');
+    assert.equal(al.duplicate, true);
+    assert.equal(yuuki.duplicate, false, 'another AniList character\'s art means another character');
+
+    const merges = planMerges(db, [al, yuuki]);
+    assert.equal(merges.length, 1);
+    assert.equal(applyMerges(db, merges), 1);
+    const after = lists.getCharacters(listId);
+    assert.equal(after.filter((c) => /alphonse/i.test(c.name)).length, 1);
+    assert.equal(after.find((c) => c.name === 'Alphonse Elric').image_url, 'https://s4.anilist.co/al.png', 'the picture moves over');
+
+    undoMerges(db, merges);
+    const restored = lists.getCharacters(listId);
+    assert.deepEqual(restored.filter((c) => /alphonse/i.test(c.name)).map((c) => c.name).sort(), ['Alphonse Elric', 'Elric Alphonse']);
+    assert.equal(restored.find((c) => c.name === 'Alphonse Elric').image_url, null);
+  },
+
+  // AniList's placeholder is shared by 1,813 characters; INUYASHIKI's Joshi and Joushi both wear it.
+  'a shared image is no evidence two rows are one character'() {
+    const { listId } = freshList();
+    const placeholder = 'https://s4.anilist.co/character/large/default.jpg';
+    lists.addCharacter(listId, 'Joushi', 'seed-script', placeholder);
+    lists.addCharacter(listId, 'Joshi', 'seed-script', placeholder);
+    const series = { 1: { characters: [
+      { id: 1, parts: n('Joushi', null, null, 'Joushi'), image: placeholder },
+      { id: 2, parts: n('Joshi', null, null, 'Joshi'), image: placeholder },
+    ] } };
+    const joushi = planRenames(db, series).skipped.collision.find((c) => c.from === 'Joushi');
+    assert.equal(joushi.duplicate, false);
+    assert.equal(planMerges(db, [joushi]).length, 0);
+  },
+
+  'a merge moves rerolls and past games, and undo puts back exactly what was there'() {
+    const stats = require('../src/core/db/stats');
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Elric Edward', 'seed-script', 'https://s4.anilist.co/ed-merge.png');
+    lists.addCharacter(listId, 'Edward Elric', 'someone', null);
+    const byName = (name) => lists.getCharacters(listId).find((c) => c.name === name);
+    const gone = byName('Elric Edward');
+    const kept = byName('Edward Elric');
+    // U rerolled both rows; V only the duplicate. U's reroll on the kept row must survive an undo.
+    lists.recordReroll(kept.id, 'merge-U');
+    lists.recordReroll(gone.id, 'merge-U');
+    lists.recordReroll(gone.id, 'merge-V');
+    stats.recordGame('merge-guild', [{ playerId: 'merge-P', turnsTaken: 3, outcome: 'won', characterId: gone.id }]);
+    const rerollUsers = (id) => db.prepare('SELECT user_id FROM character_rerolls WHERE character_id = ? ORDER BY user_id').all(id).map((r) => r.user_id);
+    const gamesOf = (id) => db.prepare('SELECT COUNT(*) AS n FROM game_players WHERE character_id = ?').get(id).n;
+    const keptBefore = db.prepare('SELECT id FROM character_rerolls WHERE character_id = ? AND user_id = ?').get(kept.id, 'merge-U').id;
+
+    const series = { 1: { characters: [{ id: 3, parts: n('Edward', 'Elric'), image: 'https://s4.anilist.co/ed-merge.png' }] } };
+    const collision = planRenames(db, series).skipped.collision.find((c) => c.id === gone.id);
+    const merges = planMerges(db, [collision]);
+    assert.equal(applyMerges(db, merges), 1);
+    assert.deepEqual(rerollUsers(kept.id), ['merge-U', 'merge-V']);
+    assert.equal(gamesOf(kept.id), 1, 'the past game now names the kept row');
+
+    undoMerges(db, merges);
+    assert.deepEqual(rerollUsers(kept.id), ['merge-U']);
+    assert.equal(db.prepare('SELECT id FROM character_rerolls WHERE character_id = ? AND user_id = ?').get(kept.id, 'merge-U').id, keptBefore);
+    assert.deepEqual(rerollUsers(gone.id), ['merge-U', 'merge-V']);
+    assert.equal(gamesOf(gone.id), 1);
+    assert.equal(gamesOf(kept.id), 0);
+  },
+
+  'a row kept by one merge and deleted by another is left alone'() {
+    const { listId } = freshList();
+    for (const name of ['Chain A', 'Chain B', 'Chain C']) lists.addCharacter(listId, name, 'someone', null);
+    const [a, b, c] = ['Chain A', 'Chain B', 'Chain C'].map((name) => lists.getCharacters(listId).find((x) => x.name === name).id);
+    // A merges into B, B into C: B would take A's games and then be deleted with them.
+    const merges = planMerges(db, [
+      { id: a, keepId: b, duplicate: true },
+      { id: b, keepId: c, duplicate: true },
+    ]);
+    assert.deepEqual(merges.map((m) => [m.gone.id, m.keepId]), [[b, c]]);
   },
 };

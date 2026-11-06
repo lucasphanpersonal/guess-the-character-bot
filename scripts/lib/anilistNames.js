@@ -43,8 +43,10 @@ const ROMAJI_WORD = new RegExp(`^(?:${SYLLABLE})+$`, 'i');
 /**
  * Folds the long vowels English releases drop: Gojou -> Gojo, Shouyou -> Shoyo, Yuuji -> Yuji.
  * "ou" folds only where the u is the lengthening, not the start of the next syllable: Inoue
- * stays Inoue (see the rule below for where that line is drawn). "oo", "ii", "aa" and "ei" are left alone -- they are as often written in English
- * (Tooru, Niikura) and "oo" would turn a romaji-shaped English word like "Moon" into "Mon".
+ * stays Inoue (see the rule below for where that line is drawn). "oo" folds only at the start
+ * of a word (Ootsutsuki -> Otsutsuki, Oota -> Ota), where it is always the long vowel; inside a
+ * word it is as often two syllables (Hiro-omi, Kiyo-omi, Moro-oka) or English (Moodie, Goose),
+ * so the few long ones there are listed below (Tooru). "ii", "aa" and "ei" are left alone.
  */
 // Words the syllable rule gets wrong, found by reading every word it folds in the library.
 // Jounouchi is Jou-no-uchi, where the second "ou" is two syllables; Rouge and Mousse are French;
@@ -69,7 +71,23 @@ const FOLD_EXCEPTIONS = new Map([
   ['ouran', 'Ouran'],
   ['rouran', 'Rouran'],
   ['oura', 'Oura'],
+  // From the applied rename: long "oo" inside a word, which the start-of-word rule cannot see.
+  ['tooru', 'Toru'],
+  ['tooyama', 'Toyama'],
+  ['toosaka', 'Tosaka'],
+  ['hoozuki', 'Hozuki'],
+  ['koori', 'Kori'],
+  // O-ouchi: the "ou" rule would leave "Oochi".
+  ['oouchi', 'Ouchi'],
+  // Blue Lock's official spellings: Barou keeps its u, and Shou-ei is a long o before "ei".
+  ['barou', 'Barou'],
+  ['shouei', 'Shoei'],
 ]);
+
+// Names no rule can produce, keyed by AniList's "surname given" with any middle name left out,
+// so a middle name AniList adds later does not lose the entry. Kyouraku's full name carries two
+// middle names English releases never use.
+const NAME_OVERRIDES = new Map([['kyouraku shunsui', 'Shunsui Kyoraku']]);
 
 // Characters whose AniList name parts are the wrong way round (the surname filed as the given
 // name), so the old surname-first flip happened to show them correctly and the new order would
@@ -122,6 +140,7 @@ function foldLongVowels(word) {
   // long vowel and a "ra" (Juura is Jura, Yuura is Yura, Moura is Mora), so they fold.
   const spareUra = word.length >= 6 ? '(?!ra$)' : '';
   return word
+    .replace(/^oo(?![aeiou])/i, (m) => m[0])
     .replace(new RegExp(`ou(?![ae])${spareUra}`, 'gi'), (m) => m[0])
     .replace(new RegExp(`uu${spareUra}`, 'gi'), (m) => m[0]);
 }
@@ -144,6 +163,8 @@ const keepsSurnameFirst = (titles) =>
  * @param titles  The series' titles (English and romaji), to tell whether it keeps surname-first.
  */
 function englishName(name, titles = []) {
+  const override = NAME_OVERRIDES.get(`${(name.last || '').trim()} ${(name.first || '').trim()}`.toLowerCase());
+  if (override) return override;
   const stored = surnameFirstName(name);
   const ordered = keepsSurnameFirst(titles) || PARTS_SWAPPED.has(stored.toLowerCase()) ? stored : givenFirstName(name);
   return foldName(ordered).replace(/\s+/g, ' ').trim();
@@ -160,4 +181,10 @@ const looksOrderSwapped = (oldName) => {
   return words.length === 2 && GIVEN_NAME_ENDING.test(words[0]) && !GIVEN_NAME_ENDING.test(words[1]);
 };
 
-module.exports = { looksOrderSwapped, englishName, surnameFirstName, givenFirstName, foldLongVowels, keepsSurnameFirst, SURNAME_FIRST_SERIES };
+// The same name whatever long-vowel spelling and capitalisation it carries: Gojou Satoru,
+// Gojo Satoru and gojo satoru are one key. What lets a later rename pass find a row an earlier
+// pass already renamed with older rules -- always together with the character's image, or with
+// an old name that means one character only, never on its own.
+const looseKey = (text) => (text || '').toLowerCase().replace(/ou/g, 'o').replace(/uu/g, 'u').replace(/oo/g, 'o').trim();
+
+module.exports = { looseKey, looksOrderSwapped, englishName, surnameFirstName, givenFirstName, foldLongVowels, keepsSurnameFirst, SURNAME_FIRST_SERIES };

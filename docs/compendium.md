@@ -297,7 +297,20 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   npm run fetch:anilist                            # once: re-fetches any series without name parts
   node scripts/rename-anilist-characters.js        # report: data/anilist-renames-<time>.csv
   node scripts/rename-anilist-characters.js --apply   # writes an undo log first (--undo=<log>)
+  node scripts/rename-anilist-characters.js --apply --merge-duplicates   # also fold names that collided
   ```
+
+  It can be run again whenever the rules change: a row is found by any spelling its character's
+  name has had (`looseKey`: Gojou Satoru, Gojo Satoru and Satoru Gojo are one key), always
+  together with the character's image or an old name that means one character only. A rename
+  that collides with a name already in the list is reported; where the row holding the name is
+  the same character (no art, art that is no AniList character's, or art only that character uses: the placeholder is shared by 1,813, so it is no evidence), it is a
+  duplicate, and `--merge-duplicates` folds the two: the kept row takes the other's picture,
+  fame, rerolls and past games, and the other is deleted, all in the undo log first. Two
+  different characters whose names come out alike are marked `distinct` and left alone.
+  "oo" folds only at the start of a word (Ootsutsuki → Otsutsuki); inside one it is as often two
+  syllables (Hiro-omi), so the long ones there are exceptions (Tooru → Toru). A name no rule can
+  make (Kyouraku's two middle names) goes in `NAME_OVERRIDES`.
 
   Read the CSV before `--apply`, and look in particular for English words the long-vowel rule
   folded by mistake: the rule's exceptions (`FOLD_EXCEPTIONS`) came from exactly that reading
