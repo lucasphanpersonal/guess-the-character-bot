@@ -165,7 +165,9 @@ like it was always there.
   palette holds the canvas on screen) give it a transparent `::before` hit area out to 44px. Both
   live in retro.css under *fingers*.
 - **The forehead overlay opts out of all of it.** Black, white, huge, plain. It is read across
-  a dim room by other people, not admired up close. Do not decorate it.
+  a dim room by other people, not admired up close. Do not decorate it. The one exception is the
+  turn's opening beat (`#forehead.starting`): the wearer's card goes bright, stepping white and
+  yellow once a second, with YOUR TURN and the count. That brightness is the signal, not decoration.
 - **Sound sits under the room, not over it.** The turn bed runs for a full minute at a time,
   several turns a game, with a party talking through it. The bar is "something you notice
   stopping", not something anyone raises their voice against — and because only the current
@@ -173,7 +175,7 @@ like it was always there.
   continuous needs an off switch (`gtc_muted`, honoured inside `tone()` so nothing can dodge it).
   The voice is a chip's, pulse and triangle. A pulse is far louder than a sine at the same gain, so an
   unnamed voice is scaled by `PULSE_LEVEL`. The exception is `GTC.TUNES.yourTurn`, loud on purpose
-  (it names `'square'` to skip the scaling): it plays in the turn's opening beat, over nothing. Off by default on the computers, where everyone can see
+  (it names `'square'` to skip the scaling): it opens the turn's beat, and on the phones the bed waits for it to finish. Off by default on the computers, where everyone can see
   the screen; on by default on the phones, where the wearer hears the clock or does not know it.
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
   screen*). It lies over the panels people read, so it is held in check, and every layer costs

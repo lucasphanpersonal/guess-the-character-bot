@@ -115,11 +115,18 @@ function countBlip(n) {
 // If audio is not running, it is asked to resume and the cue plays only if that happens within a
 // moment: a cue that turns up seconds later, after the beat, would be about nothing.
 const YOUR_TURN_LATE_MS = 1200;
+// Until when the fanfare is sounding on the audio clock. The phones' first turn has no beat (their
+// countdown came before it), so its clock and bed start with the fanfare: the bed waits for this.
+let yourTurnEndsAt = 0;
 function yourTurnCue() {
   navigator.vibrate?.([220, 90, 220, 90, 420]);
   if (muted) return;
   ensureAudio();
-  const play = () => playTune('yourTurn', Math.max(AFTER_REVEAL_S, levelUpEndsAt - audioCtx.currentTime));
+  const play = () => {
+    const delay = Math.max(AFTER_REVEAL_S, levelUpEndsAt - audioCtx.currentTime);
+    playTune('yourTurn', delay);
+    yourTurnEndsAt = audioCtx.currentTime + delay + tuneLength('yourTurn');
+  };
   if (live()) return play();
   if (!audioCtx) return;
   const asked = performance.now();
@@ -242,7 +249,8 @@ function startBed(crit) {
   bedGain = audioCtx.createGain();
   bedGain.gain.value = 1;
   bedGain.connect(audioCtx.destination);
-  bedNextBarAt = audioCtx.currentTime + 0.06;
+  // After the your-turn fanfare if it is still sounding (the first turn, which has no beat).
+  bedNextBarAt = Math.max(audioCtx.currentTime, yourTurnEndsAt) + 0.06;
   bedBar = 0;
   scheduleBedBar();
 }
