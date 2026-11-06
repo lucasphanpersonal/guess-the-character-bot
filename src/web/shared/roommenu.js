@@ -47,14 +47,14 @@
     .roommenu .rmname { flex:1; min-width:0; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .roommenu .rmtag { flex:none; font-size:.66rem; font-weight:900; letter-spacing:.05em; text-transform:uppercase;
  padding:2px 7px; background:var(--amber); color:#2b1c00; }
-    .roommenu .rmtag.off { background:var(--muted); color:#fff; }
+    .roommenu .rmtag.off { background:var(--muted); color:var(--paper); }
     .roommenu .rmkick { flex:none; width:auto; min-height:44px; padding:7px 12px; font-size:.95rem; }
     .roommenu .rmerr { color:var(--red); font-weight:800; min-height:0; margin:0 0 10px; }
     .roommenu .rmerr:empty { display:none; }
     .roommenu .rmleave { width:100%; }
     .roommenu .rmbots { width:100%; margin-bottom:10px; }
     .roommenu .rmbots[hidden] { display:none; }
-    .roommenu .rmtag.bot { background:var(--muted); color:#fff; }
+    .roommenu .rmtag.bot { background:var(--muted); color:var(--paper); }
     .roommenu .rmpause { width:100%; margin-bottom:10px; }
     .roommenu .rmpause[hidden] { display:none; }
     /* Paused: over everything, the phones' forehead view (z-index 50) included -- a phone on a

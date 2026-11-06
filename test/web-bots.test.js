@@ -27,6 +27,17 @@ module.exports = {
     assert.equal(players.find((p) => p.playerId === 'h').bot, undefined);
   },
 
+  'a host who leaves hands the room to the next person, never to a bot'() {
+    const reg = new RoomRegistry();
+    const { room } = reg.createRoom({ hostPlayerId: 'h', nickname: 'Host', kind: 'desk' });
+    reg.joinRoom(room.code, { playerId: 'b', nickname: 'Beep Bot', kind: 'desk', bot: true });
+    reg.joinRoom(room.code, { playerId: 'p', nickname: 'Pat', kind: 'desk' });
+    reg.leaveRoom(room.code, 'h');
+    assert.equal(room.hostPlayerId, 'p', 'the person, though the bot joined first');
+    reg.leaveRoom(room.code, 'p');
+    assert.equal(room.hostPlayerId, 'b', 'with only bots left, one holds it until they go');
+  },
+
   'a room with only bots connected is swept like an empty one'() {
     const reg = new RoomRegistry();
     const { room } = reg.createRoom({ hostPlayerId: 'h', nickname: 'Host', kind: 'draw' });

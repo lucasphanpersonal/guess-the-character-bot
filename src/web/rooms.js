@@ -337,7 +337,11 @@ class RoomRegistry {
       return { room: null, deleted: true };
     }
     if (room.hostPlayerId === playerId) {
-      room.hostPlayerId = room.order[0]; // next in join order becomes host
+      // Next in join order becomes host -- the next PERSON. A test bot (../bots.js) never deals,
+      // continues or removes anyone, so a bot crowned host leaves the people in the room with a
+      // game nobody can start. Only a room of bots alone hands it to one, and that room is
+      // emptying anyway: bots leave once no person holds a seat.
+      room.hostPlayerId = room.order.find((id) => !room.players.get(id)?.bot) ?? room.order[0];
     }
     return { room, deleted: false };
   }
