@@ -282,9 +282,29 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   images pulled from the games' own public asset APIs (PokeAPI's sprite repo and Riot's Data
   Dragon).
 - **`seed:anilist`** builds one list per anime/manga title from
-  [AniList](https://anilist.co), with artwork on nearly every character. AniList stores names
-  first-name-first ("Luffy Monkey"), so they're rebuilt surname-first to give
-  "Monkey D. Luffy", "Roronoa Zoro", "Nico Robin".
+  [AniList](https://anilist.co), with artwork on nearly every character. Names are shown the
+  way English releases write them (`scripts/lib/anilistNames.js`): given name first ("Satoru
+  Gojo", "Spike Spiegel", "Eren Yeager"), surname first only for the franchises whose English
+  releases keep it (ONE PIECE: "Monkey D. Luffy", "Roronoa Zoro"), and with the long vowels
+  AniList spells out folded (Gojou → Gojo, Shouyou → Shoyo), but only inside a word made
+  entirely of Japanese syllables, so Louise and Soul are never touched.
+
+  The importer used to put every name surname-first, which was right for ONE PIECE and
+  scrambled the rest: 13,313 of 20,562 names, including every Western one ("Spiegel Spike",
+  "Forger Loid"). To move a database seeded that way onto the new names:
+
+  ```bash
+  npm run fetch:anilist                            # once: re-fetches any series without name parts
+  node scripts/rename-anilist-characters.js        # report: data/anilist-renames-<time>.csv
+  node scripts/rename-anilist-characters.js --apply   # writes an undo log first (--undo=<log>)
+  ```
+
+  Read the CSV before `--apply`, and look in particular for English words the long-vowel rule
+  folded by mistake: the rule's exceptions (`FOLD_EXCEPTIONS`) came from exactly that reading
+  (Urouge, Mouseman, Mousse, Rouge). Guesses typed the old way still count: both computer games
+  judge Anime and Manga names with `romanised`, which folds long vowels and takes the words in
+  any order, so "Gojou Satoru" is correct for "Satoru Gojo". The seed file also keeps AniList's
+  other names for each character, for a later pass at nicknames such as "All Might".
 
   AniList files each season separately, so titles differing only by a season or part marker
   are **merged** — otherwise a lobby offers "Attack on Titan" four times. The merge is
