@@ -696,6 +696,8 @@ function addBtn(parent, label, cls, onClick) {
 // --- motion / tilt / forehead mode --------------------------------------------------------
 let motionEnabled = false;
 let motionDenied = false;
+// iPadOS reports itself as a Mac, so a touch screen on "MacIntel" counts as iOS too.
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 let motionNote = '';
 let audioCtx = null;
 const hasMotion = 'DeviceMotionEvent' in window;
@@ -788,7 +790,8 @@ async function enableMotion() {
     if (typeof DeviceMotionEvent?.requestPermission === 'function') {
       const r = await DeviceMotionEvent.requestPermission();
       if (r !== 'granted') {
-        // iOS only ever prompts once. After a refusal the fix is in Settings, not another tap.
+        // iOS only ever prompts once, and Chrome answers from its site settings without asking.
+        // Either way the fix is in settings, not another tap -- motionProblem() names which.
         motionDenied = true;
         motionNote = 'Motion access was refused.';
         if (lastPlayView) renderPlaying(lastPlayView);
@@ -817,7 +820,12 @@ function motionProblem() {
     return { fix: 'device', text: 'This device has no motion sensor. The game is played with a phone on your forehead, so join from a phone instead.' };
   }
   if (motionDenied) {
-    return { fix: 'settings', text: 'Motion access was refused, and iOS will not ask a second time. Open Settings, then Safari, then Motion & Orientation Access, turn it on, and reload this page.' };
+    // Not only iOS has requestPermission any more: Chrome does too, and answers it from the site's
+    // Motion sensors setting. Telling an Android player to open Safari's settings sends them
+    // looking for a browser they do not have.
+    return isIOS
+      ? { fix: 'settings', text: 'Motion access was refused, and iOS will not ask a second time. Open Settings, then Safari, then Motion & Orientation Access, turn it on, and reload this page.' }
+      : { fix: 'settings', text: 'Motion sensors are blocked for this site. Tap the icon at the left of the address bar, open Permissions or Site settings, allow Motion sensors, and reload this page.' };
   }
   // Screen-agnostic on purpose: this text renders on the setup gate AND mid-game, so anything
   // naming a control ("Good to go") is wrong on one of them. The gate adds its own line instead.
