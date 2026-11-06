@@ -783,38 +783,50 @@ function floatNewGuesses() {
   while (box.children.length > 3) box.firstElementChild.remove();
 }
 
-// One column, keyboard up: keep the picture in view above it. iOS scrolls the focused box into
-// view by itself, which in one column took the picture off the top of the screen -- typing a guess
-// meant not seeing what you were guessing. Picture plus box (~320px on a phone) fit in the space
-// above a phone keyboard, so the page is scrolled to put the picture's top at the top. When they
-// do not fit (a short landscape screen), the browser's own scroll is left alone.
+// One column, keyboard up: the whole picture and the guess box on screen together. iOS scrolls the
+// focused box into view by itself, which in one column took the picture off the top of the screen
+// -- typing a guess meant not seeing what you were guessing. Scrolling alone was not enough: on a
+// phone the space above the keyboard is often shorter than a full-width picture plus the box, so
+// the top of the drawing stayed cut off. So while the keyboard is up, the picture's column is
+// narrowed until picture, reactions and box fit in the visible area, and the page is scrolled to
+// put the picture's top at the top. The canvas keeps its own 1200 x 900 pixels; only its CSS size
+// changes, so nothing is redrawn and a stroke arriving meanwhile lands where it should.
 //
-// It moves the page once per keyboard, and only when the picture is actually out of view. It used
-// to re-scroll on every visualViewport resize, and the keyboard resizes it all through typing (the
-// suggestion bar comes and goes as words do), so the picture jumped while a guess was typed. And
-// it measures against the visible area, not the page: with the keyboard up, iOS shows a window
-// onto the page that starts offsetTop below the layout viewport's top, so aiming the picture at
-// the layout viewport's top put it under the top edge of the screen.
-let pictureKeptFor = 0; // the visible height the last adjustment was made for; 0 = not yet, this focus
+// It adjusts once per keyboard. The keyboard resizes the visual viewport all through typing (the
+// suggestion bar comes and goes as words do), and re-fitting on each of those made the picture
+// jump while a guess was typed. And it measures against the visible area, not the page: with the
+// keyboard up, iOS shows a window onto the page that starts offsetTop below the layout viewport's
+// top, so aiming at the layout viewport's top put the picture under the top edge of the screen.
+const pictureCol = $('canvas').closest('.canvaswrap').parentElement; // pad.js, which declares `canvas`, loads after this file
+const MIN_PICTURE = 160; // px wide: smaller than this is not worth looking at, so scroll instead
+let pictureKeptFor = 0; // the visible height the last fit was made for; 0 = not yet, this focus
 function keepPictureInView(first) {
   if (!oneColumn.matches || document.activeElement !== $('chatInput') || !matchMedia('(pointer: coarse)').matches) return;
   const vv = window.visualViewport;
   const room = vv ? vv.height : innerHeight;
-  // Resizes while the keyboard is still rising wait for the first adjustment. After it, the
-  // suggestion bar changes the height by ~40px, a keyboard by far more than 100.
+  // Resizes while the keyboard is still rising wait for the first fit. After it, the suggestion
+  // bar changes the height by ~40px, a keyboard by far more than 100.
   if (!first && (!pictureKeptFor || Math.abs(room - pictureKeptFor) < 100)) return;
+  pictureKeptFor = room;
+  // Everything from the picture's top to the box's bottom that is not the picture: the reactions,
+  // the gaps. It does not change with the picture's size, so it is measured once, at full size.
+  pictureCol.style.maxWidth = '';
+  const pic = canvas.getBoundingClientRect();
+  const rest = $('chatForm').getBoundingClientRect().bottom - pic.top - pic.height;
+  const fitH = room - rest - 16; // 8px clear above the picture and below the box
+  if (fitH < pic.height) pictureCol.style.maxWidth = `${Math.max(MIN_PICTURE, Math.floor(fitH * 4 / 3))}px`;
   const viewTop = vv ? vv.offsetTop : 0;
   const top = canvas.getBoundingClientRect().top - viewTop - 8; // picture's top, from the visible top
   const bottom = $('chatForm').getBoundingClientRect().bottom - viewTop + 8;
-  pictureKeptFor = room;
-  if (bottom - top > room) return; // they cannot both show: leave the browser's scroll alone
+  if (bottom - top > room) return; // still cannot both show: leave the browser's scroll alone
   if (top >= 0 && bottom <= room) return; // already in view: nothing moves
   window.scrollBy(0, top);
 }
 // After the keyboard has had time to rise (iOS animates it for ~300ms), and again if the visible
-// area changes size by a keyboard's worth -- one opening, closing, or a switch to another.
+// area changes size by a keyboard's worth -- one opening, closing, or a switch to another. Leaving
+// the box gives the picture its full size back.
 $('chatInput').addEventListener('focus', () => { pictureKeptFor = 0; setTimeout(() => keepPictureInView(true), 350); });
-$('chatInput').addEventListener('blur', () => { pictureKeptFor = 0; });
+$('chatInput').addEventListener('blur', () => { pictureKeptFor = 0; pictureCol.style.maxWidth = ''; });
 window.visualViewport?.addEventListener('resize', () => keepPictureInView(false));
 function localLine(cls, html) {
   localLines.push({ cls, html, at: Date.now() });
