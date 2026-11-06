@@ -24,7 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { surnameFirstName, looksOrderSwapped } = require('./lib/anilistNames');
+const { surnameFirstName, englishName, looksOrderSwapped } = require('./lib/anilistNames');
 const { writeFileAtomic } = require('./lib/writeAtomic');
 
 const SEED_PATH = path.join(__dirname, '..', 'data', 'seed', 'anilist-characters.json');
@@ -46,13 +46,18 @@ function planRenames(db, series) {
         continue;
       }
       const from = surnameFirstName(c.parts);
+      // The new name is worked out HERE, from the stored parts, with today's rules -- not read
+      // from c.name, which the fetch computed with whatever rules it had. Reading c.name meant a
+      // naming fix did nothing until the next multi-hour re-fetch, and the report silently showed
+      // the old misfires after the fix had merged.
+      const to = englishName(c.parts, [s.label, s.romaji]);
       // A name that stays the same is still recorded: it is what makes an old name that ONE
       // PIECE keeps and another show changes ambiguous, rather than a rename for both.
       if (!from) continue;
-      if (c.image) byImage.set(`${from.toLowerCase()}\u0000${c.image}`, c.name);
+      if (c.image) byImage.set(`${from.toLowerCase()}\u0000${c.image}`, to);
       const key = from.toLowerCase();
       if (!byOldName.has(key)) byOldName.set(key, new Set());
-      byOldName.get(key).add(c.name);
+      byOldName.get(key).add(to);
     }
   }
 
@@ -139,7 +144,7 @@ function main() {
   // check_order marks a rename shaped like a character whose AniList parts are swapped; read those.
   const lines = ['list,category,from,to,matched_by,check_order'];
   for (const r of [...renames].sort((a, b) => a.list.localeCompare(b.list) || a.from.localeCompare(b.from))) {
-    lines.push([r.list, r.category, r.from, r.to, r.matchedBy, looksOrderSwapped(r.to) ? 'yes' : ''].map(csvCell).join(','));
+    lines.push([r.list, r.category, r.from, r.to, r.matchedBy, looksOrderSwapped(r.from) ? 'yes' : ''].map(csvCell).join(','));
   }
   writeFileAtomic(csvPath, `${lines.join('\n')}\n`);
 
@@ -151,8 +156,8 @@ function main() {
   for (const r of renames.slice(0, 8)) console.log(`  e.g. ${r.from} -> ${r.to}  (${r.list})`);
   for (const c of skipped.collision.slice(0, 5)) console.log(`  collision: ${c.from} -> ${c.to}  (${c.list})`);
   console.log(`Report: ${csvPath}`);
-  console.log(`${renames.filter((r) => looksOrderSwapped(r.to)).length} row(s) flagged check_order=yes: ` +
-    'the new last word looks like a Japanese given name, so AniList may have the parts swapped.');
+  console.log(`${renames.filter((r) => looksOrderSwapped(r.from)).length} row(s) flagged check_order=yes: ` +
+    'the old first word looks like a Japanese given name, so AniList may have the parts swapped.');
   console.log('Read it before --apply: look for English words the long-vowel rule folded by mistake ' +
     '(add them to FOLD_EXCEPTIONS in scripts/lib/anilistNames.js).');
 

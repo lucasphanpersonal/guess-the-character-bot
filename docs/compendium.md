@@ -305,8 +305,10 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   (Minoura is Mino-ura). Read the rows marked `check_order` too: AniList files a few characters
   with the surname as the given name, so the old flip happened to show them right ("Tim Marcoh")
   and the new order scrambles them. The ones found so far are kept as they were
-  (`PARTS_SWAPPED`); `check_order` flags renames whose new last word ends like a Japanese given
-  name (Kuroda Heihachiro), the likeliest shape of more. Guesses typed the old way still count: both computer games
+  (`PARTS_SWAPPED`); `check_order` flags renames whose old first word ends like a Japanese
+  given name (-rou, -suke, -ichi: "Heihachirou Kuroda"), the likeliest shape of more. The script
+  works each new name out from the stored name parts with the current rules, so a fix to the rules
+  shows in the very next report, without a re-fetch. Guesses typed the old way still count: both computer games
   judge Anime and Manga names with `romanised`, which folds long vowels and takes the words in
   any order, so "Gojou Satoru" is correct for "Satoru Gojo". The seed file also keeps AniList's
   other names for each character, for a later pass at nicknames such as "All Might".
