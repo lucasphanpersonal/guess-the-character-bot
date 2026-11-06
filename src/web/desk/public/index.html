@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#1f1a4d" />
-  <title>Guess the Character</title>
+  <title>Who Am I?</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎭</text></svg>" />
   <!-- The look and the seasonal switch are shared with /draw/ (src/web/shared). The season script
        is blocking on purpose: the first paint is already in season. -->
@@ -16,9 +16,9 @@
   <link rel="stylesheet" href="/shared/theme.css" />
 </head>
 <body>
-<main>
+<main class="desk">
   <div class="titlebar">
-    <h1><a id="title" href="/">Guess the Character</a></h1>
+    <h1><a id="title" href="/">Who Am I?</a></h1>
     <div class="titletools">
       <!-- Room: who is in it, Leave, and the host's Remove -- on every screen once you are in one
            (/shared/roommenu.js). -->
@@ -59,8 +59,8 @@
           <input id="codeInput" maxlength="4" autocomplete="off" />
         </div>
         <button id="joinBtn" class="alt wide">Join Room</button>
-        <p class="hint">Playing with phones on foreheads instead? That's the
-          <a href="/">phone version</a>. Or draw them: <a href="/draw/">Draw the Character</a>.</p>
+        <p class="hint">Playing with phones on foreheads instead? Start from the
+          <a href="/?how">home page</a>. Or draw them: <a href="/draw/">Doodle Dash</a>.</p>
       </div>
     </div>
     <p class="err light" id="landingErr" role="alert"></p>
@@ -85,6 +85,7 @@
           <label id="rosterLabel">Players</label>
           <ul class="roster" id="roster"></ul>
         </div>
+        <div id="avPick"></div>
         <button id="leaveBtn" class="ghost">Leave Room</button>
       </div>
       <div class="card stack" id="hostPanel">
@@ -225,18 +226,21 @@
           <h2 id="waitTitle"></h2>
           <p class="hint" id="waitHint"></p>
         </div>
-        <div class="card">
+        <div class="card logcard">
           <h2 id="logTitle">Guesses</h2>
           <ul class="log" id="guessLog"></ul>
         </div>
-        <div class="card stack notescard">
-          <div>
-            <h2>Your Notes</h2>
-            <p class="hint">Everyone sees them as you type: keep other people's characters out.</p>
-          </div>
-          <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
-          <p class="err" id="notesErr" role="alert"></p>
+      </div>
+      <!-- Your notes sit beside the side column rather than in it: on your own turn they move under
+           the spotlight (theme.css), where the big mystery card has room to spare, so the guess box,
+           the log and the notes all fit on a laptop screen at once. -->
+      <div class="card stack notescard">
+        <div>
+          <h2>Your Notes</h2>
+          <p class="hint">Everyone sees them as you type: keep others' characters out.</p>
         </div>
+        <textarea id="notesInput" maxlength="500" placeholder="Not human. From a cartoon. Has a sidekick?" aria-label="Your notes"></textarea>
+        <p class="err" id="notesErr" role="alert"></p>
       </div>
     </div>
     <div class="strip" id="board" aria-label="Everyone playing"></div>
@@ -263,9 +267,13 @@
     </div>
   </section>
 </main>
+<!-- During play on a computer the feed docks in the title row (theme.css, the fitted play screen):
+     anywhere lower, it covered the strip of players. -->
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/shared/common.js"></script>
+<script src="/shared/avatars.js"></script>
+<script src="/shared/pointer.js"></script>
 <script src="/shared/sound.js"></script>
 <script src="/shared/pickers.js"></script>
 <script src="/shared/roommenu.js"></script>

@@ -10,17 +10,17 @@ One project, three ways to play it, all dealing from one shared library of chara
   to know, runs the turn clock, and keeps score, while the questions and answers happen live in
   voice. Whoever can see your character rules on your guess with a button.
   → [Playing on Discord](docs/discord.md)
-- **On phones** (*Guess on Phones*, from the website's home page). Heads Up–style: each player
+- **On phones** (*Who Am I?* → *Phones on Foreheads*, from the website's home page). Heads Up–style: each player
   holds a phone to their forehead, showing their character to the room, and tilts to answer.
   → [src/web/README.md](src/web/README.md) · design: [docs/mobile-app-plan.md](docs/mobile-app-plan.md)
-- **On computers** (*Guess on Computers*, `/desk/`). Every screen shows everyone's character but
+- **On computers** (*Who Am I?* → *Everyone at a Screen*, `/desk/`). Every screen shows everyone's character but
   its owner's -- whoever is asking questions big in the middle, everyone else in a strip along the
   bottom; on your turn you **type** who you think you are. A clear match counts, a clear miss is just a miss, and
   anything close goes to the other players to rule on. Each player keeps notes, shown live to
   everyone -- a note that would name someone's character is refused.
   → [src/web/README.md](src/web/README.md)
 
-And a second game on the same web server: **Draw the Character** (`/draw/`), on phones and
+And a second game on the same web server: **Draw the Character** (*Doodle Dash* on the site, `/draw/`), on phones and
 computers alike in one room. One player draws a character they picked from three; everyone else
 types guesses. The hints wait for the drawing: the kind of work at a quarter of the time, the
 blanks at half, letters written in from there, the work itself for the last quarter. Faster
@@ -29,7 +29,7 @@ back at the end with accolades and a vote for the best, each one saveable. Or pl
 **Telephone**: everyone at once, each chain passed along -- draw, guess, draw -- then replayed card
 by card to see where it went wrong.
 
-The website's home page asks which game: Draw, or Guess on phones or on computers. In every game a **Room** button lists
+The website's home page asks which game: *Who Am I?* (then phones or computers) or *Doodle Dash*. In every game a **Room** button lists
 who is in the room and lets anyone leave, and the host remove anyone or pause the game. Every
 page has a **Dark Mode** switch (remembered per browser; until it's pressed, the device's own
 setting decides).

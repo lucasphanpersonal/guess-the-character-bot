@@ -13,14 +13,14 @@ socket.on('draw:over', ({ standings, gallery = [], accolades = [], votes: counts
   view = null;
   localLines = [];
   heardPhase = '';
-  const top = standings.filter((s) => s.place === 1).map((s) => (s.playerId === me ? 'You' : s.name));
-  $('overTitle').textContent = top.length ? `${top.join(' and ')} won!` : 'Game over';
+  const top = standings.filter((s) => s.place === 1).map((s) => ({ name: s.name, you: s.playerId === me }));
+  $('overTitle').textContent = GTC.winnersTitle(top);
   // Once per game: a reconnect on this screen is sent draw:over again (re-armed by draw:state).
   if (!overHeard) { overHeard = true; sound('over', standings.some((s) => s.place === 1 && s.playerId === me)); }
   GTC.confetti();
-  window.GTCFx?.podium(standings.slice(0, 3).map((s) => s.name));
+  window.GTCFx?.podium(standings);
   $('standings').innerHTML = standings
-    .map((s) => GTC.hiscoreRow({ place: s.place, name: s.name, detail: s.left ? '(left)' : '', score: s.score, unit: 'pts' }))
+    .map((s) => GTC.hiscoreRow({ place: s.place, face: GTC.faceOf(roomState?.players, s.playerId), name: s.name, detail: s.left ? '(left)' : '', score: s.score, unit: 'pts' }))
     .join('');
   $('hostOver').hidden = !isHost();
   $('guestOver').hidden = isHost();
@@ -166,7 +166,7 @@ $('viewerSave').addEventListener('click', () => {
   c.fillStyle = '#6b6480';
   c.font = `24px ${CAPTION_FACE}`;
   c.textAlign = 'right';
-  c.fillText('Draw the Character', 1172, 946);
+  c.fillText('Doodle Dash', 1172, 946);
   const file = `${d.character?.name ?? 'drawing'} by ${d.drawer}`.replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 80) || 'drawing';
   // Built synchronously (toDataURL, not toBlob): the share sheet below only opens straight from the
   // tap, and Safari counts an async callback as no longer the tap.

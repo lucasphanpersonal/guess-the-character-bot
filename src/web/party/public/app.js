@@ -80,13 +80,34 @@ function wobble(el, text, { colour = true } = {}) {
   });
 }
 
+// The heading names what you are playing. The first question (which game) is the site's own
+// screen, so it carries the site's name; every other screen on this page is Who Am I? -- phones,
+// or a computer's start before it hands off to /desk/, which is titled the same. Re-wobbled only
+// on a change, since show() runs on every state push.
+const SITE_NAME = 'Guess the Character';
+const GAME_NAME = 'Who Am I?';
+let shownTitle = null;
+function setTitleFor(screen) {
+  const title = screen === 'splash' ? SITE_NAME : GAME_NAME;
+  if (title === shownTitle) return;
+  shownTitle = title;
+  wobble(document.getElementById('homeTitle'), title);
+  document.title = title;
+}
+
 function show(screen) {
+  // A screen that was not showing starts at the top. The page keeps its scroll across screens, so
+  // the deal screen opened where the settings screen had been scrolled to, with its check card off
+  // the top. Only on entry: the setup screen re-renders on every state push and must not jump.
+  const entering = document.getElementById(screen) && !document.getElementById(screen).classList.contains('active');
   for (const s of document.querySelectorAll('.screen')) s.classList.toggle('active', s.id === screen);
+  if (entering) window.scrollTo(0, 0);
   // Idle whimsy stops once play starts -- phones are on foreheads, and the only thing that
   // should be moving is the game.
   document.body.classList.toggle('at-play', screen === 'playing' || screen === 'countdown');
   // The same for the shared styles (retro.css), which know no game's screen names.
   document.documentElement.toggleAttribute('data-playing', screen === 'playing' || screen === 'countdown');
+  setTitleFor(screen);
   // Every way in or out of a room ends on a screen change, so this is where Room follows it.
   roomMenu?.update();
 }
@@ -94,6 +115,9 @@ function show(screen) {
 const amHost = () => lastState && lastState.hostPlayerId === me;
 
 // --- lobby rendering ----------------------------------------------------------------------
+// The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+
 function renderLobby(state) {
   // Rendered per character so each can carry its own colour (see .roomcode .ch).
   const codeEl = $('lobbyCode');
@@ -125,11 +149,12 @@ function renderLobby(state) {
     name.className = 'name';
     name.textContent = p.nickname;
     if (p.playerId === me) { const y = document.createElement('span'); y.className = 'you'; y.textContent = ' (you)'; name.appendChild(y); }
-    li.innerHTML = GTC.avatar(p.nickname);
+    li.innerHTML = GTC.avatar(p.avatar);
     li.append(dot, name);
     if (p.isHost) { const c = document.createElement('span'); c.className = 'crown'; c.textContent = 'HOST'; li.appendChild(c); }
     roster.appendChild(li);
   }
+  avPicker.update(state.players, me);
   const host = amHost();
   const enough = state.players.length >= 2;
   $('setupBtn').style.display = host ? '' : 'none';
@@ -142,9 +167,7 @@ function renderLobby(state) {
 
 // --- setup / confirm ----------------------------------------------------------------------
 function charCardHtml(ch) {
-  const img = ch.imageUrl
-    ? `<img src="${escapeHtml(ch.imageUrl)}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'noimg',textContent:'(no image)'}))">`
-    : `<div class="noimg">No image — reveal by name</div>`;
+  const img = GTC.art(ch.imageUrl);
   // Wrapped in .charcard so the fixed image box (.charcard img { height:230px }) applies wherever
   // this is inserted -- not just inside #checkCard. Without the wrapper the image rendered at
   // full natural size on the finished/tap screens and blew out the layout.
@@ -198,11 +221,18 @@ document.addEventListener('visibilitychange', () => {
 });
 
 let lastSetupView = null;
+// When the host's Remove buttons may first appear for this deal. Entering the deal screen from
+// another screen holds them back a few seconds, so the host does not hit Remove on the cards as they land.
+const REMOVE_HOLD_MS = 4000;
+let removeArmedAt = 0;
 function renderSetup(view) {
   keepAwake();
   clearInterval(countdown); // a player left during the grace: back to setup, no game to count to
   overHeard = false; // a new game: its end will be news
   finishCelebrated = false;
+  // Arm on ENTERING the deal screen, not on the first setup view of the page: a rematch, a second
+  // game or a re-deal after a removal all come back through here from another screen.
+  if (!document.getElementById('setup').classList.contains('active')) removeArmedAt = Date.now() + REMOVE_HOLD_MS;
   lastSetupView = view;
   // The tilt handler reads lastPlayView to decide whether a gesture means anything. Leaving a
   // finished game's view lying around made a tilt during the NEXT game's reroll stage look like
@@ -299,6 +329,7 @@ function renderWaitingList(view) {
     name.className = 'name';
     name.style.flex = '1';
     name.textContent = p.name;
+    li.innerHTML = GTC.faceOf(lastState?.players, p.playerId);
     li.append(name);
     if (amHost()) li.append(removeButton(p));
     ul.appendChild(li);
@@ -310,12 +341,20 @@ function removeButton(p) {
   const b = document.createElement('button');
   b.className = 'rmbtn';
   b.textContent = 'Remove';
-  b.addEventListener('click', () => {
-    if (!confirm(`Remove ${p.name} from the room? Everyone goes back to the lobby and you deal again.`)) return;
+  // Held back right after a deal (see REMOVE_HOLD_MS). Hidden rather than disabled, so the row
+  // does not look like it has a button that is broken; the row re-renders on every state push, so
+  // the timer only needs to reveal this one element.
+  const wait = removeArmedAt - Date.now();
+  if (wait > 0) {
+    b.style.visibility = 'hidden';
+    setTimeout(() => { b.style.visibility = ''; }, wait);
+  }
+  b.addEventListener('click', async () => {
+    if (!(await GTC.ask(`Remove ${p.name} from the room? Everyone goes back to the lobby and you deal again.`, { yes: 'Remove', danger: true }))) return;
     b.disabled = true;
     socket.emit('room:kick', { playerId: p.playerId }, (res) => {
       b.disabled = false;
-      if (!res?.ok) alert(res?.error || 'Could not remove them.');
+      if (!res?.ok) GTC.ask(res?.error || 'Could not remove them.', { no: null });
     });
   });
   return b;
@@ -393,7 +432,8 @@ function renderHostList(rows) {
     // Remove button on the right the text column is narrow, and the status wrapped mid-phrase.
     li.innerHTML =
       `<span style="font-weight:900;min-width:1.1em;text-align:center">${escapeHtml(r.icon)}</span>` +
-      (ch?.imageUrl ? `<img class="pickthumb" src="${escapeHtml(ch.imageUrl)}" alt="">` : '') +
+      GTC.faceOf(lastState?.players, r.playerId) +
+      GTC.art(ch?.imageUrl, 'class="pickthumb"') +
       `<span style="flex:1;min-width:0"><span class="name">${escapeHtml(r.name)}</span><br>` +
       `<span style="font-weight:700">${escapeHtml(ch?.name ?? '—')}</span><br>` +
       `<span class="you">${escapeHtml(r.meta)}</span></span>`;
@@ -420,7 +460,7 @@ function renderStandings(el, rows) {
     const tail = s.status === 'finished' ? ` — turn ${s.turns}${s.secondsLeft == null ? '' : `, ${s.secondsLeft}s left`}`
       : s.status === 'guessing' ? ` — turn ${s.turns} (guessing)`
       : s.status === 'gave_up' ? ' — gave up' : ' — waiting';
-    li.innerHTML = `<span>${STATUS_ICON[s.status] || '•'}</span><span class="name">${escapeHtml(s.name)}</span><span class="you">${tail}</span>`;
+    li.innerHTML = `<span>${STATUS_ICON[s.status] || '•'}</span>${GTC.faceOf(lastState?.players, s.playerId)}<span class="name">${escapeHtml(s.name)}</span><span class="you">${tail}</span>`;
     el.appendChild(li);
   }
 }
@@ -617,7 +657,8 @@ function renderOver(result) {
       : s.secondsLeft == null ? '' : `${s.secondsLeft}s left`;
     return GTC.hiscoreRow({
       place: s.place,
-      imageUrl: s.character?.imageUrl,
+      face: GTC.faceOf(lastState?.players, s.playerId),
+      imageUrl: s.character?.imageUrl ?? null,
       name: s.name,
       detail: `was ${s.character?.name ?? '—'}${how ? ` · ${how}` : ''}`,
       score: s.turns ?? '--',
@@ -842,7 +883,9 @@ function showGiveUpProgress(fraction) {
 // is pure and unit-tested. This reads the sensor, hands it over, and does what it is told.
 function handleGameTilt() {
   const v = lastPlayView;
-  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn) {
+  // A question on screen (GTC.ask -- "Leave the game?") holds the tilt: the phone comes off the
+  // forehead to read it, and that must not count as a gesture. confirm() used to freeze this for us.
+  if (!motionEnabled || !v || v.phase !== 'playing' || !v.isMyTurn || GTC.asking()) {
     TiltRules.reset(tilt);
     showGiveUpProgress(0);
     return;
@@ -1011,7 +1054,7 @@ function createRoom() {
   if (!nick) return ($('landingErr').textContent = 'Enter your name first.');
   $('landingErr').textContent = '';
   primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
-  socket.emit('room:create', { nickname: nick }, (res) => {
+  socket.emit('room:create', { nickname: nick, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     lastState = res.state; enterRoom(res.state); routeByStatus(res.state);
   });
@@ -1023,7 +1066,7 @@ function joinRoom() {
   if (code.length !== 4) return ($('landingErr').textContent = 'Room codes are 4 letters.');
   $('landingErr').textContent = '';
   primeMotion(); // first gesture -> turn tilt on (no separate opt-in)
-  socket.emit('room:join', { code, nickname: nick }, (res) => {
+  socket.emit('room:join', { code, nickname: nick, avatar: GTC.preferredAvatar() }, (res) => {
     // A Draw room plays on phones too, so a Draw code typed here is sent there rather than
     // refused: from the home page it is one box for any code a phone can play.
     if (res?.kind === 'draw') return location.assign(`/draw/?room=${encodeURIComponent(code)}&name=${encodeURIComponent(nick)}`);
@@ -1076,7 +1119,9 @@ socket.on('game:countdown', ({ seconds }) => startCountdown(seconds));
 socket.on('game:state', (view) => renderPlaying(view));
 socket.on('host:state', (view) => renderHost(view));
 socket.on('game:reveal', (r) => {
-  beep(r.kind === 'got' ? 760 : 380, 160); // a chime when someone finishes / bows out
+  // The guesser's own right answer gets the level-up fanfare; a finish by anyone else, the chime; a bow-out, a low note.
+  if (r.kind === 'got' && r.playerId === me) levelUpFanfare();
+  else beep(r.kind === 'got' ? 760 : 380, 160);
   // Seconds left are named at the moment of finishing because that is now the time to beat:
   // anyone who gets theirs in as many turns needs more on the clock to win outright.
   const left = r.secondsLeft == null ? '' : ` with <b>${r.secondsLeft}s</b> left`;
@@ -1111,7 +1156,7 @@ socket.on('connect', () => {
   // on screen for the rest of the party, long after everything had come back.
   $('connState').textContent = '';
   if (currentRoom && nickname) {
-    socket.emit('room:join', { code: currentRoom.code, nickname }, (res) => {
+    socket.emit('room:join', { code: currentRoom.code, nickname, avatar: GTC.preferredAvatar() }, (res) => {
       if (res?.ok) { lastState = res.state; enterRoom(res.state); routeByStatus(res.state); }
       else { currentRoom = null; store.del('gtc_lastRoom'); show('landing'); }
     });

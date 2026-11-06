@@ -20,7 +20,7 @@ without tangling into it. Two ways to play, from one server, chosen on the home 
   names a character someone is still guessing is refused with the reason, because notes are the
   one thing a player writes that the others read.
 
-And a second game, **Draw the Character** (`/draw/`), for a whole party: a room takes up to 50
+And a second game, **Draw the Character** (*Doodle Dash* on the site, `/draw/`), for a whole party: a room takes up to 50
 (`MAX_PLAYERS_BY_KIND` in `rooms.js`), where Guess the Character keeps the core's 8. Each round, everyone draws once in seat
 order -- and every game in every web game is seated afresh, unlike the last one in that room
 (`core/game/seating.js`): someone else goes first, and in Guess nobody checks (or picks for) the same
@@ -88,6 +88,14 @@ a short fanfare at game over, with a step on top for the winners (Draw's Telepho
 winners and no fanfare). Cues queue rather than overlap. **Sound On / Sound Off** sits beside the title on every
 screen, play included; the choice is the phones' own `gtc_muted`, one per browser. The phones default to on, because a wearer has no other way to hear the clock, and have a switch of their own in the corner on every screen but the forehead view.
 
+**Faces** (`shared/avatars.js`), in all three games: everyone wears one of 16 original pixel
+sprites (a cat, a frog, a robot...), each on its own coloured square, shown beside their name in the
+lobby, the Room menu, the play screens' player lists and the end screen. A newcomer gets the face
+their browser last picked if it is free, otherwise a free one at random; the lobby's picker
+(`room:avatar`) changes it. Faces are one per seat while a room has no more people than faces, and a
+worn one is refused with the wearer's name; a bigger Draw room shares them. The server keeps only a
+number per seat and reads the count from the same file the pages draw from.
+
 **Room** (`shared/roommenu.js`), in all three games, is a button by the title on every screen once
 you are in a room, play included: who is in the room, **Leave Room** (asking first, in the game's
 own words for what leaving costs), and for the host **Remove** beside everyone else, at any
@@ -103,10 +111,28 @@ not only the host, Continue Game. A room that is deleted (its last player leaves
 nobody connected) stops its game's clocks with it (`registry.onRoomDeleted`). On a phone-width computer page
 the dark-mode switch moves into it, so the title row keeps its room.
 
-**The home page** (`/`) asks one question first: which game. *Draw the Character* goes to
-`/draw/`, which plays on phones and computers alike, in one room. Guess the Character is two
-choices, because its two ways cannot share a room: *Phones* gets the forehead game's create / join,
-Browse and Test Tilt; *Computers* gets create, join and Browse, and is handed off to `/desk/`
+**Test bots** (`bots.js`, with a brain per game in `guess/bot.js` and `draw/bot.js`), for playing
+any of the three alone. Open any page once with `?bots` (`/?bots`, `/desk/?bots`, `/draw/?bots`) and
+that browser's Room menu gets **Add Bot** for the host, between games; `?bots=off` hides it again.
+Nobody else ever sees it. A bot is a player the server runs: it connects back to this server over
+socket.io, joins by the code with a face of its own (marked *Bot* in the Room menu), and acts only
+through the events a browser sends -- so every rule and leak guard holds for it as for anyone. It
+reads its room in place to play plausibly: on the check screen it fills an empty seat and locks in;
+on phones it tilts got-it or pass; on computers it types a wrong guess or two and then its name
+(sometimes with a typo, for a person to rule on) or passes, and rules on others' close guesses after
+a pause long enough for a person to get there first; in Doodle Dash it picks, doodles a face and a
+scribble a stroke at a time, guesses wrong and then right, reacts and votes; in Telephone it picks,
+doodles and names what it was passed. Bots leave as soon as no person holds a seat, never keep a room
+from the abandoned-room sweep, and are removed like anyone (Remove). `WEB_BOTS=0` turns them off;
+`WEB_BOT_SPEED` scales their pauses (the socket check runs them at 0.02).
+
+**The home page** (`/`) asks one question first: which game, of two. That screen is titled with
+the site's name; every later screen on the page is titled *Who Am I?*, as `/desk/` is. Every game is guessing a
+character, so they are named for how they play. *Doodle Dash* (Draw the Character) goes to
+`/draw/`, which plays on phones and computers alike, in one room. *Who Am I?* (Guess the Character)
+asks a second question, because its two ways cannot share a room: *Phones on Foreheads* gets the
+forehead game's create / join, Browse and Test Tilt; *Everyone at a Screen* gets create, join and
+Browse, and is handed off to `/desk/`
 (`?create=1&name=` or `?room=CODE&name=`, wiped from the address once acted on). A hint from
 `pointer: coarse` marks which of those two this device looks like. A computer's join box asks
 `GET /api/room?code=` which game a code belongs to; it answers with the game's path and nothing
@@ -167,11 +193,15 @@ web/
                        curation, dealing. Games use this, never the compendium directly.
   rooms.js             The room registry -- one for every game, so a code means one room.
   roomAccess.js        Identifying, creating and joining, with the limits on strangers.
+  bots.js              Test bots: players the server runs, for playing alone (Room menu, ?bots).
   shared/              Served at /shared/ so the games cannot drift apart. retro.css is the look
                        on every page: fonts (in fonts/, self-hosted), palette, base components, the
                        high-score table. The computer games add their layouts (theme.css), seasonal
                        switch and sound (sound.js). The phones also load common.js, pickers.js (the
                        pool picker and character search) and roommenu.js (Room: leave, remove, pause).
+                       Every page loads pointer.js, the white-glove menu pointer beside whatever
+                       you are about to choose. Questions are GTC.ask (common.js), an RPG text box
+                       that types itself out, never the browser's confirm() or alert().
                        voxels.js and fx3d.js are the 3D accents on landing, lobby and results pages
                        (cubes built in code, no model files). vendor/ holds the one Three.js file
                        they fetch: only the classes fx3d.js uses, bundled and minified with esbuild
@@ -184,6 +214,7 @@ web/
     turnLoop.js          Turns, standings, the clock, results (pure, unit-tested).
     service.js           The setup service both ways of playing drive.
     socket.js            The room/setup/turn protocol, parameterised by a VARIANT.
+    bot.js               A test bot's play, on phones and computers alike (../bots.js runs it).
   party/               Phones: the forehead variant. Served at the site root and on the default
                        socket.io namespace, because the links and QR codes out there point there.
     index.js             The variant: forehead view, a grace countdown, the tilt event.
@@ -214,6 +245,7 @@ means one room either way.
     game.js              The rules: choosing, guesses, hints, scoring, rounds (pure, unit-tested).
     gallery.js           The end screen: each drawing kept, simplified; the accolades (pure, tested).
     telephone.js         Telephone: the chains, the steps, the replay (pure, unit-tested).
+    bot.js               A test bot's play: picking, doodling, guessing, voting (../bots.js runs it).
     socket.js            The protocol and the clock: one timer per room aimed at whatever is due
                          next, a watchdog for sleeping laptops, strokes checked and relayed.
     public/              The drawing client: app.js, pad.js, gallery.js, tel.js, boot.js last.

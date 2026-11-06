@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#1f1a4d" />
-  <title>Draw the Character</title>
+  <title>Doodle Dash</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🎨</text></svg>" />
   <!-- The look and the seasonal switch are shared with /desk/ (src/web/shared). -->
   <script src="/shared/season.js"></script>
@@ -228,6 +228,18 @@
                               font-weight:800; overflow-wrap:anywhere; }
     .confirmpick .hint { font-size:.82rem; margin:6px 0 16px; }
     .confirmactions { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+    /* "No Other Name — Start Drawing" is wider than a 320px phone's dialog: it takes the row and
+       wraps inside itself rather than running off the left edge. */
+    .confirmactions #confirmGo { flex:1 1 auto; min-width:0; white-space:normal; }
+    /* The other-name panel: amber-framed, an amber title strip, the box itself full width. Its
+       --outline is amber for the frame, and the input inside draws its border from --outline too,
+       so the input takes the ink back. Room around it for the frame (a scroll box clips shadows). */
+    .aka { --outline:var(--amber); box-shadow:var(--frame); background:var(--soft); padding:0 12px 2px; margin:var(--px) var(--px) 18px; }
+    .aka input { --outline:var(--frame-ink); width:100%; font-size:1.15rem; }
+    .aka .akatitle { display:flex; align-items:center; gap:8px; margin:0 -12px 8px; padding:8px 12px;
+                     background:var(--amber); color:#1a1633; font-size:1.15rem; }
+    .aka .akasub { margin:0 0 8px; font-family:var(--font-name); font-size:1.1rem; line-height:1.2; }
+    .aka .hint { margin:6px 0 10px; }
     /* The spellings: chips you pick one of. Picked = filled blue AND a tick, never colour alone. */
     .spellings { display:flex; flex-wrap:wrap; gap:6px; }
     .spellings label { display:inline-flex; align-items:center; gap:6px; margin:0; cursor:pointer; text-transform:none; letter-spacing:0;
@@ -313,9 +325,10 @@
     .size i { display:block; border-radius:50%; background:var(--ink); }
     .tools .gap { flex:1; }
     /* A drawing room takes up to 50 (rooms.js), so the list scrolls inside its own column rather
-       than running the page down past the canvas. The bottom padding keeps the last row's hard
-       shadow, which the scroll box would otherwise clip. */
-    .players { list-style:none; margin:0; padding:0 2px 6px 0; display:flex; flex-direction:column; gap:8px;
+       than running the page down past the canvas. A scroll box clips its rows' frames, so the
+       padding is room for them: a row's --px (2px) on every side, three times that underneath for
+       its drop. With none on the top and left, every row lost its left edge and the first its top. */
+    .players { list-style:none; margin:0; padding:2px 2px 6px; display:flex; flex-direction:column; gap:8px;
                max-height:min(36rem, 64vh); overflow-y:auto; overscroll-behavior:contain; }
     .players li { display:flex; align-items:center; gap:6px; background:var(--paper); color:var(--ink);
                   padding:10px; font-weight:800; }
@@ -452,7 +465,7 @@
 <body>
 <main>
   <div class="titlebar">
-    <h1><a id="title" href="/">Draw the Character</a></h1>
+    <h1><a id="title" href="/">Doodle Dash</a></h1>
     <div class="titletools">
       <!-- Room: who is in it, Leave, and the host's Remove -- on every screen once you are in one
            (/shared/roommenu.js). -->
@@ -493,8 +506,8 @@
           <input id="codeInput" maxlength="4" autocomplete="off" />
         </div>
         <button id="joinBtn" class="alt wide">Join</button>
-        <p class="hint">Rather guess who you are? Play <a href="/desk/">Guess the Character</a> on
-          computers, or on <a href="/">phones</a>.</p>
+        <p class="hint">Rather guess who you are? Play <a href="/?how">Who Am I?</a>, at a
+          <a href="/desk/">screen</a> or with phones on foreheads.</p>
       </div>
     </div>
     <p class="err light" id="landingErr" role="alert"></p>
@@ -519,6 +532,7 @@
           <label id="rosterLabel">Players</label>
           <ul class="roster" id="roster"></ul>
         </div>
+        <div id="avPick"></div>
         <button id="leaveBtn" class="ghost">Leave Room</button>
       </div>
       <div class="card stack" id="hostPanel">
@@ -627,7 +641,7 @@
             <div id="revealPoints" class="hint"></div>
           </div>
         </div>
-        <div class="tools" id="tools" hidden>
+        <div class="tools" id="tools" hidden data-no-blip>
           <div class="row" id="swatches" role="radiogroup" aria-label="Colour"></div>
           <div class="row" id="sizes" role="radiogroup" aria-label="Brush size"></div>
           <span class="gap"></span>
@@ -635,7 +649,7 @@
           <button id="clearBtn" class="bad">Clear</button>
         </div>
         <!-- For the guessers, where the drawer has their tools: a quick word to the artist. -->
-        <div class="reactions" id="reactions" role="group" aria-label="React to the drawing" hidden>
+        <div class="reactions" id="reactions" role="group" aria-label="React to the drawing" hidden data-no-blip>
           <button type="button" data-react="star" class="r-star" aria-label="Love it" title="Love it">★</button>
           <button type="button" data-react="wow" class="r-wow" aria-label="Whoa" title="Whoa">!!</button>
           <button type="button" data-react="huh" class="r-huh" aria-label="Huh?" title="Huh?">?!</button>
@@ -671,12 +685,20 @@
           <h2 id="confirmName"></h2>
         </div>
       </div>
-      <label>Guessers get it with</label>
+      <!-- The other name, first and loudest. Playtests kept starting without it: as one quiet field
+           between two hints it read as small print, and the room then typed "Endeavor" at a picture
+           of Endeavor to no avail. So it is its own amber panel above everything else, and the
+           button below says out loud when there is no other name (app.js syncConfirmGo), which
+           makes skipping it a choice rather than a miss -- without ever making anyone type. -->
+      <div class="aka" id="akaBox">
+        <label for="alsoAccept" class="akatitle"><span class="akamark nudge" aria-hidden="true">▶</span> Called Something Else?</label>
+        <p class="akasub">A nickname, hero name or dub name? Add it, or a guess of it won't count.</p>
+        <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. Endeavor" aria-describedby="akaHint" />
+        <p class="hint" id="akaHint">Comma-separated, up to three. Nobody else sees them until the reveal.</p>
+      </div>
+      <label>Guessers already get it with</label>
       <ul class="counts" id="confirmCounts"></ul>
       <p class="hint">In any order, any capitals, with or without accents — and a small typo still counts.</p>
-      <label for="alsoAccept">Known by another name?</label>
-      <input id="alsoAccept" maxlength="130" autocomplete="off" placeholder="e.g. a hero name, the dub's name" />
-      <p class="hint">Comma-separated, up to three. Nobody else sees them until the reveal.</p>
       <!-- Which spelling the blanks take: the room says "Rock Lee", the library "Lee Rock". -->
       <label id="spellLabel">Blanks spell out</label>
       <div class="spellings" id="confirmSpellings" role="radiogroup" aria-labelledby="spellLabel"></div>
@@ -811,6 +833,8 @@
 <div class="feed" id="feed" aria-live="polite"></div>
 <script src="/socket.io/socket.io.js"></script>
 <script src="/shared/common.js"></script>
+<script src="/shared/avatars.js"></script>
+<script src="/shared/pointer.js"></script>
 <script src="/shared/sound.js"></script>
 <script src="/shared/pickers.js"></script>
 <script src="/shared/roommenu.js"></script>

@@ -6,10 +6,11 @@
 $('createBtn').addEventListener('click', createRoom);
 $('joinBtn').addEventListener('click', joinRoom);
 $('leaveBtn').addEventListener('click', leaveRoom);
-$('playLeaveBtn').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
+const LEAVE_GAME = 'Leave the game? Your character is revealed and you drop out.';
+$('playLeaveBtn').addEventListener('click', async () => { if (await GTC.ask(LEAVE_GAME, { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom(); });
 // The forehead overlay covers everything else at full-screen, including playLeaveBtn above --
 // this is the only way out while a phone is actually in forehead mode.
-$('foreheadLeave').addEventListener('click', () => { if (confirm('Leave the game? Your character is revealed and you drop out.')) leaveRoom(); });
+$('foreheadLeave').addEventListener('click', async () => { if (await GTC.ask(LEAVE_GAME, { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom(); });
 $('overLeaveBtn').addEventListener('click', leaveRoom);
 let lastOverHostPicked = false;
 $('rematchBtn').addEventListener('click', () => {
@@ -50,17 +51,17 @@ syncHowto();
 $('setupBtn').addEventListener('click', () => openConfig());
 $('cfgBackBtn').addEventListener('click', () => show('lobby'));
 $('dealBtn').addEventListener('click', deal);
-$('setupCancelBtn').addEventListener('click', () => {
-  if (confirm('Cancel this deal and send everyone back to the lobby?')) socket.emit('setup:cancel', {}, () => {});
+$('setupCancelBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Cancel this deal and send everyone back to the lobby?', { yes: 'Call It Off', no: 'Keep Dealing', danger: true })) socket.emit('setup:cancel', {}, () => {});
 });
-$('setupLeaveBtn').addEventListener('click', () => {
-  if (confirm('Leave the room?')) leaveRoom();
+$('setupLeaveBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Leave the room?', { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom();
 });
-$('hostCancelBtn').addEventListener('click', () => {
-  if (confirm('Call off this deal and send everyone back to the lobby? Your picks are kept.')) socket.emit('setup:cancel', {}, () => {});
+$('hostCancelBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Call off this deal and send everyone back to the lobby? Your picks are kept.', { yes: 'Call It Off', no: 'Keep Dealing', danger: true })) socket.emit('setup:cancel', {}, () => {});
 });
-$('hostLeaveBtn').addEventListener('click', () => {
-  if (confirm('Leave the room? The game carries on without you.')) leaveRoom();
+$('hostLeaveBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Leave the room? The game carries on without you.', { yes: 'Leave', no: 'Stay', danger: true })) leaveRoom();
 });
 $('undoBtn').addEventListener('click', () => socket.emit('setup:undo', {}, (res) => {
   $('rerollNote').textContent = res?.ok ? `Put ${res.restored} back.` : res?.error || '';
@@ -120,11 +121,11 @@ $('browseBtn').addEventListener('click', openBrowse);
 // player straight back in their room, which the page rejoins on load -- so in a room it asks first,
 // in words that say what leaving costs, and leaves properly. Out of a room it just shows the start
 // screen, which is also the way back from Browse and Test Tilt.
-$('homeTitle').addEventListener('click', (e) => {
+$('homeTitle').addEventListener('click', async (e) => {
   if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   e.preventDefault();
   if (currentRoom) {
-    if (!confirm(leaveCost())) return;
+    if (!(await GTC.ask(leaveCost(), { yes: 'Leave', no: 'Stay', danger: true }))) return;
     leaveRoom();
   }
   // Home is the first question, which game -- the one screen every other start hangs off.
@@ -163,24 +164,30 @@ roomMenu.update();
 // The CRT screen's switch on the first screen (the Room menu's is bound by roommenu.js).
 GTC.bindCrtToggles();
 
-// --- the start: which game ---------------------------------------------------------------
+// --- the start: which game, then which way -------------------------------------------------
 //
-// Asked before anything else, because it decides what the rest of the start screen offers: Draw
-// is its own page (a link), and Guess the Character is phones or computers. The answer is
-// remembered only as "where Back from Browse returns to" -- the question itself is asked on every
-// fresh visit, so a phone borrowed for one game is never stuck being a computer.
+// Asked before anything else, because it decides what the rest of the start screen offers. Two
+// games: Doodle Dash is its own page (a link), and Who Am I? is phones or computers -- a second
+// question (#how), since a room is one or the other. The answer is remembered only as "where Back
+// from Browse returns to" -- the questions are asked on every fresh visit, so a phone borrowed for
+// one game is never stuck being a computer.
 let startScreen = 'landing';
-function pickDevice(screen) {
-  startScreen = screen;
+function go(screen) {
   show(screen);
   window.scrollTo(0, 0);
 }
+function pickDevice(screen) {
+  startScreen = screen;
+  go(screen);
+}
+$('pickGuess').addEventListener('click', () => go('how'));
 $('pickPhone').addEventListener('click', () => pickDevice('landing'));
 $('pickComputer').addEventListener('click', () => pickDevice('computer'));
-for (const b of document.querySelectorAll('[data-splash]')) b.addEventListener('click', () => show('splash'));
-// A hint between the two ways to play Guess, never a decision: touch-first is a good guess at
-// "phone", and a tablet or a touchscreen laptop can still pick the other one. Draw needs no hint:
-// it plays on either.
+for (const b of document.querySelectorAll('[data-splash]')) b.addEventListener('click', () => go('splash'));
+for (const b of document.querySelectorAll('[data-how]')) b.addEventListener('click', () => go('how'));
+// A hint between the two ways to play Who Am I?, never a decision: touch-first is a good guess at
+// "phone", and a tablet or a touchscreen laptop can still pick the other one. Doodle Dash needs no
+// hint: it plays on either.
 $(matchMedia('(pointer: coarse)').matches ? 'likelyPhone' : 'likelyComputer').hidden = false;
 
 // The computer game lives on a page of its own, so the computer start hands off: create goes to
@@ -211,7 +218,7 @@ $('pcJoinBtn').addEventListener('click', async () => {
     return ($('pcErr').textContent = "Couldn't reach the server. Check your connection and try again.");
   }
   // A phone room: the forehead game cannot be played from a computer, so say whose it is.
-  if (found.path === '/') return ($('pcErr').textContent = "That room is a phone game. Join it from a phone, or ask the host for a computer room.");
+  if (found.path === '/') return ($('pcErr').textContent = "That room is Who Am I? on phones. Join it from a phone, or ask the host for a room at a screen.");
   location.assign(`${found.path}?room=${encodeURIComponent(code)}&name=${encodeURIComponent(name)}`);
 });
 $('pcCodeInput').addEventListener('input', (e) => (e.target.value = e.target.value.toUpperCase()));
@@ -253,7 +260,8 @@ for (const ev of ['focus', 'click']) {
 // The landing screen is active from the markup, so show() never runs for it -- tilt it here or
 // the first screen anyone sees is the one screen with no lean at all.
 scheduleEgg();
-wobble($('homeTitle'), 'Guess the Character');
+// show() names the heading, but never ran for the screen active in the markup.
+setTitleFor(document.querySelector('.screen.active')?.id);
 for (const el of document.querySelectorAll('[data-wobble]')) wobble(el, el.textContent, { colour: false });
 if (nickname) $('nickInput').value = nickname;
 
@@ -265,6 +273,9 @@ else if (resumeRoom) $('codeInput').value = resumeRoom;
 // A room link or a rejoin has already answered which game (only a phone page holds a phone
 // room), so skip the question. It is also what shows while the rejoin lands.
 if (resumeRoom) show('landing');
+// `/?how` opens on the second question: the desk and Draw pages link here for "phones on
+// foreheads", where the first question is already answered.
+else if (new URLSearchParams(location.search).has('how')) show('how');
 
 // Last of all: every script is in and currentRoom is decided, so the connect handler can rejoin.
 socket.connect();

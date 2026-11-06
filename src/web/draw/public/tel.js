@@ -100,7 +100,7 @@ function renderTel() {
     .map((p) => {
       const tag = p.left ? '<span class="tag gaveup">Left</span>' : playing && p.done ? '<span class="tag got">✓ In</span>' : '';
       const name = `${esc(p.name)}${p.playerId === me ? ' (you)' : ''}`;
-      return `<li class="${p.done ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}</li>`;
+      return `<li class="${p.done ? 'got' : ''}${p.left ? ' left' : ''}">${GTC.faceOf(roomState?.players, p.playerId)}<span class="pname" title="${name}">${name}</span>${tag}</li>`;
     })
     .join('');
 }

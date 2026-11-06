@@ -17,7 +17,7 @@ bottom up — each imports only from the ones below it:
 - `core/` is the game: rules, turn counts, standings, and the records of finished games.
   Discord-agnostic and frontend-agnostic.
 - `discord/` is this bot; `web/` is the web games -- Guess the Character on phones and on
-  computers, and Draw the Character ([src/web/README.md](../src/web/README.md); the phones' design:
+  computers (*Who Am I?* on the site), and Draw the Character (*Doodle Dash*) ([src/web/README.md](../src/web/README.md); the phones' design:
   [docs/mobile-app-plan.md](mobile-app-plan.md)).
 
 The two rules that keep them untangled: **`core/` never imports from `discord/` or `web/`**,

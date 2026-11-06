@@ -22,7 +22,7 @@ let me = null;
 socket.on('hello', ({ you }) => {
   me = you;
 });
-wobble($('title'), 'Guess the Character');
+wobble($('title'), 'Who Am I?');
 // Before bindThemeToggles: the menu carries a dark-mode switch of its own for phone widths.
 const roomMenu = GTCRoomMenu.mount({
   button: $('roomBtn'),
@@ -56,6 +56,7 @@ let gameView = null;
 let clock = { remaining: null, total: 60, timer: null };
 let lastBoardHtml = '';
 let lastSpotHtml = ''; // the spotlight, redrawn on the same terms as the board
+let lastLogHtml = '';  // the guess log, likewise (and its scroll reset with it)
 // Everyone's notes, by player. Kept apart from the board's HTML and filled into it in place, so a
 // note arriving with every keystroke never rebuilds the cards (and reloads every picture).
 const notesBy = new Map();
@@ -83,7 +84,7 @@ function nickname() {
 $('createBtn').addEventListener('click', () => {
   const name = nickname();
   if (!name) return ($('landingErr').textContent = 'Type your name first.');
-  socket.emit('room:create', { nickname: name }, (res) => {
+  socket.emit('room:create', { nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     enterRoom(res.state);
   });
@@ -92,7 +93,7 @@ $('createBtn').addEventListener('click', () => {
 // `quiet`: a rejoin the page attempted by itself. If that room has gone, say nothing -- an error
 // for something the person never asked for reads as the page being broken.
 function join(code, name, { quiet = false } = {}) {
-  socket.emit('room:join', { code, nickname: name }, (res) => {
+  socket.emit('room:join', { code, nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) {
       if (quiet) return store.set('gtc_desk_room', '');
       return ($('landingErr').textContent = res?.error || 'Could not join that room.');
@@ -184,6 +185,9 @@ function renderRoom() {
   // carries the per-player view the room state does not.
 }
 
+// The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+
 function renderLobby() {
   const code = roomState.code;
   $('roomCode').innerHTML = roomCodeHtml(code);
@@ -192,8 +196,9 @@ function renderLobby() {
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
+    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}</li>`)
     .join('');
+  avPicker.update(roomState.players, me);
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
   if (isHost()) {
@@ -293,7 +298,7 @@ function pickSlot(p) {
     current.classList.toggle('random', !pick);
     if (!pick) return void (current.textContent = 'Random');
     current.innerHTML =
-      (pick.imageUrl ? `<img class="pickthumb" src="${esc(pick.imageUrl)}" alt="" />` : '') +
+      GTC.art(pick.imageUrl, 'class="pickthumb"') +
       `<span class="lbl" title="${esc(pick.typed ? 'Typed in, so no picture' : pick.list || '')}">${esc(pick.typed ? `“${pick.name}”` : pick.name)}</span>` +
       `<button type="button" class="pickclear" aria-label="${esc(`Back to random for ${p.nickname}`)}">✕</button>`;
     current.querySelector('.pickclear').addEventListener('click', () => { hostPicks.delete(p.playerId); paint(); });
@@ -351,8 +356,7 @@ function cardHtml({ name, character, badge = '', current = false, mystery = fals
   if (mystery) art = '<div class="art mystery">?</div>';
   // A seat not picked for yet (pick-for-each-other). Not the mystery face: that one means "yours".
   else if (empty) art = '<div class="art"><span class="noimg">Not picked yet</span></div>';
-  else if (character?.imageUrl) art = `<div class="art"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
-  else art = '<div class="art"><span class="noimg">No picture</span></div>';
+  else art = `<div class="art">${GTC.art(character?.imageUrl, 'referrerpolicy="no-referrer" loading="lazy"')}</div>`;
   return `<div class="pcard${current ? ' current' : ''}${done ? ' done' : ''}">
       <div class="who">${esc(name)}${badge}${turns != null ? `<span class="turns">${turns} turn${turns === 1 ? '' : 's'}</span>` : ''}</div>
       ${art}
@@ -373,8 +377,7 @@ function fillNotes() {
 // The art of a seat on the board: its character, or the mystery face for your own.
 function artHtml(cls, character) {
   if (!character) return `<div class="${cls} mystery">?</div>`;
-  if (character.imageUrl) return `<div class="${cls}"><img src="${esc(character.imageUrl)}" alt="" referrerpolicy="no-referrer" loading="lazy" /></div>`;
-  return `<div class="${cls}"><span class="noimg">No picture</span></div>`;
+  return `<div class="${cls}">${GTC.art(character.imageUrl, 'referrerpolicy="no-referrer" loading="lazy"')}</div>`;
 }
 
 // The middle of the screen: whoever is asking questions. For everyone else, their character, big
@@ -384,7 +387,7 @@ function spotlightHtml(b, v) {
   // No "Guessing" badge: whoever is in the spotlight is the one guessing, so it would only repeat
   // the turn bar. Any other status is news.
   const badge = b.status === 'guessing' ? '' : STATUS_BADGE[b.status] ?? '';
-  return `<div class="spothead"><span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${badge}${turn}</div>
+  return `<div class="spothead">${GTC.faceOf(roomState?.players, b.playerId, 36)}<span class="spotwho">${esc(b.isMe ? 'You' : b.name)}</span>${badge}${turn}</div>
     ${artHtml('art', b.character)}
     <div class="spotname">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
     <div class="src">${b.character ? esc(b.character.source) : ''}</div>
@@ -399,7 +402,7 @@ function tileHtml(b, v) {
   const turns = b.turns ? `<span class="turns">${b.turns} turn${b.turns === 1 ? '' : 's'}</span>` : '';
   return `<div class="tile${current ? ' current' : ''}${done ? ' done' : ''}">
       ${artHtml('tart', b.character)}
-      <div class="tname"><span class="n" title="${esc(b.name)}">${esc(b.isMe ? `${b.name} (you)` : b.name)}</span>${turns}</div>
+      <div class="tname">${GTC.faceOf(roomState?.players, b.playerId)}<span class="n" title="${esc(b.name)}">${esc(b.isMe ? `${b.name} (you)` : b.name)}</span>${turns}</div>
       <div class="tchar">${b.character ? esc(b.character.name) : 'Who are you?'}</div>
       ${STATUS_BADGE[b.status] ?? ''}
       <div class="tnotes" data-notes-for="${esc(b.playerId)}"></div>
@@ -493,7 +496,9 @@ socket.on('game:state', (view) => {
   gameView = view;
   show('game');
   renderGame();
-  if (view.isMyTurn && !wasMyTurn) $('guessInput').focus();
+  // Not on a touch screen: in one column the guess box is under the spotlight, and a focus nobody
+  // tapped for scrolled the page to it, taking the picture off the top as the turn began.
+  if (view.isMyTurn && !wasMyTurn && matchMedia('(pointer: fine)').matches) $('guessInput').focus();
 
   // By turn number, not by isMyTurn flipping: the last player still guessing takes turn after
   // turn of their own, and each is a new turn.
@@ -529,6 +534,8 @@ function renderGame() {
     $('spotlight').innerHTML = spotHtml;
     lastSpotHtml = spotHtml;
   }
+  // You are in the spotlight (your turn, face down): your notes move under it (theme.css).
+  $('game').toggleAttribute('data-spot-me', !!spot?.isMe);
   for (const b of v.board) notesBy.set(b.playerId, b.notes ?? '');
   fillNotes();
   syncMyNotes();
@@ -566,7 +573,7 @@ function renderGame() {
   }
 
   $('logTitle').textContent = v.isMyTurn ? 'Your guesses' : `${v.current.name}'s guesses`;
-  $('guessLog').innerHTML = v.guesses.length
+  const logHtml = v.guesses.length
     ? v.guesses
         .map((g) => {
           const note = g.lapsed ? ' <span class="by">(nobody ruled)</span>' : g.ruledBy ? ` <span class="by">(ruled by ${esc(g.ruledBy)})</span>` : '';
@@ -574,6 +581,15 @@ function renderGame() {
         })
         .join('')
     : '<li class="hint">No guesses yet.</li>';
+  // On a computer the log scrolls inside its card once it outgrows it (theme.css, the fitted play
+  // screen). Newest first, so back to the top when it CHANGES -- a new guess, a ruling, a new turn --
+  // and not on every state push (clock corrections, notes), which would snatch an older guess away
+  // from someone reading it. Keyed on the log itself: the guess count stops growing at the cap.
+  if (logHtml !== lastLogHtml) {
+    $('guessLog').innerHTML = logHtml;
+    $('guessLog').scrollTop = 0;
+    lastLogHtml = logHtml;
+  }
 }
 
 // The clock is the server's: it sends seconds remaining, and this only counts down between
@@ -631,8 +647,8 @@ $('guessForm').addEventListener('submit', (e) => {
 
 $('passBtn').addEventListener('click', () =>
   socket.emit('game:pass', {}, (res) => { if (res && !res.ok) $('guessErr').textContent = res.error; }));
-$('giveUpBtn').addEventListener('click', () => {
-  if (!confirm('Give up? Your character is revealed and you are out of this game.')) return;
+$('giveUpBtn').addEventListener('click', async () => {
+  if (!(await GTC.ask('Give up? Your character is revealed and you are out of this game.', { yes: 'Give Up', no: 'Keep Playing', danger: true }))) return;
   socket.emit('game:giveup', {}, (res) => { if (res && !res.ok) $('guessErr').textContent = res.error; });
 });
 
@@ -717,8 +733,8 @@ socket.on('host:state', (view) => {
 });
 $('hostCancelBtn').addEventListener('click', () =>
   socket.emit('setup:cancel', {}, (res) => { if (!res?.ok) $('hostErr').textContent = res?.error || 'Could not cancel.'; }));
-$('hostLeaveBtn').addEventListener('click', () => {
-  if (confirm('Leave the room? The game carries on without you.')) leave();
+$('hostLeaveBtn').addEventListener('click', async () => {
+  if (await GTC.ask('Leave the room? The game carries on without you.', { yes: 'Leave', no: 'Stay', danger: true })) leave();
 });
 
 // --- results ------------------------------------------------------------------------------
@@ -747,18 +763,22 @@ socket.on('game:over', (res) => {
   gameView = null;
   heardTurn = '';
   heardRuling = null;
-  const winners = res.winners.map((w) => (w.playerId === me ? 'You' : w.name));
-  $('overTitle').textContent = winners.length ? `${winners.join(' and ')} won!` : 'Game over';
+  $('overTitle').textContent = GTC.winnersTitle(res.winners.map((w) => ({ name: w.name, you: w.playerId === me })));
   // Once per game: a reconnect on this screen is sent game:over again (re-armed by setup:state).
   if (!overHeard) { overHeard = true; sound('over', res.winners.some((w) => w.playerId === me)); }
   GTC.confetti();
-  window.GTCFx?.podium(res.standings.filter((s) => s.place != null).slice(0, 3).map((s) => s.name));
+  window.GTCFx?.podium(res.standings);
   $('standings').innerHTML = res.standings
     .map((s) => {
-      const out = s.turns != null ? '' : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
+      // Same tiebreak the phones show: two players on the same turns are split by time left, so
+      // a 3RD beside two 1STs with equal turns needs its seconds to look right.
+      const out = s.turns != null
+        ? (s.secondsLeft == null ? '' : ` · ${s.secondsLeft}s left`)
+        : s.outcome === 'gave_up' ? ' · gave up' : ' · did not get it';
       return GTC.hiscoreRow({
         place: s.place,
-        imageUrl: s.character?.imageUrl,
+        face: GTC.faceOf(roomState?.players, s.playerId),
+        imageUrl: s.character?.imageUrl ?? null,
         name: s.name,
         detail: `was ${s.character?.name ?? '—'}${out}`,
         score: s.turns ?? '--',

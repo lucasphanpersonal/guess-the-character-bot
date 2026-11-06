@@ -13,6 +13,7 @@
 // the turn's strokes (so a reconnecting browser can redraw the picture) and passes each piece on.
 
 const access = require('../roomAccess');
+const bots = require('../bots');
 const draw = require('./game');
 const web = require('../content');
 const { poolIndex } = require('../../compendium/answers');
@@ -321,15 +322,24 @@ function attachDrawSockets(nsp, { registry }) {
     const room = () => registry.getRoom(socket.data.code);
     const isHost = () => room()?.hostPlayerId === playerId;
 
-    socket.on('room:create', ({ nickname } = {}, ack) => {
-      const res = access.createRoom(socket, registry, 'draw', nickname);
+    socket.on('room:create', ({ nickname, avatar } = {}, ack) => {
+      const res = access.createRoom(socket, registry, 'draw', nickname, avatar);
       if (!res.ok) return ack?.(res);
       ack?.({ ok: true, state: stateOf(res.room) });
       broadcastRoom(res.room);
     });
 
-    socket.on('room:join', ({ code, nickname } = {}, ack) => {
-      const res = access.joinRoom(socket, registry, 'draw', code, nickname);
+    // The lobby's face picker (shared/avatars.js). Any time, not only in the lobby: a face is
+    // decoration, and the picker is simply not shown once a game is under way.
+    socket.on('room:avatar', ({ avatar } = {}, ack) => {
+      const res = access.setAvatar(socket, registry, avatar);
+      if (!res.ok) return ack?.(res);
+      ack?.({ ok: true, avatar: res.avatar });
+      broadcastRoom(res.room);
+    });
+
+    socket.on('room:join', ({ code, nickname, avatar } = {}, ack) => {
+      const res = access.joinRoom(socket, registry, 'draw', code, nickname, avatar);
       if (!res.ok) return ack?.(res);
       ack?.({ ok: true, state: stateOf(res.room), reconnected: res.reconnected });
       broadcastRoom(res.room);
@@ -679,6 +689,9 @@ function attachDrawSockets(nsp, { registry }) {
       broadcastRoom(after);
       finishIfTooFew(after);
     });
+
+    // The Room menu's Add Bot (../bots.js): a test player the server runs, for playing alone.
+    bots.attachControls(socket, { registry });
 
     socket.on('disconnect', () => {
       const code = socket.data.code;

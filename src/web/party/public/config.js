@@ -113,13 +113,7 @@ function pickSlot(p) {
     current.innerHTML = '';
     current.classList.toggle('random', !pick);
     if (!pick) { current.textContent = 'Random'; return; }
-    if (pick.imageUrl) {
-      const img = document.createElement('img');
-      img.className = 'pickthumb';
-      img.alt = '';
-      img.src = pick.imageUrl;
-      current.appendChild(img);
-    }
+    current.insertAdjacentHTML('beforeend', GTC.art(pick.imageUrl, 'class="pickthumb"'));
     const label = document.createElement('span');
     label.className = 'lbl';
     label.textContent = pick.typed ? `“${pick.name}”` : pick.name;

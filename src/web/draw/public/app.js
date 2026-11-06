@@ -30,7 +30,7 @@ let me = null;
 socket.on('hello', ({ you }) => {
   me = you;
 });
-wobble($('title'), 'Draw the Character');
+wobble($('title'), 'Doodle Dash');
 // Before bindThemeToggles: the menu carries a dark-mode switch of its own for phone widths.
 const roomMenu = GTCRoomMenu.mount({
   button: $('roomBtn'),
@@ -107,7 +107,7 @@ function enterRoom(state) {
 
 // `quiet`: a rejoin the page attempted by itself, which says nothing if the room has gone.
 function join(code, name, { quiet = false } = {}) {
-  socket.emit('room:join', { code, nickname: name }, (res) => {
+  socket.emit('room:join', { code, nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) {
       if (quiet) return store.set('gtc_draw_room', '');
       return ($('landingErr').textContent = res?.error || 'Could not join that room.');
@@ -119,7 +119,7 @@ function join(code, name, { quiet = false } = {}) {
 $('createBtn').addEventListener('click', () => {
   const name = nickname();
   if (!name) return ($('landingErr').textContent = 'Type your name first.');
-  socket.emit('room:create', { nickname: name }, (res) => {
+  socket.emit('room:create', { nickname: name, avatar: GTC.preferredAvatar() }, (res) => {
     if (!res?.ok) return ($('landingErr').textContent = res?.error || 'Could not create a room.');
     enterRoom(res.state);
   });
@@ -196,6 +196,9 @@ socket.on('room:state', (state) => {
   renderPlayers();
 });
 
+// The lobby's face picker (shared/avatars.js). Mounted once, so a roster push never rebuilds it.
+const avPicker = GTC.mountAvatarPicker($('avPick'), (n, done) => socket.emit('room:avatar', { avatar: n }, done));
+
 function renderRoom() {
   roomMenu.update(); // the Room button and its list follow every roster change
   if (!roomState || roomState.status !== 'lobby') return;
@@ -206,8 +209,9 @@ function renderRoom() {
   $('rosterLabel').textContent = `Players (${roomState.players.length}/${roomState.maxPlayers})`;
   window.GTCFx?.players(roomState.players.length);
   $('roster').innerHTML = roomState.players
-    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.nickname)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
+    .map((p) => `<li class="pill${GTC.isNewSeat(roomState.code, p.playerId) ? ' new' : ''}">${GTC.avatar(p.avatar)}<span class="dot${p.connected ? '' : ' off'}"></span>${esc(p.nickname)}${p.playerId === me ? ' (you)' : ''}${p.isHost ? ' <span class="crown">HOST</span>' : ''}${removeButton(p.playerId, p.nickname)}</li>`)
     .join('');
+  avPicker.update(roomState.players, me);
   $('hostPanel').hidden = !isHost();
   $('guestPanel').hidden = isHost();
   if (!isHost()) return;
@@ -243,12 +247,12 @@ function removeButton(id, name, { compact = false } = {}) {
     : `<button class="rmbtn" data-kick="${esc(id)}" data-name="${esc(name)}" aria-label="${label}">Remove</button>`;
 }
 
-function kick(e) {
+async function kick(e) {
   const b = e.target.closest('[data-kick]');
   if (!b) return;
   const mid = roomState?.status === 'playing';
   const cost = mid ? ' Their score stays on the board; if they are drawing, the turn ends.' : '';
-  if (!confirm(`Remove ${b.dataset.name} from the ${mid ? 'game' : 'room'}?${cost}`)) return;
+  if (!(await GTC.ask(`Remove ${b.dataset.name} from the ${mid ? 'game' : 'room'}?${cost}`, { yes: 'Remove', danger: true }))) return;
   b.disabled = true;
   socket.emit('room:kick', { playerId: b.dataset.kick }, (res) => {
     b.disabled = false;
@@ -372,7 +376,7 @@ function setClock(seconds, total, onTick = null, paused = false, ids = { secs: '
 }
 
 function characterArt(c) {
-  return c?.imageUrl ? `<img src="${esc(c.imageUrl)}" alt="" referrerpolicy="no-referrer" />` : '<span class="hint">No picture</span>';
+  return GTC.art(c?.imageUrl, 'referrerpolicy="no-referrer"');
 }
 
 // The cue for each phase of each turn, sounded once however many states that phase sends (every
@@ -527,7 +531,9 @@ function renderGame(turnChanged) {
   $('chatInput').placeholder =
     v.phase === 'drawing' ? (knows ? 'Only those who know see this' : 'Type your guess') : 'Say something';
   renderChat();
-  if (turnChanged && v.phase === 'drawing' && !v.isDrawer) $('chatInput').focus();
+  // Ready to type on a keyboard. Not on a touch screen: there a focus that nobody tapped for
+  // scrolls the box into view, which in one column took the picture off the top as the turn began.
+  if (turnChanged && v.phase === 'drawing' && !v.isDrawer && matchMedia('(pointer: fine)').matches) $('chatInput').focus();
 }
 
 // --- the blanks ------------------------------------------------------------------------------
@@ -586,7 +592,7 @@ function renderPlayers() {
             ? '<span class="tag gaveup">Gave up</span>'
             : '';
       const name = `${esc(p.name)}${p.playerId === me ? ' (you)' : ''}`;
-      return `<li data-pid="${esc(p.playerId)}" class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}"><span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
+      return `<li data-pid="${esc(p.playerId)}" class="${p.guessed ? 'got' : ''}${p.left ? ' left' : ''}">${GTC.faceOf(roomState?.players, p.playerId)}<span class="pname" title="${name}">${name}</span>${tag}<span class="score">${p.score}</span>${p.left ? '' : removeButton(p.playerId, p.name, { compact: true })}</li>`;
     })
     .join('');
   if (html !== lastPlayersHtml) $('players').innerHTML = lastPlayersHtml = html;
@@ -607,8 +613,12 @@ function openConfirm(index) {
   // cannot carry one character's names onto the next.
   $('alsoAccept').value = '';
   renderSpellings(c, c.name);
+  syncConfirmGo();
   $('confirmGo').disabled = false;
   $('confirmPick').showModal();
+  // autofocus scrolls Start Drawing into view, which on a short phone scrolled the dialog to its
+  // foot and the other-name panel off the top -- the one thing this dialog is for. Back to the top.
+  $('confirmPick').scrollTop = 0;
   // Straight into the box with a keyboard to hand; on a phone the button keeps the focus
   // (autofocus), so the on-screen keyboard does not cover the names on opening.
   if (matchMedia('(pointer: fine)').matches) $('alsoAccept').focus();
@@ -633,8 +643,19 @@ function renderSpellings(c, keep) {
     .join('');
 }
 const pickedSpelling = () => document.querySelector('#confirmSpellings input:checked')?.value ?? null;
+// With the other-name box empty, the button names the choice being made -- "No Other Name" -- so
+// starting without one is something the drawer reads and agrees to, not a box they never saw.
+// Players kept missing the box; this does not make anyone type, it makes skipping it visible.
+function syncConfirmGo() {
+  const typed = confirming && spellingOptions(confirming.choice).length > 1 + (confirming.choice.swapped ? 1 : 0);
+  $('confirmGo').textContent = typed ? 'Start Drawing' : 'No Other Name — Start Drawing';
+}
 // Typing another name offers it as a spelling at once; what was picked stays picked while it exists.
-$('alsoAccept').addEventListener('input', () => confirming && renderSpellings(confirming.choice, pickedSpelling()));
+$('alsoAccept').addEventListener('input', () => {
+  if (!confirming) return;
+  renderSpellings(confirming.choice, pickedSpelling());
+  syncConfirmGo();
+});
 
 function closeConfirm() {
   confirming = null;
@@ -767,16 +788,34 @@ function floatNewGuesses() {
 // meant not seeing what you were guessing. Picture plus box (~320px on a phone) fit in the space
 // above a phone keyboard, so the page is scrolled to put the picture's top at the top. When they
 // do not fit (a short landscape screen), the browser's own scroll is left alone.
-function keepPictureInView() {
+//
+// It moves the page once per keyboard, and only when the picture is actually out of view. It used
+// to re-scroll on every visualViewport resize, and the keyboard resizes it all through typing (the
+// suggestion bar comes and goes as words do), so the picture jumped while a guess was typed. And
+// it measures against the visible area, not the page: with the keyboard up, iOS shows a window
+// onto the page that starts offsetTop below the layout viewport's top, so aiming the picture at
+// the layout viewport's top put it under the top edge of the screen.
+let pictureKeptFor = 0; // the visible height the last adjustment was made for; 0 = not yet, this focus
+function keepPictureInView(first) {
   if (!oneColumn.matches || document.activeElement !== $('chatInput') || !matchMedia('(pointer: coarse)').matches) return;
   const vv = window.visualViewport;
   const room = vv ? vv.height : innerHeight;
-  const top = canvas.getBoundingClientRect().top + scrollY - 8;
-  const bottom = $('chatForm').getBoundingClientRect().bottom + scrollY + 8;
-  if (bottom - top <= room) window.scrollTo(0, Math.max(0, top));
+  // Resizes while the keyboard is still rising wait for the first adjustment. After it, the
+  // suggestion bar changes the height by ~40px, a keyboard by far more than 100.
+  if (!first && (!pictureKeptFor || Math.abs(room - pictureKeptFor) < 100)) return;
+  const viewTop = vv ? vv.offsetTop : 0;
+  const top = canvas.getBoundingClientRect().top - viewTop - 8; // picture's top, from the visible top
+  const bottom = $('chatForm').getBoundingClientRect().bottom - viewTop + 8;
+  pictureKeptFor = room;
+  if (bottom - top > room) return; // they cannot both show: leave the browser's scroll alone
+  if (top >= 0 && bottom <= room) return; // already in view: nothing moves
+  window.scrollBy(0, top);
 }
-$('chatInput').addEventListener('focus', () => setTimeout(keepPictureInView, 350));
-window.visualViewport?.addEventListener('resize', keepPictureInView);
+// After the keyboard has had time to rise (iOS animates it for ~300ms), and again if the visible
+// area changes size by a keyboard's worth -- one opening, closing, or a switch to another.
+$('chatInput').addEventListener('focus', () => { pictureKeptFor = 0; setTimeout(() => keepPictureInView(true), 350); });
+$('chatInput').addEventListener('blur', () => { pictureKeptFor = 0; });
+window.visualViewport?.addEventListener('resize', () => keepPictureInView(false));
 function localLine(cls, html) {
   localLines.push({ cls, html, at: Date.now() });
   localLines = localLines.slice(-12);
@@ -833,8 +872,8 @@ function burst(who, mine) {
 }
 
 // Giving up shows you the answer, which cannot be taken back -- so it asks first.
-$('giveUpBtn').addEventListener('click', () => {
-  if (!confirm("Give up on this drawing? You'll see who it is, and score nothing for it.")) return;
+$('giveUpBtn').addEventListener('click', async () => {
+  if (!(await GTC.ask("Give up on this drawing? You'll see who it is, and score nothing for it.", { yes: 'Give Up', no: 'Keep Guessing', danger: true }))) return;
   socket.emit('draw:giveup', {}, (res) => {
     if (!res?.ok) $('chatErr').textContent = res?.error || 'That did not go through.';
   });
