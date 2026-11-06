@@ -299,10 +299,12 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   node scripts/rename-anilist-characters.js --apply   # writes an undo log first (--undo=<log>)
   ```
 
-  The answer checker already takes a name's words in any order ("Gojo Satoru" is correct), but
-  not the old spelling and the old order at once: "Gojou Satoru" is judged wrong for "Satoru
-  Gojo". The seed file also keeps AniList's other names for each character, for a later pass at
-  nicknames such as "All Might".
+  Read the CSV before `--apply`, and look in particular for English words the long-vowel rule
+  folded by mistake: the rule's exceptions (`FOLD_EXCEPTIONS`) came from exactly that reading
+  (Urouge, Mouseman, Mousse, Rouge). Guesses typed the old way still count: both computer games
+  judge Anime and Manga names with `romanised`, which folds long vowels and takes the words in
+  any order, so "Gojou Satoru" is correct for "Satoru Gojo". The seed file also keeps AniList's
+  other names for each character, for a later pass at nicknames such as "All Might".
 
   AniList files each season separately, so titles differing only by a season or part marker
   are **merged** — otherwise a lobby offers "Attack on Titan" four times. The merge is

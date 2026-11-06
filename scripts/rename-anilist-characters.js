@@ -150,6 +150,8 @@ function main() {
   for (const r of renames.slice(0, 8)) console.log(`  e.g. ${r.from} -> ${r.to}  (${r.list})`);
   for (const c of skipped.collision.slice(0, 5)) console.log(`  collision: ${c.from} -> ${c.to}  (${c.list})`);
   console.log(`Report: ${csvPath}`);
+  console.log('Read it before --apply: look for English words the long-vowel rule folded by mistake ' +
+    '(add them to FOLD_EXCEPTIONS in scripts/lib/anilistNames.js).');
 
   if (!args.includes('--apply')) {
     console.log('\nReport only: nothing was changed. Re-run with --apply to rename.');
