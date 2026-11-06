@@ -132,8 +132,8 @@ like it was always there.
   (`--font-name`), a terminal face, for sentences and anything a person typed or the library holds:
   it reads fast where small pixel type would blur, and the system faces behind it in the stack carry
   the scripts it lacks (Cyrillic, CJK...), glyph by glyph. It is scaled by `size-adjust` in its
-  `@font-face`, so set sizes as you would for any face. No system font shows anywhere but the
-  forehead view (`--font-plain`).
+  `@font-face`, so set sizes as you would for any face. No system font shows anywhere, the
+  forehead view included (Lucas asked for that one by name).
 - **Frames are shadows, no radius.** `--frame` is four offset shadows, which leaves the corners
   missing — that is what reads as a pixel corner. Not `clip-path`, which would cut off the focus
   ring. No `border-radius` anywhere but the brush-size dot, which pictures a round brush.
@@ -164,10 +164,11 @@ like it was always there.
 - **Everything a thumb aims at is 44px.** Grow the control, or where the row has no room (Draw's
   palette holds the canvas on screen) give it a transparent `::before` hit area out to 44px. Both
   live in retro.css under *fingers*.
-- **The forehead overlay opts out of all of it.** Black, white, huge, plain. It is read across
-  a dim room by other people, not admired up close. Do not decorate it. The one exception is the
-  turn's opening beat (`#forehead.starting`): the wearer's card goes bright, stepping white and
-  yellow once a second, with YOUR TURN and the count. That brightness is the signal, not decoration.
+- **The forehead overlay opts out of all of it but the face.** Black, white, huge, plain, in
+  VT323 like the rest. It is read across a dim room by other people, not admired up close. Do not
+  decorate it: no glass, no glow, no frames. The one exception is the turn's opening beat
+  (`#forehead.starting`): the wearer's card goes bright, stepping white and yellow once a second,
+  with YOUR TURN and the count. That brightness is the signal, not decoration.
 - **Sound sits under the room, not over it.** The turn bed runs for a full minute at a time,
   several turns a game, with a party talking through it. The bar is "something you notice
   stopping", not something anyone raises their voice against — and because only the current
