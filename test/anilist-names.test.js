@@ -31,6 +31,19 @@ module.exports = {
     assert.equal(englishName(n('Zoro', 'Roronoa'), ['One Piece Film: Red', 'ONE PIECE FILM RED']), 'Roronoa Zoro');
   },
 
+  // AniList files a few with the surname as the given name, so the old flip happened to be right.
+  'a character whose AniList parts are swapped keeps the order it was shown in'() {
+    assert.equal(englishName(n('Marcoh', 'Tim'), ['Fullmetal Alchemist: Brotherhood']), 'Tim Marcoh');
+    assert.equal(englishName(n('Kuroda', 'Heihachirou'), ['Gintama']), 'Heihachiro Kuroda');
+  },
+
+  'a rename shaped like swapped parts is flagged for a person to check'() {
+    const { looksOrderSwapped } = require('../scripts/lib/anilistNames');
+    assert.equal(looksOrderSwapped('Kuroda Heihachiro'), true);
+    assert.equal(looksOrderSwapped('Heihachiro Kuroda'), false);
+    assert.equal(looksOrderSwapped('Satoru Gojo'), false);
+  },
+
   'a mononym is left whole'() {
     assert.equal(englishName(n('Levi', null, null, 'Levi'), ['Attack on Titan']), 'Levi');
     assert.equal(englishName(n(null, null, null, 'Nami'), ['ONE PIECE']), 'Nami');
@@ -53,6 +66,9 @@ module.exports = {
     assert.equal(foldLongVowels('You'), 'You', 'short words keep their usual English spelling');
     assert.equal(foldLongVowels('Jounouchi'), 'Jonouchi', 'Jou-no-uchi');
     for (const word of ['Urouge', 'Mouseman', 'Mousse']) assert.equal(foldLongVowels(word), word, word);
+    for (const word of ['House', 'Mouse', 'Mountain', 'Toun', 'Kanoune', 'Haruue']) assert.equal(foldLongVowels(word), word, word);
+    for (const word of ['Minoura', 'Kiyoura', 'Yotsuura', 'Oura']) assert.equal(foldLongVowels(word), word, `${word}: -ura is its own syllable`);
+    assert.equal(foldLongVowels('Kyouka'), 'Kyoka', 'a long ou before other consonants still folds');
   },
 
   'the old surname-first form is recomputed exactly, so the row can be found'() {
