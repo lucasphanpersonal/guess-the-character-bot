@@ -21,11 +21,31 @@ module.exports = {
     assert.equal(imageIsTrustworthy('Cartoon', COMMONS('Woody%20at%20Toy%20Story%20Land.jpg')), false);
   },
 
-  // For live action the actor's photo genuinely is the character's canonical look, so the
-  // rule deliberately stops here rather than trying to guess which files are bad.
-  'Commons images are kept for live-action media'() {
-    assert.equal(imageIsTrustworthy('Television Shows', COMMONS('Kiefer%20Sutherland.jpg')), true);
-    assert.equal(imageIsTrustworthy('Movies', COMMONS('Some%20Actor%202009.jpg')), true);
+  // The category does not say the medium: animated films and series sit under Movies and
+  // Television Shows, which is how these exact files reached the live database.
+  'Commons images are dropped for every fictional character, whatever the category'() {
+    assert.equal(imageIsTrustworthy('Television Shows', COMMONS('Fire%20Lord%20Azula%20cosplay%20at%20Katsucon%202015.jpg')), false);
+    assert.equal(imageIsTrustworthy('Movies', COMMONS('D23%20Expo%202013%20-%20Gaston%20(9490879529).jpg')), false);
+    assert.equal(imageIsTrustworthy('Television Shows', COMMONS('Kiefer%20Sutherland.jpg')), false);
+    assert.equal(imageIsTrustworthy('Anime', COMMONS('x.jpg')), false);
+  },
+
+  // ...but for a real person the photograph IS the answer.
+  'Commons photos are kept for real people'() {
+    assert.equal(imageIsTrustworthy('Real People', COMMONS('Albert%20Einstein%201921.jpg')), true);
+  },
+
+  // Live action keeps an actor's photo when it comes from a source that credits them in the
+  // role, which Commons never did.
+  'TMDB actor photos are still kept for live action'() {
+    assert.equal(imageIsTrustworthy('Television Shows', 'https://image.tmdb.org/t/p/w500/abc.jpg'), true);
+    assert.equal(imageIsTrustworthy('Movies', 'https://image.tmdb.org/t/p/w500/abc.jpg'), true);
+  },
+
+  'a lookalike domain is not Commons'() {
+    assert.equal(imageIsTrustworthy('Real People', 'https://upload.wikimedia.org.evil.example/x.jpg'), true,
+      'not Commons, so it falls to the medium rule like any other host');
+    assert.equal(imageIsTrustworthy('Movies', 'https://upload.wikimedia.org/wikipedia/commons/a/ab/x.jpg'), false);
   },
 
   // Fandom clears the same bar as AniList, and for the same reason: a character's page on

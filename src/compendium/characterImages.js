@@ -11,10 +11,11 @@
 //   Santa Claus     -> an 1837 painting by Robert Walter Weir
 //   Captain Nemo    -> an 1870 Neuville & Riou engraving
 //
-// The rule is about MEDIUM, not about guessing which files are bad. For live action a
-// photograph of the actor genuinely is the character's canonical look, so it stays. For
-// animation and games no photograph can be right, so Commons images are dropped there
-// outright -- no heuristics, no false positives.
+// The rule is about SOURCE and MEDIUM, not about guessing which files are bad. Commons is
+// trusted for real people only: for a fictional character it is the wrong question asked of
+// the wrong source, so its images are dropped outright -- no heuristics, no false positives.
+// Live action can still carry an actor's photo, from TMDB (the actor credited in that very
+// role) or the show's own wiki; for animation and games no photograph can be right at all.
 //
 // AniList art is always kept: it is drawn from the work itself, per character.
 //
@@ -78,9 +79,23 @@ const JUNK_IMAGE = /(\blogo\b|\bwordmark\b|favicon|wiki background|placeholder|\
 
 const looksLikeJunk = (url) => JUNK_IMAGE.test(decodeURIComponent(url).replace(/[-_]+/g, ' '));
 
+// Wikimedia Commons, the one source the rule cannot believe for a fictional character.
+const isCommonsImage = (url) => /^https?:\/\/(upload|commons)\.wikimedia\.org\//.test(url);
+
+// The one category where a photograph from Commons is simply right: it is the person.
+const REAL_PEOPLE = 'Real People';
+
 function imageIsTrustworthy(category, imageUrl) {
   if (!imageUrl) return false;
   if (isAniListImage(imageUrl) || isFandomImage(imageUrl) || isGameWikiImage(imageUrl) || isOfficialGameArt(imageUrl)) return true;
+  // Commons is refused for EVERY fictional character, not just the drawn categories. The
+  // category turned out not to say the medium: animated films and series are filed under
+  // Movies and Television Shows (Aladdin, Big Hero 6, Cars, Avatar, Batman: The Brave and the
+  // Bold), and that is how 543 Commons files reached fictional characters, about 200 of them
+  // plainly cosplay, expo or wax-museum shots by filename alone. Even the live-action ones were
+  // mostly the actor at a premiere years later ("Elisha Cuthbert in 2009"); TMDB and the show's
+  // own wiki answer the actual question instead.
+  if (isCommonsImage(imageUrl)) return category === REAL_PEOPLE;
   return !DRAWN_MEDIA.has(category);
 }
 
@@ -95,6 +110,7 @@ module.exports = {
   isFandomImage,
   isGameWikiImage,
   isOfficialGameArt,
+  isCommonsImage,
   looksLikeJunk,
   DRAWN_MEDIA,
 };
