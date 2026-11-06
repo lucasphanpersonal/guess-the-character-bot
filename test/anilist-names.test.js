@@ -301,4 +301,15 @@ module.exports = {
     assert.equal(englishName(n('Keita', 'Ooba'), []), 'Keita Oba', 'only the one character keeps Ooba');
     assert.equal(foldLongVowels('Oomu'), 'Ohmu');
   },
+
+  // The short "surname given" form finds Kyouraku by his image; by name alone it would take a
+  // separate, hand-added Jane Watson for a form of Mary Jane Watson.
+  'the short form never matches by name alone'() {
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Jane Watson', 'someone', null);
+    const series = { 1: { characters: [
+      { id: 11, parts: n('Mary Jane', 'Watson'), image: 'https://s4.anilist.co/mj.png' },
+    ] } };
+    assert.equal(planRenames(db, series).renames.filter((r) => r.listId === listId).length, 0);
+  },
 };

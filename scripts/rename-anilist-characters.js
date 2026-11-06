@@ -41,7 +41,7 @@ const NAME_ONLY_CATEGORIES = new Set(['Anime', 'Manga']);
 // given-first form, and each without the middle name (AniList adds middle names after the fact:
 // Kyouraku's two). Compared by looseKey, so a row an earlier pass renamed with older rules
 // ("Tooru Oikawa", "Shouei Baro") is found again by the next one.
-function oldForms(parts) {
+function oldForms(parts, { short = true } = {}) {
   const first = (parts.first || '').trim();
   const last = (parts.last || '').trim();
   const forms = [surnameFirstName(parts), givenFirstName(parts)];
@@ -50,7 +50,9 @@ function oldForms(parts) {
   // Souzousa Shunsui", today's parts "Jirou Sakuranosuke Shunsui"), so the surname and the last
   // word of `first` are a form too; a row is tried by its own first and last words to match it.
   const given = first.split(/\s+/).pop();
-  if (given && last && given !== first) forms.push(`${last} ${given}`, `${given} ${last}`);
+  // Image path only (short: true): by name alone "jane watson" would claim a separate hand-added
+  // Jane Watson as a form of Mary Jane Watson.
+  if (short && given && last && given !== first) forms.push(`${last} ${given}`, `${given} ${last}`);
   return [...new Set(forms.filter(Boolean).map(looseKey))];
 }
 
@@ -88,10 +90,12 @@ function planRenames(db, series) {
       }
       // A name that stays the same is still recorded: it is what makes an old name that ONE
       // PIECE keeps and another show changes ambiguous, rather than a rename for both.
+      const nameOnlyKeys = new Set(oldForms(c.parts, { short: false }));
       for (const key of oldForms(c.parts)) {
         const imageKey = `${key}\u0000${c.image}`;
         if (c.image && !byImage.has(imageKey)) byImage.set(imageKey, new Set());
         if (c.image) byImage.get(imageKey).add(to);
+        if (!nameOnlyKeys.has(key)) continue;
         if (!byOldName.has(key)) byOldName.set(key, new Set());
         byOldName.get(key).add(to);
       }
@@ -115,7 +119,7 @@ function planRenames(db, series) {
   for (const r of rows) {
     const words = r.name.trim().split(/\s+/);
     const shortKey = words.length > 2 ? looseKey(`${words[0]} ${words[words.length - 1]}`) : null;
-    let key = looseKey(r.name);
+    const key = looseKey(r.name);
     // Two characters on one shared image whose old names fold alike would be a guess: no match.
     const imageMatch = (k) => {
       const hit = r.image_url ? byImage.get(`${k}\u0000${r.image_url}`) : undefined;
@@ -123,7 +127,6 @@ function planRenames(db, series) {
     };
     let to = imageMatch(key) ?? (shortKey ? imageMatch(shortKey) : undefined);
     let matchedBy = 'image';
-    if (!to && shortKey && !byOldName.has(key) && byOldName.has(shortKey)) key = shortKey;
     if (!to && NAME_ONLY_CATEGORIES.has(r.category) && byOldName.has(key)) {
       const candidates = byOldName.get(key);
       if (candidates.size === 1) {
