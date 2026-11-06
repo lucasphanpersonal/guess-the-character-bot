@@ -52,6 +52,7 @@ module.exports = {
     assert.equal(foldLongVowels('Inoue'), 'Inoue', 'the u starts the next syllable');
     assert.equal(foldLongVowels('You'), 'You', 'short words keep their usual English spelling');
     assert.equal(foldLongVowels('Jounouchi'), 'Jonouchi', 'Jou-no-uchi');
+    for (const word of ['Urouge', 'Mouseman', 'Mousse']) assert.equal(foldLongVowels(word), word, word);
   },
 
   'the old surname-first form is recomputed exactly, so the row can be found'() {

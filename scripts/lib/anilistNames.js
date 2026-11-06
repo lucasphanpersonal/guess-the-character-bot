@@ -47,10 +47,14 @@ const ROMAJI_WORD = new RegExp(`^(?:${SYLLABLE})+$`, 'i');
  * (Tooru, Niikura) and "oo" would turn a romaji-shaped English word like "Moon" into "Mon".
  */
 // Words the syllable rule gets wrong, found by reading every word it folds in the library.
-// Jounouchi is Jou-no-uchi, where the second "ou" is two syllables; Rouge is French.
+// Jounouchi is Jou-no-uchi, where the second "ou" is two syllables; Rouge and Mousse are French;
+// Urouge is ONE PIECE's official spelling; Mouseman is English.
 const FOLD_EXCEPTIONS = new Map([
   ['jounouchi', 'Jonouchi'],
   ['rouge', 'Rouge'],
+  ['urouge', 'Urouge'],
+  ['mouseman', 'Mouseman'],
+  ['mousse', 'Mousse'],
 ]);
 
 function foldLongVowels(word) {
