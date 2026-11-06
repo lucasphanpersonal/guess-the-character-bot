@@ -223,4 +223,63 @@ module.exports = {
     assert.deepEqual(restored.filter((c) => /alphonse/i.test(c.name)).map((c) => c.name).sort(), ['Alphonse Elric', 'Elric Alphonse']);
     assert.equal(restored.find((c) => c.name === 'Alphonse Elric').image_url, null);
   },
+
+  // AniList's placeholder is shared by 1,813 characters; INUYASHIKI's Joshi and Joushi both wear it.
+  'a shared image is no evidence two rows are one character'() {
+    const { listId } = freshList();
+    const placeholder = 'https://s4.anilist.co/character/large/default.jpg';
+    lists.addCharacter(listId, 'Joushi', 'seed-script', placeholder);
+    lists.addCharacter(listId, 'Joshi', 'seed-script', placeholder);
+    const series = { 1: { characters: [
+      { id: 1, parts: n('Joushi', null, null, 'Joushi'), image: placeholder },
+      { id: 2, parts: n('Joshi', null, null, 'Joshi'), image: placeholder },
+    ] } };
+    const joushi = planRenames(db, series).skipped.collision.find((c) => c.from === 'Joushi');
+    assert.equal(joushi.duplicate, false);
+    assert.equal(planMerges(db, [joushi]).length, 0);
+  },
+
+  'a merge moves rerolls and past games, and undo puts back exactly what was there'() {
+    const stats = require('../src/core/db/stats');
+    const { listId } = freshList();
+    lists.addCharacter(listId, 'Elric Edward', 'seed-script', 'https://s4.anilist.co/ed-merge.png');
+    lists.addCharacter(listId, 'Edward Elric', 'someone', null);
+    const byName = (name) => lists.getCharacters(listId).find((c) => c.name === name);
+    const gone = byName('Elric Edward');
+    const kept = byName('Edward Elric');
+    // U rerolled both rows; V only the duplicate. U's reroll on the kept row must survive an undo.
+    lists.recordReroll(kept.id, 'merge-U');
+    lists.recordReroll(gone.id, 'merge-U');
+    lists.recordReroll(gone.id, 'merge-V');
+    stats.recordGame('merge-guild', [{ playerId: 'merge-P', turnsTaken: 3, outcome: 'won', characterId: gone.id }]);
+    const rerollUsers = (id) => db.prepare('SELECT user_id FROM character_rerolls WHERE character_id = ? ORDER BY user_id').all(id).map((r) => r.user_id);
+    const gamesOf = (id) => db.prepare('SELECT COUNT(*) AS n FROM game_players WHERE character_id = ?').get(id).n;
+    const keptBefore = db.prepare('SELECT id FROM character_rerolls WHERE character_id = ? AND user_id = ?').get(kept.id, 'merge-U').id;
+
+    const series = { 1: { characters: [{ id: 3, parts: n('Edward', 'Elric'), image: 'https://s4.anilist.co/ed-merge.png' }] } };
+    const collision = planRenames(db, series).skipped.collision.find((c) => c.id === gone.id);
+    const merges = planMerges(db, [collision]);
+    assert.equal(applyMerges(db, merges), 1);
+    assert.deepEqual(rerollUsers(kept.id), ['merge-U', 'merge-V']);
+    assert.equal(gamesOf(kept.id), 1, 'the past game now names the kept row');
+
+    undoMerges(db, merges);
+    assert.deepEqual(rerollUsers(kept.id), ['merge-U']);
+    assert.equal(db.prepare('SELECT id FROM character_rerolls WHERE character_id = ? AND user_id = ?').get(kept.id, 'merge-U').id, keptBefore);
+    assert.deepEqual(rerollUsers(gone.id), ['merge-U', 'merge-V']);
+    assert.equal(gamesOf(gone.id), 1);
+    assert.equal(gamesOf(kept.id), 0);
+  },
+
+  'a row kept by one merge and deleted by another is left alone'() {
+    const { listId } = freshList();
+    for (const name of ['Chain A', 'Chain B', 'Chain C']) lists.addCharacter(listId, name, 'someone', null);
+    const [a, b, c] = ['Chain A', 'Chain B', 'Chain C'].map((name) => lists.getCharacters(listId).find((x) => x.name === name).id);
+    // A merges into B, B into C: B would take A's games and then be deleted with them.
+    const merges = planMerges(db, [
+      { id: a, keepId: b, duplicate: true },
+      { id: b, keepId: c, duplicate: true },
+    ]);
+    assert.deepEqual(merges.map((m) => [m.gone.id, m.keepId]), [[b, c]]);
+  },
 };

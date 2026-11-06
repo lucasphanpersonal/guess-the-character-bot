@@ -5,7 +5,7 @@
 //
 //   node scripts/rename-anilist-characters.js                  # report only: writes the CSV
 //   node scripts/rename-anilist-characters.js --apply          # rename, writing an undo log first
-//   node scripts/rename-anilist-characters.js --merge-duplicates   # fold duplicate collisions (see below)
+//   node scripts/rename-anilist-characters.js --apply --merge-duplicates   # also fold duplicate collisions (see below)
 //   node scripts/rename-anilist-characters.js --undo=data/anilist-renames-<timestamp>.json
 //
 // It can be run again after the rules change: rows are found by every spelling a character's name
@@ -25,7 +25,7 @@
 // A rename that would collide with a name already in the same list (two seasons merged under two
 // spellings) is skipped and reported, never forced: the list's UNIQUE(list_id, name) is what
 // keeps one character from being dealt twice. When the row already holding the name is the same
-// character (no art, the same art, or art that is not another AniList character's), it is a
+// character (no art, art that is no AniList character's, or art only that character uses), it is a
 // duplicate, and --merge-duplicates folds the two: the kept row takes the other's picture, fame,
 // rerolls and past games, and the other is deleted, all recorded in the undo log first.
 
@@ -56,13 +56,17 @@ function oldForms(parts) {
  * duplicate: true when that row is the same character, so mergeDuplicates may fold them.
  */
 function planRenames(db, series) {
-  const byImage = new Map(); // `${looseKey(old form)}\u0000${image}` -> new name
+  const byImage = new Map(); // `${looseKey(old form)}\u0000${image}` -> Set of new names
   const byOldName = new Map(); // looseKey(old form) -> Set of new names
-  const anilistImages = new Map(); // image -> new name
+  // image -> { who: Set of AniList characters, to: Set of new names }. An image is evidence of
+  // WHO a row is only when one character uses it: AniList's placeholder (default.jpg) is shared
+  // by 1,813 characters, among them INUYASHIKI's Joshi and Joushi, two people whose names now
+  // fold together.
+  const imageUsers = new Map();
   let withoutParts = 0;
 
-  for (const s of Object.values(series)) {
-    for (const c of s.characters || []) {
+  for (const [seriesKey, s] of Object.entries(series)) {
+    for (const [i, c] of (s.characters || []).entries()) {
       if (!c.parts) {
         withoutParts++;
         continue;
@@ -72,11 +76,17 @@ function planRenames(db, series) {
       // naming fix did nothing until the next multi-hour re-fetch, and the report silently showed
       // the old misfires after the fix had merged.
       const to = englishName(c.parts, [s.label, s.romaji]);
-      if (c.image) anilistImages.set(c.image, to);
+      if (c.image) {
+        if (!imageUsers.has(c.image)) imageUsers.set(c.image, { who: new Set(), to: new Set() });
+        imageUsers.get(c.image).who.add(c.id ?? `${seriesKey}:${i}`);
+        imageUsers.get(c.image).to.add(to);
+      }
       // A name that stays the same is still recorded: it is what makes an old name that ONE
       // PIECE keeps and another show changes ambiguous, rather than a rename for both.
       for (const key of oldForms(c.parts)) {
-        if (c.image) byImage.set(`${key}\u0000${c.image}`, to);
+        const imageKey = `${key}\u0000${c.image}`;
+        if (c.image && !byImage.has(imageKey)) byImage.set(imageKey, new Set());
+        if (c.image) byImage.get(imageKey).add(to);
         if (!byOldName.has(key)) byOldName.set(key, new Set());
         byOldName.get(key).add(to);
       }
@@ -99,7 +109,9 @@ function planRenames(db, series) {
   const skipped = { collision: [], ambiguous: 0, withoutParts };
   for (const r of rows) {
     const key = looseKey(r.name);
-    let to = r.image_url ? byImage.get(`${key}\u0000${r.image_url}`) : undefined;
+    // Two characters on one shared image whose old names fold alike would be a guess: no match.
+    const viaImage = r.image_url ? byImage.get(`${key}\u0000${r.image_url}`) : undefined;
+    let to = viaImage?.size === 1 ? [...viaImage][0] : undefined;
     let matchedBy = 'image';
     if (!to && NAME_ONLY_CATEGORIES.has(r.category) && byOldName.has(key)) {
       const candidates = byOldName.get(key);
@@ -116,10 +128,12 @@ function planRenames(db, series) {
     const holder = taken.get(to.toLowerCase());
     // A case-only change ("Ichigo kurosaki" -> "Ichigo Kurosaki") is the same row, not a collision.
     if (holder && holder.id !== r.id) {
-      // The holder is the same character unless it carries a DIFFERENT AniList character's art:
-      // two people whose names fold together (Yuuki and Yuki) must never be merged into one.
-      const holderIs = holder.image_url && anilistImages.get(holder.image_url);
-      const duplicate = !holder.image_url || holder.image_url === r.image_url || !holderIs || holderIs === to;
+      // Merged only on evidence it is the same character: no art, art that is no AniList
+      // character's, or art that belongs to exactly one AniList character and that character is
+      // this one. Two people whose names fold together (Yuuki and Yuki, Joushi and Joshi) must
+      // never be merged, so shared art (the placeholder) is no evidence and leaves the pair alone.
+      const users = holder.image_url && imageUsers.get(holder.image_url);
+      const duplicate = !holder.image_url || !users || (users.who.size === 1 && users.to.has(to));
       skipped.collision.push({ id: r.id, keepId: holder.id, list: r.list, from: r.name, to, duplicate });
       continue;
     }
@@ -155,12 +169,16 @@ function undoRenames(db, renames) {
  * and the duplicate is deleted. Returns an undo record per merge, written to the undo log FIRST.
  */
 function planMerges(db, collisions) {
+  // A row that is one merge's keeper and another's duplicate would take the first merge's games
+  // and rerolls and then be deleted with them. Three spellings of one character; left for a person.
+  const goneIds = new Set(collisions.filter((c) => c.duplicate).map((c) => c.id));
   const row = db.prepare('SELECT * FROM characters WHERE id = ?');
+  const keptRerollUsers = db.prepare('SELECT user_id FROM character_rerolls WHERE character_id = ?');
   const hasGames = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'game_players'").get();
   const rerolls = db.prepare('SELECT * FROM character_rerolls WHERE character_id = ?');
   const games = hasGames ? db.prepare('SELECT rowid AS rowid FROM game_players WHERE character_id = ?') : null;
   return collisions
-    .filter((c) => c.duplicate)
+    .filter((c) => c.duplicate && !goneIds.has(c.keepId))
     .map((c) => {
       const gone = row.get(c.id);
       const kept = row.get(c.keepId);
@@ -172,7 +190,15 @@ function planMerges(db, collisions) {
           image_url: kept.image_url == null && gone.image_url != null ? gone.image_url : undefined,
           fame: kept.fame == null && gone.fame != null ? gone.fame : undefined,
         },
+        // All of the duplicate's rerolls, to put back on undo (deleting the row cascades them),
+        // and the users among them that MOVE: those with no reroll on the kept row already.
+        // UNIQUE(character_id, user_id) means the others stay where they are, and undo must not
+        // take the kept row's own reroll away.
         rerolls: rerolls.all(gone.id),
+        movedRerollUsers: (() => {
+          const kept = new Set(keptRerollUsers.all(c.keepId).map((r) => r.user_id));
+          return rerolls.all(gone.id).map((r) => r.user_id).filter((u) => !kept.has(u));
+        })(),
         gameRowids: games ? games.all(gone.id).map((g) => g.rowid) : [],
       };
     })
@@ -193,7 +219,8 @@ function applyMerges(db, merges) {
     for (const m of merges) {
       if (m.filled.image_url !== undefined) fillImage.run(m.filled.image_url, m.keepId);
       if (m.filled.fame !== undefined) fillFame.run(m.filled.fame, m.keepId);
-      for (const r of m.rerolls) moveReroll.run(m.keepId, r.user_id, r.created_at);
+      const moving = new Set(m.movedRerollUsers);
+      for (const r of m.rerolls) if (moving.has(r.user_id)) moveReroll.run(m.keepId, r.user_id, r.created_at);
       for (const rowid of m.gameRowids) moveGame.run(m.keepId, rowid);
       changed += remove.run(m.gone.id, m.gone.name).changes;
     }
@@ -208,7 +235,7 @@ function undoMerges(db, merges) {
     ? db.prepare(`INSERT OR IGNORE INTO characters (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
     : null;
   const reroll = db.prepare('INSERT OR IGNORE INTO character_rerolls (id, character_id, user_id, created_at) VALUES (?, ?, ?, ?)');
-  const dropMoved = db.prepare('DELETE FROM character_rerolls WHERE character_id = ? AND user_id = ? AND id <> ?');
+  const dropMoved = db.prepare('DELETE FROM character_rerolls WHERE character_id = ? AND user_id = ?');
   const unfill = (col) => db.prepare(`UPDATE characters SET ${col} = NULL WHERE id = ? AND ${col} = ?`);
   const unfillImage = unfill('image_url');
   const unfillFame = unfill('fame');
@@ -217,10 +244,8 @@ function undoMerges(db, merges) {
   db.transaction(() => {
     for (const m of merges) {
       changed += insert.run(...cols.map((c) => m.gone[c])).changes;
-      for (const r of m.rerolls) {
-        reroll.run(r.id, r.character_id, r.user_id, r.created_at);
-        dropMoved.run(m.keepId, r.user_id, r.id);
-      }
+      for (const user of m.movedRerollUsers) dropMoved.run(m.keepId, user);
+      for (const r of m.rerolls) reroll.run(r.id, r.character_id, r.user_id, r.created_at);
       for (const rowid of m.gameRowids) game.run(m.gone.id, rowid);
       if (m.filled.image_url !== undefined) unfillImage.run(m.keepId, m.filled.image_url);
       if (m.filled.fame !== undefined) unfillFame.run(m.keepId, m.filled.fame);
@@ -280,12 +305,20 @@ function main() {
   console.log(`${duplicates} of the collisions are the same character twice; --merge-duplicates folds them together.`);
 
   const merging = args.includes('--merge-duplicates');
-  if (!args.includes('--apply') && !merging) {
+  // The collisions are worked out as if this run's renames happen, so merging without them
+  // would act on a plan that is not what the database holds.
+  if (merging && !args.includes('--apply')) {
+    console.log('\n--merge-duplicates needs --apply alongside it: the collisions assume the renames.');
+    return;
+  }
+  if (!args.includes('--apply')) {
     console.log('\nReport only: nothing was changed. Re-run with --apply to rename, and --merge-duplicates to merge.');
     return;
   }
-  const doRenames = args.includes('--apply') ? renames : [];
+  const doRenames = renames;
   const merges = merging ? planMerges(db, skipped.collision) : [];
+  const chained = skipped.collision.filter((c) => c.duplicate).length - merges.length;
+  if (merging && chained) console.log(`${chained} duplicate(s) left alone: one row would be kept by one merge and deleted by another.`);
   const log = path.join(dataDir, `anilist-renames-${stamp}.json`);
   writeFileAtomic(log, `${JSON.stringify({ renames: doRenames.map(({ id, from, to }) => ({ id, from, to })), merges })}\n`);
   console.log(`Undo log: ${log}`);
