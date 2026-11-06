@@ -68,7 +68,7 @@ const QUERY = `query ($page: Int, $type: MediaType, $perPage: Int, $charPerPage:
           role
           node {
             id
-            name { first middle last full }
+            name { first middle last full alternative }
             favourites
             image { large }
           }
@@ -87,7 +87,7 @@ const CAST_QUERY = `query ($id: Int, $page: Int, $perPage: Int) {
         role
         node {
           id
-          name { first middle last full }
+          name { first middle last full alternative }
           favourites
           image { large }
         }
@@ -136,30 +136,31 @@ async function gql(query, variables) {
   }
 }
 
-/**
- * AniList stores names in Western order, so `full` reads "Luffy Monkey" and "Robin Nico".
- * Rebuilding them surname-first restores the form these characters are actually known by:
- * "Monkey D. Luffy", "Nico Robin", "Roronoa Zoro", "Tony Tony Chopper", "Portgas D. Ace".
- *
- * Mononyms ("Nami", "Gaara") have an empty or missing surname and are left exactly as they
- * are -- reordering a one-part name is how you get a blank.
- */
-function displayName(name) {
-  const last = (name.last || '').trim();
-  const first = (name.first || '').trim();
-  const middle = (name.middle || '').trim();
-  if (!last || !first) return (name.full || first || last || '').trim();
-  return [last, middle, first].filter(Boolean).join(' ');
-}
+// How a name is shown -- given name first, long vowels folded, surname first only for the
+// franchises that keep it in English -- is decided in scripts/lib/anilistNames.js, which the
+// rename script shares so the live database and this file agree.
+const { englishName } = require('./lib/anilistNames');
 
 // Belt and braces alongside isAdult:false -- a handful of ecchi titles are not flagged
 // adult but are still not what anyone wants dealt to them mid-game.
 const BLOCKED_GENRES = new Set(['Hentai', 'Ecchi']);
 
-function toCast(edges) {
+// Each character keeps AniList's raw name parts and id beside the display name, so a change of
+// naming rule can be re-applied (and the old form recomputed, to find the row to rename) without
+// paying for another fetch.
+function toCast(edges, titles) {
   return edges
     .map((e) => ({
-      name: displayName(e.node.name),
+      name: englishName(e.node.name, titles),
+      id: e.node.id,
+      parts: {
+        first: e.node.name.first || null,
+        middle: e.node.name.middle || null,
+        last: e.node.name.last || null,
+        full: e.node.name.full || null,
+      },
+      // Other names AniList knows the character by ("Goku", "All Might"); not used for display.
+      alternative: (e.node.name.alternative || []).filter(Boolean),
       favourites: e.node.favourites || 0,
       role: e.role,
       image: e.node.image?.large || null,
@@ -219,10 +220,14 @@ async function main() {
 
       for (const media of result.media) {
         if ((media.genres || []).some((g) => BLOCKED_GENRES.has(g))) continue;
-        // Already fully paged by an earlier run.
-        if (data.series[media.id]?.complete) continue;
+        // Already fully paged by an earlier run -- with the raw name parts, which runs before the
+        // names fix did not keep. A series without them is fetched again, so re-running this
+        // script once is how an older file gets them, resumably like any other run.
+        const known = data.series[media.id];
+        if (known?.complete && known.characters?.[0]?.parts) continue;
 
-        const cast = toCast(media.characters?.edges || []);
+        const titles = [media.title.english, media.title.romaji];
+        const cast = toCast(media.characters?.edges || [], titles);
         let more = media.characters?.pageInfo?.hasNextPage;
 
         // Page the rest of the cast. One Piece needs twenty of these; most shows need none.
@@ -235,7 +240,7 @@ async function main() {
             console.warn(`  ! ${media.title.romaji} cast page ${cp} failed (${err.message})`);
             break;
           }
-          cast.push(...toCast(next.Media.characters.edges));
+          cast.push(...toCast(next.Media.characters.edges, titles));
           more = next.Media.characters.pageInfo.hasNextPage;
         }
 
@@ -273,7 +278,7 @@ async function main() {
   console.log(`Written to ${path.relative(process.cwd(), OUT_PATH)}.`);
 }
 
-module.exports = { displayName, OUT_PATH };
+module.exports = { OUT_PATH };
 
 if (require.main === module) {
   main().catch((err) => {
