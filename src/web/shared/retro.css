@@ -381,6 +381,11 @@ dialog.card, dialog.roommenu { color:var(--ink); }
   .flash-stamp { font-family:var(--font-arcade); font-size:32px; padding:14px 18px; color:var(--on-screen); background:var(--screen);
                  --px:4px; box-shadow:var(--frame); animation:flashStamp .3s steps(4); }
   .flash.good .flash-stamp { --outline:var(--green); } .flash.bad .flash-stamp { --outline:var(--red); } .flash.near .flash-stamp { --outline:var(--amber); }
+  /* Your turn: the one flash that is meant to be bright, because it is the one that has to reach
+     somebody looking elsewhere. Still one flash per turn, never a loop, and nothing at all under
+     reduced motion (GTC.flash); the page says whose turn it is in words as well. */
+  .flash.turn { background:rgba(255,224,102,.62); animation-duration:.9s; }
+  .flash.turn .flash-stamp { --outline:var(--amber); }
 
   /* The CRT screen's flicker: the glass breathes by a few percent of its own faint layer, so the
      page underneath changes by under one percent. Far too small and too slow to be a flash. */

@@ -86,8 +86,10 @@
   const STEPS = [0, 2, 4, 5, 7, 9, 11, 12];
   const climb = (nth) => 2 ** (STEPS[Math.min(STEPS.length, Math.max(1, nth || 1)) - 1] / 12);
   const CUES = {
-    // Your turn: a soft rising pair. The one cue meant to reach someone looking elsewhere.
-    turn() { tone(523, 160, { gain: 0.3 }); tone(784, 260, { gain: 0.3, at: 0.13 }); },
+    // Your turn: the one cue meant to reach someone looking elsewhere, so the one cue here that is
+    // not soft -- GTC.TUNES.yourTurn, the same fanfare the phones play. It opens the turn's quiet
+    // beat before the clock runs, so it does not land on top of anything but a reveal (queued).
+    turn() { tune('yourTurn'); },
     // Somebody got it: a bright rising triad.
     got(nth) { const k = climb(nth); [523, 659, 784].forEach((f, i) => tone(f * k, i === 2 ? 320 : 150, { gain: 0.26, type: 'triangle', at: i * 0.1 })); },
     // You got it: a level-up fanfare (GTC.TUNES.levelUp), climbing with the same `nth` as the others.

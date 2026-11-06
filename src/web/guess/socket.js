@@ -1,5 +1,6 @@
 // Socket.io wiring for Guess the Character on the web: rooms, setup/confirm/reroll (and the pick
-// of pick-for-each-other mode), the grace countdown, the turn loop, and -- in host-picks mode --
+// of pick-for-each-other mode), the grace countdown, the turn loop (each turn armed with its
+// opening beat, turnLoop.turnGraceMs), and -- in host-picks mode --
 // the view of the host who picked and sits out. Shared by both ways of playing; what differs between them is a VARIANT:
 //
 //   variant.kind           which rooms are theirs ('party' phones, 'desk' computers)
@@ -133,22 +134,30 @@ function attachSockets(nsp, { registry, setup, variant }) {
   // A server-authoritative turn clock. The deadline lives on the server (game.turnEndsAt) and
   // the per-player view carries seconds-remaining, so clients count down locally without
   // trusting cross-device wall clocks. When it fires the turn simply passes -- nobody is removed.
-  const scheduleTurn = (room, ms) => {
+  //
+  // `fresh`: a turn just beginning, which opens with its "Your turn!" beat (turnLoop.turnGraceMs):
+  // the deadline moves back by that much and game.turnStartsAt says when the clock really starts.
+  // A clock picked up again after a pause has no opening beat -- that turn already had one.
+  const scheduleTurn = (room, ms, { fresh = false } = {}) => {
     clearTurnTimer(room);
     const game = room.game;
     const duration = ms ?? game.turnSeconds * 1000;
+    game.turnStartsAt = null;
     // Paused by the host: the turn is armed frozen, its time kept for Continue.
     if (game.hostPaused) {
       game.turnEndsAt = null;
       game.pausedRemaining = duration;
       return;
     }
-    game.turnEndsAt = Date.now() + duration;
+    const grace = fresh ? loop.turnGraceMs() : 0;
+    const now = Date.now();
+    if (grace) game.turnStartsAt = now + grace;
+    game.turnEndsAt = now + grace + duration;
     room.turnTimer = setTimeout(() => {
       if (variant.deferTimeout?.(room)) return; // the variant ends this turn itself
       const r = loop.timeout(game, game.currentPlayerId);
       if (r.ok) handleTurnResult(room, r, null);
-    }, duration);
+    }, grace + duration);
     room.turnTimer.unref?.();
   };
 
@@ -171,7 +180,9 @@ function attachSockets(nsp, { registry, setup, variant }) {
     clearTurnTimer(room);
     // A clock the host already stopped has its time left kept; reading turnEndsAt (null then)
     // would have handed the player a turn of zero seconds.
-    if (game.turnEndsAt != null) game.pausedRemaining = Math.max(0, game.turnEndsAt - Date.now());
+    // Read through the clock, not off the deadline: a drop during the opening beat keeps the whole
+    // turn, not the turn plus the beat.
+    if (game.turnEndsAt != null) game.pausedRemaining = loop.clockMsLeft(game, Date.now());
     else game.pausedRemaining ??= game.turnSeconds * 1000;
     game.turnEndsAt = null;
     game.pausedForDisconnect = true;
@@ -202,7 +213,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
   const hostPause = (room) => {
     const game = room.game;
     if (game.hostPaused) return;
-    if (game.turnEndsAt != null) game.pausedRemaining = Math.max(0, game.turnEndsAt - Date.now());
+    if (game.turnEndsAt != null) game.pausedRemaining = loop.clockMsLeft(game, Date.now());
     clearTurnTimer(room);
     game.turnEndsAt = null;
     game.hostPaused = true;
@@ -282,7 +293,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
       room.game.hostPaused = true;
       room.game.idlePaused = true;
     }
-    scheduleTurn(room);
+    scheduleTurn(room, undefined, { fresh: true });
     if (idle) broadcastRoom(room);
     // The player we advanced TO may themselves be offline -- the same rule the disconnect
     // handler applies, arriving by a different route. pauseTurn broadcasts for us.
@@ -306,7 +317,9 @@ function attachSockets(nsp, { registry, setup, variant }) {
     clearCountdown(room);
     room.status = 'playing';
     loop.startTurn(room.game); // first player's turn 1
-    scheduleTurn(room);
+    // The first turn opens with its "Your turn!" beat only where nothing came before it: on the
+    // phones the countdown just did that job, and a second wait on top of it is only a wait.
+    scheduleTurn(room, undefined, { fresh: GRACE_SECONDS <= 0 });
     broadcastRoom(room);
     emitGame(room);
   };
@@ -558,6 +571,9 @@ function attachSockets(nsp, { registry, setup, variant }) {
     // While the host has paused, nobody's turn moves -- a tilt or a guess would score against a
     // clock that is not running. Rulings and notes still work: they are not the turn.
     const PAUSED = { ok: false, error: 'The game is paused.' };
+    // The turn's opening beat (turnLoop.inGrace): its clock has not started, so neither has the
+    // turn. An answer in it would be scored with time nobody spent.
+    const NOT_YET = { ok: false, error: 'Your turn starts in a moment.' };
 
     socket.on('room:pause', ({ paused } = {}, ack) => {
       const r = room();
@@ -586,6 +602,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       if (r.game.hostPaused) return ack?.(PAUSED);
+      if (loop.inGrace(r.game)) return ack?.(NOT_YET);
       const res = loop.pass(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, null);
@@ -595,6 +612,7 @@ function attachSockets(nsp, { registry, setup, variant }) {
       const r = room();
       if (!playing(r)) return ack?.({ ok: false, error: 'No game running.' });
       if (r.game.hostPaused) return ack?.(PAUSED);
+      if (loop.inGrace(r.game)) return ack?.(NOT_YET);
       const res = loop.giveUp(r.game, playerId);
       ack?.(res);
       if (res.ok) handleTurnResult(r, res, res.reveal);

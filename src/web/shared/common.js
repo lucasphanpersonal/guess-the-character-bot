@@ -181,6 +181,17 @@
       [784, 70, 0.14, undefined, 0], [988, 70, 0.14, undefined, 0.07], [1175, 70, 0.14, undefined, 0.14],
       [1568, 210, 0.16, undefined, 0.21],
     ],
+    // Your turn: the one cue that has to reach somebody who is not looking -- a phone in a lap, a
+    // tab behind a call. A pickup of two short notes, a leap up to a held one over a triangle bass,
+    // and a high answer on top. Named 'square' rather than left as the pulse, so it is not scaled
+    // down with the rest (PULSE_LEVEL): it is the loudest thing either game plays on purpose, about
+    // the level of the phones' time-up alarm. It opens the turn's quiet beat before the clock
+    // starts (turnLoop.turnGraceMs), so nothing else is sounding under it.
+    yourTurn: [
+      [659, 70, 0.3, 'square', 0], [659, 70, 0.3, 'square', 0.1],
+      [988, 240, 0.32, 'square', 0.2], [247, 320, 0.3, 'triangle', 0.2],
+      [1319, 110, 0.22, 'square', 0.48], [1976, 260, 0.2, 'square', 0.58],
+    ],
     // A menu select: two quick high notes, like a cursor moving, and quieter than any cue, because a
     // screen full of buttons would otherwise chirp at every tap. Plays on every button and choice.
     select: [[1047, 35, 0.1, undefined, 0], [1568, 50, 0.1, undefined, 0.04]],
