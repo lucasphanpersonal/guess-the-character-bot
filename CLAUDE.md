@@ -176,8 +176,9 @@ like it was always there.
   continuous needs an off switch (`gtc_muted`, honoured inside `tone()` so nothing can dodge it).
   The voice is a chip's, pulse and triangle. A pulse is far louder than a sine at the same gain, so an
   unnamed voice is scaled by `PULSE_LEVEL`. The exception is `GTC.TUNES.yourTurn`, loud on purpose
-  (it names `'square'` to skip the scaling): it opens the turn's beat, and on the phones the bed waits for it to finish. Off by default on the computers, where everyone can see
-  the screen; on by default on the phones, where the wearer hears the clock or does not know it.
+  (it names `'square'` to skip the scaling): it opens the turn's beat, and on the phones the bed waits for it to finish. On by default everywhere: on the
+  phones the wearer hears the clock or does not know it, and on the computers "your turn" is for
+  someone looking elsewhere (it was off there once, and nobody who never found the switch heard it).
 - **The CRT screen is one fixed layer over the page, never a transform of it** (retro.css, *the CRT
   screen*). It lies over the panels people read, so it is held in check, and every layer costs
   contrast (even a black that darkens text and paper alike: the formula's flare term). Its comment
