@@ -1,8 +1,18 @@
-# Registers the scheduled task that keeps this machine serving: the web app with its tunnel, from
-# logon, with a five-minute watchdog -- see the notes below for what the watchdog relies on.
+# Registers the scheduled tasks that keep this machine serving:
 #
-# -Remove also removes the old "Guess the Character (Discord bot)" task, if a machine still has
-# it from before the Discord bot was retired.
+#   'Guess the Character'          the web app with its tunnel, from logon, with a five-minute
+#                                  watchdog -- see the notes below for what the watchdog relies on.
+#   'Guess the Character (keeper)' scripts/host-keeper.js every two minutes: deploys each merge to
+#                                  main once no game is in progress, and restarts a site that is
+#                                  running but has stopped answering. Its log is
+#                                  data\host-keeper\keeper.log.
+#
+# To stop this machine hosting, DISABLE 'Guess the Character' (or run -Remove): stopping it is not
+# enough, because the watchdog starts it again. The keeper does nothing while that task is
+# disabled or missing.
+#
+# -Remove removes both, and the old "Guess the Character (Discord bot)" task, if a machine still
+# has it from before the Discord bot was retired.
 #
 #   powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts\install-autostart.ps1 -Remove
@@ -23,12 +33,13 @@ param([switch]$Remove)
 
 $ErrorActionPreference = 'Stop'
 $TaskName = 'Guess the Character'
+$KeeperTaskName = 'Guess the Character (keeper)'
 $BotTaskName = 'Guess the Character (Discord bot)'
 $root = Split-Path -Parent $PSScriptRoot
 
 if ($Remove) {
     # Each one only if present: the bot task exists only on machines set up before it was retired.
-    foreach ($name in $TaskName, $BotTaskName) {
+    foreach ($name in $TaskName, $KeeperTaskName, $BotTaskName) {
         if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
             Unregister-ScheduledTask -TaskName $name -Confirm:$false
             "Removed scheduled task '$name'."
@@ -98,5 +109,42 @@ Install-Task $TaskName @{
     Action = $action; Trigger = $triggers; Settings = $settings
     Description = 'Starts the Guess the Character web server and its named Cloudflare tunnel at logon.'
 }
+
+# The keeper. A short job every two minutes rather than a long-running process, so there is no
+# second thing to keep alive: a run that crashes is simply followed by the next one.
+#
+# Under `conhost --headless` because a console program started by an interactive task opens a
+# window, and one flashing up every two minutes on the host's desktop is not acceptable. (The
+# launcher's own window is a single one that stays.)
+#
+# ExecutionTimeLimit covers the slowest run, a deploy with `npm ci` (which host-keeper.js itself
+# caps at 15 minutes). IgnoreNew so a slow run is never joined by a second one halfway through a
+# deploy. Interactive like the launcher, so it runs as you and git sees your credentials and config.
+$keeperAction = New-ScheduledTaskAction -Execute (Join-Path $env:WINDIR 'System32\conhost.exe') `
+    -Argument "--headless `"$node`" scripts\host-keeper.js" `
+    -WorkingDirectory $root
+$keeperTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 2)
+$keeperSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+    -ExecutionTimeLimit (New-TimeSpan -Minutes 20) -StartWhenAvailable `
+    -MultipleInstances IgnoreNew
+
+Install-Task $KeeperTaskName @{
+    Action = $keeperAction; Trigger = $keeperTrigger; Settings = $keeperSettings
+    Description = 'Deploys merges to main and restarts the Guess the Character site if it stops answering (scripts/host-keeper.js).'
+}
+
+# The keeper deploys only into a checkout that is on main and has no local edits, and says so in
+# its log rather than touching anything. Say it here too, since right after installing is when
+# someone is looking -- otherwise the first sign is that merges quietly stop arriving.
+Push-Location $root
+try {
+    $branch = (git rev-parse --abbrev-ref HEAD 2>$null)
+    $edits = (git status --porcelain --untracked-files=no 2>$null)
+    if ($branch -ne 'main') { Write-Warning "This checkout is on '$branch', not main: the keeper will not deploy until it is back on main." }
+    if ($edits) {
+        Write-Warning 'This checkout has local edits, so the keeper will not deploy until they are committed, stashed or reverted:'
+        $edits | ForEach-Object { Write-Warning "  $_" }
+    }
+} finally { Pop-Location }
 
 if ($failed) { exit 1 }

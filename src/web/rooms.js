@@ -196,6 +196,26 @@ class RoomRegistry {
   }
 
   /**
+   * How many rooms have a person in them right now, and how many of those are mid-game.
+   *
+   * `rooms.size` alone cannot tell the host keeper (scripts/host-keeper.js) whether a restart
+   * would cost anyone anything: rooms everyone has left stay in memory until the sweep, and a
+   * restart throws away every room, since none of them outlive the process. Bots are not people,
+   * as in the sweep below. Published by /api/health.
+   */
+  activity() {
+    let occupied = 0;
+    let inGame = 0;
+    for (const room of this.rooms.values()) {
+      if (![...room.players.values()].some((p) => !p.bot && p.conns.size > 0)) continue;
+      occupied++;
+      // Anything past the lobby and short of the results: setup, countdown, playing.
+      if (room.status !== 'lobby' && room.status !== 'finished') inGame++;
+    }
+    return { occupied, inGame };
+  }
+
+  /**
    * Drops rooms nobody is connected to any more.
    *
    * A room is only deleted on an explicit leave, and a socket that simply goes away just marks

@@ -254,6 +254,29 @@ function aFailingTeardownDoesNotKeepTheRoom() {
   assert.equal(ran, true);
 }
 
+// The host keeper restarts the server to deploy only when nobody would lose a room by it.
+function activityCountsRoomsWithAPersonInThemAndThoseMidGame() {
+  const reg = new RoomRegistry();
+  assert.deepEqual(reg.activity(), { occupied: 0, inGame: 0 });
+  const { room: empty } = reg.createRoom({ hostPlayerId: 'p1', nickname: 'Alex' });
+  assert.deepEqual(reg.activity(), { occupied: 0, inGame: 0 }, 'a seat nobody is connected to is nobody');
+  reg.attachConnection(empty.code, 'p1', 's1');
+  assert.deepEqual(reg.activity(), { occupied: 1, inGame: 0 }, 'a lobby with someone in it');
+  const { room: game } = reg.createRoom({ hostPlayerId: 'p2', nickname: 'Sam' });
+  reg.attachConnection(game.code, 'p2', 's2');
+  for (const status of ['setup', 'countdown', 'playing']) {
+    game.status = status;
+    assert.deepEqual(reg.activity(), { occupied: 2, inGame: 1 }, status);
+  }
+  game.status = 'finished';
+  assert.deepEqual(reg.activity(), { occupied: 2, inGame: 0 }, 'the results screen is not a game in progress');
+  game.status = 'playing';
+  reg.detachConnection(game.code, 'p2', 's2');
+  game.addSeat('bot1', 'Bot', 0, { bot: true });
+  game.players.get('bot1').conns.add('bot-sock');
+  assert.deepEqual(reg.activity(), { occupied: 1, inGame: 0 }, 'a bot is not somebody being there');
+}
+
 module.exports = {
   'every way a room is deleted is announced': everyWayARoomIsDeletedIsAnnounced,
   'a failing teardown does not keep the room': aFailingTeardownDoesNotKeepTheRoom,
@@ -276,4 +299,5 @@ module.exports = {
   'leaving as the last player deletes the room': leavingAsTheLastPlayerDeletesTheRoom,
   'nicknames are trimmed and length-capped': nicknamesAreTrimmedAndLengthCapped,
   'a departed player keeps their name for the standings': aDepartedPlayerKeepsTheirNameForTheStandings,
+  'activity counts rooms with a person in them, and those mid-game': activityCountsRoomsWithAPersonInThemAndThoseMidGame,
 };

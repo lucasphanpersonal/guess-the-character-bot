@@ -332,7 +332,9 @@ show a grey dot, and closing/reopening a tab reclaims the same seat.
 
 Endpoints that prove the shared core is reachable from this frontend:
 
-- `GET /api/health` — live room count, round modes, and image-cache size.
+- `GET /api/health` — live room count, how many rooms have people in them (`occupied`) and how many
+  are mid-game (`inGame`), and image-cache size. The host keeper reads the last two before it
+  restarts the server to deploy.
 - `GET /img/<characterId>` — character artwork, served from a local read-through cache
   (`src/web/imageCache.js`). Phones fetch from this server; the server fetches each image from
   its CDN once. That matters because Wikimedia Commons throttles by IP and a party shares one,

@@ -30,3 +30,6 @@ data/dev-tls.*
 # Logs from the retired Discord bot -- machine-local, kept ignored for machines that still have them.
 data/bot-restart.log*
 data/discord-bot.log
+
+# The host keeper's log, state and stop request (scripts/host-keeper.js) -- machine-local.
+data/host-keeper/
