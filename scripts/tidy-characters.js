@@ -25,7 +25,8 @@
 //
 // CLEARED IMAGES -- a picture that is a placeholder, not the character.
 //
-// --images-from -- a JSON array of { id, image_url } to fill where a character still has none.
+// --images-from -- a JSON array of { id, list_id, name, image_url } to fill where a character
+// still has none, applied only while the id, list and name all still agree and the URL is https.
 // The fill scripts (fetch-fandom-images.js, fetch-tmdb-images.js) write straight to whatever
 // database they open; they were run on a copy, and this carries their finds over, so the live
 // database changes once, under one undo log, instead of over hours.
@@ -122,18 +123,23 @@ function finder(db) {
 function plan(db, { images = [] } = {}) {
   const find = finder(db);
   const missing = [];
-  const listId = db.prepare('SELECT id FROM character_lists WHERE owner_scope IS NULL AND name = ? COLLATE NOCASE');
 
   const collisions = [];
+  const mergeLists = new Map(); // dropped id -> { list, keep }, for the report
   for (const [list, keep, drop] of MERGES) {
     const kept = find(list, keep);
     const gone = find(list, drop);
     if (!kept || !gone) missing.push(`merge ${list}: ${!kept ? `"${keep}"` : ''}${!kept && !gone ? ' and ' : ''}${!gone ? `"${drop}"` : ''} not found`);
-    else collisions.push({ id: gone.id, keepId: kept.id, duplicate: true });
+    else {
+      collisions.push({ id: gone.id, keepId: kept.id, duplicate: true });
+      mergeLists.set(gone.id, { list, keep });
+    }
   }
 
   const rerolls = db.prepare('SELECT * FROM character_rerolls WHERE character_id = ?');
   const games = db.prepare('SELECT rowid AS rowid FROM game_players WHERE character_id = ?');
+  const castOf = db.prepare('SELECT id, name FROM characters WHERE list_id = ? AND id != ?');
+  const lower = (s) => s.toLocaleLowerCase('en');
   const pairs = [];
   for (const [list, name, members] of PAIRS) {
     const row = find(list, name);
@@ -141,14 +147,19 @@ function plan(db, { images = [] } = {}) {
       missing.push(`pair ${list}: "${name}" not found`);
       continue;
     }
-    // Members are checked by exact name, then by first word ("Shrek" for "Shrek", "Hiccup" for
-    // "Hiccup Horrendous Haddock III"): a list that already has the member under a shorter name
-    // must not gain a second spelling of them.
-    const firstWord = db.prepare(
-      'SELECT 1 FROM characters WHERE list_id = ? AND id != ? AND (name = ? COLLATE NOCASE OR name LIKE ? || \' %\' OR ? LIKE name || \' %\')'
-    );
-    const add = members.filter((m) => !firstWord.get(row.list_id, row.id, m, m, m));
-    pairs.push({ row, add, rerolls: rerolls.all(row.id), gameRowids: games.all(row.id).map((g) => g.rowid), list });
+    // A member is already in the list when a row has its exact name, or a row's name is the
+    // member's first part ("Hiccup" covers "Hiccup Horrendous Haddock III"). Never the other way:
+    // "Max Zhang" starting with "Max" says nothing about Lookism's Max, and taking it to would
+    // drop him silently.
+    const cast = castOf.all(row.list_id, row.id);
+    const add = [];
+    const covered = [];
+    for (const m of members) {
+      const hit = cast.find((c) => lower(c.name) === lower(m) || lower(m).startsWith(`${lower(c.name)} `));
+      if (hit) covered.push({ member: m, by: hit.name });
+      else add.push(m);
+    }
+    pairs.push({ row, add, covered, rerolls: rerolls.all(row.id), gameRowids: games.all(row.id).map((g) => g.rowid), list });
   }
 
   const cleared = [];
@@ -158,11 +169,19 @@ function plan(db, { images = [] } = {}) {
     else if (row.image_url) cleared.push({ id: row.id, image_url: row.image_url });
   }
 
-  const current = db.prepare('SELECT image_url FROM characters WHERE id = ?');
+  // A find made on a copy names its row by id, list and name; it is applied only while all three
+  // still agree, because ids on the copy and the live file can drift apart (a merge, a re-seed).
+  const current = db.prepare('SELECT list_id, name, image_url FROM characters WHERE id = ?');
   const goneIds = new Set([...collisions.map((c) => c.id), ...pairs.map((p) => p.row.id)]);
-  const filled = images.filter((i) => i.image_url && !goneIds.has(i.id) && current.get(i.id)?.image_url === null);
+  const filled = [];
+  for (const i of images) {
+    const row = current.get(i.id);
+    const ok = row && row.list_id === i.list_id && row.name === i.name && row.image_url === null &&
+      /^https:\/\//.test(i.image_url ?? '') && !goneIds.has(i.id);
+    if (ok) filled.push({ id: i.id, list_id: i.list_id, name: i.name, image_url: i.image_url });
+  }
 
-  return { merges: planMerges(db, collisions), pairs, cleared, filled, missing, listId };
+  return { merges: planMerges(db, collisions), mergeLists, pairs, cleared, filled, missing };
 }
 
 function apply(db, p) {
@@ -196,13 +215,15 @@ function undo(db, log) {
     : null;
   const reroll = db.prepare('INSERT OR IGNORE INTO character_rerolls (id, character_id, user_id, created_at) VALUES (?, ?, ?, ?)');
   const game = db.prepare('UPDATE game_players SET character_id = ? WHERE rowid = ? AND character_id IS NULL');
-  const dropAdded = db.prepare('DELETE FROM characters WHERE id = ? AND added_by = ?');
+  // By (list, name, added_by) rather than by the logged ids, which are written only after the
+  // change: a crash between the two log writes leaves the rows without their ids.
+  const dropAdded = db.prepare('DELETE FROM characters WHERE list_id = ? AND name = ? AND added_by = ?');
   const unfill = db.prepare('UPDATE characters SET image_url = NULL WHERE id = ? AND image_url = ?');
   const restoreImage = db.prepare('UPDATE characters SET image_url = ? WHERE id = ? AND image_url IS NULL');
   db.transaction(() => {
     for (const f of log.filled) unfill.run(f.id, f.image_url);
     for (const c of log.cleared) restoreImage.run(c.image_url, c.id);
-    for (const id of log.added) dropAdded.run(id, ADDED_BY);
+    for (const p of log.pairs) for (const name of p.add) dropAdded.run(p.row.list_id, name, ADDED_BY);
     for (const p of log.pairs) {
       insert.run(...cols.map((c) => p.row[c]));
       for (const r of p.rerolls) reroll.run(r.id, r.character_id, r.user_id, r.created_at);
@@ -213,11 +234,17 @@ function undo(db, log) {
 }
 
 function report(p) {
-  for (const m of p.merges) console.log(`merge  "${m.gone.name}" into #${m.keepId}`);
+  for (const m of p.merges) {
+    const { list, keep } = p.mergeLists.get(m.gone.id);
+    console.log(`merge  ${list}: "${m.gone.name}" into "${keep}" (#${m.keepId})`);
+  }
   for (const pair of p.pairs) {
-    console.log(`pair   ${pair.list}: delete "${pair.row.name}"${pair.add.length ? `, add ${pair.add.map((n) => `"${n}"`).join(', ')}` : ''}`);
+    const added = pair.add.length ? `, add ${pair.add.map((n) => `"${n}"`).join(', ')}` : '';
+    const covered = pair.covered.map((c) => `"${c.member}" is "${c.by}"`).join(', ');
+    console.log(`pair   ${pair.list}: delete "${pair.row.name}"${added}${covered ? ` (already there: ${covered})` : ''}`);
   }
   for (const c of p.cleared) console.log(`image  clear #${c.id}`);
+  for (const f of p.filled) console.log(`image  fill #${f.id} "${f.name}" ${f.image_url}`);
   console.log(`\n${p.merges.length} merge(s), ${p.pairs.length} pair(s), ${p.cleared.length} image(s) cleared, ${p.filled.length} image(s) filled.`);
   for (const m of p.missing) console.log(`NOT FOUND: ${m}`);
 }

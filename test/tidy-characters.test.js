@@ -30,11 +30,16 @@ function library() {
   lists.addCharacter(shrek, 'Princess Fiona', 'tester');
   lists.addCharacter(shrek, 'Shrek and Fiona', 'tester');
 
+  // A longer name starting with a member's is somebody else: Max must still be added.
+  const lookism = lists.createList(null, 'Lookism', 'tester', 'Manga');
+  lists.addCharacter(lookism, 'Max and Derrick', 'tester');
+  lists.addCharacter(lookism, 'Max Zhang', 'tester');
+
   const dragonAge = lists.createList(null, 'Dragon Age', 'tester', 'Video Games');
   const leliana = lists.addCharacter(dragonAge, 'Leliana', 'tester', 'https://s4.anilist.co/default.jpg');
   const morrigan = lists.addCharacter(dragonAge, 'Morrigan', 'tester');
 
-  built = { fate, keep, gone, splatoon, shrek, leliana, morrigan };
+  built = { fate, keep, gone, splatoon, shrek, lookism, dragonAge, leliana, morrigan };
   return built;
 }
 
@@ -44,7 +49,7 @@ module.exports = {
   'apply merges duplicates, splits pairs, clears placeholders and fills images; undo puts it all back'() {
     const lib = library();
     const before = snapshot();
-    const fills = [{ id: lib.morrigan, image_url: 'https://static.wikia.nocookie.net/dragonage/morrigan.png' }];
+    const fills = [{ id: lib.morrigan, list_id: lib.dragonAge, name: 'Morrigan', image_url: 'https://static.wikia.nocookie.net/dragonage/morrigan.png' }];
 
     const p = plan(db, { images: fills });
     const added = apply(db, p);
@@ -64,7 +69,8 @@ module.exports = {
     const img = (id) => db.prepare('SELECT image_url FROM characters WHERE id = ?').get(id).image_url;
     assert.equal(img(lib.leliana), null, 'placeholder cleared');
     assert.equal(img(lib.morrigan), fills[0].image_url, 'image filled');
-    assert.equal(added.length, 2);
+    assert.deepEqual(namesIn(lib.lookism), ['Derrick', 'Max', 'Max Zhang'], 'Max Zhang is not Max');
+    assert.equal(added.length, 4);
 
     undo(db, { merges: p.merges, pairs: p.pairs, cleared: p.cleared, filled: p.filled, added });
     assert.deepEqual(snapshot(), before, 'undo restores every row exactly');
@@ -72,8 +78,14 @@ module.exports = {
 
   'a fill never overwrites an image, and a missing row is reported rather than guessed'() {
     const lib = library();
-    const p = plan(db, { images: [{ id: lib.leliana, image_url: 'https://example.invalid/x.png' }] });
-    assert.equal(p.filled.length, 0, 'Leliana still has her (placeholder) image, so nothing is filled');
+    const p = plan(db, {
+      images: [
+        { id: lib.leliana, list_id: lib.dragonAge, name: 'Leliana', image_url: 'https://example.invalid/x.png' },
+        { id: lib.morrigan, list_id: lib.dragonAge, name: 'Somebody Else', image_url: 'https://example.invalid/y.png' },
+        { id: lib.morrigan, list_id: lib.dragonAge, name: 'Morrigan', image_url: 'http://example.invalid/z.png' },
+      ],
+    });
+    assert.equal(p.filled.length, 0, 'not over an image, not when the name has drifted, not over http');
     assert.ok(p.missing.some((m) => m.includes('Big Hero 6')), 'lists absent from this database are reported');
   },
 };
