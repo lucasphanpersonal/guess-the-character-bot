@@ -1,17 +1,17 @@
 // The compendium's lists and characters: every content read and write goes through here.
 //
-// SCOPES. Anything that plays -- a Discord server (its guild id), the web app ('web') -- is a
-// scope, and a scope sees two kinds of list:
+// SCOPES. Anything that plays -- the web app ('web'), and once a Discord server (its guild
+// id), whose rows are still in the database -- is a scope, and a scope sees two kinds of list:
 //
 //   - the SHARED compendium (owner_scope NULL), visible to every scope: every seeded list, and
-//     every list made with /list create -- a list typed out by hand is wanted everywhere;
+//     every list made by hand (createList) -- a list typed out by hand is wanted everywhere;
 //   - its OWN private lists (owner_scope = the scope), invisible elsewhere. Nothing makes these
 //     today except the migration, for a second Discord server's lists (see db.js); the slot is
 //     kept so a scope CAN hold something no one else sees.
 //
 // Each scope also has its own playable selection (list_selection), which is what `enabled`
 // means on any row returned here: 1 if THAT scope has the list switched on. The same list can be
-// on for one Discord server, off for another and on for the web, which is the whole reason the
+// on for one scope, off for another, which is the whole reason the
 // selection stopped being a column on the list.
 //
 // A null scope means "the compendium itself": it sees only shared lists and has no selection.
@@ -21,8 +21,8 @@ const db = require('./db');
 const { foldDiacritics } = require('./text');
 const { identityKeys } = require('./answers');
 
-// The web app's scope, resolved once, here: the web server plays as it, and /list create in
-// Discord switches a new list on for it too -- two processes that must agree on the name.
+// The web app's scope, resolved once, here: the web server plays as it, and the content scripts
+// default to it -- several processes that must agree on the name.
 // WEB_SCOPE overrides it (the socket check gives itself a throwaway one).
 const WEB_SCOPE = process.env.WEB_SCOPE || 'web';
 
@@ -304,9 +304,8 @@ const LABEL_LIST_LIMIT = 3;
 /**
  * Human-readable label for a whole lobby selection, e.g. "Naruto (Manga) + Scrubs (TV Shows)".
  *
- * A selection can cover a whole category -- `/lobby create category:Video Games` pools 127
- * lists, and rolling "Anime" pools 443 -- and naming each one would produce a label
- * thousands of characters long, well past what Discord will render in an embed. Past a
+ * A selection can cover a whole category -- "Video Games" pools 127 lists, and "Anime"
+ * pools 443 -- and naming each one would produce a label thousands of characters long. Past a
  * handful, the shared category is the honest summary; a mixed selection just gets counted.
  */
 function getListLabelForIds(listIds) {

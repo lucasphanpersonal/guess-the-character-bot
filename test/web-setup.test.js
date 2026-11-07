@@ -198,8 +198,8 @@ function unlockingReopensAConfirmation() {
   assert.equal(applyConfirm(game, 'p1').allReady, false);
 }
 
-// The web config screen lets the host pick a turn length; it must land inside the same bounds
-// the Discord bot enforces, and garbage must fall through to the single default rather than
+// The web config screen lets the host pick a turn length; it must land inside the core's bounds
+// (core/game/limits.js), and garbage must fall through to the single default rather than
 // being coerced into a number here.
 function turnSecondsIsClampedToTheSharedBounds() {
   assert.equal(clampTurnSeconds(60), 60);

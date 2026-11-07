@@ -1,7 +1,6 @@
 // Shows or changes one scope's playable selection -- which lists its random deals draw from.
 //
-// A Discord server curates its own with /list select and /list toggle. The web app has no admin
-// screen, so this is how its selection is set; it works for any scope.
+// The web app has no admin screen, so this is how its selection is set; it works for any scope.
 //
 //   node scripts/select-lists.js                                  # show the web's selection
 //   node scripts/select-lists.js --scope=<id>                     # ... or any scope's

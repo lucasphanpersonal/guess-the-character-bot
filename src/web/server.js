@@ -1,8 +1,7 @@
 // Guess the Character -- the web server, and everything its games share.
 //
-// The second frontend, alongside the Discord bot (src/discord). Both import their game state
-// from the shared core (src/core) and their content from the compendium (src/compendium) -- see
-// docs/mobile-app-plan.md#architecture.
+// Game state comes from the shared core (src/core) and content from the compendium
+// (src/compendium) -- see docs/architecture.md.
 //
 // It hosts the web GAMES and owns what they have in common: the HTTP(S) servers and the one
 // socket.io instance, static files, character artwork through a local read-through cache, the
@@ -345,8 +344,6 @@ function requestHandler(req, res) {
   if (url.pathname === '/api/health') {
     return sendJson(res, 200, {
       ok: true,
-      // Web rooms only. Discord lobbies live in the bot, a separate process (scripts/start-all.js
-      // runs the two apart), so a count of them here was always 0.
       rooms: registry.rooms.size,
       imageCache: { files: imageCache.stats().files },
       // What the join QR will encode. Handy for confirming through a proxy that it says https:
@@ -423,8 +420,7 @@ drawGame.attach(io, { registry });
 // Test bots (./bots.js) connect back to this server, so they need its port once it is listening.
 require('./bots').configure({ server, registry });
 
-// Abandoned-room sweep, once for every game's rooms (they share the registry). Same role as
-// GameManager.evictStaleLobbies on the Discord side.
+// Abandoned-room sweep, once for every game's rooms (they share the registry).
 const ROOM_TTL_MS = Number(process.env.WEB_ROOM_TTL_MS || 30 * 60 * 1000);
 const sweeper = setInterval(() => {
   const n = registry.sweepAbandoned(ROOM_TTL_MS);
@@ -440,7 +436,7 @@ if (require.main === module) {
   // Bind to 0.0.0.0 explicitly so other devices on the LAN (phones) can connect, not just
   // this machine. Node defaults to this, but stating it makes the intent obvious.
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[web] Guess the Character (sharing core with the Discord bot). Compendium scope: ${WEB_SCOPE}`);
+    console.log(`[web] Guess the Character. Compendium scope: ${WEB_SCOPE}`);
     console.log(`[web] Image cache: ${cachedImages} file(s) on disk; artwork is fetched once and served locally.`);
     console.log(`[web]   HTTP  (no tilt -- the client will say so):`);
     console.log(`[web]     on this machine:  http://localhost:${PORT}`);

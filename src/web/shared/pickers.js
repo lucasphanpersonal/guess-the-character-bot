@@ -8,7 +8,7 @@
 // (pp-*, cs-*) in its own sheet, because the phones' look is not the computers' stylesheet.
 //
 // Pure DOM, no framework. Every interpolated value is escaped, list and category names included:
-// /list create in Discord lets anyone name a list.
+// lists made by hand (and through the retired Discord bot, by anyone) carry any name.
 (function () {
   const esc = (v) =>
     String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

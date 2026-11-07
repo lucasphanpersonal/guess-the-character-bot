@@ -4,7 +4,7 @@
 // with `fixed: false`, and use many trials because the shuffle is random -- one green run proves
 // little (CLAUDE.md).
 
-const { assert, createRecorder, createFakeClient } = require('./harness');
+const { assert } = require('./harness');
 const { freshSeating } = require('../src/core/game/seating');
 
 const seat = (players, previous) => freshSeating(players, previous, { fixed: false });
@@ -65,36 +65,6 @@ module.exports = {
   },
 
   // The part that can go wrong: each character must stay with its player when the order moves.
-  async 'Discord: a reseated game keeps every character with its player'() {
-    const engine = require('../src/discord/game/engine');
-    const Lobby = require('../src/core/game/Lobby');
-    const GameManager = require('../src/core/game/GameManager');
-    const was = process.env.GTC_FIXED_SEATING;
-    process.env.GTC_FIXED_SEATING = '0';
-    try {
-      const firsts = new Set();
-      for (let t = 0; t < 12; t++) {
-        const channelId = `seat-chan-${t}`;
-        const lobby = new Lobby({ guildId: 'seat-guild', channelId, hostId: 'p1', listIds: [], listNames: [], turnSeconds: 90, maxRerolls: 2 });
-        for (const id of ['p1', 'p2', 'p3', 'p4']) lobby.addPlayer(id);
-        GameManager.createLobby(channelId, lobby);
-        const chars = ['Mario', 'Luigi', 'Peach', 'Bowser'].map((name) => ({ name, image_url: null }));
-        const res = await engine.startGame(createFakeClient(createRecorder()), lobby, chars);
-        assert.equal(res.ok, true);
-        const game = lobby.game;
-        assert.deepEqual(['p1', 'p2', 'p3', 'p4'].map((id) => game.headByPlayer[id].name), ['Mario', 'Luigi', 'Peach', 'Bowser']);
-        assert.ok(sameSet(game.turnOrder, lobby.players));
-        assert.deepEqual(lobby.lastOrder, game.turnOrder, 'kept for the next game to be unlike');
-        firsts.add(game.turnOrder[0]);
-        engine.clearTimers(game);
-        GameManager.endLobby(channelId);
-      }
-      assert.ok(firsts.size > 1, 'not always the host first');
-    } finally {
-      process.env.GTC_FIXED_SEATING = was;
-    }
-  },
-
   'web: a reseated deal keeps every hand-picked character with its player'() {
     const { createSetup, dealWithPicks } = require('../src/web/guess/gameSetup');
     // The service seats first, then deals in that order: picks are by player, so wherever each

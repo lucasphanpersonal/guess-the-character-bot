@@ -9,7 +9,7 @@
 // are tuned to their APIs, and a destructive flag acts on that split. This is the plain case.
 
 const USER_AGENT =
-  'guess-the-character-bot/1.0 (Discord party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
+  'guess-the-character-bot/1.0 (party game; https://github.com/lucasphanpersonal/guess-the-character-bot)';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

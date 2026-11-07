@@ -1,5 +1,7 @@
 # Multiplayer design
 
+> **Historical record.** This was written while the game ran as a Discord bot, which was removed in November 2026; the web games are now the only way to play. The reasoning still explains the rules the web plays by, but the Discord specifics (embeds, DMs, buttons, slash commands) describe code that no longer exists.
+
 Generalising the game from exactly two players to up to eight, and replacing the
 first-correct-guess-wins race with "everyone plays until they get it, ranked by turns taken".
 

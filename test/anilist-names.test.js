@@ -240,7 +240,6 @@ module.exports = {
   },
 
   'a merge moves rerolls and past games, and undo puts back exactly what was there'() {
-    const stats = require('../src/core/db/stats');
     const { listId } = freshList();
     lists.addCharacter(listId, 'Elric Edward', 'seed-script', 'https://s4.anilist.co/ed-merge.png');
     lists.addCharacter(listId, 'Edward Elric', 'someone', null);
@@ -251,7 +250,9 @@ module.exports = {
     lists.recordReroll(kept.id, 'merge-U');
     lists.recordReroll(gone.id, 'merge-U');
     lists.recordReroll(gone.id, 'merge-V');
-    stats.recordGame('merge-guild', [{ playerId: 'merge-P', turnsTaken: 3, outcome: 'won', characterId: gone.id }]);
+    // A game recorded by the old Discord bot: the rows are still in the database, so a merge must keep them pointing right.
+    const gameId = db.prepare('INSERT INTO games (guild_id, player_count, finished_at) VALUES (?, 1, ?)').run('merge-guild', Date.now()).lastInsertRowid;
+    db.prepare('INSERT INTO game_players (game_id, user_id, turns_taken, outcome, character_id) VALUES (?, ?, 3, ?, ?)').run(gameId, 'merge-P', 'won', gone.id);
     const rerollUsers = (id) => db.prepare('SELECT user_id FROM character_rerolls WHERE character_id = ? ORDER BY user_id').all(id).map((r) => r.user_id);
     const gamesOf = (id) => db.prepare('SELECT COUNT(*) AS n FROM game_players WHERE character_id = ?').get(id).n;
     const keptBefore = db.prepare('SELECT id FROM character_rerolls WHERE character_id = ? AND user_id = ?').get(kept.id, 'merge-U').id;

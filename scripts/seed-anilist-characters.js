@@ -52,7 +52,7 @@
 //   node scripts/seed-anilist-characters.js --fame-floor 1     # percent; 0 = off
 //   node scripts/seed-anilist-characters.js --dry-run
 //
-// Lists land in the shared compendium, which every Discord server and the web app see.
+// Lists land in the shared compendium, which every scope sees.
 
 const fs = require('fs');
 const path = require('path');

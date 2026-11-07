@@ -3,13 +3,12 @@
 // Pure, like ../guess/turnLoop.js: no socket.io, no DB, unit-tested on its own. The socket layer
 // (./index.js) drives it and emits.
 //
-// On phones the room rules on a spoken guess by watching the wearer's phone; on Discord, other
-// players press a button. On a computer the guesser TYPES, and the compendium's checker
+// On phones the room rules on a spoken guess by watching the wearer's phone. On a computer the guesser TYPES, and the compendium's checker
 // (src/compendium/answers.js) decides what it can:
 //
 //   correct  -> the turn ends as "got it", exactly as a tilt up would
-//   wrong    -> nothing happens but a line in the log: a miss costs nothing and the turn goes on,
-//               as on Discord (no limit -- chosen, not overlooked)
+//   wrong    -> nothing happens but a line in the log: a miss costs nothing and the turn goes on
+//               (no limit -- chosen, not overlooked)
 //   close    -> the OTHER players rule: a typo, a stripped title, a shared surname is a person's
 //               call. The first ruling settles it.
 //

@@ -34,7 +34,7 @@
 //   node scripts/seed-wikidata-people.js --group actors
 //   node scripts/seed-wikidata-people.js --dry-run
 //
-// Lists land in the shared compendium, which every Discord server and the web app see.
+// Lists land in the shared compendium, which every scope sees.
 
 const fs = require('fs');
 const path = require('path');

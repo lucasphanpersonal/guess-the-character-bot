@@ -703,8 +703,8 @@ function renderOver(result) {
         ? `${escapeHtml(names[0])} wins on time — got it in ${turnsText(result.bestTurnCount)}${leftText(w0.secondsLeft)}!`
         : `${escapeHtml(names[0])} wins — got it in ${turnsText(result.bestTurnCount)}!`;
   // `place` comes from the server (Game.standings): turns first, then time left, with level
-  // players sharing a place. Re-deriving it here from turns alone is how this screen and the
-  // Discord reveal could have ranked one game two different ways.
+  // players sharing a place. Re-deriving it here from turns alone is how two screens could
+  // rank one game two different ways.
   $('finalStandings').innerHTML = result.standings.map((s) => {
     const how = s.turns === null ? (s.outcome === 'gave_up' ? 'gave up' : 'did not finish')
       : s.secondsLeft == null ? '' : `${s.secondsLeft}s left`;

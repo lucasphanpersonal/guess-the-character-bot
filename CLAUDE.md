@@ -1,7 +1,7 @@
 # Working notes for Claude
 
 Conventions and hard-won rules for this repo. README.md and docs/ are the reference (the README
-maps them: discord.md, compendium.md, architecture.md, plus src/web/README.md); this file is the
+maps them: compendium.md, architecture.md, plus src/web/README.md); this file is the
 part that is easy to get wrong twice. Every rule below is here because something broke.
 
 ## Shape of the repo
@@ -10,7 +10,6 @@ part that is easy to get wrong twice. Every rule below is here because something
 src/db/          Opens the SQLite file. No tables of its own.
 src/compendium/  The content: lists, characters, scopes, each scope's selection. Own schema.
 src/core/        Frontend-agnostic game state + the games' records.
-src/discord/     The Discord bot.
 src/web/         The web games: shared server/rooms/content, one folder per game.
   guess/           Guess the Character's web rules + room protocol, shared by both ways below.
   party/           Phones (forehead view, tilt). Owns the site root + default namespace.
@@ -36,17 +35,18 @@ the client from disk on every request, so `git mv` of `public/` 404'd the live s
 restarted on the new path. Bridge a move like that (a directory junction from the old path)
 until the live process has restarted, then remove the bridge.
 
-**`core/` never imports from `discord/` or `web/`.** Both frontends depend on the core; the
-core depends on neither. This is the one invariant that keeps two frontends from fusing.
+**`core/` never imports from `web/`.** The web depends on the core; the core depends on no
+frontend. There was a Discord bot beside the web until November 2026, and this invariant is
+what let it be deleted without touching a rule the web plays by.
 
 **Nothing above the compendium queries its tables.** Content goes through
 `src/compendium/characterLists.js`; `compendium/` imports only `db/`, never `core/`. That is
 what keeps the content separable from any one game -- and more games are coming. The content
 scripts in `scripts/` are the compendium's own tools and are the one exception.
 
-**Every content read is through a scope's eyes.** A scope is anything that plays: a Discord
-guild id, or `'web'`. It sees the shared lists (`owner_scope IS NULL`: everything seeded and
-everything from `/list create`) plus its own private ones, and `enabled` on any returned row
+**Every content read is through a scope's eyes.** A scope is anything that plays: today
+`'web'`, and the retired Discord bot's guild ids, whose selections are still on file. It sees the
+shared lists (`owner_scope IS NULL`: everything seeded and everything made by hand) plus its own private ones, and `enabled` on any returned row
 means *that scope's* selection
 (`list_selection`). Pass the scope you are acting for -- never borrow another's. The web app
 once played as the richest Discord guild and so read that server's selection, and the shared
@@ -63,15 +63,12 @@ and restart every live process together when it ships.
 ## Verifying a change
 
 ```bash
-npm test                  # unit suite, no network, no Discord
+npm test                  # unit suite, no network
 npm run check:web-socket  # boots the real web server, drives a full game over sockets
 ```
 
 Both must pass before a commit. Beyond that:
 
-- **Touching anything under `core/`? Boot the Discord bot**, don't just run tests:
-  `node src/discord/index.js` and confirm `Logged in as … Loaded 7 commands.` "The tests pass"
-  and "the bot still starts" are different claims.
 - **Changing web UI? Measure it in a browser.** Read back computed styles and
   `getBoundingClientRect()` — don't eyeball a screenshot and don't assume a CSS rule applied.
   Several bugs here (the sheared card, the sideways pan, the tilt alternation) were invisible
@@ -98,8 +95,8 @@ Both must pass before a commit. Beyond that:
   and when something is random (a deal, a shuffle), a single green run proves little.
 - **Never leave a detached server running.** Each `nohup`/background restart of the launcher
   *adds* a stack rather than replacing one. Four accumulated over one session: one held :4180
-  so the user's own launcher could not bind, and three extra Discord bots stayed logged in, so
-  every slash command was handled four times. When finished, kill what you started.
+  so the user's own launcher could not bind, and three extra Discord bots (since retired) stayed
+  logged in, so every slash command was handled four times. When finished, kill what you started.
 - **Never kill a process by port alone.** "Kill whatever holds :4180" cannot tell your leftovers
   from the user's live session, and it took out their running web server twice in one morning --
   while their launcher and tunnel stayed up, leaving a tunnel fronting a dead port. Identify the

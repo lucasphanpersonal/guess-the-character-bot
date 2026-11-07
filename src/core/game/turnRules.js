@@ -1,9 +1,8 @@
 // The turn rules of Guess the Character -- one copy, for every frontend.
 //
-// Pure: no Discord, no sockets, no timers, no clock of its own. The Discord bot
-// (src/discord/game/engine.js) and the web (src/web/guess/turnLoop.js) both drive these over a
-// core Game and wrap them in their own I/O. They used to be two implementations of the same rules
-// -- the web's a port of the bot's -- which is how two frontends end up disagreeing about one rule.
+// Pure: no sockets, no timers, no clock of its own. The web (src/web/guess/turnLoop.js, for the
+// phones and the computers alike) drives these over a core Game and wraps them in its own I/O.
+// One copy for both ways of playing is what keeps them from disagreeing about one rule.
 //
 // THE RULES. Strict rotation, one player at a time. Getting your character ends YOUR involvement,
 // not the game; the score is turns taken (Game.standings). Pass hands the turn on and never removes

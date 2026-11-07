@@ -1,78 +1,72 @@
 ---
-description: Full design review — game design, UX, architecture, state, data, security, tests, docs, across both frontends
+description: Full design review — game design, UX, architecture, state, data, security, tests, docs, across every web game
 argument-hint: "[optional: focus area, e.g. \"state and concurrency only\"]"
 ---
 
-Do a full design review of this project — Hedbanz-style "Guess the Character", played
-either through a Discord bot or a phone-in-hand party web app, both over one shared core.
-Read the code before forming opinions: start with CLAUDE.md, README.md,
+Do a full design review of this project — Hedbanz-style "Guess the Character" (on phones held
+to foreheads, or on computers with typed guesses) and "Draw the Character", party web games over
+one shared core. Read the code before forming opinions: start with CLAUDE.md, README.md,
 docs/multiplayer-design.md, docs/multiplayer-ux.md and docs/mobile-app-plan.md to
-understand the intended design, then read src/ in full — src/core/ is shared,
-src/discord/game/engine.js is the bot's core (~1000 lines), src/web/ is the web app — and
-skim test/ to see what behavior is actually pinned down.
+understand the intended design, then read src/ in full — src/core/ is the shared game rules,
+src/compendium/ the content, src/web/ the games (one folder per game, shared pieces at the top)
+— and skim test/ to see what behavior is actually pinned down.
 
-Hold both frontends to the review: a finding that only names the bot when the same flaw
-exists in src/web/ (or in the core they share) is half a finding.
+Hold every way of playing to the review: a finding that only names the phones when the same flaw
+exists on the computers (or in the core they share) is half a finding.
 
 Review across all of these axes. For each, tell me what's well-designed and what
 isn't — I want the honest version, not a list of compliments.
 
 1. GAME DESIGN
    - Do the rules hold up? Turn order, pass/guess mechanics, the difficulty system
-     (README "Difficulty: how obscure a character you'll be dealt"), reroll-teaches-
-     the-pool, and audience-vote mode.
+     (docs/compendium.md "Difficulty"), rerolls, host-picks and pick-for-each-other.
    - Where can a game reach a state that is boring, unfair, or unwinnable? Consider
-     2 players vs 8, everyone passing, a player going AFK, an audience that doesn't vote.
+     2 players vs 8, everyone passing, a player going AFK or losing Wi-Fi.
    - Is judging (who decides a guess is right) sound, or is it exploitable/ambiguous?
+     Include the typed-guess checker (src/compendium/answers.js).
    - Does difficulty actually correlate with how hard a character is to guess, or just
      with how obscure the source data says it is?
 
 2. UX AND INTERACTION DESIGN
-   - Walk the full flow as a first-time player: /lobby create → join → start → DM
-     confirmation → turns → game over → rematch. Where would someone get confused,
+   - Walk the full flow as a first-time player on each device: create a room → join (QR or
+     code) → setup/confirm → turns → results → rematch. Where would someone get confused,
      stuck, or not know it's their turn?
-   - Split-brain risk between the channel board and the DM confirmation flow.
-   - Ephemeral vs public messaging: is anything leaked that shouldn't be (a player
-     seeing their own character), or hidden that should be visible?
-   - Are button/label/copy choices consistent across lobbyButtons, turnControls,
-     voteControls, gameOverControls, listBrowser, listFilter?
-   - Accessibility of the boards: do they read sensibly as plain text, and do they
-     survive on mobile and in a narrow client?
+   - Leaks: can any payload reach a player carrying their own character (CLAUDE.md, the
+     forehead view vs the board view)?
+   - Are button/label/copy choices consistent across the phones, the computers and Draw?
+   - Accessibility: reduced motion, contrast through the CRT layer, screen readers, 44px targets.
 
 3. ARCHITECTURE AND CODE DESIGN
-   - Is engine.js doing too much? Propose a concrete decomposition if so, with the
+   - Is any module doing too much? Propose a concrete decomposition if so, with the
      seams you'd actually cut along.
-   - Evaluate the layering: commands/ → game/ → db/, plus components/router.js as the
-     single customId dispatch point. Where is that layering violated? Separately: does
-     anything in src/core/ import from src/discord/ or src/web/? That invariant is what
-     keeps the two frontends from fusing.
-   - Is Game / Lobby / GameManager the right state model? GameManager holds lobbies in
-     a process-local Map keyed by channelId, and deliberately retains FINISHED lobbies
-     for /rematch — assess the lifecycle, leak potential, and restart behavior.
-   - customId encoding: is the `<namespace>:<...>` scheme robust against Discord's
-     100-char limit, stale controls from older deploys, and IDs from a different game?
+   - Evaluate the layering: db/ → compendium/ → core/ → web/. Where is that layering violated?
+     Does anything in src/core/ import from src/web/, or anything above the compendium query
+     its tables?
+   - Is Game plus the web's Room the right state model? Rooms live in a process-local registry
+     with an abandoned-room sweep — assess the lifecycle, leak potential, and restart behavior.
+   - The socket protocols: are events versioned against stale clients, and are a client's
+     claims (seat, host, turn) always checked server side?
 
 4. STATE, CONCURRENCY, AND FAILURE
-   - All live game state is in memory; only lists/stats/activeBoards are in SQLite.
-     What breaks on process restart mid-game, and is data/activeBoards + timerWatchdog
-     a real recovery story or a partial one?
-   - Race conditions: two players clicking the same button simultaneously, a timer
-     firing while a guess modal is open, a rematch starting before the previous game
-     finalizes, /lobby end during a turn.
-   - Discord-specific failure modes: the 3-second ack window, the 15-minute interaction
-     token expiry, message edit failures, rate limits, DMs closed by the user, a player
-     leaving the guild mid-game. Which of these are handled and which would crash a game?
-   - What happens to an unhandled rejection inside an interaction handler — does it kill
-     the game, the channel, or the process?
+   - All live game state is in memory; only the compendium is in SQLite. What breaks on a
+     server restart mid-game, and how do players find out?
+   - Race conditions: two players acting on the same turn at once, a clock firing while a
+     ruling is pending, a rematch starting before the previous game finalizes, the host
+     leaving mid-turn.
+   - Network failure modes: a phone sleeping, a socket reconnecting with a stale view, the
+     Cloudflare tunnel caching assets. Which of these are handled and which would stall a game?
+   - What happens to an unhandled rejection inside a socket handler — does it kill the game,
+     the room, or the process?
 
 5. DATA AND DATABASE DESIGN
    - Review src/core/db/schema.sql: normalization, indexes, uniqueness constraints, and
-     whether the queries in characterLists.js (560 lines) match how the schema is shaped.
+     whether the queries in characterLists.js match how the schema is shaped (and
+     src/compendium/schema.sql alongside it).
    - better-sqlite3 is synchronous — is any query on a hot path long enough to block
      the event loop while games are running?
-   - Multi-tenancy: are per-guild list selections properly scoped, and can one server
-     see or mutate another's data?
-   - Character images (src/core/util/characterImages.js, scripts/fetch-fandom-images.js,
+   - Scopes: are list selections properly scoped, and can one room or scope change what
+     another is dealt?
+   - Character images (src/compendium/characterImages.js, src/web/imageCache.js, scripts/fetch-fandom-images.js,
      clean-character-images.js): how is a bad or hotlink-broken image detected, and what
      does a player see when it fails?
 
@@ -84,23 +78,22 @@ isn't — I want the honest version, not a list of compliments.
    - Licensing/attribution obligations for the scraped data and images.
 
 7. SECURITY AND ABUSE
-   - Permission model: who can start, end, force-advance, or judge? What can a
-     non-host or spectator do that they shouldn't?
-   - Untrusted input reaching an embed, a DB query, or a filename — including custom
-     list names and guessed text.
-   - .env handling and whether anything secret can end up in a log or an error message
-     posted to a channel.
-   - Griefing: spam-created lobbies, a host who joins and immediately leaves, someone
-     mass-adding junk to a shared list.
+   - Permission model: who can start, end, remove players, or rule? What can a
+     non-host do that they shouldn't? Is the seat secret ever published?
+   - Untrusted input reaching HTML, a DB query, or a filename — including list names,
+     nicknames, notes, chat and guessed text.
+   - .env handling and whether anything secret can end up in a log or a client payload.
+   - Griefing: room-code guessing, spam-created rooms, flooding a room with seats.
+     (src/web/rateLimit.js, roomAccess.js)
 
 8. TESTING
-   - test/run.js is a hand-rolled runner over a harness that fakes Discord. Assess the
-     harness's fidelity — what class of bug can it structurally never catch?
+   - test/run.js is a hand-rolled runner over pure modules, and scripts/check-web-socket.js
+     drives the real server over sockets. What class of bug can neither ever catch?
    - Which of the risks you found above have no test, ranked by how bad the failure is.
 
 9. DOCS AND MAINTAINABILITY
-   - README.md is 36k and doubles as design doc, setup guide, and reference. Is that
-     serving readers, and how would you split it?
+   - README.md, docs/ and src/web/README.md: do they serve readers, and does each say
+     one thing in one place?
    - Do docs/multiplayer-design.md and docs/multiplayer-ux.md still match the code, or
      has the implementation drifted?
    - How hard is it to add a new interactive control or a new game mode today?

@@ -24,7 +24,7 @@
 //
 //   node scripts/backfill-popularity.js [scope] [--top=N] [--reset] [--no-enable]
 //
-// Ranking is done on the shared compendium. The optional scope -- a Discord guild id, or 'web'
+// Ranking is done on the shared compendium. The optional scope -- 'web', or any other scope id
 // -- is whose playable selection then gets re-cut to each category's top N; with none, it only
 // ranks. (Unlike the other content scripts, a leading guild id still means something here:
 // whose selection to cut, which is what it always meant.)

@@ -1,5 +1,5 @@
 // Unit tests for the web room registry (src/web/rooms.js). Pure state, no socket.io, no
-// network -- the same discipline the Discord game tests use with fake Discord objects.
+// network.
 
 const { assert } = require('./harness');
 const { RoomRegistry, MAX_PLAYERS, maxPlayersFor, CODE_LENGTH } = require('../src/web/rooms');

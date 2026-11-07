@@ -1,21 +1,19 @@
 // A local web browser for the character database: `npm run browse`.
 //
-// `/list show` paginates inside Discord, which is fine for checking one show and hopeless for
-// 43,000 characters across 2,000 lists. This serves the same data as a searchable grid with
-// the artwork visible, which is the only way to actually judge whether a list is worth
-// playing with.
+// 43,000 characters across 2,000 lists cannot be judged a page at a time. This serves them as a
+// searchable grid with the artwork visible, which is the only way to actually judge whether a
+// list is worth playing with.
 //
 // Read-only, deliberately: it opens the live database in readonly mode so it is safe to run
-// while the bot is up (SQLite's WAL allows concurrent readers), and nothing here can change
-// what the bot deals. Curation still happens through `/list toggle`, `/list select` and
-// `npm run select:lists`. That is also why this has its own SQL rather than going through
+// while the site is up (SQLite's WAL allows concurrent readers), and nothing here can change
+// what the site deals. Curation still happens through `npm run select:lists`. That is also why this has its own SQL rather than going through
 // src/compendium, which migrates the database when it loads.
 //
 // It looks through one scope's eyes (src/compendium/characterLists.js): the shared lists plus
 // that scope's own, with "in the playable pool" meaning THAT scope's selection. --scope=<id>
-// picks it (a Discord guild id, or 'web'); the default is the web app's.
+// picks it; the default is the web app's.
 //
-// No new dependencies -- node's own http server, and the better-sqlite3 the bot already uses.
+// No new dependencies -- node's own http server, and the better-sqlite3 the site already uses.
 
 const http = require('http');
 const fs = require('fs');

@@ -4,8 +4,8 @@
 //     --list="Slay the Spire" --category="Video Games" \
 //     --categories="Character,Bosses,Elites,Monsters,NPC" --dry-run
 //
-// The list lands in the shared compendium, switched off everywhere: switch it on per scope with
-// `/list toggle` in a Discord server, or `npm run select:lists -- --scope=web --add="<name>"`.
+// The list lands in the shared compendium, switched off everywhere: switch it on for the web with
+// `npm run select:lists -- --scope=web --add="<name>"`.
 //
 // The other fetchers fill artwork for characters that are ALREADY in the database. This one
 // creates the characters too, for a game the bulk seeders never covered -- Wikidata only lists
@@ -196,7 +196,7 @@ async function main() {
       list = getListByName(null, listName);
       console.log(
         `created shared list "${listName}" (#${id}) in ${category}. It is off everywhere until a ` +
-          'scope switches it on: /list toggle in Discord, or npm run select:lists for the web.'
+          'scope switches it on: npm run select:lists for the web.'
       );
     }
   } else {

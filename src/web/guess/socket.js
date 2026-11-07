@@ -360,10 +360,9 @@ function attachSockets(nsp, { registry, setup, variant }) {
     }
   };
 
-  // Wall-clock backstop (mirrors the Discord bot's timerWatchdog): the setTimeouts above are the
-  // primary path, but if the process is suspended (a laptop sleeping) they fire late. This
-  // re-checks every deadline against the real clock so a turn that expired while asleep ends on
-  // wake instead of hanging. It never double-fires: the resolve-once guard in the turn loop makes a
+  // Wall-clock backstop: the setTimeouts above are the primary path, but if the process is
+  // suspended (a laptop sleeping) they fire late. This re-checks every deadline against the real
+  // clock so a turn that expired while asleep ends on wake instead of hanging. It never double-fires: the resolve-once guard in the turn loop makes a
   // second timeout a no-op, and beginGame begins only a game still counting down.
   // A room the registry deletes (its last player left, or the sweep found nobody connected for half
   // an hour) takes its timers with it. They ran on otherwise: a turn timing out armed the next, an

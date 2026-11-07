@@ -1,13 +1,11 @@
 // Stage 2: dealing characters and the confirm/reroll flow, for the web frontend.
 //
-// This mirrors the Discord confirm phase (src/discord/game/confirmPhase.js) but with the I/O
-// pulled out: it builds a real core `Game`, and all the rules below run against Game's pure
+// The I/O is pulled out: it builds a real core `Game`, and all the rules below run against Game's pure
 // helpers (checkTargetOf, headByPlayer). Content access (dealing, rerolling, recording a
 // rejection) is injected as `content`, so this module is unit-testable with fakes and has no
 // socket.io or direct DB dependency -- the same discipline as rooms.js.
 //
-// The rules kept verbatim from the Discord side, because they are player-count logic, not
-// Discord logic:
+// The rules:
 //   - Each player CHECKS exactly one character: the next player's, round the rotation
 //     (Game.checkTargetOf). That one player, and only that one, may reroll it.
 //   - A reroll excludes every character already in play (nobody should wear a duplicate) plus
@@ -18,7 +16,7 @@
 // Host-picks mode (web only) changes who decides, not the rules above: the host chooses the
 // characters (dealWithPicks) and sits the game out -- they are not in the turn order, so they
 // neither check nor wear anything. Rerolls are off, since a reroll would undo the host's choice
-// (the same call the Discord side makes for its audience vote). Players still check and lock in:
+// Players still check and lock in:
 // that screen is also where tilt gets turned on. The host gets buildHostSetupView instead.
 //
 // Pick-for-each-other mode (web only) keeps every rule above and changes only how a seat is
@@ -28,28 +26,28 @@
 // can never begin with an empty seat. Everyone still plays; nobody sits out.
 
 const Game = require('../../core/game/Game');
-const { FIELDS: LOBBY_FIELDS } = require('../../core/game/lobbySettings');
+const { TURN_SECONDS } = require('../../core/game/limits');
 const { identityKeys } = require('../../compendium/answers');
 // The sendable shape of a character. Who may RECEIVE which one is this file's business -- never
 // anyone their own -- and that is decided below, not in the shape.
 const { publicCharacter } = require('../publicCharacter');
 
 /**
- * Clamp a client-supplied turn length to the same bounds the Discord bot enforces, so the two
- * frontends can't disagree about what's legal. Returns undefined for missing/garbage input, so
+ * Clamp a client-supplied turn length to the core's bounds (core/game/limits.js). Returns undefined for missing/garbage input, so
  * the caller falls through to createSetup's own default rather than coercing to a number here --
  * there is exactly one place turnSeconds defaults.
  */
 function clampTurnSeconds(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return undefined;
-  const { min, max } = LOBBY_FIELDS.turnSeconds;
+  const { min, max } = TURN_SECONDS;
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-// Rerolls are always unlimited (-1) in the web app too -- a reroll budget only added friction
-// to a party game. The budget machinery (rerollsLeft, the -1 sentinel) is kept so a finite
-// limit remains representable, but nothing sets one. See src/core/game/lobbySettings.js.
+// Rerolls are always unlimited (-1) -- a reroll budget only added friction to a party game,
+// since nobody benefits from "you're out of rerolls" mid-setup. The budget machinery
+// (rerollsLeft, the -1 sentinel) is kept so a finite limit remains representable, but nothing
+// sets one.
 const DEFAULT_MAX_REROLLS = -1;
 
 /**
@@ -68,7 +66,7 @@ const DEFAULT_MAX_REROLLS = -1;
  */
 function createSetup({ order, guildId, listIds, difficulty, characters, turnSeconds = 60, maxRerolls = DEFAULT_MAX_REROLLS, preferImages = false, rerollAllowed = true, checkerPicks = false }) {
   // A lobby-shaped object is all Game needs: its players (turn order) and the fields Game.head
-  // reads for the source label. No Discord lobby, no board, no settings surface.
+  // reads for the source label. No lobby class, no board, no settings surface.
   const pseudoLobby = { guildId, listIds, difficulty, preferImages, players: [...order] };
   const game = new Game({ lobby: pseudoLobby, characters, turnSeconds });
   game.rerollAllowed = rerollAllowed;
@@ -86,7 +84,7 @@ function createSetup({ order, guildId, listIds, difficulty, characters, turnSeco
 /**
  * The personalized setup view for one viewer. Critically, it NEVER contains the viewer's own
  * character: they see the one they check (with reroll controls) and the rest as reference,
- * which between them is every character but their own -- exactly the Discord DM split.
+ * which between them is every character but their own.
  *
  * @param {Game} game
  * @param {string} viewerId

@@ -1,6 +1,6 @@
 // Whether a typed guess names a character: 'correct', 'close', or 'wrong'.
 //
-// The games on a computer cannot lean on the table the way the Discord bot and the phones do --
+// The games on a computer cannot lean on the table the way the phones do --
 // there, a person rules on what was said out loud. Here somebody TYPES "sasuke" for "Sasuke
 // Uchiha", "tails" for `Miles "Tails" Prower`, "uzumaki naruto" for "Naruto Uzumaki", and a
 // checker has to agree with what a person would have said. Comparing whole names would refuse

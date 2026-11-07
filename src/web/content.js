@@ -7,7 +7,8 @@
 //
 // The web plays as its own compendium scope (WEB_SCOPE, 'web' by default): it sees the shared
 // lists and deals from its own playable selection. That used to be the richest Discord server's
-// id, which meant reading -- and risking writing -- that server's selection.
+// id (from when a Discord bot shared this database), which meant reading -- and risking
+// writing -- that server's selection.
 
 const characterLists = require('../compendium/characterLists');
 const { answerForms } = require('../compendium/answers');
@@ -15,7 +16,7 @@ const { answerForms } = require('../compendium/answers');
 // Every form of every name the web can see, as the checker compares them. ~0.13s to build over the
 // library, so it is built when a game that uses it starts up (warmKnownNames) and rebuilt every ten
 // minutes off a timer -- never inside somebody's guess, on the event loop every room shares -- so a
-// list added from Discord is known soon after without a restart.
+// list a content script adds is known soon after without a restart.
 const KNOWN_REFRESH_MS = 10 * 60 * 1000;
 let known = null;
 const buildKnown = () => {
@@ -33,8 +34,8 @@ function warmKnownNames() {
   refresher.unref?.();
 }
 
-// Resolved in the compendium, because /list create in Discord switches new lists on for this
-// same scope. Curate its selection with `npm run select:lists`.
+// Resolved in the compendium, which owns every scope's name. Curate its selection with
+// `npm run select:lists`.
 const { WEB_SCOPE } = characterLists;
 
 // The dealing calls a game's setup makes, injected rather than imported there so the game logic
