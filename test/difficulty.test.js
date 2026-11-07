@@ -84,6 +84,52 @@ module.exports = {
   },
 
   // ---------------------------------------------------------------------------
+  // The list cut: a pooled draw skips the most obscure shows below Everything
+  // ---------------------------------------------------------------------------
+
+  'a pooled draw keeps the best-known lists of each category, and Everything keeps them all'() {
+    const guildId = freshGuild();
+    const n = lists.POOLED_LISTS * 2;
+    const ids = [];
+    for (let i = 0; i < n; i++) {
+      // Popularity falls with i; five ranked characters each, so no list is tiny.
+      const id = seedList(guildId, `Pooled ${i}`, Object.fromEntries([1, 2, 3, 4, 5].map((k) => [`P${i}-${k}`, 10 * k])));
+      lists.setListPopularity(id, 1000 - i);
+      ids.push(id);
+    }
+    const listsIn = (d) => new Set(lists.drawablePool(ids, d).map((c) => c.list_id));
+    assert.equal(listsIn('everything').size, n, 'nothing is removed');
+    assert.equal(listsIn('normal').size, Math.ceil(n * lists.DIFFICULTIES.normal.lists));
+    const easy = listsIn('easy');
+    assert.equal(easy.size, Math.ceil(n * lists.DIFFICULTIES.easy.lists));
+    assert.ok(easy.has(ids[0]) && !easy.has(ids[n - 1]), 'the best-known survive, the most obscure go');
+  },
+
+  'tiny lists drop out of a pooled draw, but not out of Everything'() {
+    const guildId = freshGuild();
+    const ids = [];
+    for (let i = 0; i < lists.POOLED_LISTS; i++) {
+      const size = i === 0 ? 3 : 5;
+      const id = seedList(guildId, `Sized ${i}`, Object.fromEntries([...Array(size)].map((_, k) => [`S${i}-${k}`, 10 + k])));
+      lists.setListPopularity(id, 5000); // the tiny one is as popular as any
+      ids.push(id);
+    }
+    assert.ok(!lists.drawablePool(ids, 'normal').some((c) => c.list_id === ids[0]));
+    assert.ok(lists.drawablePool(ids, 'everything').some((c) => c.list_id === ids[0]));
+  },
+
+  'named lists are never cut, however obscure'() {
+    const guildId = freshGuild();
+    const ids = [];
+    for (let i = 0; i < lists.POOLED_LISTS - 1; i++) {
+      const id = seedList(guildId, `Named ${i}`, { [`N${i}`]: 5 });
+      lists.setListPopularity(id, i);
+      ids.push(id);
+    }
+    assert.equal(new Set(lists.drawablePool(ids, 'easy').map((c) => c.list_id)).size, ids.length);
+  },
+
+  // ---------------------------------------------------------------------------
   // Rerolls are recorded, never acted on
   // ---------------------------------------------------------------------------
 

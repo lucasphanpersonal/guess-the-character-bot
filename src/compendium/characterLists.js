@@ -349,8 +349,9 @@ function getCharactersForLists(listIds) {
 //
 // Curating lists cannot fix being dealt somebody obscure, because the obscurity is INSIDE
 // the list. Attack on Titan is on everybody's shortlist and its cast still runs from Eren
-// (36,038 favourites) down to bit parts with three. So difficulty cuts each cast by fame
-// instead of cutting the list.
+// (36,038 favourites) down to bit parts with three. So difficulty cuts each cast by fame.
+// A pooled draw is cut over its lists as well (trimLists, below), because the obscurity is
+// also in WHICH lists a pool of two thousand holds.
 //
 // The cut is per list, deliberately. Fame comes from two incomparable scales (AniList
 // favourites in the thousands, Wikipedia sitelinks in the tens), so a pool-wide threshold
@@ -358,10 +359,11 @@ function getCharactersForLists(listIds) {
 // scale-free, and it is also the more useful rule: it keeps the leads of every show rather
 // than every character of the most-documented shows.
 
+// `lists` is the second cut, over the lists themselves -- see trimLists below.
 const DIFFICULTIES = {
-  easy: { label: 'Easy', keep: 0.25, blurb: 'best-known quarter of each cast' },
-  normal: { label: 'Normal', keep: 0.6, blurb: 'skips the deepest cuts' },
-  everything: { label: 'Everything', keep: 1, blurb: 'every character, however obscure' },
+  easy: { label: 'Easy', keep: 0.25, lists: 0.25, blurb: 'best-known quarter of each cast, from the best-known shows' },
+  normal: { label: 'Normal', keep: 0.6, lists: 0.6, blurb: 'skips the deepest cuts and the most obscure shows' },
+  everything: { label: 'Everything', keep: 1, lists: 1, blurb: 'every character, however obscure' },
 };
 const DEFAULT_DIFFICULTY = 'normal';
 
@@ -393,6 +395,58 @@ function applyDifficulty(characters, difficulty) {
     const ranked = [...cast].sort((a, b) => (b.fame ?? -1) - (a.fame ?? -1));
     // At least one, so a two-character list never becomes undrawable.
     kept.push(...ranked.slice(0, Math.max(1, Math.ceil(ranked.length * keep))));
+  }
+  return kept;
+}
+
+// The cut over lists. Cutting inside each cast still left a pooled draw ("Everything", a whole
+// category) dealing from every list a scope has switched on, and the web has all ~2,000 on: the
+// lead of a 2009 visual novel was as likely as the lead of Naruto, and 347 lists hold three or
+// four bit parts each. Nothing is removed -- Everything still deals from every list -- but Easy
+// and Normal draw a pooled selection from its better-known shows.
+//
+// Only a POOLED draw is cut. A host who names lists has chosen them, and "naming a list outright
+// always works" (list_selection in schema.sql). The draw is not told which it is, so the size
+// of the selection says it: a category is cut only when the selection holds at least
+// POOLED_LISTS of its lists. Nobody types twenty list names; "Everything" and a category pick
+// hand over hundreds.
+//
+// Ranked within the selection and within one category, because popularity is on a different
+// scale in each category (schema.sql) and only means anything compared inside one. A list with
+// no popularity sorts last. Lists of fewer than TINY_LIST characters go too: a three-person cast
+// is somebody's bit parts, whatever the show.
+const POOLED_LISTS = 20;
+const TINY_LIST = 5;
+
+function trimLists(listIds, difficulty) {
+  const share = difficultyOf(difficulty).lists;
+  if (share >= 1 || listIds.length < POOLED_LISTS) return listIds;
+  const placeholders = listIds.map(() => '?').join(',');
+  const meta = db
+    .prepare(
+      `SELECT cl.id, cl.category, cl.popularity, COUNT(c.id) AS size
+         FROM character_lists cl LEFT JOIN characters c ON c.list_id = cl.id
+        WHERE cl.id IN (${placeholders}) GROUP BY cl.id`
+    )
+    .all(...listIds);
+  const byCategory = new Map();
+  for (const l of meta) {
+    const key = l.category ?? '';
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(l);
+  }
+  const kept = [];
+  for (const group of byCategory.values()) {
+    if (group.length < POOLED_LISTS) {
+      kept.push(...group.map((l) => l.id));
+      continue;
+    }
+    const ranked = group
+      .filter((l) => l.size >= TINY_LIST)
+      .sort((a, b) => (b.popularity ?? -1) - (a.popularity ?? -1) || a.id - b.id);
+    // At least one, so a category of tiny lists still deals rather than going dark.
+    const take = ranked.length ? ranked.slice(0, Math.max(1, Math.ceil(ranked.length * share))) : group;
+    kept.push(...take.map((l) => l.id));
   }
   return kept;
 }
@@ -444,7 +498,9 @@ function drawablePool(listIds, difficulty) {
     poolCache.set(key, hit);
     return hit.pool;
   }
-  const pool = Object.freeze(dedupeByName(applyDifficulty(getCharactersForLists(listIds), difficulty).map(Object.freeze)));
+  const pool = Object.freeze(
+    dedupeByName(applyDifficulty(getCharactersForLists(trimLists(listIds, difficulty)), difficulty).map(Object.freeze))
+  );
   poolCache.delete(key);
   poolCache.set(key, { version, pool });
   while (poolCache.size > POOL_CACHE_MAX) poolCache.delete(poolCache.keys().next().value);
@@ -862,6 +918,8 @@ module.exports = {
   DEFAULT_DIFFICULTY,
   difficultyOf,
   applyDifficulty,
+  trimLists,
+  POOLED_LISTS,
   drawablePool,
   recordReroll,
   countRerollers,
