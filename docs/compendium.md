@@ -20,6 +20,18 @@ fame rather than cutting the list:
 | **Normal** (default) | skips the deepest cuts | 91 |
 | **Everything** | every character | 151 — down to Abel and Dennis Aiblinger |
 
+A pooled draw (**Everything**, or a whole category) is also cut over its **lists**, because a
+selection of hundreds of shows has obscure *shows* in it, not only obscure characters. A category
+counts as pooled when the selection holds at least 20 of its lists. Those lists are then ranked by
+popularity within that category: Easy keeps the best-known quarter, Normal the best-known 60%,
+and both drop lists of fewer than 5 characters. Everything keeps every list. A host who names
+lists (fewer than 20 in a category) has chosen them, so a named pick is never cut. On the website,
+which has every list switched on, Normal deals from about 940 lists and Easy from about 400.
+
+A selection that is already short (`/list select top:N`) is cut again on Easy once it holds 20 or
+more lists of a category. That is the price of telling a pooled draw from a named one by its size
+alone.
+
 Set it with `/lobby create difficulty:` or the **🎚️ Difficulty** button on the lobby board,
 which cycles and tells you the resulting pool size. It's a per-lobby setting on purpose:
 the list selection says which franchises this server likes, difficulty says how deep tonight's
