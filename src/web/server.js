@@ -345,6 +345,9 @@ function requestHandler(req, res) {
     return sendJson(res, 200, {
       ok: true,
       rooms: registry.rooms.size,
+      // { occupied, inGame }: rooms with a person connected, and those mid-game. The host keeper
+      // waits for these to reach zero before restarting the server to deploy (rooms.js activity).
+      ...registry.activity(),
       imageCache: { files: imageCache.stats().files },
       // What the join QR will encode. Handy for confirming through a proxy that it says https:
       // a QR that says http silently disables tilt controls for whoever scans it.

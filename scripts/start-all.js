@@ -23,13 +23,17 @@
 // scheduled task, scripts/install-autostart.ps1) saw it "Running" and never started a fresh pair.
 // So either of those exiting unexpectedly stops the rest and exits non-zero, which is what lets
 // the task's watchdog bring the site back.
+//
+// It also stops cleanly when the host keeper asks it to (see the end of this file), which is how a
+// merge to main gets deployed without anyone at the keyboard.
 
 require('dotenv').config();
 
 const { spawn, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
+const { namedTunnel } = require('./lib/tunnelConfig');
+const { STOP_REQUEST } = require('./lib/hostKeeper');
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(`--${flag}`);
@@ -95,54 +99,6 @@ function start(tag, command, commandArgs, env = {}) {
 
 if (wantWeb) {
   start('web', process.execPath, [path.join('src', 'web', 'server.js')], secure ? { WEB_HTTPS: '1' } : {});
-}
-
-/**
- * The hostname routed to OUR port, rather than whichever `hostname:` happens to come first.
- *
- * One tunnel can front several services -- a `hostname: files.example / service: http://…:3000`
- * rule sitting above ours is an ordinary config -- so the first hostname in the file is not
- * necessarily this app's. Printing that one as the address to share sends the party to someone
- * else's site, so match the rule by the port its `service:` dials and only fall back to "the
- * first hostname" when nothing routes here.
- */
-function ingressHostname(cfg, port) {
-  // Only the ingress block: a `- ` elsewhere in the file is some other list, not a routing rule.
-  const rules = (cfg.split(/^ingress:[ \t]*$/m)[1] ?? '').split(/^\s*-\s+/m).slice(1);
-  const field = (rule, key) => rule.match(new RegExp(`\\b${key}:\\s*(\\S+)`))?.[1] ?? null;
-  // Substring rather than regex: WEB_PORT is whatever the environment says, and a port with a
-  // regex metacharacter in it would otherwise match the wrong rule (or throw).
-  const dialsUs = (rule) => {
-    const service = field(rule, 'service') ?? '';
-    return service.endsWith(`:${port}`) || service.endsWith(`:${port}/`);
-  };
-  const hosted = rules.filter((r) => field(r, 'hostname'));
-  return field(hosted.find(dialsUs) ?? hosted[0] ?? '', 'hostname');
-}
-
-/**
- * The configured named tunnel as `{ name, hostname }`, or null if there isn't one.
- *
- * A quick tunnel mints a fresh random hostname on every launch, which is fine for one party and
- * useless as an address: the link you handed out last week is already dead. Once
- * `cloudflared tunnel login` and `tunnel create` have been run there is a `config.yml` naming a
- * persistent tunnel and the hostname routed to it, so prefer that whenever it exists.
- *
- * Read with a regex rather than a YAML dependency -- a handful of scalars do not justify a
- * parser -- and any failure falls through to the quick tunnel instead of taking the launcher
- * down with it.
- */
-function namedTunnel(port) {
-  try {
-    const cfg = fs.readFileSync(path.join(os.homedir(), '.cloudflared', 'config.yml'), 'utf8');
-    const name = cfg.match(/^\s*tunnel:\s*(\S+)/m)?.[1];
-    // `<UUID>` still sitting there means the template was copied but never filled in. cloudflared
-    // reports that as a credentials error much further along, so catch it here where it is obvious.
-    if (!name || name.startsWith('<')) return null;
-    return { name, hostname: ingressHostname(cfg, port) };
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -245,3 +201,24 @@ function shutdown(reason, code = 0) {
 }
 
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => shutdown(signal));
+
+// The host keeper (scripts/host-keeper.js) asks for a clean stop by creating STOP_REQUEST -- to
+// deploy a merge, or because the server stopped answering -- and starts the scheduled task again
+// once this has exited. A file because Windows has no signal another process can send that this
+// one gets to handle, and ending the task can leave the children running (lib/hostKeeper.js).
+// One left over from before this launcher started is stale: honouring it would stop the site the
+// moment it came up.
+try {
+  fs.rmSync(STOP_REQUEST, { force: true });
+} catch {
+  /* nothing to clear */
+}
+setInterval(() => {
+  if (shuttingDown || !fs.existsSync(STOP_REQUEST)) return;
+  try {
+    fs.rmSync(STOP_REQUEST, { force: true });
+  } catch {
+    /* gone already; stop regardless */
+  }
+  shutdown('the host keeper asked for a restart', 0);
+}, 2000).unref();

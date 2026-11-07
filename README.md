@@ -49,6 +49,12 @@ Or behind a Cloudflare tunnel, for playing off the LAN:
 npm run start:all -- --secure --tunnel
 ```
 
+On the machine that hosts the site, `scripts\install-autostart.ps1` registers two scheduled tasks:
+the launcher above, started at logon and brought back within five minutes if it exits, and the host
+keeper (`scripts/host-keeper.js`), which every two minutes deploys whatever has merged to main --
+restarting only once no game is in progress -- and restarts a site that stops answering. Its log is
+`data/host-keeper/keeper.log`. To take a machine off hosting, disable the launcher task.
+
 A fresh database has no characters. Seed the library and choose what the web plays with -- see [The compendium › Seeding](docs/compendium.md#seeding-character-lists) and
 [Choosing which lists you play with](docs/compendium.md#choosing-which-lists-you-play-with).
 

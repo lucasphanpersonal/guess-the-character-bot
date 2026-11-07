@@ -55,6 +55,13 @@ server got dealt. Per-room exclusion sets (`Room.excludedListIds`) still exist s
 cannot reshape the web's selection for the next. The null scope is the compendium itself:
 shared lists only, no selection -- it is what the content scripts work against.
 
+**A merge to main deploys itself.** The host keeper (`scripts/host-keeper.js`, every two minutes
+on the hosting PC) fast-forwards the checkout, runs `npm ci` if the lockfile moved, and restarts the
+site once no room has a game in progress. So whatever merges is live within minutes, and a change
+that cannot be live without a manual step (a re-run of `install-autostart.ps1`, a data script)
+needs that step planned before it merges. It never touches a checkout that is off main, ahead of
+it or edited, so hand-work on the host pauses deploys until it is cleaned up. Its log says why.
+
 **The live database is migrated by whichever new process opens it first** (`compendium/db.js`
 on require). A running process on the old code then reads a layout it does not understand.
 Rehearse a schema change on a copy (`BOT_DB_PATH`, taken with better-sqlite3's `.backup()`),
