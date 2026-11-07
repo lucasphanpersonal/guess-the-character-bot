@@ -136,8 +136,37 @@ async function waitFor(test, timeoutMs, everyMs = 1000) {
   }
 }
 
+/**
+ * Holds the launcher's watchdog off while the site is down on purpose.
+ *
+ * The launcher task has a five-minute "start it if it is not running" trigger, and a deploy keeps
+ * the site stopped for as long as the fast-forward and `npm ci` take. A tick landing in that window
+ * would start the old code, or a server on a half-installed node_modules -- and on Windows that
+ * server then holds better-sqlite3's .node file open, so `npm ci` fails on the locked file and a
+ * good merge goes down the rollback path. Disabled, the task cannot be triggered.
+ *
+ * But "disabled" is also how a person says this machine is not hosting, and the keeper honours
+ * that by doing nothing. So it records that the disable is its own, BEFORE disabling, and the next
+ * run re-enables a task its predecessor left disabled (main, below) -- otherwise a keeper that
+ * crashed mid-deploy would leave the site down for good.
+ */
+function holdWatchdog(state) {
+  if (state.disabledByKeeper) return;
+  state.disabledByKeeper = true;
+  saveState(state);
+  taskDo('Disable-ScheduledTask');
+}
+function releaseWatchdog(state) {
+  if (!state.disabledByKeeper) return;
+  taskDo('Enable-ScheduledTask');
+  delete state.disabledByKeeper;
+  saveState(state);
+}
+
 /** Stops the launcher and everything it runs. False if something is still serving the port. */
 async function stopSite(state) {
+  holdWatchdog(state);
+  // A disabled task that is running keeps running, so it can still be asked to stop.
   if (taskState() === 'Running') {
     fs.writeFileSync(STOP_REQUEST, new Date().toISOString());
     const stopped = await waitFor(() => taskState() !== 'Running', 30_000);
@@ -150,47 +179,83 @@ async function stopSite(state) {
   fs.rmSync(STOP_REQUEST, { force: true });
   const portFree = await waitFor(async () => !(await health(LOCAL_HEALTH, 3000)), 15_000);
   if (!portFree) {
-    say(state, `Something outside the task is still answering on :${PORT} (a launcher started by hand?). Not starting a second one; stop it, and the next run will.`);
+    // note, not say: this repeats every run until a person deals with it.
+    note(state, `Something outside the task is still answering on :${PORT} (a launcher started by hand?). Not starting a second one; stop it, and the next run will.`);
   }
   return portFree;
 }
 
 async function startSite(state) {
+  releaseWatchdog(state);
   taskDo('Start-ScheduledTask');
   state.startedAt = Date.now();
   const up = await waitFor(async () => !!(await health(LOCAL_HEALTH, 3000)), 90_000, 3000);
-  say(state, up ? 'The site is answering again.' : 'The site has not answered within 90s of starting; the next runs will keep checking.');
+  say(state, up ? 'The site is answering.' : 'The site has not answered within 90s of starting.');
   return up;
 }
 
-/** Restart, optionally deploying `target` on the way: stop, fast-forward, install, start. */
+/**
+ * Back to `head`, the commit that was running before this deploy, with what it needs installed.
+ * False when node_modules could not be repaired, in which case starting the site would only start
+ * a crash loop: better down and saying so.
+ *
+ * Not a full undo. If the new code got as far as opening the database, it may have migrated it
+ * (compendium/db.js migrates on require), and the old code may not read the new layout -- which is
+ * why a schema change is rehearsed on a copy before it merges (CLAUDE.md).
+ */
+function rollBack(state, head, install) {
+  try {
+    // --keep refuses to touch local changes; there are none (planDeploy checked).
+    git('reset', '--keep', head);
+  } catch (err) {
+    say(state, `COULD NOT ROLL BACK to ${head.slice(0, 7)}: ${firstLine(err)}. The site needs a person.`);
+    return false;
+  }
+  say(state, `Rolled back to ${head.slice(0, 7)}.`);
+  if (install && !npmCi(state)) {
+    say(state, 'npm ci FAILED AGAIN for the commit that was running: node_modules is broken, so the site is left stopped. It needs a person.');
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Restart, optionally deploying `target` on the way: stop, fast-forward, install, start -- and if
+ * the new commit does not come up, roll back to `head` and start that. Each failure marks the
+ * target failed, so it is not retried until main moves again.
+ */
 async function restart(state, { target, head, install } = {}) {
-  if (!(await stopSite(state))) return;
-  if (target) {
+  try {
+    if (!(await stopSite(state))) return false;
+    if (!target) return await startSite(state);
+    const short = target.slice(0, 7);
     try {
       git('merge', '--ff-only', '--quiet', target);
     } catch (err) {
-      say(state, `Could not fast-forward to ${target.slice(0, 7)}: ${firstLine(err)}. Starting the site on ${head.slice(0, 7)}.`);
+      say(state, `Could not fast-forward to ${short}: ${firstLine(err)}. Starting the site on ${head.slice(0, 7)}.`);
       state.failedTarget = target;
-      return startSite(state);
+      return await startSite(state);
     }
     if (install && !npmCi(state)) {
-      // node_modules is in an unknown state now, and the code needs what it failed to install.
-      // Step back to the commit that was running (reset --keep refuses to touch local changes,
-      // and there are none: planDeploy checked) and install what that one needs.
       state.failedTarget = target;
-      try {
-        git('reset', '--keep', head);
-        say(state, `Rolled back to ${head.slice(0, 7)}.`);
-        npmCi(state);
-      } catch (err) {
-        say(state, `Could not roll back to ${head.slice(0, 7)}: ${firstLine(err)}`);
-      }
-      return startSite(state);
+      return rollBack(state, head, install) && (await startSite(state));
     }
-    say(state, `Deployed ${target.slice(0, 7)}${install ? ' (with npm ci)' : ''}.`);
+    if (await startSite(state)) {
+      say(state, `Deployed ${short}${install ? ' (with npm ci)' : ''}.`);
+      return true;
+    }
+    // A commit that passed CI and still does not boot here: a setting this machine lacks, a
+    // migration that fails on the live data. Left running, the health check would restart the
+    // same broken commit every six minutes until someone noticed.
+    say(state, `${short} did not come up; rolling it back.`);
+    state.failedTarget = target;
+    if (!(await stopSite(state))) return false;
+    return rollBack(state, head, install) && (await startSite(state));
+  } finally {
+    // However this ended -- including a throw -- the watchdog is not left held. Where the site was
+    // deliberately left stopped (node_modules broken), the watchdog is what keeps retrying it.
+    releaseWatchdog(state);
   }
-  return startSite(state);
 }
 
 function npmCi(state) {
@@ -232,7 +297,16 @@ async function main() {
     return;
   }
   const state = loadState();
-  const task = taskState();
+  let task = taskState();
+  if (state.disabledByKeeper) {
+    // A previous run disabled the launcher's task for a deploy and did not live to re-enable it.
+    if (task === 'Disabled') {
+      taskDo('Enable-ScheduledTask');
+      say(state, `Re-enabled the '${TASK}' task, which an interrupted run of the keeper had left disabled.`);
+      task = taskState();
+    }
+    delete state.disabledByKeeper;
+  }
   if (task === 'Missing' || task === 'Disabled') {
     note(state, `The '${TASK}' task is ${task.toLowerCase()}, so this machine is not hosting; doing nothing.`);
     return saveState(state);
@@ -250,10 +324,12 @@ async function main() {
   }
   if (repo) {
     const plan = planDeploy({ ...repo, health: local, now: Date.now() }, state);
-    if (plan.action !== 'wait') delete state.waitingFor;
+    // The wait is timed from when the checkout first fell behind and had to wait, not from the
+    // latest merge (planDeploy). It ends when the checkout catches up.
+    if (plan.action === 'none' || plan.action === 'pull' || plan.action === 'deploy') delete state.waitingSince;
     if (plan.action === 'skip') note(state, `Not deploying: ${plan.reason}.`);
     if (plan.action === 'wait') {
-      if (state.waitingFor !== repo.target) Object.assign(state, { waitingFor: repo.target, waitingSince: Date.now() });
+      state.waitingSince ??= Date.now();
       note(state, `Not restarting yet: ${plan.reason}.`);
     }
     if (plan.action === 'pull') {
@@ -269,9 +345,13 @@ async function main() {
       }
     }
     if (plan.action === 'deploy') {
-      say(state, `Deploying ${plan.reason}${plan.install ? ' (lockfile changed: npm ci)' : ''}.`);
-      if (repo.files.includes('scripts/install-autostart.ps1')) {
-        say(state, 'This change edits scripts/install-autostart.ps1; the tasks are not re-registered automatically, so re-run it.');
+      // Once per target: a deploy blocked by a stray server is attempted every run.
+      if (state.announced !== repo.target) {
+        state.announced = repo.target;
+        say(state, `Deploying ${plan.reason}${plan.install ? ' (lockfile changed: npm ci)' : ''}.`);
+        if (repo.files.includes('scripts/install-autostart.ps1')) {
+          say(state, 'This change edits scripts/install-autostart.ps1; the tasks are not re-registered automatically, so re-run it.');
+        }
       }
       if (!DRY) await restart(state, { ...repo, install: plan.install });
       return saveState(state);

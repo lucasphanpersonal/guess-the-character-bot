@@ -133,4 +133,18 @@ Install-Task $KeeperTaskName @{
     Description = 'Deploys merges to main and restarts the Guess the Character site if it stops answering (scripts/host-keeper.js).'
 }
 
+# The keeper deploys only into a checkout that is on main and has no local edits, and says so in
+# its log rather than touching anything. Say it here too, since right after installing is when
+# someone is looking -- otherwise the first sign is that merges quietly stop arriving.
+Push-Location $root
+try {
+    $branch = (git rev-parse --abbrev-ref HEAD 2>$null)
+    $edits = (git status --porcelain --untracked-files=no 2>$null)
+    if ($branch -ne 'main') { Write-Warning "This checkout is on '$branch', not main: the keeper will not deploy until it is back on main." }
+    if ($edits) {
+        Write-Warning 'This checkout has local edits, so the keeper will not deploy until they are committed, stashed or reverted:'
+        $edits | ForEach-Object { Write-Warning "  $_" }
+    }
+} finally { Pop-Location }
+
 if ($failed) { exit 1 }

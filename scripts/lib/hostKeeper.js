@@ -34,20 +34,35 @@ const LIMITS = {
   publicRestartEveryMs: 60 * MINUTE,
   // A deploy waits for nobody to be in a room. A tab left open on a lobby is somebody to the
   // server, and keeps a room for as long as it stays open -- possibly days -- so after this long
-  // waiting only a game in progress holds the deploy back.
+  // waiting only a game in progress holds the deploy back...
   waitForEmptyMs: 3 * 60 * MINUTE,
+  // ...and after this long, not even that: a game abandoned mid-turn with a tab still connected
+  // would otherwise hold every deploy for as long as that tab stays open. No real game lasts 12h.
+  waitForGameMs: 12 * 60 * MINUTE,
 };
+
+// Files the running site never reads, so a change to only these is pulled with no restart.
+// scripts/ holds the compendium's own tools, which nothing in src/ requires -- except the four that
+// run the site or decide how (the launcher, the keeper and their two libraries).
+const SITE_SCRIPTS = new Set(['scripts/start-all.js', 'scripts/host-keeper.js', 'scripts/lib/hostKeeper.js', 'scripts/lib/tunnelConfig.js']);
 
 /**
  * Does a change to these files need the server restarted to take effect?
  *
- * Only when every file is one the running server never reads does a pull alone finish the deploy.
+ * Only when every file is one the running site never reads does a pull alone finish the deploy.
+ * Seed files are among them: they reach the live database only through a content script someone
+ * runs, never by being pulled.
  * The served client (src/web/.../public) is NOT one of them, although the server reads it from
  * disk per request: a page from the new client talking to the old server is exactly the mismatch
  * a deploy has to avoid, so it ships with a restart like any other code.
  */
 function needsRestart(files) {
-  const inert = (f) => /\.md$/i.test(f) || /^(docs|test|\.github)\//.test(f) || f === 'LICENSE' || f === '.gitignore';
+  const inert = (f) =>
+    /\.md$/i.test(f) ||
+    /^(docs|test|\.github|\.claude|data\/seed)\//.test(f) ||
+    (f.startsWith('scripts/') && !SITE_SCRIPTS.has(f)) ||
+    f === 'LICENSE' ||
+    f === '.gitignore';
   return files.some((f) => !inert(f));
 }
 
@@ -67,7 +82,10 @@ function needsInstall(files) {
  *   files: what differs between head and target.
  *   health: /api/health's body, or null when the server did not answer.
  *   now: ms.
- * @param {object} state  The keeper's saved state (see host-keeper.js).
+ * @param {object} state  The keeper's saved state (see host-keeper.js). `waitingSince` is when it
+ *   first had to hold a deploy back since the checkout was last up to date. It is NOT reset when
+ *   main moves again: several merges land on a busy day, and a clock that restarted for each would
+ *   let one lobby tab left open hold back every deploy for good.
  * @returns {{ action: 'none'|'skip'|'pull'|'wait'|'deploy', reason: string, install?: boolean }}
  *   pull: fast-forward only, nothing restarts. deploy: stop, fast-forward, maybe install, start.
  */
@@ -88,13 +106,16 @@ function planDeploy(seen, state) {
   const install = needsInstall(files);
   // No answer means nothing to protect: the server is down or hung, and a deploy restarts it.
   if (!health) return { action: 'deploy', reason: `${short}, and the server is not answering`, install };
-  const waitedMs = state.waitingFor === target && state.waitingSince ? now - state.waitingSince : 0;
+  const waitedMs = state.waitingSince ? now - state.waitingSince : 0;
   const { occupied = 0, inGame = 0 } = health;
-  if (inGame > 0) return { action: 'wait', reason: `${short} waits: ${inGame} game(s) in progress`, install };
+  if (inGame > 0 && waitedMs < LIMITS.waitForGameMs) {
+    return { action: 'wait', reason: `${short} waits: ${inGame} game(s) in progress`, install };
+  }
   if (occupied > 0 && waitedMs < LIMITS.waitForEmptyMs) {
     return { action: 'wait', reason: `${short} waits: ${occupied} room(s) with people in them`, install };
   }
-  return { action: 'deploy', reason: occupied > 0 ? `${short}, after waiting 3h for idle rooms to empty` : short, install };
+  const hours = Math.round(waitedMs / (60 * MINUTE));
+  return { action: 'deploy', reason: occupied > 0 ? `${short}, after waiting ${hours}h for the rooms to empty` : short, install };
 }
 
 /**

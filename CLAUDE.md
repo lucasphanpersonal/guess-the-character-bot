@@ -61,6 +61,9 @@ site once no room has a game in progress. So whatever merges is live within minu
 that cannot be live without a manual step (a re-run of `install-autostart.ps1`, a data script)
 needs that step planned before it merges. It never touches a checkout that is off main, ahead of
 it or edited, so hand-work on the host pauses deploys until it is cleaned up. Its log says why.
+A commit that does not come up is rolled back to the one that was running -- but the code, not
+the database: a migration has already happened by then, which is one more reason a schema change
+is rehearsed on a copy first (below).
 
 **The live database is migrated by whichever new process opens it first** (`compendium/db.js`
 on require). A running process on the old code then reads a layout it does not understand.

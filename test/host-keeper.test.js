@@ -20,12 +20,15 @@ const seen = (over = {}) => ({
 });
 
 module.exports = {
-  'only docs, tests and CI config are pulled without a restart'() {
+  'files the running site never reads are pulled without a restart'() {
     assert.equal(needsRestart(['README.md', 'docs/compendium.md', 'test/x.test.js', '.github/workflows/ci.yml']), false);
     assert.equal(needsRestart(['README.md', 'src/web/server.js']), true);
     // The served client is code too: a new page talking to the old server is the mismatch to avoid.
     assert.equal(needsRestart(['src/web/party/public/app.js']), true);
     assert.equal(needsRestart(['scripts/start-all.js']), true);
+    // The compendium's own tools and seed files reach nothing until someone runs them.
+    assert.equal(needsRestart(['scripts/seed-roster.js', 'scripts/lib/http.js', 'data/seed/dota-2.json', '.claude/launch.json']), false);
+    for (const f of ['scripts/host-keeper.js', 'scripts/lib/hostKeeper.js', 'scripts/lib/tunnelConfig.js']) assert.equal(needsRestart([f]), true, f);
   },
 
   'a lockfile or package.json change means npm ci'() {
@@ -65,23 +68,35 @@ module.exports = {
     assert.equal(planDeploy(seen({ health: null }), {}).action, 'deploy');
   },
 
-  'a game in progress holds a deploy for as long as it lasts'() {
+  'a game in progress holds a deploy, up to a cap no real game reaches'() {
     const busy = seen({ health: { ...idle, occupied: 1, inGame: 1 } });
     assert.equal(planDeploy(busy, {}).action, 'wait');
-    const longAgo = { waitingFor: TARGET, waitingSince: busy.now - 24 * 60 * 60 * 1000 };
-    assert.equal(planDeploy(busy, longAgo).action, 'wait');
+    assert.equal(planDeploy(busy, { waitingSince: busy.now - LIMITS.waitForEmptyMs }).action, 'wait', 'longer than a lobby');
+    assert.equal(planDeploy(busy, { waitingSince: busy.now - LIMITS.waitForGameMs }).action, 'deploy');
   },
 
   'an occupied lobby holds a deploy, but not forever'() {
     const lobby = seen({ health: { ...idle, occupied: 1 } });
     assert.equal(planDeploy(lobby, {}).action, 'wait');
-    const almost = { waitingFor: TARGET, waitingSince: lobby.now - LIMITS.waitForEmptyMs + 1 };
+    const almost = { waitingSince: lobby.now - LIMITS.waitForEmptyMs + 1 };
     assert.equal(planDeploy(lobby, almost).action, 'wait');
-    const waited = { waitingFor: TARGET, waitingSince: lobby.now - LIMITS.waitForEmptyMs };
+    const waited = { waitingSince: lobby.now - LIMITS.waitForEmptyMs };
     assert.equal(planDeploy(lobby, waited).action, 'deploy');
-    // The wait is per merge: time spent waiting on an earlier one does not count for a newer one.
-    const earlier = { waitingFor: 'c'.repeat(40), waitingSince: lobby.now - LIMITS.waitForEmptyMs };
-    assert.equal(planDeploy(lobby, earlier).action, 'wait');
+  },
+
+  'a new merge mid-wait does not restart the wait'() {
+    // Main moved from TARGET to a newer commit 2h59m into the wait: the clock is how long the
+    // checkout has been behind, so one minute later the deploy goes ahead.
+    const NEWER = 'c'.repeat(40);
+    let state = {};
+    const t0 = 1_000_000_000;
+    const lobby = (target, now) => seen({ target, now, health: { ...idle, occupied: 1 } });
+    for (const [target, now] of [[TARGET, t0], [NEWER, t0 + LIMITS.waitForEmptyMs - 60_000]]) {
+      const plan = planDeploy(lobby(target, now), state);
+      assert.equal(plan.action, 'wait');
+      state = { ...state, waitingSince: state.waitingSince ?? now };
+    }
+    assert.equal(planDeploy(lobby(NEWER, t0 + LIMITS.waitForEmptyMs), state).action, 'deploy');
   },
 
   'a server that stops answering is restarted after several checks in a row, not one'() {
