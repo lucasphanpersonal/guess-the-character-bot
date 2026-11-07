@@ -1,5 +1,7 @@
 # Mobile party app: a plan
 
+> **Historical record.** This was written while the game ran as a Discord bot, which was removed in November 2026; the web games are now the only way to play. The reasoning still explains the rules the web plays by, but the Discord specifics (embeds, DMs, buttons, slash commands) describe code that no longer exists.
+
 Taking "Guess the Character" off Discord and onto phones held to foreheads in a circle,
 Heads Up–style. Companion to [multiplayer-design.md](multiplayer-design.md) and
 [multiplayer-ux.md](multiplayer-ux.md), which this plan assumes throughout — the turn loop,

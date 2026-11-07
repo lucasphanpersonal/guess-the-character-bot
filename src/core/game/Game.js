@@ -2,14 +2,14 @@ const { getCharacterSource } = require('../../compendium/characterLists');
 
 class Game {
   /**
-   * Turns a database character row into the shape the DMs and reveal render.
+   * Turns a database character row into the shape the setup screens and reveal render.
    *
    * `source` names the work the character is from, so whoever is answering questions knows
    * which "Ditto" or "Jack" they were handed. Looked up once, when the character is dealt,
    * because the same value goes out to both players and every spectator.
    *
    * A failed lookup is not worth losing a game over -- it is a display nicety, and the test
-   * harness builds lobbies with no guild rows behind them at all.
+   * tests build games with no scope rows behind them at all.
    */
   static head(lobby, character) {
     let source = null;
@@ -20,7 +20,7 @@ class Game {
     }
     // id and listId ride along so a reroll can be recorded against the character, and so
     // "never deal this show again" knows which list to switch off. Hand-picked characters
-    // carry them too -- /lobby set-characters resolves a real row -- so both survive there;
+    // carry them too when they resolve to a real row, so both survive there;
     // they are only null for a shape that never came out of the database.
     return {
       name: character.name,
@@ -36,7 +36,7 @@ class Game {
   constructor({ lobby, characters, turnSeconds, order = lobby.players }) {
     this.lobby = lobby;
     this.turnOrder = [...order];
-    // Each player's "head" is what THEY must guess -- and what every OTHER player was DM'd.
+    // Each player's "head" is what THEY must guess -- and what every OTHER player is shown.
     this.headByPlayer = {};
     // A null character is a seat nobody has chosen for yet: the web's pick-for-each-other mode
     // deals empty and fills each one as its checker picks. Play cannot begin until every seat
@@ -47,17 +47,13 @@ class Game {
     this.turnSeconds = turnSeconds;
     this.currentTurnIndex = 0;
     this.finished = false;
-    // Unique instance ID for this game, used in button customIds to prevent stale controls
-    // from old games in the same channel from affecting this one.
-    this.gameInstanceId = Math.random().toString(36).substring(2, 9);
     // The score. Everyone plays until they get their character, and fewest turns wins, so
     // turns are counted per player rather than as a shared round number -- once players start
     // dropping out of the rotation the two stop agreeing.
     //
-    // Turn count is also the only score the bot OBSERVES rather than being told: it hands the
-    // turns out. The wrong-guess count it used to keep only existed when a judge remembered
-    // to press the button, so it undercounted, and undercounted worst for the players
-    // conscientious enough to click.
+    // Turn count is also the only score the game OBSERVES rather than being told: it hands the
+    // turns out. A wrong-guess count only exists when a judge remembers to press the button, so
+    // it undercounts, and undercounts worst for the players conscientious enough to click.
     this.turnsTaken = new Map(this.turnOrder.map((id) => [id, 0]));
     // playerId -> the turn they got their character on. Presence means they are out of the
     // rotation, and is what `active` is defined against. Written only through recordFinish.
@@ -65,71 +61,24 @@ class Game {
     // playerId -> whole seconds left on their clock the moment they got it, or null where no
     // clock was read. The tiebreak between equal turn counts -- see standings.
     this.secondsLeftBy = new Map();
-    // Everyone who left the rotation without finishing -- always a deliberate act: pressing
-    // 🏳️ Give up (engine.submitGiveUp), or leaving mid-game via `/lobby leave`
-    // (engine.submitForfeit). Passing never adds anyone here -- it only ever hands the turn on
-    // -- and nobody is ever added for merely going quiet, since a timed-out turn just passes
-    // (see engine.checkLastChanceTimeout). Membership is what `active` is defined against, and
-    // there can be several.
+    // Everyone who left the rotation without finishing -- always a deliberate act: giving up
+    // (turnRules.giveUp), or leaving mid-game (turnRules.forfeit). Passing never adds anyone here
+    // -- it only ever hands the turn on -- and nobody is ever added for merely going quiet, since
+    // a timed-out turn just passes (turnRules.timeout). Membership is what `active` is defined
+    // against, and there can be several.
     this.surrendered = new Set();
-    // Players whose character has already been shown publicly BEFORE the final reveal -- today
-    // that means someone who left mid-game (engine.submitForfeit reveals what they were wearing
-    // the moment they go). finalizeGame skips these so the end-of-game reveal doesn't show the
-    // same character twice. Finishers aren't tracked here: finishedBy already excludes them.
-    this.revealed = new Set();
     // "<playerId>:<turnNumber>" for every turn that has already been resolved, so no turn can
-    // be resolved twice. See the note in engine.endTurn: judging is open to everyone who
-    // isn't guessing, so simultaneous presses are routine rather than exotic.
+    // be resolved twice (turnRules.resolveTurn): judging is open to everyone who isn't guessing,
+    // so simultaneous presses are routine rather than exotic.
     this.resolvedTurns = new Set();
     // Turns in a row that timed out with nobody acting -- see turnRules' DESERTED.
     this.idleTimeouts = 0;
-    // Populated by engine.startGame (and by the web's gameSetup, in its own shape):
-    // { [playerId]: { confirmed, rerollsLeft, rejectedNames, checkMessage, referenceMessages } }
+    // Populated by the web's gameSetup: { [playerId]: { confirmed, rerollsLeft, rejectedNames, history } }
     this.confirmState = null;
-    // Display names, resolved once when the game starts. They label characters in three
-    // different DMs and are re-rendered on every reroll, which is a lot of user lookups for
-    // something that cannot change mid-game.
-    this.names = {};
-
-    // --- the Discord bot's, from here down (src/discord/game/). The core never reads these; they
-    // sit on the game because they live and die with it. The web keeps its own clocks on the room.
-    this.timer = null; // the turn's countdown
-    this.countdownHandles = [];
-    // The single self-updating message for the current turn. Replaced by engine.startTurn on
-    // every new turn.
-    this.turnBoardMessage = null;
-    // The board of the turn that just ended, frozen and awaiting deletion by the next turn --
-    // see engine.dropRetiredBoard. Left in place when the game ends, so the channel keeps a
-    // record of the final turn.
-    this.retiredBoardMessage = null;
-    this.voiceConnection = null;
-    this.audioPlayer = null;
-    // True after a turn's timer expires until the player guesses or passes -- they get one
-    // last chance to guess before the turn actually moves on.
-    this.paused = false;
-    // Handle for the last-chance grace timer; when it lapses the turn passes (see
-    // engine.checkLastChanceTimeout) -- it never removes anyone.
-    this.lastChanceHandle = null;
   }
 
   get currentPlayerId() {
     return this.turnOrder[this.currentTurnIndex];
-  }
-
-  /**
-   * Everyone entitled to rule on the current turn: every player who isn't the one guessing.
-   *
-   * Players who have already finished are deliberately included. They were told every
-   * character at the start, so they remain able to rule on a guess, and it leaves them a job
-   * instead of turning them into spectators.
-   */
-  get judges() {
-    return this.turnOrder.filter((id) => id !== this.currentPlayerId);
-  }
-
-  /** The single judge, for the two-player case and for messages that name one. */
-  get judgeId() {
-    return this.judges[0];
   }
 
   /**
@@ -140,7 +89,7 @@ class Game {
    * reroll is not private the way it is at two players, and letting any viewer reroll any
    * character would mean two people can reject the same one at once, and that one player's
    * unfamiliarity overrides N-2 who were happy. One checker each removes both, and at two
-   * players it reduces to exactly what the bot did before: each player checks the other's.
+   * players it reduces to each player checking the other's.
    */
   checkTargetOf(playerId) {
     const i = this.turnOrder.indexOf(playerId);
@@ -151,19 +100,6 @@ class Game {
   checkerOf(playerId) {
     const i = this.turnOrder.indexOf(playerId);
     return this.turnOrder[(i - 1 + this.turnOrder.length) % this.turnOrder.length];
-  }
-
-  setNames(names) {
-    this.names = names;
-  }
-
-  /**
-   * Display name, so a missed lookup still reads as somebody. 'Player', as the web says it: a
-   * Discord mention here was one frontend's syntax in the core, and the bot cannot reach this
-   * without names any more (startGame does not start without fetching every player).
-   */
-  nameOf(playerId) {
-    return this.names[playerId] ?? 'Player';
   }
 
   /** Still guessing: hasn't got their character and hasn't given up. */
@@ -201,8 +137,7 @@ class Game {
    * `msLeft` is how long that turn's clock still had to run. It is kept in WHOLE seconds, the
    * unit every clock in the game shows: below that, the gap between two players is the tilt hold
    * and the network, not play, and a win decided by it would read as "41s left, beaten by 41s
-   * left". Players level to the second stay level. A finish after the clock ran out (Discord's
-   * last-chance window) is 0. null means there was no clock to read, and ties stay ties.
+   * left". Players level to the second stay level. A finish after the clock ran out is 0. null means there was no clock to read, and ties stay ties.
    */
   recordFinish(playerId, msLeft = null) {
     this.finishedBy.set(playerId, this.turnsFor(playerId));
@@ -242,7 +177,7 @@ class Game {
    * The condition is `min(finished turn counts) < your earliest possible finish`. The subtlety
    * is what "your earliest possible finish" is at the moment we ask:
    *
-   *   - For the player currently guessing, that is the turn in hand. `engine.startTurn` has
+   *   - For the player currently guessing, that is the turn in hand. `turnRules.beginTurn` has
    *     already incremented their `turnsTaken` for it, so `turnsFor` IS that turn's number,
    *     and they can still TIE by getting it now whenever that number <= bestTurnCount.
    *   - For anyone waiting, their earliest chance is their NEXT turn, `turnsFor + 1`.

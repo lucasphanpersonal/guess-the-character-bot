@@ -7,7 +7,7 @@
 //   node scripts/seed-roster.js data/seed/deadlock.json
 //
 // The list is shared (every scope can see it) and, like every new list, switched on nowhere:
-// each scope's selection is its own (select-lists.js for the web, /list toggle on Discord).
+// each scope's selection is its own (select-lists.js).
 
 const fs = require('fs');
 const path = require('path');

@@ -1,7 +1,6 @@
 # Web app
 
-Guess the Character in a browser, living **side by side** with the Discord bot in the same repo
-without tangling into it. Two ways to play, from one server, chosen on the home page (below):
+Guess the Character in a browser. Two ways to play, from one server, chosen on the home page (below):
 
 - **Phones** (party mode, at the site root): Heads Up–style, below. Full design:
   [docs/mobile-app-plan.md](../../docs/mobile-app-plan.md).
@@ -186,7 +185,6 @@ src/
   db/          Opens the SQLite file.
   compendium/  The content: lists, characters, scopes, selections.
   core/        Shared, frontend-agnostic game state.
-  discord/     The Discord bot. Imports from core and compendium.
   web/         <- you are here. The web games. Import from core and compendium.
 ```
 
@@ -265,29 +263,26 @@ out of a game folder is the signal to move that piece up a level instead -- whic
 answer reaching a guesser early, through the view, the drawer's choices or an insider's chat
 line; `test/draw.test.js` and the socket check search whole payloads for it.
 
-The rule that keeps it clean: **`core/` never imports from `discord/` or `web/`.** Both
-frontends depend on the core; the core depends on neither. The codemod that created this split
-verified there are no `core -> frontend` requires, and the test suite (`npm test`) still passes
-unchanged, which is what proves the Discord bot didn't move logically — only physically.
+The rule that keeps it clean: **`core/` never imports from `web/`.** The web depends on the
+core; the core depends on no frontend, so the next one can sit beside the web without either
+reaching into the other.
 
 ## What's shared vs. new
 
 - **Reused verbatim:** the content/difficulty/curation logic from `src/compendium/` (the web
   app plays as its own compendium scope, `'web'`, with its own playable selection -- see
   [The compendium](../../docs/compendium.md#the-compendium-shared-lists-and-scopes)), and the pure game state from core
-  (`core/game/Game.js` and `lobbySettings.js`, plus the player cap `MAX_PLAYERS` from `Lobby.js`).
-  Not `GameManager`: that is the bot's lobbies, in the bot's process. Rooms are the web's own
-  (`rooms.js`), one registry for every web game.
-- **New here:** the transport (WebSocket rooms instead of Discord's gateway), the UI, and the
-  forehead-mode tilt mechanic — none of which the Discord bot has an equivalent of.
-- **The turn rules are shared, not ported:** `core/game/turnRules.js` is the one copy, and both
-  the bot and `guess/turnLoop.js` call it. It is also the seam a simultaneous free-for-all would
+  (`core/game/Game.js`, `seating.js`, and `limits.js` for the player cap `MAX_PLAYERS` and the
+  turn-length bounds). Rooms are the web's own (`rooms.js`), one registry for every web game.
+- **New here:** the transport (WebSocket rooms), the UI, and the forehead-mode tilt mechanic.
+- **The turn rules live in the core:** `core/game/turnRules.js` is the one copy, and
+  `guess/turnLoop.js` calls it for the phones and the computers alike. It is also the seam a simultaneous free-for-all would
   replace -- who may act and what "advance" means are decided there and nowhere else.
 
 ## Run it
 
 ```bash
-npm run start:all -- --secure --tunnel   # everything: web + Discord bot + a public URL
+npm run start:all -- --secure --tunnel   # everything: web + a public URL
 npm run web              # HTTP on :4180 — browsing only; tilt (and so play) needs HTTPS
 npm run web:secure       # HTTP on :4180 AND HTTPS on :4443 (self-signed) — HTTPS enables tilt
 npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, full game -- both ways)
@@ -295,10 +290,10 @@ npm run check:web-socket # end-to-end socket check (rooms, setup, countdown, ful
 
 The computer version needs no HTTPS (it uses no sensors): `http://<host>:4180/desk/` works.
 
-`start:all` runs both frontends (and optionally a Cloudflare tunnel) in one terminal with
+`start:all` runs the web server (and optionally a Cloudflare tunnel) in one terminal with
 per-process prefixes, and stops them together on Ctrl+C. Flags: `--secure`, `--tunnel`,
-`--no-web`, `--no-discord`. A child exiting never takes its siblings down — a bad Discord token
-should not close a game in progress.
+`--no-web`. The server and the tunnel are one thing, the site: either exiting stops the other
+and exits non-zero, so the scheduled task's watchdog brings both back.
 
 `--tunnel` prefers the **named** tunnel configured in `~/.cloudflared/config.yml`, so the address
 is the same every launch (`https://guess-the-character.com`). With no config it falls back to a
@@ -403,7 +398,7 @@ Endpoints that prove the shared core is reachable from this frontend:
   for X to reconnect") and **resumes** when they return — bounded, so a player who never comes
   back doesn't freeze the game (after 30s the clock resumes and the turn eventually passes). A
   wall-clock **watchdog** re-checks turn/countdown deadlines every 3s so a suspended server
-  doesn't hang a turn on wake (mirrors the Discord bot's `timerWatchdog`).
+  doesn't hang a turn on wake.
 - **6. Polish — in progress.** Done: **rematch** with the same settings (redeal + straight back
   to confirm, no reconfiguring); **QR-code joins** (`GET /api/qr?room=CODE` renders an SVG of the join URL, built
   server-side from the request's own host -- it takes a room code, never arbitrary text); an optional **prefer characters with artwork** toggle on the host's

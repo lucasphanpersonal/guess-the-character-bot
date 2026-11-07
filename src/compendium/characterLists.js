@@ -1,17 +1,17 @@
 // The compendium's lists and characters: every content read and write goes through here.
 //
-// SCOPES. Anything that plays -- a Discord server (its guild id), the web app ('web') -- is a
-// scope, and a scope sees two kinds of list:
+// SCOPES. Anything that plays -- the web app ('web'), and once a Discord server (its guild
+// id), whose rows are still in the database -- is a scope, and a scope sees two kinds of list:
 //
 //   - the SHARED compendium (owner_scope NULL), visible to every scope: every seeded list, and
-//     every list made with /list create -- a list typed out by hand is wanted everywhere;
+//     every list made by hand (createList) -- a list typed out by hand is wanted everywhere;
 //   - its OWN private lists (owner_scope = the scope), invisible elsewhere. Nothing makes these
 //     today except the migration, for a second Discord server's lists (see db.js); the slot is
 //     kept so a scope CAN hold something no one else sees.
 //
 // Each scope also has its own playable selection (list_selection), which is what `enabled`
 // means on any row returned here: 1 if THAT scope has the list switched on. The same list can be
-// on for one Discord server, off for another and on for the web, which is the whole reason the
+// on for one scope, off for another, which is the whole reason the
 // selection stopped being a column on the list.
 //
 // A null scope means "the compendium itself": it sees only shared lists and has no selection.
@@ -21,8 +21,8 @@ const db = require('./db');
 const { foldDiacritics } = require('./text');
 const { identityKeys } = require('./answers');
 
-// The web app's scope, resolved once, here: the web server plays as it, and /list create in
-// Discord switches a new list on for it too -- two processes that must agree on the name.
+// The web app's scope, resolved once, here: the web server plays as it, and the content scripts
+// default to it -- several processes that must agree on the name.
 // WEB_SCOPE overrides it (the socket check gives itself a throwaway one).
 const WEB_SCOPE = process.env.WEB_SCOPE || 'web';
 
@@ -43,11 +43,11 @@ function isVisibleTo(list, scope) {
   return !!list && (list.owner_scope == null || list.owner_scope === scope);
 }
 
-// `scope` null makes a SHARED list -- what the seed scripts and /list create do. A scope makes a
+// `scope` null makes a SHARED list -- what the seed scripts and a hand-made list do. A scope makes a
 // list private to it. Lists arrive switched off because the seed scripts create them in the
 // thousands. A list somebody types out by hand is the opposite case -- that is a deliberate
 // choice, so it is playable straight away: `enabled` switches it on for its owning scope, and
-// `enabledFor` for any others (/list create names the server it was typed in, and the web).
+// `enabledFor` for any others.
 // ---------------------------------------------------------------------------
 // Content version: when a cached pool must be rebuilt
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ function isVisibleTo(list, scope) {
 // blocked event loop for the web's whole selection, with rerolls unlimited -- one player holding
 // the button stalled every room on the server. So pools are cached, and a cached pool is good
 // for as long as the content is unchanged. Two things change it: a write through this module
-// (counted here), and a write by another process -- a seed script, the bot -- which SQLite
+// (counted here), and a write by another process -- a seed script, say -- which SQLite
 // reports through data_version.
 let localWrites = 0;
 const contentVersion = () => `${localWrites}:${db.pragma('data_version', { simple: true })}`;
@@ -304,9 +304,8 @@ const LABEL_LIST_LIMIT = 3;
 /**
  * Human-readable label for a whole lobby selection, e.g. "Naruto (Manga) + Scrubs (TV Shows)".
  *
- * A selection can cover a whole category -- `/lobby create category:Video Games` pools 127
- * lists, and rolling "Anime" pools 443 -- and naming each one would produce a label
- * thousands of characters long, well past what Discord will render in an embed. Past a
+ * A selection can cover a whole category -- "Video Games" pools 127 lists, and "Anime"
+ * pools 443 -- and naming each one would produce a label thousands of characters long. Past a
  * handful, the shared category is the honest summary; a mixed selection just gets counted.
  */
 function getListLabelForIds(listIds) {
@@ -461,8 +460,7 @@ function trimLists(listIds, difficulty) {
 // two ways. A reroll says "this table didn't know them", not "nobody should get them" -- and a
 // character one party skips is another party's favourite. And the count was global across every
 // server and the website while the website's "people" are ids a browser makes up, so one visitor
-// could retire characters for everyone. Curation is a person's call, made with /list toggle and
-// `npm run select:lists`.
+// could retire characters for everyone. Curation is a person's call, made with `npm run select:lists`.
 
 function recordReroll(characterId, userId) {
   if (!characterId) return 0;
@@ -620,10 +618,10 @@ function listNamesInCategory(scope, category) {
 }
 
 // ---------------------------------------------------------------------------
-// A scope's playable selection (`enabled`), curated from /list select
+// A scope's playable selection (`enabled`), curated with `npm run select:lists`
 // ---------------------------------------------------------------------------
 //
-// Only pooled draws consult this. Naming a list outright -- `/lobby create list:Naruto` --
+// Only pooled draws consult this. Naming a list outright (a host picking "Naruto" for a room)
 // deliberately bypasses it: the point of the selection is to keep obscure lists out of a
 // random deal, not to make them unreachable when somebody asks for one by name.
 
@@ -636,8 +634,8 @@ function getEnabledLists(scope) {
   return scopedLists(scope, `AND ${ENABLED} ORDER BY cl.name COLLATE NOCASE`, scope);
 }
 
-// Every category with how much of it is switched on -- drives the /list select landing page
-// and the "nothing is enabled yet" errors, which need to name what IS available.
+// Every category with how much of it is switched on -- drives select-lists' summary and the
+// "nothing is enabled yet" errors, which need to name what IS available.
 function listCategoriesWithEnabledCounts(scope) {
   return db
     .prepare(
@@ -677,7 +675,7 @@ function listsForFilter(scope, category) {
  * already had 150 on for its top 50 silently did nothing while reporting success -- the
  * worst possible outcome, since there was no way to tell it hadn't worked.
  *
- * Hand-picked extras do get dropped. `/list toggle` puts one back in three keystrokes,
+ * Hand-picked extras do get dropped. `select:lists --add=` puts one back in one command,
  * which is a smaller cost than a command that lies about what it did.
  */
 function setTopN(scope, category, n) {

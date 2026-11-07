@@ -1,19 +1,12 @@
--- The games' own records: live Discord boards, and finished games for stats.
+-- The games' own records: finished games, written by the Discord bot while there was one.
+--
+-- Nothing writes these now; the web games keep no records. The tables stay because the live
+-- database holds that history, and the content scripts that merge or delete characters
+-- (tidy-characters, rename-anilist-characters) keep its character_id pointing right. An old
+-- database may also still hold the bot's `active_boards` table: harmless, and left alone.
 --
 -- Applied by src/core/db/connection.js, AFTER the compendium's tables
 -- (src/compendium/schema.sql), because game_players points at a character.
-
--- The button-bearing messages ("boards") that are live right now. Deliberately NOT game
--- state -- just enough to find those messages again after a restart and retire them, since
--- the lobby/game they belong to is gone. See src/discord/game/boards.js.
-CREATE TABLE IF NOT EXISTS active_boards (
-  id INTEGER PRIMARY KEY,
-  channel_id TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  kind TEXT NOT NULL, -- 'lobby', 'turn', 'vote', 'gameover', or 'confirm'
-  created_at INTEGER NOT NULL,
-  UNIQUE(channel_id, message_id)
-);
 
 -- One row per finished game, and one per player in it.
 --
@@ -21,7 +14,7 @@ CREATE TABLE IF NOT EXISTS active_boards (
 -- 'player1' | 'player2' | 'tie' verdict, which cannot describe a game with three players in
 -- it. See docs/multiplayer-design.md. Existing rows are migrated in connection.js.
 --
--- guild_id here really is a Discord guild: stats and the leaderboard are per server. It is not
+-- guild_id here really is a Discord guild: stats and the leaderboard were per server. It is not
 -- the compendium's scope, and the compendium's move away from guild ids did not touch it.
 CREATE TABLE IF NOT EXISTS games (
   id INTEGER PRIMARY KEY,
@@ -42,13 +35,13 @@ CREATE TABLE IF NOT EXISTS game_players (
   outcome TEXT NOT NULL,
   -- Which character they were wearing. Turn counts alone cannot say whether a long game was
   -- a hard character or a slow table, and this is the only moment the pairing exists -- a
-  -- finished game is not reconstructable afterwards. NULL for characters assigned by hand
-  -- via /lobby set-characters, which have no row behind them, and for every game played
+  -- finished game is not reconstructable afterwards. NULL for characters the bot's hosts
+  -- assigned by hand, which had no row behind them, and for every game played
   -- before this column existed.
   --
   -- SET NULL rather than CASCADE or the default RESTRICT. CASCADE would delete the player out
   -- of a game they actually played because someone later pruned a list. RESTRICT would make
-  -- `/list remove` and `npm run reset:seeded` start failing on any character that has ever
+  -- `npm run reset:seeded` and the tidy scripts start failing on any character that has ever
   -- been dealt. Losing the link is the only loss the game itself survives.
   character_id INTEGER REFERENCES characters(id) ON DELETE SET NULL,
   PRIMARY KEY (game_id, user_id)

@@ -1,5 +1,5 @@
 // Builds data/seed/wikidata-people.json -- famous real-world people and music groups, grouped
-// by what they are best known for, for a category the bot had nothing in: actors, athletes,
+// by what they are best known for, for a category the game had nothing in: actors, athletes,
 // scientists, politicians, bands and the rest.
 //
 // SOURCE

@@ -28,8 +28,7 @@ const TiltRules = (() => {
   // the character the player is still wearing, and no undo reaches that -- while tilting down
   // only passes, which costs nothing. It is also the direction ordinary play produces by
   // accident: nodding along, or lifting the phone to reset it on the forehead. So "got it" asks
-  // for a firmer tilt held slightly longer, and "pass" keeps the original, lighter touch. Same
-  // asymmetry the Discord side applies to its confirm-on-correct guard.
+  // for a firmer tilt held slightly longer, and "pass" keeps the original, lighter touch.
   const TILT_TH_UP = 6.5;    // ~41 degrees off upright (was 5.5, ~34: too easy to trip)
   const TILT_TH_DOWN = 5.5;  // unchanged
   const HOLD_UP_MS = 600;    // was 450

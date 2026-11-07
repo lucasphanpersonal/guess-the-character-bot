@@ -117,41 +117,6 @@ function deletingAListTakesItsSelectionsWithIt() {
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM list_selection WHERE list_id = ?').get(id).n, 0);
 }
 
-// --- /list create ---------------------------------------------------------------------------
-
-// A hand-made list is wanted wherever the bot is played: shared, playable at once where it was
-// typed and on the web, and waiting for any other server to choose it.
-async function listCreateMakesASharedListPlayableHereAndOnTheWeb() {
-  const create = require('../src/discord/commands/actions/list-create');
-  const { createRecorder, createFakeClient, createSlashInteraction } = require('./harness');
-  const here = scope('creator');
-  const elsewhere = scope('elsewhere');
-  const name = `Hand Made ${++n}-${Date.now()}`;
-  const recorder = createRecorder();
-  try {
-    await create.execute(
-      createSlashInteraction({
-        client: createFakeClient(recorder),
-        userId: 'owner',
-        guildId: here,
-        channelId: 'create-channel',
-        options: { name, category: 'Scope Tests' },
-        recorder,
-        canManageGuild: true,
-      })
-    );
-    const list = lists.getListByName(elsewhere, name);
-    assert.ok(list, 'another server can see it');
-    assert.equal(list.owner_scope, null, 'because it is shared');
-    assert.equal(list.enabled, 0, "but it is off there until that server chooses it");
-    assert.equal(lists.getListByName(here, name).enabled, 1, 'on where it was made');
-    assert.equal(lists.getListByName(lists.WEB_SCOPE, name).enabled, 1, 'and on the web');
-    assert.match(recorder.allText(), /Created character list/);
-  } finally {
-    db.prepare('DELETE FROM character_lists WHERE name = ? AND owner_scope IS NULL').run(name);
-  }
-}
-
 // --- migration from the guild-scoped layout -------------------------------------------------
 
 // The layout as it shipped before scopes, close enough to the real one to exercise every step.
@@ -274,7 +239,6 @@ module.exports = {
   'a scope cannot select a list it cannot see': aScopeCannotSelectAListItCannotSee,
   'the compendium itself has no selection': theCompendiumItselfHasNoSelection,
   'deleting a list takes its selections with it': deletingAListTakesItsSelectionsWithIt,
-  '/list create makes a shared list, on here and on the web': listCreateMakesASharedListPlayableHereAndOnTheWeb,
   'migration: the content guild is shared and every selection is kept': theMigrationSharesTheContentGuildAndKeepsEverySelection,
   'migration: foreign keys still cascade afterwards': theMigratedForeignKeysStillCascade,
   'migration: idempotent, and matches a fresh database': theMigrationIsIdempotentAndMatchesAFreshDatabase,

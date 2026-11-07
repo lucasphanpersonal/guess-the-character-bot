@@ -1,7 +1,7 @@
 // The turn loop, for Guess the Character on the web -- phones and computers alike.
 //
-// The RULES are not here: they are src/core/game/turnRules.js, the one copy the Discord bot runs
-// too. This file is the web's side of them: its clock (a server-side deadline, frozen while the
+// The RULES are not here: they are src/core/game/turnRules.js, kept in the core so every way of
+// playing shares one copy. This file is the web's side of them: its clock (a server-side deadline, frozen while the
 // current player is disconnected), and what every web view shares -- standings, the clock, the
 // buttons, the results. Pure, no socket.io, unit-tested on its own; the socket layer drives it.
 //
@@ -10,7 +10,7 @@
 // so each brings its own view -- ../party/view.js and ../desk/view.js.
 //
 // The web ends a turn and moves on in one step (turnRules.resolveTurn, then advance): it has
-// nothing to show in between, unlike the bot.
+// nothing to show in between.
 
 const { publicCharacter } = require('../publicCharacter');
 const rules = require('../../core/game/turnRules');

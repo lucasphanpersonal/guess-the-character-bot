@@ -1,9 +1,8 @@
 # The compendium
 
 The content every game deals from: lists and characters, how obscure a deal may go, which
-images can be trusted, which lists each server (and the web) plays with, how a typed guess is
-checked, and how the library is seeded and browsed. Shared by the Discord bot and every web
-game; the code is `src/compendium/`.
+images can be trusted, which lists the web plays with, how a typed guess is checked, and how the
+library is seeded and browsed. Shared by every web game; the code is `src/compendium/`.
 
 ---
 
@@ -28,14 +27,13 @@ and both drop lists of fewer than 5 characters. Everything keeps every list. A h
 lists (fewer than 20 in a category) has chosen them, so a named pick is never cut. On the website,
 which has every list switched on, Normal deals from about 940 lists and Easy from about 400.
 
-A selection that is already short (`/list select top:N`) is cut again on Easy once it holds 20 or
+A selection that is already short (`npm run select:lists -- --top=N`) is cut again on Easy once it holds 20 or
 more lists of a category. That is the price of telling a pooled draw from a named one by its size
 alone.
 
-Set it with `/lobby create difficulty:` or the **🎚️ Difficulty** button on the lobby board,
-which cycles and tells you the resulting pool size. It's a per-lobby setting on purpose:
-the list selection says which franchises this server likes, difficulty says how deep tonight's
-players want to go, and those change on different schedules.
+The host sets it on the room's setup screen. It's a per-room setting on purpose: the list
+selection says which franchises get played, difficulty says how deep tonight's players want to
+go, and those change on different schedules.
 
 The cut is applied **per list**, which matters because the two fame scales are incomparable
 (AniList favourites in the thousands, Wikipedia sitelinks in the tens). A pool-wide threshold
@@ -70,8 +68,8 @@ price of having no false positives — a missing image costs little, while a wro
 misleads whoever is answering questions.
 
 The seeder applies it going forward. For a database seeded before it existed, clear the Commons
-files the rule no longer trusts (only Commons: art set by hand with `/list image` is left alone),
-then let the wiki and TMDB backfills refill what they can, since both touch only characters with
+files the rule no longer trusts (only Commons: art set by hand through the old Discord bot's
+`/list image` is left alone), then let the wiki and TMDB backfills refill what they can, since both touch only characters with
 no image:
 
 ```bash
@@ -83,93 +81,64 @@ npm run fetch:tmdb -- --category=Movies     # likewise for "Television Shows"
 ## Rerolls, and dropping a show
 
 **A reroll is recorded, and that is all.** Each one is kept per (character, person) in
-`character_rerolls`, so the browse tool can sort by **Most rerolled** and `/character` can say how
-many people have rerolled someone -- a hint for whoever curates. It never stops a character being
+`character_rerolls`, so the browse tool can sort by **Most rerolled** -- a hint for whoever curates. It never stops a character being
 dealt. It used to: three different people rerolling a character retired it from every random
 draw. But a reroll says *this table didn't know them*, not *nobody should get them*, and one
 party's skip is another's favourite -- so whether a character stays in play is a person's call,
 made with the tools below, not a counter's.
 
-**🚫 Never deal this show** sits next to Reroll on the confirmation DM. It drops that list
-from the server's selection *and* rerolls, in one press — the alternative is rerolling now
-and remembering to curate later, which nobody does. It costs a reroll (because it is one),
-refuses if dropping would leave the lobby nothing to deal from, and `/list toggle` undoes it.
-Because this changes the shared pool, it requires the **Manage Server** permission.
-
 ## Choosing which lists you play with
 
 The seed data runs to ~2,000 lists, and most of them are obscure enough that being dealt one
-is a wasted turn — the reroll button was doing the job a filter should. Server managers use
-`/list select` for that filter: a page of checkboxes (multi-select menus, 75 per page)
-covering every list, with a running count of what's on.
+is a wasted turn — the reroll button was doing the job a filter should. So each scope has a
+**playable selection**: the lists its random deals draw from. The lists themselves are one
+shared compendium (see [The compendium](#the-compendium-shared-lists-and-scopes)); which of them
+a scope plays with is that scope's alone.
 
-**Every server has its own selection.** The lists themselves are one shared compendium (see
-[The compendium](#the-compendium-shared-lists-and-scopes)), but which of them a server plays
-with is that server's alone — and the web app has a separate one again. Ticking a list here
-changes nothing anywhere else.
+The web's selection has no admin screen; it is set from the command line:
 
-**Setup enables the top 100 of each category**, so a server starts with a sensible pool
-rather than an empty one. That happens in `npm run backfill:popularity -- <server-id>`, which
-ranks the shared lists by fame and then switches on the best-known 100 per category for that
-server (`--top=N` to move the line, `--no-enable` to rank without touching the selection; with
-no id it only ranks). The ranking reads the seed files — AniList audience size for Anime and
-Manga; for TV, Cartoon, Movies and Video Games, a year of English Wikipedia readers of the work
-itself (summed over a franchise's works), from `npm run fetch:work-fame` and its
+```bash
+npm run select:lists                                       # show the web's selection
+npm run select:lists -- --top=100                          # exactly each category's top 100
+npm run select:lists -- --top=200 --category=Anime         # move the line for one category
+npm run select:lists -- --add="Naruto" --remove="Bleach"   # one list at a time
+npm run select:lists -- --copy-from=<scope>                # replace with another scope's
+npm run select:lists -- --scope=<scope>                    # any other scope instead of the web
+```
+
+`--top` is **exact**: anything below the line is switched off. The ranking it cuts by comes from
+`npm run backfill:popularity`, which ranks the shared lists by fame (and, given a scope, switches
+on the best-known 100 per category for it; `--top=N` to move the line, `--no-enable` to rank
+without touching the selection). The ranking reads the seed files — AniList audience size for
+Anime and Manga; for TV, Cartoon, Movies and Video Games, a year of English Wikipedia readers of
+the work itself (summed over a franchise's works), from `npm run fetch:work-fame` and its
 `data/seed/work-fame.json`; summed sitelinks for Real People. Readers rather than the cast's
 sitelinks, which ranked a big cast over a famous show (Glee above Breaking Bad), and rather than
 how many Wikipedias cover the work, which bulk-made stubs inflate (Go, Dog. Go! is in 160 of
 them, Breaking Bad 93). Unranked lists sort last and still work.
 
-From there curation is exceptions, and there are three ways to do it, in rough order of how
-often you'll want them:
-
-| | Best for |
-| --- | --- |
-| `/list toggle <list>` | One list in or out. Autocomplete finds it in three keystrokes and shows ✅/⬜ for its current state. |
-| `/list select top:<n>` | Moving the cut line wholesale — `top:200` for every category, or with `category:` for one. **Exact**: anything below the line is switched off. |
-| `/list select` | The checkbox page, for browsing and bulk work. Sorted best-known first, 75 checkboxes a page, with Enable/Disable page and Disable all. |
-
-The page is the fallback, not the main event: once the default is sensible, hunting a single
-show across six pages is worse than naming it.
-
-The selection governs **pooled draws only** — `category`, `everything` and `random`. Naming a
-list outright (`/lobby create list:Naruto`) always works, enabled or not, because asking for
-one by name is already a deliberate choice. Lists made by hand with `/list create` are
-enabled on creation for the same reason — in the server that made them **and on the web**.
-They are shared, so every other server can see them too, and switch them on with `/list
-toggle`.
+The selection governs **pooled draws only** — a whole category, or everything. A host who names
+lists outright always gets them, enabled or not, because asking for one by name is already a
+deliberate choice. A room host can also leave lists out for one room; that is the room's own
+exclusion set and never changes the selection the next room deals from.
 
 ## The compendium: shared lists and scopes
 
 Every list and character lives in one **compendium** (`src/compendium/`), and anything that
-plays reads it as a **scope**: a Discord server is a scope (its guild id), and so is the web
-app (`'web'`, or `WEB_SCOPE` if set). A scope sees:
+plays reads it as a **scope**: the web app is one (`'web'`, or `WEB_SCOPE` if set). The
+project once had a Discord bot too, and each Discord server it ran in was a scope of its own
+(its guild id); those servers' selections and private lists are still in the database, unused.
+A scope sees:
 
-- the **shared** lists — everything the seed scripts create and everything made with `/list
-  create`, visible to every scope; and
+- the **shared** lists — everything the seed scripts create and every list made by hand,
+  visible to every scope; and
 - its **own private** lists, which nobody else sees. Nothing creates these today except the
   migration below, for a second server's lists; the slot exists for anything a scope should
   keep to itself.
 
 Each scope also keeps its **own playable selection**. That used to be a single `enabled` flag
 on each list, shared by everyone — so the web app was quietly playing (and could have been
-rewriting) one Discord server's choices. Now a server's `/list select` and the web's selection
-are independent.
-
-The Discord commands that edit a list's characters (`/list add`, `/list remove`, `/list
-image`) work on any list the server can see, shared ones included, and still need **Manage
-Server**. An edit to a shared list is an edit for everyone who plays it — fine for one owner's
-servers, and the thing to revisit before the bot is shared more widely.
-
-The web app's selection has no admin screen; set it from the command line:
-
-```bash
-npm run select:lists                                       # show the web's selection
-npm run select:lists -- --top=100                          # exactly each category's top 100
-npm run select:lists -- --add="Naruto" --remove="Bleach"   # one list at a time
-npm run select:lists -- --copy-from=<server-id>            # copy a Discord server's selection
-npm run select:lists -- --scope=<server-id>                # any other scope instead of the web
-```
+rewriting) one Discord server's choices. Now every scope's selection is independent.
 
 Databases from before scopes are migrated automatically the first time the new code opens
 them: every list of the server with the most content becomes shared — its hand-made ones too,
@@ -179,7 +148,7 @@ server's selection, so it deals what it dealt before.
 
 ## Checking a typed guess
 
-The Discord bot and the phones leave guesses to the people at the table. Games played on a
+The phones leave guesses to the people at the table. Games played on a
 computer can't, so the compendium has a checker (`src/compendium/answers.js`) with three
 verdicts:
 
@@ -225,9 +194,9 @@ A character is shown with the work they come from — "Luke Skywalker, Star Wars
 ## Seeding character lists
 
 Bundled importers, all idempotent — re-running only adds what's missing, so they're safe to
-run repeatedly. Everything they create goes into the **shared compendium**, which every server
-and the web app see; nothing is switched on until a scope selects it (`npm run
-backfill:popularity -- <server-id>` does that in bulk — see
+run repeatedly. Everything they create goes into the **shared compendium**, which every scope
+sees; nothing is switched on until a scope selects it (`npm run select:lists -- --top=100`
+does that in bulk — see
 [Choosing which lists you play with](#choosing-which-lists-you-play-with)).
 
 ```bash
@@ -256,7 +225,7 @@ party rather than a classmate with one line. Its popularity is measured from the
 themselves, given by hand in `data/seed/work-overrides.json`: searching Wikidata for "Persona"
 finds the term in psychology.
 
-These used to take a server id first. An old command that still passes one is fine: the id is
+These used to take a Discord server id first. An old command that still passes one is fine: the id is
 recognised, ignored with a note, and the lists land in the shared compendium as usual.
 
 > **The Character Codex was removed.** It was the original bulk source and a poor fit: it
@@ -271,7 +240,7 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   Footballers, Scientists & Inventors, Politicians & Leaders, Religious Figures, Musicians,
   Comedians and the rest — from [Wikidata](https://www.wikidata.org). Ranked by how many
   language Wikipedias carry an article, which is the same fame signal the Wikidata-sourced
-  fictional characters use, so `difficulty` and `/list select` work on them unchanged.
+  fictional characters use, so difficulty and the playable selection work on them unchanged.
 
   **This is the one category where a photograph is simply correct.** The image rule exists
   because Wikidata's image property answers "an image associated with this item", which for a
@@ -398,13 +367,12 @@ recognised, ignored with a note, and the lists land in the shared compendium as 
   without writing using `--dry-run`. Wikidata only carries freely-licensed images, which rules
   out most cartoon art, so a lot of these arrive text-only.
 
-Anything still without an image reveals as plain text, which is a supported look — use
-`/list image` to fill in any you care about.
+Anything still without an image reveals as plain text, which is a supported look.
 
 ## Browsing what you've got
 
-`/list show` paginates inside Discord, which is fine for checking one show and hopeless for
-43,000 characters. `npm run browse` serves a local page for it instead:
+43,000 characters can't be judged a page at a time. `npm run browse` serves a local page for
+them:
 
 ```bash
 npm run browse          # then open http://localhost:4173
@@ -413,10 +381,10 @@ npm run browse          # then open http://localhost:4173
 Search by name across everything, filter by category, by whether a list is in the playable
 pool, or by whether a character has artwork at all, and sort by fame or by how often people
 have rerolled someone. Clicking a list drills into it. It reads the live database
-**read-only**, so it is safe to run while the bot is up and cannot change what gets dealt --
-curation still happens through `/list toggle`, `/list select` and `npm run select:lists`.
-It looks through one scope's eyes — the web app's by default; `--scope=<server-id>` shows a
-server's private lists and its own playable pool instead.
+**read-only**, so it is safe to run while the site is up and cannot change what gets dealt --
+curation still happens through `npm run select:lists`. It looks through one scope's eyes — the
+web app's by default; `--scope=<id>` shows another scope's private lists and playable pool
+instead.
 
 Two views worth knowing about: **Missing artwork** finds the characters that will reveal as
 plain text, and sorting by **Most rerolled** shows what people keep rejecting -- the place to
@@ -424,8 +392,7 @@ start if you want to switch a list off by hand.
 
 `--port=` and `--db=` override the defaults.
 
-`seed:pokemon` and `seed:lol` take an optional list name as their argument. Combine
-anything at game time: `/lobby create list:Naruto, Scrubs`.
+`seed:pokemon` and `seed:lol` take an optional list name as their argument.
 
 <details>
 <summary>Refreshing the AniList and Wikidata caches</summary>

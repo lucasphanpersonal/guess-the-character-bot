@@ -2,7 +2,7 @@
 // scripts/fetch-wikidata-people.js): actors, athletes, scientists, politicians, music groups
 // and the rest, one list per field.
 //
-// Everything the bot could deal until now was fictional, which quietly ruled out the version
+// Everything the game could deal until now was fictional, which quietly ruled out the version
 // of this game most people have actually played -- the one where the name on your forehead is
 // a real person.
 //
@@ -34,7 +34,7 @@
 //   node scripts/seed-wikidata-people.js --group actors
 //   node scripts/seed-wikidata-people.js --dry-run
 //
-// Lists land in the shared compendium, which every Discord server and the web app see.
+// Lists land in the shared compendium, which every scope sees.
 
 const fs = require('fs');
 const path = require('path');
@@ -56,7 +56,7 @@ const CATEGORY = 'Real People';
 // importer's 30-per-show, because a field is a much broader thing than a cast.
 const PER_LIST_LIMIT = 150;
 // Below this a list is not worth existing -- a lobby drawing from it has nothing to choose
-// between, and it clutters `/list select` for everyone.
+// between, and it clutters every list picker.
 const MIN_PEOPLE = 5;
 
 // Read lazily-safe at module scope: backfill-popularity.js imports assignPeople from this file,
@@ -174,8 +174,8 @@ function main() {
   if (skippedSmall) console.log(`${skippedSmall} list(s) skipped for being too small.`);
   if (!dryRun) {
     console.log(
-      'New lists are OFF by default -- switch them on with `/list select category:Real People`' +
-        ' or `npm run backfill:popularity`.'
+      'New lists are OFF by default -- switch them on with' +
+        ' `npm run select:lists -- --top=100 --category="Real People"` or `npm run backfill:popularity`.'
     );
   }
 }

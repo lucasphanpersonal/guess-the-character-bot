@@ -1,5 +1,7 @@
 # Multiplayer: playing it, and what that breaks
 
+> **Historical record.** This was written while the game ran as a Discord bot, which was removed in November 2026; the web games are now the only way to play. The reasoning still explains the rules the web plays by, but the Discord specifics (embeds, DMs, buttons, slash commands) describe code that no longer exists.
+
 A companion to [multiplayer-design.md](multiplayer-design.md). That document settles the rules
 and the data. This one walks a real session at five players and asks what it feels like, then
 specifies the interface changes that fall out.

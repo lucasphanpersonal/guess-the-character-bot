@@ -1,9 +1,9 @@
 // Per-room list exclusions (src/web/rooms.js + the setup service's curation).
 //
-// The property that matters is NEGATIVE: excluding a list for one room must not change the
-// shared `enabled` column, because the Discord bot reads that same column as its playable pool.
-// The first implementation flipped `enabled` directly, which meant anyone with a room link could
-// permanently reshape what a whole Discord server got dealt.
+// The property that matters is NEGATIVE: excluding a list for one room must not change the web's
+// playable selection, which every later room deals from. The first implementation flipped the
+// list's `enabled` flag directly, which meant anyone with a room link could permanently reshape
+// what everyone else got dealt (a whole Discord server, back when one shared it).
 
 const { assert } = require('./harness');
 const { RoomRegistry } = require('../src/web/rooms');

@@ -73,7 +73,7 @@ function noClockKeepsTheTie() {
   assert.equal(row(g, 'a').secondsLeft, null);
 }
 
-// Discord's last-chance window runs past the deadline; a finish there is 0, never negative.
+// A finish read after the deadline (the clock's grace) is 0, never negative.
 function pastTheDeadlineIsZero() {
   const g = game(['a']);
   finish(g, 'a', 1, -20_000);

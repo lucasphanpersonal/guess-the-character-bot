@@ -2,26 +2,23 @@
 //
 // Deliberately transport-agnostic: nothing here imports socket.io or touches a network, so it
 // is unit-testable in isolation (see test/web-rooms.test.js) and the socket layer
-// (src/web/guess/socket.js) is a thin translation from events to these calls. This mirrors how the
-// Discord side keeps Game/GameManager as plain state with the I/O pushed to the edges.
+// (src/web/guess/socket.js) is a thin translation from events to these calls.
 //
-// What a web room needs that the core Discord `Lobby` doesn't model: a nickname per seat and a
-// live connection flag per seat, because a phone dropping Wi-Fi mid-party is routine, not rare
-// (see docs/mobile-app-plan.md#reconnection-matters-more-here-than-it-does-on-discord). Seats
-// are keyed by a persistent client-generated playerId (stored in the browser), NOT by the
+// A web room carries a nickname per seat and a live connection flag per seat, because a phone
+// dropping Wi-Fi mid-party is routine, not rare (see docs/mobile-app-plan.md). Seats are keyed by a persistent client-generated playerId (stored in the browser), NOT by the
 // socket id, so a reconnecting phone reclaims its exact seat instead of being seen as a new
 // player. Character dealing and the turn loop live in gameSetup.js/turnLoop.js over a core
 // `Game`; this file only gets people into the same room and keeps the roster live.
 
-const { MAX_PLAYERS } = require('../core/game/Lobby');
+const { MAX_PLAYERS } = require('../core/game/limits');
 // The faces a seat can wear. The art lives with the pages (shared/avatars.js); the server needs
 // only how many there are, and reads it from that same file so the two cannot disagree.
 const Avatars = require('./shared/avatars');
 
-// How many seats a room of each kind has. Guess the Character keeps the core's 8 -- the Discord
-// game's, and a forehead game's natural size, everyone watching everyone. Drawing has no such
-// shape: one draws, the rest guess, and a bigger room is only a bigger audience. 50 is "no limit"
-// for any party while still a ceiling, and the ceiling is the only guard: roomAccess.js limits
+// How many seats a room of each kind has. Guess the Character keeps the core's 8 -- a forehead
+// game's natural size, everyone watching everyone. Drawing has no such shape: one draws, the
+// rest guess, and a bigger room is only a bigger audience. 50 is "no limit" for any party while
+// still a ceiling, and the ceiling is the only guard: roomAccess.js limits
 // failed joins (guessing codes) and room creation per client, but not a successful join, so
 // without one a script holding a room's code could fill it with seats faster than any host could
 // remove them. Telephone grows with it -- every chain visits every seat -- which is the mode,

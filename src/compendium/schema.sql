@@ -1,14 +1,14 @@
 -- The compendium: every list, every character, and who plays with which.
 --
--- Applied by src/compendium/db.js. The games' own tables (results, live Discord boards) live in
+-- Applied by src/compendium/db.js. The games' own tables (finished games) live in
 -- src/core/db/schema.sql on the same file; nothing here refers to them.
 
 CREATE TABLE IF NOT EXISTS character_lists (
   id INTEGER PRIMARY KEY,
   -- Who can see the list. NULL is the shared compendium, which every scope sees -- that is
-  -- where every seeded list lives, and every list made with `/list create`. Otherwise the one
+  -- where every seeded list lives, and every list made by hand. Otherwise the one
   -- scope it is private to, and no one else (today only a second Discord server's lists, kept
-  -- private by the migration in db.js).
+  -- private by the migration in db.js, from when a Discord bot shared this database).
   --
   -- This was `guild_id NOT NULL` once, with the seed scripts filing ~2,000 lists under one
   -- Discord server and the web app borrowing that server's id to see them. Renamed rather than
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS character_lists (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_character_lists_owner_name
   ON character_lists (IFNULL(owner_scope, ''), name COLLATE NOCASE);
 
--- Which lists a scope plays with: its "playable selection", set from /list select in Discord.
+-- Which lists a scope plays with: its "playable selection" (`npm run select:lists`).
 --
 -- Off by default: the compendium runs to ~2,000 lists, most of them obscure enough that being
 -- dealt one is a dead turn, so a scope opts lists IN rather than pruning them out. Only pooled
@@ -51,7 +51,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_character_lists_owner_name
 -- Per scope, which is the point. It used to be an `enabled` column ON the list, i.e. one switch
 -- shared by everyone who could see it: the web app read the Discord server's selection, and a
 -- web host unticking a list would have taken it out of the server's game. A scope is any id that
--- plays: a Discord guild id, or 'web' for the web app (WEB_SCOPE overrides that).
+-- plays: 'web' for the web app (WEB_SCOPE overrides that), and the Discord guild ids whose
+-- selections are still on file from the retired bot.
 CREATE TABLE IF NOT EXISTS list_selection (
   scope TEXT NOT NULL,
   list_id INTEGER NOT NULL REFERENCES character_lists(id) ON DELETE CASCADE,

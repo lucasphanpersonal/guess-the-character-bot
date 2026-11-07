@@ -15,7 +15,7 @@
 // 180 of them near-perfect -- so reading rank back out of the row order is recovering a signal
 // that is already there, not guessing.
 //
-// Only rows added by `seed-script` are touched. Characters added by hand through Discord have no
+// Only rows added by `seed-script` are touched. Characters added by hand (through the old Discord bot) have no
 // meaningful insertion order, and this script's own sibling (seed-wiki-characters.js) inserts
 // alphabetically, which would produce a confidently wrong ranking. Both are skipped, and a list
 // is only backfilled when EVERY row in it qualifies.

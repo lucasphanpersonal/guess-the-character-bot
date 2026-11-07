@@ -33,8 +33,9 @@ const FETCH_TIMEOUT_MS = 20000;
 //
 // No SVG. An SVG is a document that can carry script, and this cache serves from the site's own
 // origin -- so one stored SVG opened at /img/<id> would run as the site, able to read every
-// player's seat secret. Image URLs come from more people than the seed scripts (Discord's
-// /list image, the DM image button), so the cache cannot assume they are benign. An SVG is
+// player's seat secret. Image URLs come from more than the seed scripts (the retired Discord
+// bot let anyone set one, and those rows are still in the library), so the cache cannot assume
+// they are benign. An SVG is
 // simply not cached: /img sends the browser to it upstream, where an <img> renders it inertly.
 const EXT = {
   'image/jpeg': 'jpg',
