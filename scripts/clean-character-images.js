@@ -6,7 +6,7 @@
 // image back, because the seeder now applies the same rule. Afterwards, `npm run fetch:fandom`
 // and `npm run fetch:tmdb` refill what they can, since both only touch characters with no image.
 //
-// Only Commons files are ever cleared. Images set by hand with /list image from any other host
+// Only Commons files are ever cleared. Images set by hand (the retired bot's /list image) from any other host
 // (a game's press kit, a publisher's site) are left alone: the rule cannot vouch for them, but a
 // person chose them on purpose. A hand-set COMMONS file on a fictional character is cleared like
 // any other -- nothing records who set an image, so it cannot be told apart.

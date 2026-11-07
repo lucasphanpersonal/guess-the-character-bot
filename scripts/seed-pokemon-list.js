@@ -16,9 +16,9 @@ const {
   getCharacters,
 } = require('../src/compendium/characterLists');
 
-// Same category seed:lol files itself under, so `/lobby create category:Video Games` and
-// random category roulette both reach the Pokédex. Left uncategorised it sat alone in
-// "Uncategorized" and only a lobby naming the list by hand could ever draw from it.
+// Same category seed:lol files itself under, so a Video Games deal and random category
+// roulette both reach the Pokédex. Left uncategorised it sat alone in "Uncategorized" and only
+// a host naming the list by hand could ever draw from it.
 const CATEGORY = 'Video Games';
 
 const SPRITE_BASE = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork';

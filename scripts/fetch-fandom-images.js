@@ -11,7 +11,7 @@
 //
 // Searching the FRANCHISE'S OWN WIKI makes that structural rather than a heuristic:
 // naruto.fandom.com cannot return a Zelda character, however the query is spelled. It is the
-// same move the bot already makes with per-title lists and per-list fame.
+// same move the compendium already makes with per-title lists and per-list fame.
 //
 // A name that is not a page title is followed through the wiki's own redirects ("Grampa" ->
 // Abraham Simpson) and with a title stripped ("Captain Rex" -> Rex), but only onto a single

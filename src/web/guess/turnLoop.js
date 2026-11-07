@@ -10,7 +10,7 @@
 // so each brings its own view -- ../party/view.js and ../desk/view.js.
 //
 // The web ends a turn and moves on in one step (turnRules.resolveTurn, then advance): it has
-// nothing to show in between, unlike the bot.
+// nothing to show in between.
 
 const { publicCharacter } = require('../publicCharacter');
 const rules = require('../../core/game/turnRules');

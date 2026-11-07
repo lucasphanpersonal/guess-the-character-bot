@@ -43,11 +43,11 @@ function isVisibleTo(list, scope) {
   return !!list && (list.owner_scope == null || list.owner_scope === scope);
 }
 
-// `scope` null makes a SHARED list -- what the seed scripts and /list create do. A scope makes a
+// `scope` null makes a SHARED list -- what the seed scripts and a hand-made list do. A scope makes a
 // list private to it. Lists arrive switched off because the seed scripts create them in the
 // thousands. A list somebody types out by hand is the opposite case -- that is a deliberate
 // choice, so it is playable straight away: `enabled` switches it on for its owning scope, and
-// `enabledFor` for any others (/list create names the server it was typed in, and the web).
+// `enabledFor` for any others.
 // ---------------------------------------------------------------------------
 // Content version: when a cached pool must be rebuilt
 // ---------------------------------------------------------------------------
@@ -57,7 +57,7 @@ function isVisibleTo(list, scope) {
 // blocked event loop for the web's whole selection, with rerolls unlimited -- one player holding
 // the button stalled every room on the server. So pools are cached, and a cached pool is good
 // for as long as the content is unchanged. Two things change it: a write through this module
-// (counted here), and a write by another process -- a seed script, the bot -- which SQLite
+// (counted here), and a write by another process -- a seed script, say -- which SQLite
 // reports through data_version.
 let localWrites = 0;
 const contentVersion = () => `${localWrites}:${db.pragma('data_version', { simple: true })}`;
@@ -460,8 +460,7 @@ function trimLists(listIds, difficulty) {
 // two ways. A reroll says "this table didn't know them", not "nobody should get them" -- and a
 // character one party skips is another party's favourite. And the count was global across every
 // server and the website while the website's "people" are ids a browser makes up, so one visitor
-// could retire characters for everyone. Curation is a person's call, made with /list toggle and
-// `npm run select:lists`.
+// could retire characters for everyone. Curation is a person's call, made with `npm run select:lists`.
 
 function recordReroll(characterId, userId) {
   if (!characterId) return 0;
@@ -619,10 +618,10 @@ function listNamesInCategory(scope, category) {
 }
 
 // ---------------------------------------------------------------------------
-// A scope's playable selection (`enabled`), curated from /list select
+// A scope's playable selection (`enabled`), curated with `npm run select:lists`
 // ---------------------------------------------------------------------------
 //
-// Only pooled draws consult this. Naming a list outright -- `/lobby create list:Naruto` --
+// Only pooled draws consult this. Naming a list outright (a host picking "Naruto" for a room)
 // deliberately bypasses it: the point of the selection is to keep obscure lists out of a
 // random deal, not to make them unreachable when somebody asks for one by name.
 
@@ -635,8 +634,8 @@ function getEnabledLists(scope) {
   return scopedLists(scope, `AND ${ENABLED} ORDER BY cl.name COLLATE NOCASE`, scope);
 }
 
-// Every category with how much of it is switched on -- drives the /list select landing page
-// and the "nothing is enabled yet" errors, which need to name what IS available.
+// Every category with how much of it is switched on -- drives select-lists' summary and the
+// "nothing is enabled yet" errors, which need to name what IS available.
 function listCategoriesWithEnabledCounts(scope) {
   return db
     .prepare(
@@ -676,7 +675,7 @@ function listsForFilter(scope, category) {
  * already had 150 on for its top 50 silently did nothing while reporting success -- the
  * worst possible outcome, since there was no way to tell it hadn't worked.
  *
- * Hand-picked extras do get dropped. `/list toggle` puts one back in three keystrokes,
+ * Hand-picked extras do get dropped. `select:lists --add=` puts one back in one command,
  * which is a smaller cost than a command that lies about what it did.
  */
 function setTopN(scope, category, n) {

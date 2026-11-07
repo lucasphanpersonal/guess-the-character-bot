@@ -285,8 +285,8 @@ function attachSockets(nsp, { registry, setup, variant }) {
 
     clearPause(room); // the pause belonged to the turn that just ended, not to this one
     // Deserted (turnRules.deserted): two full rounds of turns ran out with nobody touching anything.
-    // Paused, not ended -- unlike the bot's channel, a web room is somewhere people come back to,
-    // and whoever does can carry on. Paused BEFORE the turn is armed, so it arms frozen with its
+    // Paused, not ended -- a web room is somewhere people come back to, and whoever does can
+    // carry on. Paused BEFORE the turn is armed, so it arms frozen with its
     // whole time kept, and no clock runs while nobody is there to watch it.
     const idle = loop.deserted(room.game) && !room.game.hostPaused;
     if (idle) {

@@ -15,7 +15,7 @@
 // 'seed-script' -- are left completely alone, and so is every scope's private list.
 //
 // Deleting a list cascades to its characters and to every scope's selection of it
-// (src/compendium/schema.sql, ON DELETE CASCADE) -- so this also empties /list select.
+// (src/compendium/schema.sql, ON DELETE CASCADE) -- so this also empties those lists out of every selection.
 //
 // Usage:
 //   node scripts/reset-seeded-lists.js            # dry run, shows what would go

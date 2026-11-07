@@ -197,8 +197,8 @@ function requestHandler(req, res) {
   }
 
   // Character artwork, served from the local cache. The id names a database row, so a web client
-  // cannot choose the URL -- but the URL in that row is not necessarily benign: /list image and
-  // the DM image button let people set it. So the cache only fetches public addresses and never
+  // cannot choose the URL -- but the URL in that row is not necessarily benign: the retired Discord
+  // bot let anyone set one, and those rows are still in the library. So the cache only fetches public addresses and never
   // stores SVG (see imageCache.js), what it serves carries headers that stop it ever running as a
   // page on this origin, and a URL that is not a public http(s) one is not redirected to either.
   // A miss that cannot be filled redirects upstream, which is exactly the pre-cache behaviour, so

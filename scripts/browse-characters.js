@@ -209,7 +209,7 @@ server.listen(PORT, () => {
   const { lists: l, characters: c, withImage } = meta(DEFAULT_SCOPE).totals;
   console.log(`Character browser: http://localhost:${PORT}  (as scope "${DEFAULT_SCOPE}")`);
   console.log(`  ${c} characters in ${l} lists, ${withImage} with artwork`);
-  console.log(`  reading ${DB_PATH} (read-only -- safe to run while the bot is up)`);
+  console.log(`  reading ${DB_PATH} (read-only -- safe to run while the site is up)`);
   console.log('  Ctrl+C to stop.');
 });
 

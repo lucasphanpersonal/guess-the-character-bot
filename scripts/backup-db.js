@@ -4,7 +4,7 @@
 // Uses better-sqlite3's online backup API rather than copying the file: the live database
 // runs in WAL mode, and recent writes can still be sitting in bot.sqlite-wal rather than in
 // bot.sqlite itself, so a plain file copy can silently miss them. The backup API reads a
-// consistent snapshot instead, safely even while the bot is running.
+// consistent snapshot instead, safely even while the site is running.
 //
 // Usage:
 //   node scripts/backup-db.js [label]

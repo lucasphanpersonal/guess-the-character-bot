@@ -20,8 +20,8 @@
 //   advance      the pointer to the next player still guessing, and their turn counted -- or the
 //                game over when nobody is left.
 //
-// The web runs the two back to back. The bot freezes the outgoing turn's board and announces a
-// finish between them, so those still describe the turn that just ended.
+// The web runs the two back to back. They are separate so a frontend that wants to show the turn
+// that just ended (a finish announcement, say) can do so between them.
 //
 // The clock is the frontend's: a resolution takes `msLeft` from whatever clock that frontend runs
 // (the tiebreak -- see Game.recordFinish).
@@ -30,13 +30,12 @@
 // who may act and what "advance" means are decided here and nowhere else.
 //
 // DESERTED. Going quiet is never terminal for a PLAYER -- but a whole table going quiet used to
-// be endless: every turn timed out, passed, and armed the next, forever (the bot posting a board
-// a minute to an empty channel; a web room ticking on after everyone had gone). So timeouts in a
+// be endless: every turn timed out, passed, and armed the next, forever (a web room ticking on
+// after everyone had gone). So timeouts in a
 // row are counted, anything anyone does resets the count, and two full laps of them -- every
 // player still guessing, twice over, with nobody touching anything -- is `deserted`. One lap
 // would end a game because two people stepped out for a drink. What a frontend does about it is
-// its own: the bot ends the game as /lobby end does, keeping finished results; the web pauses it,
-// so anyone coming back can carry on.
+// its own: the web pauses the game, so anyone coming back can carry on.
 
 const turnKey = (game) => `${game.currentPlayerId}:${game.turnsFor(game.currentPlayerId)}`;
 

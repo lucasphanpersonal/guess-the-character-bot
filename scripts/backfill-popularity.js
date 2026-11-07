@@ -1,5 +1,5 @@
-// Fills in character_lists.popularity from the seed files, so /list select can sort
-// best-known first.
+// Fills in character_lists.popularity from the seed files, so select:lists and the
+// pickers can sort best-known first.
 //
 // The fame score is only ever compared WITHIN a category, which is what lets two
 // incompatible scales sit in one column -- but that only holds if a score is applied to
@@ -212,7 +212,7 @@ function main() {
 
   console.log(`Ranked ${matched} shared lists.`);
   if (unmatched.length) {
-    // Unranked lists still work -- they just sort last on the /list select page.
+    // Unranked lists still work -- they just sort last.
     console.log(`${unmatched.length} lists had no score and will sort last, e.g. ${unmatched.slice(0, 5).join(', ')}`);
   }
 
@@ -240,7 +240,7 @@ function main() {
   for (const c of listCategoriesWithEnabledCounts(scope)) {
     console.log(`  ${c.category}: ${c.enabled} of ${c.count}`);
   }
-  console.log('\nAdjust with /list select (checkboxes) or /list toggle <list> (one at a time).');
+  console.log('\nAdjust with npm run select:lists (--top=N, or --add/--remove one list at a time).');
 }
 
 module.exports = { scoresFromAniList, scoresFromWikidata };
