@@ -318,7 +318,8 @@
    * The lobby's picker: a grid of every face, a 44px button each. It has no line of its own. The
    * roster already shows who you are, so your own row there is what opens the grid (`mine`, set by
    * each page's roster): tap it again, or press Enter on it, to fold the grid away. It opens by
-   * itself only for someone who has never picked, which is the moment it is news. One pick folds it
+   * itself only for someone who has never picked, which is the moment it is news, and not on a
+   * phone, where it would push Start off the screen. One pick folds it
    * away again, which gives the lobby back its Start button.
    *
    * Taken faces are disabled with the wearer's name on them: a face is one per seat while there are
@@ -332,7 +333,11 @@
    */
   function mountPicker(el, pick, roster) {
     el.classList.add('avpick');
-    el.innerHTML = `<div class="avgrid" id="avGrid" role="radiogroup" aria-label="Pick your player"${GTC.store.get(KEY) == null ? '' : ' hidden'}>${SET.map((s, n) =>
+    // Open at first only for someone who has never chosen, and only where it fits: on a phone the
+    // grid's three rows pushed the host's Start button below the fold (978px on an 839px screen).
+    // There the row's arrow (.mine) offers it instead, and everyone already has a face.
+    const openAtFirst = GTC.store.get(KEY) == null && !window.matchMedia?.('(max-width: 600px)').matches;
+    el.innerHTML = `<div class="avgrid" id="avGrid" role="radiogroup" aria-label="Pick your player"${openAtFirst ? '' : ' hidden'}>${SET.map((s, n) =>
         `<button type="button" class="avopt" role="radio" aria-checked="false" data-av="${n}">${api.svg(n, 36)}<span class="avmark" aria-hidden="true"></span></button>`).join('')}</div>
       <p class="hint avnote" role="status"></p>`;
     const grid = el.querySelector('.avgrid');
