@@ -288,6 +288,27 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
   main.desk .tile .tart.mystery { font-size:16px; }
 }
 @media (max-width: 900px) { .stage { grid-template-columns:1fr; } }
+/* A computer lobby opened on a phone: the host's settings run ~900px, and Start sat under all of
+   them (1303px on a 360x640 screen). It rides the foot of the screen while the settings scroll
+   past, so a host who is happy with the defaults never has to hunt for it. Sticky, not fixed: it
+   stays inside the host's card, so it never covers the room code, the roster or a guest's page.
+   What rides is the .startbar, the button AND #lobbyErr under it: that line says why Start is grey
+   ("Waiting for one more player") and what the server said when it failed, and riding the button
+   alone left it ~600px below, out of sight. The bar is card-coloured so the settings pass behind it. */
+.startbar > .err { margin-top:8px; }
+@media (max-width: 600px) {
+  .startbar { position:sticky; bottom:0; z-index:2; background:var(--card); padding:8px 0 12px; }
+  .startbar > .err:empty { display:none; }
+  /* Disabled (waiting for a second player) is half opacity everywhere else, which here let the
+     settings scrolling underneath show through the button. Riding, it is solid and greyed instead. */
+  .startbar > #startBtn:disabled { opacity:1; --face:var(--soft); --deep:var(--chip-edge); color:var(--muted); }
+}
+/* On a short one, the lobby's mascot gives way too: the host's card would otherwise start so low
+   that the riding button is cut off at the foot of a 360x640 screen. The phones' own page does the
+   same in party/public/index.html (its max-height: 700px block). */
+@media (max-width: 600px) and (max-height: 700px) {
+  #lobby > .fx3d { display:none; }
+}
 .notescard textarea { min-height:4.5em; }
 .spotlight { display:flex; flex-direction:column; gap:10px; --outline:var(--amber); --px:4px; }
 .spothead { display:flex; align-items:center; flex-wrap:wrap; gap:8px 10px; }
