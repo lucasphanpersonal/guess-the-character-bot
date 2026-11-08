@@ -325,9 +325,11 @@ async function main() {
       console.warn(`  ! ${old.label} (${id}) failed (${err.message}) -- kept as it was`);
       continue;
     }
+    if (!media) continue;
     const entry = await fetchSeries(media, media.type || (old.category === 'Anime' ? 'ANIME' : 'MANGA'));
-    // Keep what is there rather than drop a series because one fetch came back thin.
-    if (!entry) continue;
+    // Keep what is there rather than drop a series, or shrink it, because one fetch came back thin:
+    // a cast page that failed partway leaves fewer characters than the file already has.
+    if (!entry || (!entry.complete && entry.characters.length < old.characters.length)) continue;
     data.series[id] = entry;
     console.log(`  ${entry.label}: ${entry.characters.length} characters`);
     save(data);
