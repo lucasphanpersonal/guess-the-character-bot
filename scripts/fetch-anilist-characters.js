@@ -27,7 +27,9 @@
 // One request returns ten series, or one page of 25 characters for a single series. Deep
 // shows therefore cost a request per 25 characters, and AniList's rate limit is the binding
 // constraint, so the run takes a while. It is resumable: the output file records which
-// series are fully paged, so Ctrl-C and re-run only costs the series in flight.
+// series are fully paged, so Ctrl-C and re-run only costs the series in flight. A series already
+// in the file that is incomplete or lacks the raw name parts is fetched again -- by id, at the end
+// of the run, when it has dropped out of the popularity window the sweep pages through.
 //
 // Usage:
 //   node scripts/fetch-anilist-characters.js                 # anime + manga, default depth
@@ -72,6 +74,32 @@ const QUERY = `query ($page: Int, $type: MediaType, $perPage: Int, $charPerPage:
             favourites
             image { large }
           }
+        }
+      }
+    }
+  }
+}`;
+
+// One series by id, for the stragglers pass at the end of main(): a series already in the file
+// that has fallen out of the popularity window can no longer be reached by paging, so it is asked
+// for by name -- by id, that is.
+const MEDIA_QUERY = `query ($id: Int, $charPerPage: Int) {
+  Media(id: $id) {
+    id
+    type
+    title { romaji english }
+    format
+    popularity
+    genres
+    characters(sort: FAVOURITES_DESC, perPage: $charPerPage) {
+      pageInfo { hasNextPage }
+      edges {
+        role
+        node {
+          id
+          name { first middle last full alternative }
+          favourites
+          image { large }
         }
       }
     }
@@ -199,6 +227,41 @@ function parseArgs(argv) {
   return opts;
 }
 
+/**
+ * A whole series as the file keeps it -- the first page of its cast from `media`, then the rest
+ * paged by id -- or null when it has too few characters to deal from.
+ */
+async function fetchSeries(media, type) {
+  const titles = [media.title.english, media.title.romaji];
+  const cast = toCast(media.characters?.edges || [], titles);
+  let more = media.characters?.pageInfo?.hasNextPage;
+
+  // Page the rest of the cast. One Piece needs twenty of these; most shows need none.
+  for (let cp = 2; more; cp++) {
+    await sleep(PACE_MS);
+    let next;
+    try {
+      next = await gql(CAST_QUERY, { id: media.id, page: cp, perPage: CHARS_PER_MEDIA });
+    } catch (err) {
+      console.warn(`  ! ${media.title.romaji} cast page ${cp} failed (${err.message})`);
+      break;
+    }
+    cast.push(...toCast(next.Media.characters.edges, titles));
+    more = next.Media.characters.pageInfo.hasNextPage;
+  }
+
+  if (cast.length < 3) return null;
+  return {
+    label: media.title.english || media.title.romaji,
+    romaji: media.title.romaji,
+    category: type === 'ANIME' ? 'Anime' : 'Manga',
+    format: media.format,
+    popularity: media.popularity,
+    complete: !more,
+    characters: cast,
+  };
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const data = load(opts.refresh);
@@ -226,36 +289,11 @@ async function main() {
         const known = data.series[media.id];
         if (known?.complete && known.characters?.[0]?.parts) continue;
 
-        const titles = [media.title.english, media.title.romaji];
-        const cast = toCast(media.characters?.edges || [], titles);
-        let more = media.characters?.pageInfo?.hasNextPage;
-
-        // Page the rest of the cast. One Piece needs twenty of these; most shows need none.
-        for (let cp = 2; more; cp++) {
-          await sleep(PACE_MS);
-          let next;
-          try {
-            next = await gql(CAST_QUERY, { id: media.id, page: cp, perPage: CHARS_PER_MEDIA });
-          } catch (err) {
-            console.warn(`  ! ${media.title.romaji} cast page ${cp} failed (${err.message})`);
-            break;
-          }
-          cast.push(...toCast(next.Media.characters.edges, titles));
-          more = next.Media.characters.pageInfo.hasNextPage;
-        }
-
-        if (cast.length < 3) continue;
-        data.series[media.id] = {
-          label: media.title.english || media.title.romaji,
-          romaji: media.title.romaji,
-          category: type === 'ANIME' ? 'Anime' : 'Manga',
-          format: media.format,
-          popularity: media.popularity,
-          complete: !more,
-          characters: cast,
-        };
+        const entry = await fetchSeries(media, type);
+        if (!entry) continue;
+        data.series[media.id] = entry;
         kept++;
-        characters += cast.length;
+        characters += entry.characters.length;
       }
 
       save(data);
@@ -268,6 +306,33 @@ async function main() {
       }
       await sleep(PACE_MS);
     }
+  }
+
+  // Stragglers: series in the file still missing the raw name parts (or a full cast) that the
+  // sweep above did not reach because they have dropped out of the top titles it pages through.
+  // Without this a plain re-run can never finish an older file -- 13 series were stuck that way.
+  // Only series of a type this run covers, so --type still means what it says.
+  const stale = Object.entries(data.series).filter(
+    ([, s]) => opts.types.includes(s.category === 'Anime' ? 'ANIME' : 'MANGA') && !(s.complete && s.characters?.[0]?.parts)
+  );
+  if (stale.length) console.log(`\n=== ${stale.length} series outside the sweep without name parts or a full cast ===`);
+  for (const [id, old] of stale) {
+    await sleep(PACE_MS);
+    let media;
+    try {
+      media = (await gql(MEDIA_QUERY, { id: Number(id), charPerPage: CHARS_PER_MEDIA })).Media;
+    } catch (err) {
+      console.warn(`  ! ${old.label} (${id}) failed (${err.message}) -- kept as it was`);
+      continue;
+    }
+    if (!media) continue;
+    const entry = await fetchSeries(media, media.type || (old.category === 'Anime' ? 'ANIME' : 'MANGA'));
+    // Keep what is there rather than drop a series, or shrink it, because one fetch came back thin:
+    // a cast page that failed partway leaves fewer characters than the file already has.
+    if (!entry || (!entry.complete && entry.characters.length < old.characters.length)) continue;
+    data.series[id] = entry;
+    console.log(`  ${entry.label}: ${entry.characters.length} characters`);
+    save(data);
   }
 
   const all = Object.values(data.series);
