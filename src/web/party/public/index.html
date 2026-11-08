@@ -563,6 +563,9 @@
        Decoration and a hint give way; the two slabs do not. */
     @media (max-height: 700px) {
       #splash .fx3d, #splash .splashhint { display:none; }
+      /* The lobby the same way: on a 360x640 phone the mascot's 132px put the host's Set Up Game at
+         705px. The room code, the QR (others scan it) and the roster stay; the decoration goes. */
+      #lobby > .fx3d { display:none; }
     }
     /* Draw is a link (it is another page), dressed as the slabs beside it. */
     .devicebtn.c2 { background:var(--amber); color:#2b1c00; text-decoration:none;
