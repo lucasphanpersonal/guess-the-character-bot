@@ -567,7 +567,14 @@
          705px. The room code, the QR (others scan it) and the roster stay; the decoration goes.
        The computer lobbies do the same in shared/theme.css, when opened on a short phone. */
       #lobby > .fx3d { display:none; }
+      /* And the end screen's trophy, so Rematch is on screen (it was at 830px on a 360x640 phone). */
+      #over > .fx3d { display:none; }
     }
+    /* The end screen spaces its lines with the column's gap alone: the paragraphs' own margins added
+       to it, and an empty error line held ~60px open for a failure that is rare, which left a hole
+       between the standings and Rematch. When an error comes it takes its line then. */
+    #over > p { margin:0; }
+    #over > .err:empty { display:none; }
     /* Draw is a link (it is another page), dressed as the slabs beside it. */
     .devicebtn.c2 { background:var(--amber); color:#2b1c00; text-decoration:none;
                     box-shadow:var(--frame), inset 0 calc(var(--px) * -2) 0 0 var(--amber-d), inset 0 var(--px) 0 0 rgba(255,255,255,.28), var(--drop); }

@@ -287,7 +287,13 @@ label.pp-row { display:flex; align-items:center; gap:10px; padding:7px 2px; marg
   main.desk .tile .tart { height:2.25rem; }
   main.desk .tile .tart.mystery { font-size:16px; }
 }
-@media (max-width: 900px) { .stage { grid-template-columns:1fr; } }
+@media (max-width: 900px) {
+  .stage { grid-template-columns:1fr; }
+  /* One column (a phone): the notes' error line is rare, and held open it left ~40px of nothing
+     under the box, as it does on the fitted screen above. The guess box's line stays held: a miss
+     fills it every few seconds, and Pass under it should not jump each time. */
+  .notescard .err:empty { display:none; }
+}
 /* A computer lobby opened on a phone: the host's settings run ~900px, and Start sat under all of
    them (1303px on a 360x640 screen). It rides the foot of the screen while the settings scroll
    past, so a host who is happy with the defaults never has to hunt for it. Sticky, not fixed: it
