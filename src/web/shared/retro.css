@@ -544,9 +544,10 @@ dialog.card, dialog.roommenu { color:var(--ink); }
 .typed > .rpgtext::after, .rpgtext.typed::after { visibility:visible; }
 .toast, dialog.rpgbox { color:#fff; background:linear-gradient(var(--rpg-top), var(--rpg-bottom));
   box-shadow:var(--frame), inset 0 0 0 2px var(--rpg-rule), var(--drop); }
-/* A question, at the bottom of the screen where an RPG kept its text. Readable face, and big: it is
-   read once, by someone deciding something. */
-dialog.rpgbox { position:fixed; inset:auto 0 max(24px, env(safe-area-inset-bottom)); margin:0 auto; --px:3px;
+/* A question, at the top centre of the screen, where the eye lands first and a thumb at the bottom
+   of a phone does not have to reach past it. Readable face, and big: it is read once, by someone
+   deciding something. */
+dialog.rpgbox { position:fixed; inset:max(24px, env(safe-area-inset-top)) 0 auto; margin:0 auto; --px:3px;
   width:min(34rem, calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 48px); overflow:auto;
   padding:18px 20px 16px; border:none; font-family:var(--font-name); }
 dialog.rpgbox::backdrop { background:rgba(5,5,12,.55); }
