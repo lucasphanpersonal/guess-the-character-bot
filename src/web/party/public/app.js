@@ -723,7 +723,8 @@ function renderOver(result) {
   // is otherwise only on the lobby screen which nobody is looking at any more.
   $('overCode').textContent = lastState ? `Room code ${lastState.code} — anyone can still join` : '';
   $('overErr').textContent = '';
-  $('rematchBtn').style.display = host ? '' : 'none';
+  // Rematch is the host's, and so is any error under it: nothing to pin for anyone else.
+  $('overBar').hidden = !host;
   $('changeBtn').style.display = host ? '' : 'none';
   // A hand-picked game can't be re-dealt "with the same settings": the picks aren't kept, and
   // the same characters again would be no game. So the button takes the host back to the

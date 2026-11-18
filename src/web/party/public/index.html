@@ -574,7 +574,19 @@
        to it, and an empty error line held ~60px open for a failure that is rare, which left a hole
        between the standings and Rematch. When an error comes it takes its line then. */
     #over > p { margin:0; }
-    #over > .err:empty { display:none; }
+    /* The host's Rematch rides the foot of the screen, as the computer lobbies' Start does
+       (shared/theme.css): a standings row is ~132px on a phone, so from four players on Rematch was
+       below the fold, and it is the one thing the whole room is waiting on. Sticky, not fixed: once
+       scrolled to the end it settles in place. Change Settings and Leave Room stay out of the bar,
+       so it covers as little of the standings as it can and nobody leaves by accident. The error
+       line is in the bar UNDER Rematch, its line held open even when empty: an error that appeared
+       above Rematch (as it once did), or that grew a riding bar upward, would move the button just
+       after the tap. Field-coloured, so the standings pass behind it. Only the host has anything in
+       it; for everyone else app.js hides it. */
+    .overbar { position:sticky; bottom:0; z-index:2; display:flex; flex-direction:column; gap:8px;
+               background:var(--brand); padding:10px 0 8px; margin:-10px 0 -8px; }
+    .overbar[hidden] { display:none; }
+    .overbar > p { margin:0; min-height:1.3em; min-height:1lh; } /* a whole line, so a one-line error moves nothing */
     /* Draw is a link (it is another page), dressed as the slabs beside it. */
     .devicebtn.c2 { background:var(--amber); color:#2b1c00; text-decoration:none;
                     box-shadow:var(--frame), inset 0 calc(var(--px) * -2) 0 0 var(--amber-d), inset 0 var(--px) 0 0 rgba(255,255,255,.28), var(--drop); }
@@ -951,9 +963,12 @@
         <div style="height:8px"></div>
         <ol class="hiscore" id="finalStandings"></ol>
       </div>
-      <p class="err" id="overErr"></p>
       <p class="hint center" id="overCode"></p>
-      <button id="rematchBtn">Rematch — Same Settings</button>
+      <!-- The host's next move, riding the foot of the screen (index.html styles: .overbar). -->
+      <div class="overbar" id="overBar">
+        <button id="rematchBtn">Rematch — Same Settings</button>
+        <p class="err" id="overErr"></p>
+      </div>
       <button id="changeBtn" class="ghost">Change Settings</button>
       <button id="overLeaveBtn" class="ghost">Leave Room</button>
     </section>

@@ -544,12 +544,17 @@ dialog.card, dialog.roommenu { color:var(--ink); }
 .typed > .rpgtext::after, .rpgtext.typed::after { visibility:visible; }
 .toast, dialog.rpgbox { color:#fff; background:linear-gradient(var(--rpg-top), var(--rpg-bottom));
   box-shadow:var(--frame), inset 0 0 0 2px var(--rpg-rule), var(--drop); }
-/* A question, at the top centre of the screen, where the eye lands first and a thumb at the bottom
-   of a phone does not have to reach past it. Readable face, and big: it is read once, by someone
-   deciding something. */
+/* A question, at the top centre of a computer's screen, where the eye lands first. Readable face,
+   and big: it is read once, by someone deciding something. */
 dialog.rpgbox { position:fixed; inset:max(24px, env(safe-area-inset-top)) 0 auto; margin:0 auto; --px:3px;
   width:min(34rem, calc(100vw - 32px)); max-width:none; max-height:calc(100dvh - 48px); overflow:auto;
   padding:18px 20px 16px; border:none; font-family:var(--font-name); }
+/* On a phone, at the bottom, where an RPG kept its text and where the thumb already is: at the top
+   its answers sat ~150px down a 640px screen, the hardest place to reach one-handed (Lucas chose
+   the bottom on phones, Nov 18, after #49 had moved it to the top everywhere). */
+@media (max-width: 600px) {
+  dialog.rpgbox { inset:auto 0 max(24px, env(safe-area-inset-bottom)); }
+}
 dialog.rpgbox::backdrop { background:rgba(5,5,12,.55); }
 dialog.rpgbox .rpgtext { margin:0; font-size:1.45rem; line-height:1.25; overflow-wrap:anywhere; }
 /* The choices: room on each one's left for the pointer, and 44px for a thumb. */
