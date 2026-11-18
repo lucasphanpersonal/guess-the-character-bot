@@ -1522,8 +1522,21 @@ const connect = (playerId) => {
     const heardGuesses = [];
     H.on('desk:guess', (g) => heardGuesses.push(g));
     const over = until(H, 'game:over', () => true, 20000);
+    // What happened, in order, printed only if the game fails to end: CI once saw it hang past its
+    // 20s (Nov 9) when 72 local runs never took 2s, and a bare FAIL left nothing to go on.
+    const t0 = Date.now();
+    const story = [];
+    const tell = (...what) => story.push(`${String(Date.now() - t0).padStart(6)}ms  ${what.join(' ')}`);
+    H.on('desk:guess', (g) => tell('guess', JSON.stringify(g.name), JSON.stringify(g.text), g.verdict ?? ''));
+    H.on('desk:ruled', (x) => tell('ruled', JSON.stringify(x)));
+    let lastTurn = null;
     H.on('game:state', (v) => {
-      if (v.isMyTurn && !v.hostPaused) H.emit('game:guess', { text: mine(dCode, 'botHostDesk') }, () => {});
+      const turn = v.current ? `${v.current.playerId}:${v.current.turnNumber}` : 'none';
+      if (turn !== lastTurn) { lastTurn = turn; tell('turn', turn, v.isMyTurn ? '(host)' : ''); }
+      if (v.ruling || v.paused || v.hostPaused) tell('state', JSON.stringify({ ruling: v.ruling ?? null, paused: !!v.paused, hostPaused: !!v.hostPaused }));
+      if (v.isMyTurn && !v.hostPaused) {
+        H.emit('game:guess', { text: mine(dCode, 'botHostDesk') }, (res) => { if (!res?.ok) tell('host guess refused', JSON.stringify(res)); });
+      }
     });
     H.on('setup:state', (v) => { if (!v.confirmed) H.emit('setup:confirm', {}, () => {}); });
     r = await H.emitWithAck('setup:start', { poolType: 'everything', difficulty: 'everything' });
@@ -1531,6 +1544,17 @@ const connect = (playerId) => {
     check(!(await H.emitWithAck('room:addBot', {})).ok, 'bots: ...and none can join once a game is under way');
     const desked = await over;
     check(!!desked && desked.standings?.length === 3, 'bots: the bots confirm and take their turns, and the game ends');
+    if (!desked) {
+      const room = registry.getRoom(dCode);
+      const g = room?.game;
+      const names = Object.fromEntries([...(room?.players.values() ?? [])].map((p) => [p.playerId, p.nickname]));
+      console.log('     what happened, from the host\'s socket:\n' + story.map((l) => `       ${l.replace(/p_[\w-]+/g, (id) => names[id] ?? id)}`).join('\n'));
+      console.log('     room now: ' + JSON.stringify({
+        status: room?.status, names, turnOrder: g?.turnOrder, currentTurnIndex: g?.currentTurnIndex,
+        finished: g?.finished, ruling: g?.desk?.ruling ?? null, paused: g?.paused ?? null, hostPaused: g?.hostPaused ?? null,
+        rulingTimer: !!room?.rulingTimer, turnTimer: !!room?.turnTimer,
+      }));
+    }
     check(heardGuesses.some((g) => /Bot$/.test(g.name)), 'bots: they type guesses on a computer');
 
     // The host removes one, then leaves: the other leaves with them, and the room goes.
